@@ -1,9 +1,11 @@
 package handlers
 
 import (
-	"fmt"
 	"gorm/models"
 	"gorm/services"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type HandlerUser struct {
@@ -14,31 +16,46 @@ func GetHandlerUser(service *services.ServicesUser) *HandlerUser {
 	return &HandlerUser{service}
 }
 
-func (s *HandlerUser) HandlerLogOut(username string, gmail string, password string){
-	user := models.UserDataBase{
-		User: models.User{
-			Username: username,
-			Gmail: gmail,
-		},
-		Password: password,
+func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, exist := c.Get("logout")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener user",
+			})
+			return
+		}
+		err := s.service.CreateUser(user.(models.UserDataBase))
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err,
+			})
+			return
+		}
+		c.JSON(201, gin.H{
+			"message": "user create",
+		})
 	}
-	err := s.service.CreateUser(user)
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	fmt.Println("Usuario creado exitosamente")
 }
-
-func (s *HandlerUser) HandlerLogIn(username string, password string){
-	user := models.UserLogin{
-		Username: username,
-		Password: password,
+func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, exist := c.Get("login")
+		if !exist {
+			c.JSON(401, gin.H{
+				"error": "no se encuentran los datos",
+			})
+			return
+		}
+		token, err := s.service.LogIn(user.(models.UserLogin))
+		if err != nil {
+			c.JSON(401, gin.H{
+				"error": err,
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message": "login exitoso",
+		})
+		c.SetCookie(token, "token", 3600, "/", "localhost", false, true)
 	}
-	token, err := s.service.LogIn(user)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("Token: %s", token)
 }

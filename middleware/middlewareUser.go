@@ -2,38 +2,45 @@ package middleware
 
 import (
 	"fmt"
+	"gorm/models"
 	"gorm/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
-func MiddlewareLogOut(username string, gmail string, password string) bool {
-	if !utils.ValidationLenUsername(username) {
-		fmt.Println("El usuario tiene que tener mas de 5 caracteres")
-		return false
-	}
+func MiddlewareLogOut() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var user models.UserDataBase
+		c.BindJSON(&user)
+		if !utils.ValidationLenUsername(user.Username) {
+			fmt.Println("El usuario tiene que tener mas de 5 caracteres")
+			return
+		}
 
-	if !utils.ValidationGmail(gmail) {
-		fmt.Println("Email invalido") 
-		return false
-	}
+		if !utils.ValidationGmail(user.Gmail) {
+			fmt.Println("Email invalido")
+			return 
+		}
 
-	if !utils.ValidationPasswordLen(password) {
-		fmt.Println("La contrasena tiene que contener mas de 8 caracteres")
-		return false
-	}
+		if !utils.ValidationPasswordLen(user.Password) {
+			fmt.Println("La contrasena tiene que contener mas de 8 caracteres")
+			return
+		}
 
-	if !utils.ValidationPasswordNumber(password) {
-		fmt.Println("La contrasena tiene que contener algun numero")
-		return false
-	}
+		if !utils.ValidationPasswordNumber(user.Password) {
+			fmt.Println("La contrasena tiene que contener algun numero")
+			return
+		}
 
-	if !utils.ValidationPasswordCharacterSpecial(password) {
-		fmt.Println("La contrasena tiene que contener algun caracter especial")
-		return false
-	}
+		if !utils.ValidationPasswordCharacterSpecial(user.Password) {
+			fmt.Println("La contrasena tiene que contener algun caracter especial")
+			return
+		}
 
-	if !utils.ValidationPasswordUpper(password) {
-		fmt.Println("La contrasena tiene que contener alguna mayuscula")
-		return false
+		if !utils.ValidationPasswordUpper(user.Password) {
+			fmt.Println("La contrasena tiene que contener alguna mayuscula")
+			return 
+		}
+		
 	}
-	return true
 }
