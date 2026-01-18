@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"gorm/models"
 	"gorm/repos"
@@ -15,11 +16,11 @@ func InitServices(repo *repos.RepositoriesUser) *ServicesUser{
 	return &ServicesUser{repo: repo}
 }
 
-func (s *ServicesUser) CreateUser(user models.UserDataBase) error {
-	if _,exist := s.repo.UsernameExist(user.Username); exist {
+func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context) error {
+	if _,exist := s.repo.UsernameExist(user.Username, ctx); exist {
 		return errors.New("Username existente")
 	}
-	if _,exist := s.repo.EmailExist(user.Gmail); exist {
+	if _,exist := s.repo.EmailExist(user.Gmail, ctx); exist {
 		return errors.New("Gmail existente")
 	}
 	hash_password, err := utils.Hash(user.Password)
@@ -28,15 +29,15 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase) error {
 	}
 	user.Password = hash_password
 
-	err = s.repo.CreateUser(user)
+	err = s.repo.CreateUser(user, ctx)
 	if err != nil {
 		return errors.New("error al crear usuario")
 	}
 	return nil
 }
 
-func (s *ServicesUser) LogIn(user models.UserLogin) (string, error) {
-	userData, exist := s.repo.UsernameExist(user.Username)
+func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string, error) {
+	userData, exist := s.repo.UsernameExist(user.Username, ctx)
 	if !exist {
 		return "", errors.New("Usuario inexistente")
 	}

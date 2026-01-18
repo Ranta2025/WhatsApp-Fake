@@ -16,10 +16,11 @@ import (
 func main() {
 	utils.LoadEnv()
 	defer database.DisconnectMongo()
-	data, client, err := database.GetConection()
+	data, client,rd, err := database.GetConection()
 	if err != nil {
 		log.Fatal(err)
 	}
+	_ = rd
 	_ = client
 	repo := repos.GetRespositorieUser(data)
 	service := services.InitServices(repo)

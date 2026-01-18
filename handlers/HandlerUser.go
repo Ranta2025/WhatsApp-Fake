@@ -18,6 +18,7 @@ func GetHandlerUser(service *services.ServicesUser) *HandlerUser {
 
 func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
 		user, exist := c.Get("logout")
 		if !exist {
 			c.JSON(400, gin.H{
@@ -25,7 +26,7 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 			})
 			return
 		}
-		err := s.service.CreateUser(user.(models.UserDataBase))
+		err := s.service.CreateUser(user.(models.UserDataBase), ctx)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{
 				"message": err,
@@ -39,6 +40,7 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 }
 func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
 		user, exist := c.Get("login")
 		if !exist {
 			c.JSON(401, gin.H{
@@ -46,7 +48,7 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			})
 			return
 		}
-		token, err := s.service.LogIn(user.(models.UserLogin))
+		token, err := s.service.LogIn(user.(models.UserLogin), ctx)
 		if err != nil {
 			c.JSON(401, gin.H{
 				"error": err,

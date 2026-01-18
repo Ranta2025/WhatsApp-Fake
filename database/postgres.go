@@ -39,7 +39,7 @@ func Conection() (*gorm.DB, error) {
 		fmt.Println("Error al migrar base de datos")
 		return nil, err
 	}
-	fmt.Println("Coneccion establecida")
+	fmt.Println("Postgres, Coneccion establecida")
 	db = data
 	return db, nil
 }
