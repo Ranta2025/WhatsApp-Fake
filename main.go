@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-
 	"gorm/cache"
 	"gorm/config"
 	"gorm/database"
@@ -12,8 +11,10 @@ import (
 	"gorm/routers"
 	"gorm/services"
 	"gorm/utils"
-
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/mongo"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -23,16 +24,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_ = client
-	repo := repos.GetRespositorieUser(data)
-	cache := cache.InitChacheUser(rd, repo)
-	service := services.InitServices(repo, cache)
-	handler := handlers.GetHandlerUser(service)
+	handlerLog := GetHandlerLog(data, rd)
+	handlerApiMessage := GetHandlerApi(client)
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
 	app.Welcome()
-	routers.Router(*handler, app.app)
+	routers.Router(*handlerLog, app.app, *handlerApiMessage)
 	app.Run()
 }
 
@@ -55,4 +53,19 @@ func (a *app) Welcome(){
 func GetApp() app{
 	app := app{app: gin.Default()}
 	return app
+}
+
+func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser{
+	repo := repos.GetRespositorieUser(data)
+	cache := cache.InitChacheUser(rd, repo)
+	service := services.InitServices(repo, cache)
+	handler := handlers.GetHandlerUser(service)
+	return handler
+}
+
+func GetHandlerApi(mongodb *mongo.Client) *handlers.HandlerApiMessage{
+	repo := repos.InitRepoApiMessage(mongodb)
+	service := services.InitServiceApiMessage(repo)
+	handler := handlers.InitHandlerApiMessage(service)
+	return handler
 }
