@@ -3,11 +3,13 @@ package main
 import (
 	"log"
 
+	"gorm/cache"
 	"gorm/config"
 	"gorm/database"
 	"gorm/handlers"
 	"gorm/middleware"
 	"gorm/repos"
+	"gorm/routers"
 	"gorm/services"
 	"gorm/utils"
 
@@ -21,16 +23,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_ = rd
 	_ = client
 	repo := repos.GetRespositorieUser(data)
-	service := services.InitServices(repo)
+	cache := cache.InitChacheUser(rd, repo)
+	service := services.InitServices(repo, cache)
 	handler := handlers.GetHandlerUser(service)
-	_ = handler
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
 	app.Welcome()
+	routers.Router(*handler, app.app)
 	app.Run()
 }
 

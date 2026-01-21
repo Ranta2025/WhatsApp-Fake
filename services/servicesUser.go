@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"gorm/cache"
 	"gorm/models"
 	"gorm/repos"
 	"gorm/utils"
@@ -10,10 +11,14 @@ import (
 
 type ServicesUser struct {
 	repo *repos.RepositoriesUser
+	cache *cache.CacheUser
 }
 
-func InitServices(repo *repos.RepositoriesUser) *ServicesUser{
-	return &ServicesUser{repo: repo}
+func InitServices(repo *repos.RepositoriesUser, cache *cache.CacheUser) *ServicesUser{
+	return &ServicesUser{
+		repo: repo,
+		cache: cache,
+	}
 }
 
 func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context) error {

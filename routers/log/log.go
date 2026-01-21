@@ -8,11 +8,11 @@ import (
 )
 
 type Log struct {
-	router gin.RouterGroup
-	handler handlers.HandlerUser
+	Router *gin.Engine
+	Handler handlers.HandlerUser
 }
 
-func (rout *Log) LogIn(){
-	rout.router.POST("/LogIn", middleware.MiddlewareLogIn(), rout.handler.HandlerLogIn())
-	rout.router.POST("/LogOut", middleware.MiddlewareLogOut(), rout.handler.HandlerLogOut())
+func (rout *Log) Logs(){
+	rout.Router.POST("/LogIn", middleware.MiddlewareLogIn(), rout.Handler.HandlerLogIn())
+	rout.Router.POST("/LogOut", middleware.MiddlewareLogOut(), rout.Handler.HandlerLogOut())
 }
