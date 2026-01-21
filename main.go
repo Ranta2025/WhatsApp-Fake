@@ -6,6 +6,7 @@ import (
 	"gorm/config"
 	"gorm/database"
 	"gorm/handlers"
+	"gorm/middleware"
 	"gorm/repos"
 	"gorm/services"
 	"gorm/utils"
@@ -28,6 +29,7 @@ func main() {
 	_ = handler
 	app := GetApp()
 	app.app.Use(config.Cors())
+	app.app.Use(middleware.TimeMiddleware())
 	app.Welcome()
 	app.Run()
 }
