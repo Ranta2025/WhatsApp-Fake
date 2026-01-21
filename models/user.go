@@ -4,13 +4,13 @@ import "gorm.io/gorm"
 
 type User struct {
 	gorm.Model
-	Username string `gorm:"size:30;unique"`
-	Gmail    string `gorm:"unique"`
+	Username string `gorm:"size:30;unique" json:"username" binding:"required"`
+	Gmail    string `gorm:"unique" json:"email" binding:"required,email"`
 }
 
 type UserDataBase struct{
 	User
-	Password string `gorm:"size:45"`
+	Password string `gorm:"size:45" json:"password" binding:"required"`
 	Activo bool `gorm:"default:true"`
 }
 

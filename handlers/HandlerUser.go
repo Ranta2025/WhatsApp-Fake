@@ -41,14 +41,25 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		user, exist := c.Get("login")
+		username, exist := c.Get("username")
 		if !exist {
 			c.JSON(401, gin.H{
 				"error": "no se encuentran los datos",
 			})
 			return
 		}
-		token, err := s.service.LogIn(user.(models.UserLogin), ctx)
+		password, exist := c.Get("username")
+		if !exist {
+			c.JSON(401, gin.H{
+				"error": "no se encuentran los datos",
+			})
+			return
+		}
+		user := models.UserLogin{
+			Username: username.(string),
+			Password: password.(string),
+		}
+		token, err := s.service.LogIn(user, ctx)
 		if err != nil {
 			c.JSON(401, gin.H{
 				"error": err,
