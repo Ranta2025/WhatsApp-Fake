@@ -25,7 +25,7 @@ func main() {
 		log.Fatal(err)
 	}
 	handlerLog := GetHandlerLog(data, rd)
-	handlerApiMessage := GetHandlerApi(client)
+	handlerApiMessage := GetHandlerApi(client, data)
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
@@ -63,8 +63,8 @@ func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser{
 	return handler
 }
 
-func GetHandlerApi(mongodb *mongo.Client) *handlers.HandlerApiMessage{
-	repo := repos.InitRepoApiMessage(mongodb)
+func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) *handlers.HandlerApiMessage{
+	repo := repos.InitRepoApiMessage(mongodb, data)
 	service := services.InitServiceApiMessage(repo)
 	handler := handlers.InitHandlerApiMessage(service)
 	return handler

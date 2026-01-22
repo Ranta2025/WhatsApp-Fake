@@ -2,6 +2,7 @@ package api
 
 import (
 	"gorm/handlers"
+	"gorm/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,4 +17,9 @@ func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerApiMess
 		app: app,
 		handler: handler,
 	}
+}
+
+
+func (rt *RouterApiMessage) GetUser(){
+	rt.app.GET("user", middleware.MiddlewareTokenValidation(), rt.handler.HandlerGetUser())
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func middlewareTokenValidation() gin.HandlerFunc {
+func MiddlewareTokenValidation() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		tokenCookie, err := ctx.Cookie("token")
 		if err != nil {

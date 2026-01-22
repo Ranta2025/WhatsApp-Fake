@@ -7,26 +7,27 @@ import (
 	"gorm/models"
 	"gorm/repos"
 	"gorm/utils"
+	"log"
 )
 
 type ServicesUser struct {
-	repo *repos.RepositoriesUser
+	repo  *repos.RepositoriesUser
 	cache *cache.CacheUser
 }
 
-func InitServices(repo *repos.RepositoriesUser, cache *cache.CacheUser) *ServicesUser{
+func InitServices(repo *repos.RepositoriesUser, cache *cache.CacheUser) *ServicesUser {
 	return &ServicesUser{
-		repo: repo,
+		repo:  repo,
 		cache: cache,
 	}
 }
 
 func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context) error {
-	if exist := s.repo.UsernameExist(user.Username, ctx); !exist {
-		return errors.New("Username existente")
+	if exist := s.repo.UsernameExist(user.Username, ctx); exist {
+		return errors.New("Username ya existe")
 	}
-	if _,exist := s.repo.EmailExist(user.Gmail, ctx); !exist {
-		return errors.New("Gmail existente")
+	if _, exist := s.repo.EmailExist(user.Gmail, ctx); exist {
+		return errors.New("Email ya existe")
 	}
 	hash_password, err := utils.Hash(user.Password)
 	if err != nil {
@@ -42,20 +43,25 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 }
 
 func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string, error) {
-	exist, err := s.cache.CacheUserExist(user.Username, ctx)
-	if err != nil{
-		return "", err
-	}
+	log.Println("[SERVICE] Iniciando LogIn para usuario:", user.Username)
+	log.Println("[SERVICE] Contraseña recibida:", user.Password)
+	exist := s.repo.UsernameExist(user.Username, ctx)
+	log.Println("[SERVICE] ¿Usuario existe?:", exist)
 	if !exist {
 		return "", errors.New("Usuario inexistente")
 	}
 	password, err := s.cache.CachePassword(user.Username, ctx)
 	if err != nil {
+		log.Println("[SERVICE] Error obteniendo password:", err.Error())
 		return "", err
 	}
-	if !utils.ComparePassword(user.Password, password){
+	log.Println("[SERVICE] Password de BD:", password)
+	log.Println("[SERVICE] Password recibida:", user.Password)
+	if !utils.ComparePassword(user.Password, password) {
+		log.Println("[SERVICE] Contraseña INCORRECTA")
 		return "", errors.New("Contrasena incorrecta")
-	} 
+	}
+	log.Println("[SERVICE] Contraseña CORRECTA")
 	token, err := utils.GenerateToken(user.Username)
 	if err != nil {
 		return "", err

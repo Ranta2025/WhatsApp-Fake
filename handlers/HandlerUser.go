@@ -3,6 +3,7 @@ package handlers
 import (
 	"gorm/models"
 	"gorm/services"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -48,27 +49,31 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			})
 			return
 		}
-		password, exist := c.Get("username")
+		password, exist := c.Get("password")
 		if !exist {
 			c.JSON(401, gin.H{
 				"error": "no se encuentran los datos",
 			})
 			return
 		}
+		log.Println("[HANDLER] Username:", username.(string))
+		log.Println("[HANDLER] Password:", password.(string))
 		user := models.UserLogin{
 			Username: username.(string),
 			Password: password.(string),
 		}
 		token, err := s.service.LogIn(user, ctx)
 		if err != nil {
+			log.Println("[HANDLER] Error en LogIn:", err.Error())
 			c.JSON(401, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
+		log.Println("[HANDLER] Login exitoso, token:", token)
+		c.SetCookie("token",token,3600,"api/v1/user","localhost",false,true)
 		c.JSON(200, gin.H{
-			"message": "login exitoso",
+			"message": "LogIn exitoso",	
 		})
-		c.SetCookie(token, "token", 3600, "/", "localhost", false, true)
 	}
 }
