@@ -10,7 +10,7 @@ type User struct {
 
 type UserDataBase struct{
 	User
-	Password string `gorm:"size:45" json:"password" binding:"required"`
+	Password string `gorm:"size:70" json:"password" binding:"required"`
 	Activo bool `gorm:"default:true"`
 }
 

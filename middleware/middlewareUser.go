@@ -18,7 +18,6 @@ func MiddlewareLogOut() gin.HandlerFunc {
 			c.Abort()
 			return 
 		}
-		user.Activo = true
 
 		if !utils.ValidationLenUsername(user.Username) {
 			c.JSON(http.StatusBadRequest, gin.H{

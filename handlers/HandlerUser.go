@@ -29,7 +29,7 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 		err := s.service.CreateUser(user.(models.UserDataBase), ctx)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{
-				"message": err,
+				"message": err.Error(),
 			})
 			return
 		}
@@ -62,7 +62,7 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 		token, err := s.service.LogIn(user, ctx)
 		if err != nil {
 			c.JSON(401, gin.H{
-				"error": err,
+				"error": err.Error(),
 			})
 			return
 		}
