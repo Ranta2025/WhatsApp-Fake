@@ -22,24 +22,35 @@ func (db *RepositoriesUser) CreateUser(user models.UserDataBase, c context.Conte
 	return db.db.Model(models.UserDataBase{}).WithContext(ctx).Create(&user).Error
 }
 
-func (db *RepositoriesUser) UsernameExist(username string ,c context.Context) (models.UserDataBase ,bool) {
+func (db *RepositoriesUser) UsernameExist(username string ,c context.Context) (bool) {
 	ctx, cancel := context.WithTimeout(c, 10 * time.Second)
 	defer cancel()
-	var user models.UserDataBase
-	result := db.db.WithContext(ctx).Where("username = ?", username).First(&user)
+	var usernameDB string
+	result := db.db.WithContext(ctx).Select("username").Where("username = ?", username).First(&usernameDB)
 	if result.Error != nil || result.RowsAffected == 0 {
-		return user, false
+		return false
 	}
-	return user, true
+	return true
 }
 
-func (db *RepositoriesUser) EmailExist(email string, c context.Context) (models.UserDataBase, bool) {
+func (db *RepositoriesUser) EmailExist(email string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10 * time.Second)
 	defer cancel()
-	var user models.UserDataBase
-	result := db.db.WithContext(ctx).Where("gmail = ?", email).First(&user)
+	var gmail string
+	result := db.db.WithContext(ctx).Select("gmail").Where("gmail = ?", email).First(&gmail)
 	if result.Error != nil || result.RowsAffected == 0 {
-		return user, false
+		return "", false
 	}
-	return user, true
+	return gmail, true
+}
+
+func (db *RepositoriesUser) GetPassword(email string, c context.Context) (string, bool) {
+	ctx, cancel := context.WithTimeout(c, 10 * time.Second)
+	defer cancel()
+	var password string
+	result := db.db.WithContext(ctx).Select("password").Where("gmail = ?", email).First(&password)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return "", false
+	}
+	return password, true
 }

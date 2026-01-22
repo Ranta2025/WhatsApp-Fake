@@ -22,10 +22,10 @@ func InitServices(repo *repos.RepositoriesUser, cache *cache.CacheUser) *Service
 }
 
 func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context) error {
-	if _,exist := s.repo.UsernameExist(user.Username, ctx); exist {
+	if exist := s.repo.UsernameExist(user.Username, ctx); !exist {
 		return errors.New("Username existente")
 	}
-	if _,exist := s.repo.EmailExist(user.Gmail, ctx); exist {
+	if _,exist := s.repo.EmailExist(user.Gmail, ctx); !exist {
 		return errors.New("Gmail existente")
 	}
 	hash_password, err := utils.Hash(user.Password)
@@ -42,12 +42,18 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 }
 
 func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string, error) {
-	userData, exist := s.repo.UsernameExist(user.Username, ctx)
+	exist, err := s.cache.CacheUserExist(user.Username, ctx)
+	if err != nil{
+		return "", err
+	}
 	if !exist {
 		return "", errors.New("Usuario inexistente")
 	}
-
-	if !utils.ComparePassword(user.Password, userData.Password){
+	password, err := s.cache.CachePassword(user.Username, ctx)
+	if err != nil {
+		return "", err
+	}
+	if !utils.ComparePassword(user.Password, password){
 		return "", errors.New("Contrasena incorrecta")
 	} 
 	token, err := utils.GenerateToken(user.Username)
