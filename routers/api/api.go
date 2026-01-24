@@ -20,6 +20,9 @@ func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerApiMess
 }
 
 
-func (rt *RouterApiMessage) GetUser(){
+func (rt *RouterApiMessage) ApiUser(){
 	rt.app.GET("user", middleware.MiddlewareTokenValidation(), rt.handler.HandlerGetUser())
+	rt.app.PUT("user", middleware.MiddlewareTokenValidation(), middleware.MiddlewareUsername(), rt.handler.HandlerPutUser())
 }
+
+

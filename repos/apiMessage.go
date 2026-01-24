@@ -2,6 +2,8 @@ package repos
 
 import (
 	"context"
+	"errors"
+	"gorm/models"
 	"gorm/schemas"
 	"log"
 	"strings"
@@ -39,4 +41,14 @@ func (ap *ApiMessage) GetUserDataBase(username string, ctx context.Context) (*sc
 	}
 	log.Println("Usuario encontrado:", user)
 	return &user, nil
+}
+
+func (ap *ApiMessage) RepoPutUser(username string, usernameUpdate string, ctx context.Context)  error {
+	c, cancel := context.WithTimeout(ctx, 10 * time.Second)
+	defer cancel()
+	result := ap.data.Model(&models.UserDataBase{}).WithContext(c).Where("username = ?",username).Update("username",usernameUpdate)
+	if result.Error != nil || result.RowsAffected == 0{
+		return errors.New("Error al modificar username")
+	}
+	return nil
 }

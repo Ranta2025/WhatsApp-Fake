@@ -1,15 +1,20 @@
 services:
   app:
     build:
-      context: .
-      dockerfile: dockerfile
+      context: ..
+      dockerfile: docker/dockerfile
     container_name: gorm-app
     env_file:
-      - .env
+      - ../.env
     environment:
       MONGO_HOST: mongo
       MONGO_PORT: 27017
       MONGO_DB: mydb
+      MONGO_USER: ""
+      MONGO_PASS: ""
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       - mongo
       - postgres
@@ -39,9 +44,9 @@ services:
     container_name: postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_USER: gorm
+      POSTGRES_DB: gorm
     ports:
       - "5432:5432"
     volumes:
@@ -61,6 +66,22 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - backend
+  
+  frontend:
+    image: node:20-alpine
+    container_name: frontend
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "5173:5173"
+    depends_on:
+      - app
     networks:
       - backend
 

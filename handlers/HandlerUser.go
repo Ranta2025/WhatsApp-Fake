@@ -71,9 +71,18 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			return
 		}
 		log.Println("[HANDLER] Login exitoso, token:", token)
-		c.SetCookie("token",token,3600,"api/v1/user","localhost",false,true)
+		c.SetCookie("token", token, 3600, "api/v1/", "localhost", false, true)
 		c.JSON(200, gin.H{
-			"message": "LogIn exitoso",	
+			"message": "LogIn exitoso",
+		})
+	}
+}
+
+func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.SetCookie("token", "", -1, "api/v1/", "localhost", false, true)
+		c.JSON(200, gin.H{
+			"message": "logout",
 		})
 	}
 }

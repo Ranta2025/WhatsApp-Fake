@@ -14,5 +14,6 @@ type Log struct {
 
 func (rout *Log) Logs(){
 	rout.Router.POST("/LogIn", middleware.MiddlewareLogIn(), rout.Handler.HandlerLogIn())
-	rout.Router.POST("/LogOut", middleware.MiddlewareLogOut(), rout.Handler.HandlerLogOut())
+	rout.Router.POST("/register", middleware.MiddlewareLogOut(), rout.Handler.HandlerLogOut())
+	rout.Router.POST("/logout", rout.Handler.HandlerLogoutSession())
 }
