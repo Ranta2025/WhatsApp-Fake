@@ -5,7 +5,6 @@ import (
 	"gorm/services"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -71,16 +70,8 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			})
 			return
 		}
-		domain := os.Getenv("COOKIE_DOMAIN")
-		secure := os.Getenv("SECURE_COOKIE") == "true"
-
-		if secure {
-			c.SetSameSite(http.SameSiteNoneMode)
-		} else {
-			c.SetSameSite(http.SameSiteLaxMode)
-		}
-
-		c.SetCookie("token", token, 3600, "/api/v1/", domain, secure, true)
+		log.Println("[HANDLER] Login exitoso, token:", token)
+		c.SetCookie("token", token, 3600, "/api/v1/", "localhost", false, true)
 		c.JSON(200, gin.H{
 			"message": "LogIn exitoso",
 		})
@@ -89,16 +80,7 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 
 func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		domain := os.Getenv("COOKIE_DOMAIN")
-		secure := os.Getenv("SECURE_COOKIE") == "true"
-
-		if secure {
-			c.SetSameSite(http.SameSiteNoneMode)
-		} else {
-			c.SetSameSite(http.SameSiteLaxMode)
-		}
-
-		c.SetCookie("token", "", -1, "api/v1/", domain, secure, true)
+		c.SetCookie("token", "", -1, "api/v1/", "localhost", false, true)
 		c.JSON(200, gin.H{
 			"message": "logout",
 		})
