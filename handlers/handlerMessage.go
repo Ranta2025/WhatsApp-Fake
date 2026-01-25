@@ -4,6 +4,7 @@ import (
 	"gorm/services"
 	"gorm/utils"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,26 +19,25 @@ func InitHandlerApiMessage(services *services.ServiceApiMessage) *HandlerApiMess
 	}
 }
 
-
 func (hd *HandlerApiMessage) HandlerGetUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		if !exist {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener datos",
+				"error": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		user, err := hd.service.ServicesGetUser(username.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusNotImplemented, gin.H{
-				"message":err.Error(),
+				"message": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
-		ctx.IndentedJSON(200,user)
+		ctx.IndentedJSON(200, user)
 	}
 }
 
@@ -45,20 +45,20 @@ func (hd *HandlerApiMessage) HandlerPutUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		usernameUpedate, exist2 := ctx.Get("usernameUpdate")
-		if !exist || !exist2  {
+		if !exist || !exist2 {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":"error al obtener datos",
+				"message": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		user, err := hd.service.ServicePutUser(username.(string), usernameUpedate.(string), ctx)
-		if err != nil{
+		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":err.Error(),
+				"message": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		token, err := utils.GenerateToken(user.Username)
 		if err != nil {
@@ -66,11 +66,20 @@ func (hd *HandlerApiMessage) HandlerPutUser() gin.HandlerFunc {
 				"messaje": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
-		ctx.SetCookie("token", token, 3600, "/api/v1/","localhost",false,true)
+		domain := os.Getenv("COOKIE_DOMAIN")
+		secure := os.Getenv("SECURE_COOKIE") == "true"
+
+		if secure {
+			ctx.SetSameSite(http.SameSiteNoneMode)
+		} else {
+			ctx.SetSameSite(http.SameSiteLaxMode)
+		}
+
+		ctx.SetCookie("token", token, 3600, "/api/v1/", domain, secure, true)
 		ctx.JSON(200, gin.H{
-			"message":user,
+			"message": user,
 		})
 	}
 }
@@ -79,24 +88,24 @@ func (hd *HandlerApiMessage) HandlerAddContact() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		number, exist2 := ctx.Get("number")
-		if !exist || !exist2  {
+		if !exist || !exist2 {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":"error al obtener datos",
+				"message": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 
 		contact, err := hd.service.AddContact(username.(string), number.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":err.Error(),
+				"message": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		ctx.JSON(201, gin.H{
-			"contacto creado":contact,
+			"contacto creado": contact,
 		})
 	}
 }
@@ -106,19 +115,19 @@ func (hd *HandlerApiMessage) HandlerContacts() gin.HandlerFunc {
 		username, exist := ctx.Get("username")
 		if !exist {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener datos",
+				"error": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 
 		contacts, err := hd.service.ServiceGetContacts(username.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener chats",
+				"error": "error al obtener chats",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 
 		ctx.IndentedJSON(200, contacts)
