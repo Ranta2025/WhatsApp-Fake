@@ -50,10 +50,23 @@ func Conection() (*gorm.DB, error) {
 		fmt.Println("Error al conectar con base de datos")
 		return nil, err
 	}
-	if err := data.AutoMigrate(&models.UserDataBase{}); err != nil {
+	if err := data.AutoMigrate(&models.UserDataBase{}, &models.ContactDataBase{}); err != nil {
 		fmt.Println("Error al migrar base de datos")
 		return nil, err
 	}
+	data.Exec(`DO $$ BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_contact_data_bases_user') THEN
+			ALTER TABLE contact_data_bases DROP CONSTRAINT fk_contact_data_bases_user;
+		END IF;
+		IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_contact_data_bases_user_contact') THEN
+			ALTER TABLE contact_data_bases DROP CONSTRAINT fk_contact_data_bases_user_contact;
+		END IF;
+	END $$;`)
+	data.Exec(`DO $$ BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users') THEN
+			DROP TABLE users;
+		END IF;
+	END $$;`)
 	fmt.Println("Postgres, Coneccion establecida")
 	db = data
 	return db, nil

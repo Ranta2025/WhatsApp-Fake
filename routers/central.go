@@ -14,4 +14,5 @@ func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handler
 	subrouter := app.Group("/api/v1/")
 	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi)
 	apiMessage.ApiUser()
+	apiMessage.ApiContact()
 }

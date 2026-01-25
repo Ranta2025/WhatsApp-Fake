@@ -48,7 +48,7 @@ func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string
 	exist := s.repo.UsernameExist(user.Username, ctx)
 	log.Println("[SERVICE] ¿Usuario existe?:", exist)
 	if !exist {
-		return "", errors.New("Usuario inexistente")
+		return "", errors.New("Credenciales invalidas")
 	}
 	password, err := s.cache.CachePassword(user.Username, ctx)
 	if err != nil {
@@ -59,7 +59,7 @@ func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string
 	log.Println("[SERVICE] Password recibida:", user.Password)
 	if !utils.ComparePassword(user.Password, password) {
 		log.Println("[SERVICE] Contraseña INCORRECTA")
-		return "", errors.New("Contrasena incorrecta")
+		return "", errors.New("Credenciales invalidas")
 	}
 	log.Println("[SERVICE] Contraseña CORRECTA")
 	token, err := utils.GenerateToken(user.Username)

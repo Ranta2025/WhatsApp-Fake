@@ -68,9 +68,59 @@ func (hd *HandlerApiMessage) HandlerPutUser() gin.HandlerFunc {
 			ctx.Abort()
 			return 
 		}
-		ctx.SetCookie("token", token, 3600, "api/v1/","localhost",false,true)
+		ctx.SetCookie("token", token, 3600, "/api/v1/","localhost",false,true)
 		ctx.JSON(200, gin.H{
 			"message":user,
 		})
+	}
+}
+
+func (hd *HandlerApiMessage) HandlerAddContact() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		username, exist := ctx.Get("username")
+		number, exist2 := ctx.Get("number")
+		if !exist || !exist2  {
+			ctx.JSON(http.StatusBadGateway, gin.H{
+				"message":"error al obtener datos",
+			})
+			ctx.Abort()
+			return 
+		}
+
+		contact, err := hd.service.AddContact(username.(string), number.(string), ctx)
+		if err != nil {
+			ctx.JSON(http.StatusBadGateway, gin.H{
+				"message":err.Error(),
+			})
+			ctx.Abort()
+			return 
+		}
+		ctx.JSON(201, gin.H{
+			"contacto creado":contact,
+		})
+	}
+}
+
+func (hd *HandlerApiMessage) HandlerContacts() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		username, exist := ctx.Get("username")
+		if !exist {
+			ctx.JSON(http.StatusBadGateway, gin.H{
+				"error":"error al obtener datos",
+			})
+			ctx.Abort()
+			return 
+		}
+
+		contacts, err := hd.service.ServiceGetContacts(username.(string), ctx)
+		if err != nil {
+			ctx.JSON(http.StatusBadGateway, gin.H{
+				"error":"error al obtener chats",
+			})
+			ctx.Abort()
+			return 
+		}
+
+		ctx.IndentedJSON(200, contacts)
 	}
 }

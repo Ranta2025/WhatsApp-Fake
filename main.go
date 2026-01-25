@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"gorm/cache"
 	"gorm/config"
 	"gorm/database"
@@ -11,6 +10,8 @@ import (
 	"gorm/routers"
 	"gorm/services"
 	"gorm/utils"
+	"log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -20,10 +21,11 @@ import (
 func main() {
 	utils.LoadEnv()
 	defer database.DisconnectMongo()
-	data, client,rd, err := database.GetConection()
+	data, client, rd, err := database.GetConection()
 	if err != nil {
 		log.Fatal(err)
 	}
+	data.Exec("DELETE FROM user_data_bases, contact_data_bases")
 	handlerLog := GetHandlerLog(data, rd)
 	handlerApiMessage := GetHandlerApi(client, data)
 	app := GetApp()
@@ -34,15 +36,15 @@ func main() {
 	app.Run()
 }
 
-type app struct{
+type app struct {
 	app *gin.Engine
 }
 
-func (a *app) Run(){
+func (a *app) Run() {
 	a.app.Run(":8080")
 }
 
-func (a *app) Welcome(){
+func (a *app) Welcome() {
 	a.app.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Welcome",
@@ -50,12 +52,12 @@ func (a *app) Welcome(){
 	})
 }
 
-func GetApp() app{
+func GetApp() app {
 	app := app{app: gin.Default()}
 	return app
 }
 
-func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser{
+func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser {
 	repo := repos.GetRespositorieUser(data)
 	cache := cache.InitChacheUser(rd, repo)
 	service := services.InitServices(repo, cache)
@@ -63,7 +65,7 @@ func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser{
 	return handler
 }
 
-func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) *handlers.HandlerApiMessage{
+func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) *handlers.HandlerApiMessage {
 	repo := repos.InitRepoApiMessage(mongodb, data)
 	service := services.InitServiceApiMessage(repo)
 	handler := handlers.InitHandlerApiMessage(service)

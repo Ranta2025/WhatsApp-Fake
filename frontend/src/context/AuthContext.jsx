@@ -1,19 +1,14 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useContext } from 'react';
 import api from '../api/axios';
 
 const AuthContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        // Aquí podrías verificar si el usuario ya tiene una sesión válida
-        // Por ahora lo dejamos simple, asumiendo que el login establece el estado
-        setLoading(false);
-    }, []);
+    const [loading] = useState(false);
 
     const login = async (username, password) => {
         try {
@@ -36,8 +31,12 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const updateUsername = (username) => {
+        setUser((prev) => (prev ? { ...prev, username } : { username }));
+    };
+
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, logout, loading, updateUsername }}>
             {!loading && children}
         </AuthContext.Provider>
     );

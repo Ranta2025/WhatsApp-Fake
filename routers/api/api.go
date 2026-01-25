@@ -13,16 +13,23 @@ type RouterApiMessage struct {
 }
 
 func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerApiMessage) *RouterApiMessage{
-	return &RouterApiMessage{
+	rout := &RouterApiMessage{
 		app: app,
 		handler: handler,
 	}
+	rout.app.Use(middleware.MiddlewareTokenValidation())
+	return rout
 }
 
 
 func (rt *RouterApiMessage) ApiUser(){
-	rt.app.GET("user", middleware.MiddlewareTokenValidation(), rt.handler.HandlerGetUser())
-	rt.app.PUT("user", middleware.MiddlewareTokenValidation(), middleware.MiddlewareUsername(), rt.handler.HandlerPutUser())
+	rt.app.GET("user", rt.handler.HandlerGetUser())
+	rt.app.PUT("user", middleware.MiddlewareUsername(), rt.handler.HandlerPutUser())
+}
+
+func (rt *RouterApiMessage) ApiContact(){
+	rt.app.POST("contact",middleware.MiddlewareContact(),rt.handler.HandlerAddContact())
+	rt.app.GET("contact",rt.handler.HandlerContacts())
 }
 
 

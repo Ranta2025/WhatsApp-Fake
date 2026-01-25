@@ -60,6 +60,9 @@ func (db *RepositoriesUser) EmailExist(email string, c context.Context) (string,
 		}
 		return "", false
 	}
+	if gmail == ""{
+		return "", false
+	}
 	return gmail, true
 }
 

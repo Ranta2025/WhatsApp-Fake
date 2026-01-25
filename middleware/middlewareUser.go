@@ -35,6 +35,14 @@ func MiddlewareLogOut() gin.HandlerFunc {
 			return
 		}
 
+		if len(user.Telephon) != 8 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "El numero de telefono tiene que contener 8 caracteres",
+			})
+			c.Abort()
+			return
+		}
+
 		if !utils.ValidationPasswordLen(user.Password) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "La contraseña debe contener mas de 8 caracteres",

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import api from '../api/axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import AuthLayout from '../components/AuthLayout';
 
 export default function Register() {
     const [formData, setFormData] = useState({
@@ -9,8 +11,10 @@ export default function Register() {
         numero: '',
         password: ''
     });
+    const [confirm, setConfirm] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const { login } = useAuth();
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -18,75 +22,93 @@ export default function Register() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (formData.password !== confirm) {
+            setError('Las contraseñas no coinciden');
+            return;
+        }
         try {
-            // Asumiendo endpoint de registro estándar, aunque tu backend actual usa /LogOut para crear usuarios
-            // lo cual es un nombre confuso que mencionaré en el review.
-            // Usaré /LogOut temporalmente porque así está tu backend:
-            // func (s *HandlerUser) HandlerLogOut() ... "user create"
-            await api.post('/register', formData); 
-            navigate('/');
+            await api.post('/register', formData);
+            await login(formData.username, formData.password);
+            navigate('/dashboard');
         } catch (err) {
-            setError('Error al registrar usuario. Verifica los requisitos.');
+            const data = err?.response?.data;
+            const msg = (typeof data === 'string')
+                ? data
+                : data?.error || data?.message || err?.message || 'Error al registrar usuario. Verifica los requisitos.';
+            setError(msg);
         }
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-            <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-96">
-                <h2 className="text-2xl font-bold mb-6 text-center">Crear Cuenta</h2>
-                {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Usuario</label>
-                        <input
-                            type="text"
-                            name="username"
-                            onChange={handleChange}
-                            className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-green-500"
-                            placeholder="Mínimo 5 caracteres"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Email</label>
-                        <input
-                            type="email"
-                            name="email"
-                            onChange={handleChange}
-                            className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-green-500"
-                            placeholder="ejemplo@gmail.com"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Número</label>
-                        <input
-                            type="text"
-                            name="numero"
-                            onChange={handleChange}
-                            className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-green-500"
-                            placeholder="8 dígitos"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Contraseña</label>
-                        <input
-                            type="password"
-                            name="password"
-                            onChange={handleChange}
-                            className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-green-500"
-                            placeholder="Mínimo 8 caracteres, Num, Mayus"
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-200"
-                    >
-                        Registrarse
-                    </button>
-                </form>
-                <p className="mt-4 text-center text-sm text-gray-400">
-                    ¿Ya tienes cuenta? <a href="/" className="text-green-400 hover:underline">Ingresa aquí</a>
-                </p>
-            </div>
-        </div>
+        <AuthLayout
+            title="Crear tu cuenta"
+            subtitle="Únete a ApiChat para conversar con tus contactos"
+            footer={(
+                <span>
+                    ¿Ya tienes cuenta? <Link to="/" className="text-indigo-300 hover:text-white">Inicia sesión</Link>
+                </span>
+            )}
+        >
+            {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-indigo-200 mb-1">Usuario</label>
+                    <input
+                        type="text"
+                        name="username"
+                        onChange={handleChange}
+                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        placeholder="Mínimo 5 caracteres"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-indigo-200 mb-1">Email</label>
+                    <input
+                        type="email"
+                        name="email"
+                        onChange={handleChange}
+                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        placeholder="ejemplo@gmail.com"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-indigo-200 mb-1">Número</label>
+                    <input
+                        type="text"
+                        name="numero"
+                        onChange={handleChange}
+                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        placeholder="8 dígitos"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-indigo-200 mb-1">Contraseña</label>
+                    <input
+                        type="password"
+                        name="password"
+                        onChange={handleChange}
+                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        placeholder="Mínimo 8 caracteres, número, mayúsculas, especial"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-indigo-200 mb-1">Confirmar Contraseña</label>
+                    <input
+                        type="password"
+                        name="confirm"
+                        value={confirm}
+                        onChange={(e) => setConfirm(e.target.value)}
+                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        placeholder="Repite tu contraseña"
+                    />
+                </div>
+                <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition"
+                >
+                    Registrarse
+                </button>
+            </form>
+        </AuthLayout>
     );
 }
