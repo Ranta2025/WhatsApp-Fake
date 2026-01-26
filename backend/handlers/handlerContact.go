@@ -1,25 +1,26 @@
 package handlers
 
 import (
-	"gorm/services"
-	"gorm/utils"
+	"gorm/backend/models"
+	"gorm/backend/services"
+	"gorm/backend/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-type HandlerApiMessage struct {
-	service *services.ServiceApiMessage
+type HandlerContact struct {
+	service *services.ServiceApiContact
 }
 
-func InitHandlerApiMessage(services *services.ServiceApiMessage) *HandlerApiMessage {
-	return &HandlerApiMessage{
+func InitHandlerApiMessage(services *services.ServiceApiContact) *HandlerContact {
+	return &HandlerContact{
 		service: services,
 	}
 }
 
 
-func (hd *HandlerApiMessage) HandlerGetUser() gin.HandlerFunc {
+func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		if !exist {
@@ -41,7 +42,7 @@ func (hd *HandlerApiMessage) HandlerGetUser() gin.HandlerFunc {
 	}
 }
 
-func (hd *HandlerApiMessage) HandlerPutUser() gin.HandlerFunc {
+func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		usernameUpedate, exist2 := ctx.Get("usernameUpdate")
@@ -75,7 +76,7 @@ func (hd *HandlerApiMessage) HandlerPutUser() gin.HandlerFunc {
 	}
 }
 
-func (hd *HandlerApiMessage) HandlerAddContact() gin.HandlerFunc {
+func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		number, exist2 := ctx.Get("number")
@@ -101,7 +102,7 @@ func (hd *HandlerApiMessage) HandlerAddContact() gin.HandlerFunc {
 	}
 }
 
-func (hd *HandlerApiMessage) HandlerContacts() gin.HandlerFunc {
+func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		if !exist {
@@ -122,5 +123,33 @@ func (hd *HandlerApiMessage) HandlerContacts() gin.HandlerFunc {
 		}
 
 		ctx.IndentedJSON(200, contacts)
+	}
+}
+
+func (hd *HandlerContact) ContactPut() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		username,exist := ctx.Get("username")
+		contactadd, existContact := ctx.Get("answerContact")
+		if !(exist && existContact){
+			ctx.JSON(http.StatusBadGateway, gin.H{
+				"error":"error al obtener datos",
+			})
+			return 
+		}
+		contact := models.ContactPut{
+			ContactAdd: contactadd.(models.ContactAdd),
+			Username: username.(string),
+		}
+
+		err := hd.service.ServiceContactPut(contact, ctx)
+		if err != nil {
+			ctx.JSON(http.StatusBadGateway, gin.H{
+				"error":"error al cambiar status",
+			})
+			return 
+		}
+		ctx.JSON(http.StatusOK, gin.H{
+			"message":"status actualizado",
+		})
 	}
 }

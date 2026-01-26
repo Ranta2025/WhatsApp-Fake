@@ -12,6 +12,8 @@ export default function Register() {
         password: ''
     });
     const [confirm, setConfirm] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
     const { login } = useAuth();
@@ -83,24 +85,44 @@ export default function Register() {
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-indigo-200 mb-1">Contraseña</label>
-                    <input
-                        type="password"
-                        name="password"
-                        onChange={handleChange}
-                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
-                        placeholder="Mínimo 8 caracteres, número, mayúsculas, especial"
-                    />
+                    <div className="relative">
+                        <input
+                            type={showPassword ? 'text' : 'password'}
+                            name="password"
+                            onChange={handleChange}
+                            className="w-full p-3 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                            placeholder="Mínimo 8 caracteres, número, mayúsculas, especial"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-white text-sm"
+                            aria-label="Mostrar/Ocultar contraseña"
+                        >
+                            {showPassword ? 'Ocultar' : 'Ver'}
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-indigo-200 mb-1">Confirmar Contraseña</label>
-                    <input
-                        type="password"
-                        name="confirm"
-                        value={confirm}
-                        onChange={(e) => setConfirm(e.target.value)}
-                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
-                        placeholder="Repite tu contraseña"
-                    />
+                    <div className="relative">
+                        <input
+                            type={showConfirm ? 'text' : 'password'}
+                            name="confirm"
+                            value={confirm}
+                            onChange={(e) => setConfirm(e.target.value)}
+                            className="w-full p-3 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                            placeholder="Repite tu contraseña"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowConfirm((v) => !v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-white text-sm"
+                            aria-label="Mostrar/Ocultar confirmación"
+                        >
+                            {showConfirm ? 'Ocultar' : 'Ver'}
+                        </button>
+                    </div>
                 </div>
                 <button
                     type="submit"

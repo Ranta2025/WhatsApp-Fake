@@ -11,7 +11,7 @@ import (
 func GenerateToken(username string) (string, error) {
 	claim := jwt.MapClaims{}
 	claim["username"] = username
-	claim["exp"] = time.Now().Add(15 * time.Minute).Unix()
+	claim["exp"] = time.Now().Add(24 * time.Hour).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
 	hash_token,err := token.SignedString([]byte(os.Getenv("SECRETKEY")))

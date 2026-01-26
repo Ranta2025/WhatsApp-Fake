@@ -3,8 +3,8 @@ package repos
 import (
 	"context"
 	"errors"
-	"gorm/models"
-	"gorm/schemas"
+	"gorm/backend/models"
+	"gorm/backend/schemas"
 	"log"
 	"strings"
 	"time"
@@ -13,19 +13,19 @@ import (
 	"gorm.io/gorm"
 )
 
-type ApiMessage struct {
+type ApiContact struct {
 	mongo *mongo.Client
 	data  *gorm.DB
 }
 
-func InitRepoApiMessage(mongo *mongo.Client, data *gorm.DB) *ApiMessage {
-	return &ApiMessage{
+func InitRepoContact(mongo *mongo.Client, data *gorm.DB) *ApiContact {
+	return &ApiContact{
 		mongo: mongo,
 		data:  data,
 	}
 }
 
-func (ap *ApiMessage) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
+func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	log.Println("Buscando usuario:", username)
@@ -43,7 +43,7 @@ func (ap *ApiMessage) GetUserDataBase(username string, ctx context.Context) (*sc
 	return &user, nil
 }
 
-func (ap *ApiMessage) RepoPutUser(username string, usernameUpdate string, ctx context.Context) error {
+func (ap *ApiContact) RepoPutUser(username string, usernameUpdate string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	result := ap.data.Model(&models.UserDataBase{}).WithContext(c).Where("username = ?", username).Update("username", usernameUpdate)
@@ -53,13 +53,13 @@ func (ap *ApiMessage) RepoPutUser(username string, usernameUpdate string, ctx co
 	return nil
 }
 
-func (ap *ApiMessage) AddContact(contact models.ContactDataBase, ctx context.Context) error {
+func (ap *ApiContact) AddContact(contact models.ContactDataBase, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return ap.data.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
 }
 
-func (ap *ApiMessage) ExistContactAdd(idUser uint, IdContact uint, ctx context.Context) bool {
+func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.Context) bool {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var count int64
@@ -70,17 +70,17 @@ func (ap *ApiMessage) ExistContactAdd(idUser uint, IdContact uint, ctx context.C
 	return count > 0
 }
 
-func (ap *ApiMessage) PutStatus(contact models.ContactDataBase,status string,ctx context.Context) error {
+func (ap *ApiContact) PutStatus(id_user uint, id_contact uint,status string,ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return ap.data.Model(&models.ContactDataBase{}).
 		WithContext(c).
-		Where("id_user = ? AND id_contact = ?", contact.IdUser, contact.IdContact).
-		Or("id_user = ? AND id_contact = ?", contact.IdContact, contact.IdUser).
+		Where("id_user = ? AND id_contact = ?", id_user, id_contact).
+		Or("id_user = ? AND id_contact = ?", id_contact, id_user).
 		Update("status", status).Error
 }
 
-func (app *ApiMessage) GetIdUsername(username string, ctx context.Context) (int, error) {
+func (app *ApiContact) GetIdUsername(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var id_user int
@@ -91,7 +91,7 @@ func (app *ApiMessage) GetIdUsername(username string, ctx context.Context) (int,
 	return id_user, nil
 }
 
-func (app *ApiMessage) GetNumberUsername(username string, ctx context.Context) (int, error) {
+func (app *ApiContact) GetNumberUsername(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var id_user int
@@ -102,7 +102,7 @@ func (app *ApiMessage) GetNumberUsername(username string, ctx context.Context) (
 	return id_user, nil
 }
 
-func (app *ApiMessage) GetContactNumber(number string, ctx context.Context) (*models.ContactChat, error) {
+func (app *ApiContact) GetContactNumber(number string, ctx context.Context) (*models.ContactChat, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var contact models.ContactChat
@@ -117,7 +117,7 @@ func (app *ApiMessage) GetContactNumber(number string, ctx context.Context) (*mo
 	return &contact, nil
 }
 
-func (app *ApiMessage) GetContactsNumber(id uint, ctx context.Context) (*[]models.ContactChat, error) {
+func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]models.ContactChat, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var contacts []models.ContactChat

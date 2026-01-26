@@ -3,27 +3,28 @@ package services
 import (
 	"context"
 	"errors"
-	"gorm/models"
-	"gorm/repos"
-	"gorm/schemas"
+	"gorm/backend/models"
+	"gorm/backend/repos"
+	"gorm/backend/schemas"
+	"strings"
 )
 
-type ServiceApiMessage struct {
-	client *repos.ApiMessage
+type ServiceApiContact struct {
+	client *repos.ApiContact
 }
 
-func InitServiceApiMessage(cliente *repos.ApiMessage) *ServiceApiMessage {
-	return &ServiceApiMessage{
+func InitServiceApiMessage(cliente *repos.ApiContact) *ServiceApiContact {
+	return &ServiceApiContact{
 		client: cliente,
 	}
 }
 
-func (sr *ServiceApiMessage) ServicesGetUser(username string, ctx context.Context) (*schemas.UserGet, error) {
+func (sr *ServiceApiContact) ServicesGetUser(username string, ctx context.Context) (*schemas.UserGet, error) {
 	user, err := sr.client.GetUserDataBase(username, ctx)
 	return user, err
 }
 
-func (sr *ServiceApiMessage) ServicePutUser(username string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, error) {
+func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, error) {
 	if username == usernameUpdate {
 		return nil, errors.New("Proporciono el mismo usuario")
 	}
@@ -39,7 +40,7 @@ func (sr *ServiceApiMessage) ServicePutUser(username string, usernameUpdate stri
 	return user, nil
 }
 
-func (sr *ServiceApiMessage) AddContact(username string, number string, ctx context.Context) (*models.ContactChat, error) {
+func (sr *ServiceApiContact) AddContact(username string, number string, ctx context.Context) (*models.ContactChat, error) {
 	id_user, err := sr.client.GetIdUsername(username, ctx)
 	if err != nil {
 		return nil, err
@@ -63,7 +64,7 @@ func (sr *ServiceApiMessage) AddContact(username string, number string, ctx cont
 	exist := sr.client.ExistContactAdd(contact.IdUser, contact.IdContact, ctx)
 	existContact := sr.client.ExistContactAdd(contact.IdContact, contact.IdUser, ctx)
 	if exist && existContact {
-		if err := sr.client.PutStatus(contact, "accepted", ctx); err != nil {
+		if err := sr.client.PutStatus(contact.IdUser,contact.IdContact, "accepted", ctx); err != nil {
 			return nil, errors.New("error al cambiar status del contacto")
 		}
 	} else {
@@ -86,7 +87,7 @@ func (sr *ServiceApiMessage) AddContact(username string, number string, ctx cont
 	return contactChat, nil
 }
 
-func (sr *ServiceApiMessage) ServiceGetContacts(username string, ctx context.Context) (*[]models.ContactChat, error) {
+func (sr *ServiceApiContact) ServiceGetContacts(username string, ctx context.Context) (*[]models.ContactChat, error) {
 	id, err := sr.client.GetIdUsername(username, ctx)
 	if err != nil {
 		return nil, err
@@ -102,7 +103,29 @@ func (sr *ServiceApiMessage) ServiceGetContacts(username string, ctx context.Con
 	return contacts, nil
 }
 
-func (sr *ServiceApiMessage) ServiceGetContactByNumber(number string, ctx context.Context) (*models.ContactChat, error) {
+func (sr *ServiceApiContact) ServiceGetContactByNumber(number string, ctx context.Context) (*models.ContactChat, error) {
 	contact, err := sr.client.GetContactNumber(number, ctx)
 	return contact, err
 }
+
+func (sr *ServiceApiContact) ServiceContactPut(contact models.ContactPut, ctx context.Context) error {
+	id_user, err := sr.client.GetIdUsername(contact.Username, ctx)
+	if  err != nil {
+		return err
+	}
+	id_contact, err := sr.client.GetIdUsername(contact.UsernameAdd, ctx)
+	if err != nil {
+		return err
+	}
+	
+	var status string
+	if answer := strings.ToLower(contact.Answer); answer == "yes" {
+		status = "accepted"
+	}else {
+		status = "rechazed"
+	}
+	err = sr.client.PutStatus(uint(id_user), uint(id_contact), status, ctx)
+	return err
+}
+
+

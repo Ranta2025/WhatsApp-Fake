@@ -18,6 +18,7 @@ export default function Dashboard() {
     const [showSearch, setShowSearch] = useState(false);
     const [drafts, setDrafts] = useState({});
     const [messagesByChat, setMessagesByChat] = useState({});
+    const [answering, setAnswering] = useState(false);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -82,9 +83,18 @@ export default function Dashboard() {
     };
     const submitEdit = async (e) => {
         e.preventDefault();
+        const nu = newUsername.trim();
+        if (!nu || nu.length < 5) {
+            setStatus('El usuario tiene que tener mas de 5 caracteres');
+            return;
+        }
+        if (user?.username && nu === user.username) {
+            setStatus('Proporciono el mismo usuario');
+            return;
+        }
         try {
-            await api.put('/api/v1/user', { username: newUsername });
-            updateUsername(newUsername);
+            await api.put('/api/v1/user', { username: nu });
+            updateUsername(nu);
             const { data } = await api.get('/api/v1/user');
             setProfile(data);
             setShowEdit(false);
@@ -93,6 +103,40 @@ export default function Dashboard() {
             const d = err?.response?.data;
             const msg = typeof d === 'string' ? d : d?.message || d?.error || err?.message || 'Error al actualizar';
             setStatus(msg);
+        }
+    };
+    const answerContact = async (ans) => {
+        if (!selected) return;
+        setAnswering(true);
+        setStatus('');
+        try {
+            const { data: resp } = await api.put('/api/v1/contact', {
+                username_add: selected.Username,
+                answare: ans,
+            });
+            const ok = resp && (resp.message === 'status actualizado');
+            if (!ok) {
+                const msg = typeof resp === 'string' ? resp : (resp?.message || 'Error al actualizar contacto');
+                setStatus(msg);
+                return;
+            }
+            const { data } = await api.get('/api/v1/contact');
+            const refreshed = Array.isArray(data) ? data : [];
+            setContacts(refreshed);
+            const still = refreshed.find(c => c.Username === selected.Username);
+            if (!still) {
+                setSelected(null);
+                setStatus(ans === 'yes' ? 'Contacto aceptado' : 'Contacto rechazado');
+                return;
+            }
+            setSelected(still);
+            setStatus(ans === 'yes' ? 'Contacto aceptado' : 'Contacto rechazado');
+        } catch (err) {
+            const d = err?.response?.data;
+            const msg = typeof d === 'string' ? d : d?.message || d?.error || 'Error al actualizar contacto';
+            setStatus(msg);
+        } finally {
+            setAnswering(false);
         }
     };
     const submitAddContact = async (e) => {
@@ -141,6 +185,23 @@ export default function Dashboard() {
                     <div className="w-3 h-3 bg-green-500 rounded-full" title="Conectado"></div>
                 </div>
                 
+                <div className="p-4 border-b border-white/10">
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => { setShowAdd(true); setAddMsg(''); }}
+                            className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded text-sm transition"
+                        >
+                            Añadir
+                        </button>
+                        <button
+                            onClick={() => setShowSearch(true)}
+                            className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded text-sm transition"
+                        >
+                            Buscar
+                        </button>
+                    </div>
+                </div>
+
                 <div className="flex-1 overflow-y-auto p-4">
                     <div className="text-indigo-200 text-sm mb-2 uppercase">Contactos</div>
                     <div>
@@ -166,20 +227,6 @@ export default function Dashboard() {
                             <div className="text-sm text-indigo-300">Sin contactos</div>
                         )}
                     </div>
-                    <div className="mt-2 flex gap-2">
-                        <button
-                            onClick={() => { setShowAdd(true); setAddMsg(''); }}
-                            className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded text-sm transition"
-                        >
-                            Añadir
-                        </button>
-                        <button
-                            onClick={() => setShowSearch(true)}
-                            className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded text-sm transition"
-                        >
-                            Buscar
-                        </button>
-                    </div>
                 </div>
 
                 <div className="p-4 bg-white/10 border-t border-white/10">
@@ -199,7 +246,6 @@ export default function Dashboard() {
                             )}
                         </div>
                     </div>
-                    {status && <div className="text-xs text-indigo-200 mb-2">{status}</div>}
                     <div className="flex gap-2 mb-3">
                         <button
                             onClick={toggleProfile}
@@ -252,14 +298,16 @@ export default function Dashboard() {
                             {selected.Status === 'pending' && (
                                 <div className="flex gap-2">
                                     <button
-                                        onClick={() => setShowSearch(true)}
-                                        className="px-3 py-1 rounded bg-green-600/30 text-green-200"
+                                        onClick={() => answerContact('yes')}
+                                        disabled={answering}
+                                        className={`px-3 py-1 rounded ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-green-600/30 text-green-200`}
                                     >
                                         Yes
                                     </button>
                                     <button
-                                        onClick={() => setShowSearch(true)}
-                                        className="px-3 py-1 rounded bg-red-600/30 text-red-200"
+                                        onClick={() => answerContact('no')}
+                                        disabled={answering}
+                                        className={`px-3 py-1 rounded ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-red-600/30 text-red-200`}
                                     >
                                         No
                                     </button>
@@ -369,6 +417,7 @@ export default function Dashboard() {
                     <div className="w-full max-w-sm bg-white/10 border border-white/20 rounded-xl p-6">
                         <h3 className="text-lg font-bold mb-3">Editar nombre de perfil</h3>
                         <form onSubmit={submitEdit} className="space-y-4">
+                                    {status && <div className="text-xs text-indigo-200">{status}</div>}
                             <input
                                 type="text"
                                 value={newUsername}

@@ -3,10 +3,10 @@ package services
 import (
 	"context"
 	"errors"
-	"gorm/cache"
-	"gorm/models"
-	"gorm/repos"
-	"gorm/utils"
+	"gorm/backend/cache"
+	"gorm/backend/models"
+	"gorm/backend/repos"
+	"gorm/backend/utils"
 	"log"
 )
 

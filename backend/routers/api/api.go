@@ -1,18 +1,18 @@
 package api
 
 import (
-	"gorm/handlers"
-	"gorm/middleware"
+	"gorm/backend/handlers"
+	"gorm/backend/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
 type RouterApiMessage struct {
 	app *gin.RouterGroup
-	handler *handlers.HandlerApiMessage
+	handler *handlers.HandlerContact
 }
 
-func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerApiMessage) *RouterApiMessage{
+func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact) *RouterApiMessage{
 	rout := &RouterApiMessage{
 		app: app,
 		handler: handler,
@@ -30,6 +30,7 @@ func (rt *RouterApiMessage) ApiUser(){
 func (rt *RouterApiMessage) ApiContact(){
 	rt.app.POST("contact",middleware.MiddlewareContact(),rt.handler.HandlerAddContact())
 	rt.app.GET("contact",rt.handler.HandlerContacts())
+	rt.app.PUT("contact",middleware.MiddlewareContactPut(), rt.handler.ContactPut())
 }
 
 

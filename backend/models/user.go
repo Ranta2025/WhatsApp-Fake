@@ -18,7 +18,4 @@ type UserDataBase struct{
 	ContactsWhereIAmAdded []ContactDataBase `gorm:"foreignKey:IdContact"`
 }
 
-type UserLogin struct {
-	Username string
-	Password string
-}
+

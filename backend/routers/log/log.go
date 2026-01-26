@@ -1,8 +1,8 @@
 package log
 
 import (
-	"gorm/handlers"
-	"gorm/middleware"
+	"gorm/backend/handlers"
+	"gorm/backend/middleware"
 
 	"github.com/gin-gonic/gin"
 )

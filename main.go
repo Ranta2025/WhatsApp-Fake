@@ -1,15 +1,15 @@
 package main
 
 import (
-	"gorm/cache"
-	"gorm/config"
-	"gorm/database"
-	"gorm/handlers"
-	"gorm/middleware"
-	"gorm/repos"
-	"gorm/routers"
-	"gorm/services"
-	"gorm/utils"
+	"gorm/backend/cache"
+	"gorm/backend/config"
+	"gorm/backend/database"
+	"gorm/backend/handlers"
+	"gorm/backend/middleware"
+	"gorm/backend/repos"
+	"gorm/backend/routers"
+	"gorm/backend/services"
+	"gorm/backend/utils"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -65,8 +65,8 @@ func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser {
 	return handler
 }
 
-func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) *handlers.HandlerApiMessage {
-	repo := repos.InitRepoApiMessage(mongodb, data)
+func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) *handlers.HandlerContact {
+	repo := repos.InitRepoContact(mongodb, data)
 	service := services.InitServiceApiMessage(repo)
 	handler := handlers.InitHandlerApiMessage(service)
 	return handler

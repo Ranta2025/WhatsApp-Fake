@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"gorm/models"
-	"gorm/services"
+	"gorm/backend/models"
+	"gorm/backend/services"
 	"log"
 	"net/http"
 

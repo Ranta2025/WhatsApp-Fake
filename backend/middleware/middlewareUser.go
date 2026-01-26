@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"gorm/models"
-	"gorm/utils"
+	"gorm/backend/models"
+	"gorm/backend/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -89,11 +89,7 @@ func MiddlewareLogOut() gin.HandlerFunc {
 
 func MiddlewareLogIn() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		type body struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		}
-		var b body
+		var b models.UserLogin
 		if err := ctx.ShouldBindJSON(&b); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "complete todos los campos",
@@ -116,10 +112,7 @@ func MiddlewareLogIn() gin.HandlerFunc {
 
 func MiddlewareUsername() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		type body struct {
-			Username string `json:"username"`
-		}
-		var b body
+		var b models.Username
 		if err := ctx.ShouldBindJSON(&b); err != nil || b.Username == "" {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"message": "complete todos los campos",
@@ -127,6 +120,15 @@ func MiddlewareUsername() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
+
+		if !utils.ValidationLenUsername(b.Username) {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "El usuario tiene que tener mas de 5 caracteres",
+			})
+			ctx.Abort()
+			return
+		}
+		
 		ctx.Set("usernameUpdate", b.Username)
 		ctx.Next()
 	}

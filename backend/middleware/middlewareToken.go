@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"gorm/utils"
+	"gorm/backend/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
