@@ -64,22 +64,55 @@ export default function Dashboard() {
             [key]: value,
         }));
     };
-    const handleSend = () => {
+    const getUnreadCount = (contact) => {
+        const key = getChatKey(contact);
+        const arr = messagesByChat[key] || [];
+        return arr.filter((m) => m.Username === contact.Username && m.Status !== 'seen').length;
+    };
+    const getStatusIcon = (status) => {
+        const base = "w-4 h-4";
+        if (status === 'seen') {
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
+                    <path fill="#f59e0b" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
+                    <path fill="#f59e0b" d="M10 13l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z" transform="translate(-4,-4)"></path>
+                </svg>
+            );
+        }
+        if (status === 'delivered') {
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
+                    <path fill="#fcd34d" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
+                    <path fill="#fcd34d" d="M10 13l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z" transform="translate(-4,-4)"></path>
+                </svg>
+            );
+        }
+        return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
+                <path fill="#e5e7eb" d="M4 12l4 4 10-10 2 2-12 12-6-6z"></path>
+            </svg>
+        );
+    };
+    const handleSend = async () => {
         if (!selected) return;
         const trimmed = currentDraft.trim();
         if (!trimmed) return;
         const key = getChatKey(selected);
-        setMessagesByChat((prev) => {
-            const prevMsgs = prev[key] || [];
-            return {
+        try {
+            await api.post('/api/v1/chat', {
+                receptor: selected.Username,
+                message: trimmed,
+            });
+            const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
+            setMessagesByChat((prev) => ({
                 ...prev,
-                [key]: [...prevMsgs, { from: 'me', text: trimmed }],
-            };
-        });
-        setDrafts((prev) => ({
-            ...prev,
-            [key]: '',
-        }));
+                [key]: Array.isArray(data) ? data : [],
+            }));
+            setDrafts((prev) => ({
+                ...prev,
+                [key]: '',
+            }));
+        } catch {}
     };
     const submitEdit = async (e) => {
         e.preventDefault();
@@ -176,6 +209,82 @@ export default function Dashboard() {
         }
     };
 
+    useEffect(() => {
+        let timer;
+        const putDelivered = async () => {
+            try {
+                await api.put('/api/v1/chat');
+            } catch {}
+        };
+        putDelivered();
+        timer = setInterval(putDelivered, 3000);
+        return () => {
+            if (timer) clearInterval(timer);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!selected) return;
+        const key = getChatKey(selected);
+        let active = true;
+        const fetchMessages = async () => {
+            try {
+                const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
+                if (!active) return;
+                setMessagesByChat((prev) => ({
+                    ...prev,
+                    [key]: Array.isArray(data) ? data : [],
+                }));
+            } catch {}
+        };
+        const markSeen = async () => {
+            try {
+                await api.put(`/api/v1/chat/${selected.Username}`);
+            } catch {}
+        };
+        fetchMessages();
+        markSeen();
+        const intervalId = setInterval(fetchMessages, 3000);
+        const seenIntervalId = setInterval(markSeen, 3000);
+        return () => {
+            active = false;
+            clearInterval(intervalId);
+            clearInterval(seenIntervalId);
+        };
+    }, [selected]);
+
+    useEffect(() => {
+        if (!contacts || contacts.length === 0) return;
+        let active = true;
+        const fetchAllChats = async () => {
+            try {
+                const results = await Promise.all(
+                    contacts.map((c) =>
+                        api.get(`/api/v1/chat/${c.Username}`)
+                            .then(({ data }) => ({ key: getChatKey(c), data }))
+                            .catch(() => ({ key: getChatKey(c), data: null }))
+                    )
+                );
+                if (!active) return;
+                setMessagesByChat((prev) => {
+                    const next = { ...prev };
+                    results.forEach(({ key, data }) => {
+                        if (Array.isArray(data)) {
+                            next[key] = data;
+                        }
+                    });
+                    return next;
+                });
+            } catch {}
+        };
+        fetchAllChats();
+        const id = setInterval(fetchAllChats, 3000);
+        return () => {
+            active = false;
+            clearInterval(id);
+        };
+    }, [contacts]);
+
     return (
         <div className="flex h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950 text-white overflow-hidden">
             {/* Sidebar */}
@@ -209,7 +318,7 @@ export default function Dashboard() {
                             <button
                                 key={idx}
                                 onClick={() => setSelected(c)}
-                                className={`w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Username === c.Username ? 'ring-1 ring-indigo-400' : ''}`}
+                                className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Username === c.Username ? 'ring-1 ring-indigo-400' : ''}`}
                             >
                                 <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
                                     {c.Username?.charAt(0)?.toUpperCase()}
@@ -220,6 +329,11 @@ export default function Dashboard() {
                                 </div>
                                 {c.Status === 'pending' && (
                                     <span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">pendiente</span>
+                                )}
+                                {getUnreadCount(c) > 0 && (
+                                    <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                        {getUnreadCount(c)}
+                                    </span>
                                 )}
                             </button>
                         ))}
@@ -318,26 +432,36 @@ export default function Dashboard() {
                             {(messagesByChat[getChatKey(selected)] || []).length === 0 ? (
                                 <div className="flex-1 flex items-center justify-center">
                                     <div className="text-center">
-                                        <div className="text-sm">El chat estará disponible pronto</div>
+                                        <div className="text-sm">Sin mensajes</div>
                                     </div>
                                 </div>
                             ) : (
-                                (messagesByChat[getChatKey(selected)] || []).map((m, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={`flex ${m.from === 'me' ? 'justify-end' : 'justify-start'}`}
-                                    >
+                                (messagesByChat[getChatKey(selected)] || []).map((m, idx) => {
+                                    const isMine = m.Username === user?.username;
+                                    const text = m.Message;
+                                    const statusMsg = isMine ? m.Status : '';
+                                    const timeStr = m.Time ? new Date(m.Time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                    return (
                                         <div
-                                            className={`max-w-xs px-3 py-2 rounded-2xl text-sm ${
-                                                m.from === 'me'
-                                                    ? 'bg-indigo-600 text-white rounded-br-none'
-                                                    : 'bg-white/10 text-indigo-100 rounded-bl-none'
-                                            }`}
+                                            key={idx}
+                                            className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
                                         >
-                                            {m.text}
+                                            <div
+                                                className={`max-w-xs px-3 py-2 rounded-2xl text-sm ${
+                                                    isMine
+                                                        ? 'bg-indigo-600 text-white rounded-br-none'
+                                                        : 'bg-white/10 text-indigo-100 rounded-bl-none'
+                                                }`}
+                                            >
+                                                <div>{text}</div>
+                                                <div className="text-[10px] opacity-80 mt-1 flex items-center gap-1 justify-end">
+                                                    <span>{timeStr}</span>
+                                                    {isMine && <span>{getStatusIcon(m.Status)}</span>}
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>

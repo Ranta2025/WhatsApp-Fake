@@ -50,7 +50,7 @@ func Conection() (*gorm.DB, error) {
 		fmt.Println("Error al conectar con base de datos")
 		return nil, err
 	}
-	if err := data.AutoMigrate(&models.UserDataBase{}, &models.ContactDataBase{}); err != nil {
+	if err := data.AutoMigrate(&models.UserDataBase{}, &models.ContactDataBase{}, &models.Message{}); err != nil {
 		fmt.Println("Error al migrar base de datos")
 		return nil, err
 	}

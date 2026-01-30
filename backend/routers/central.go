@@ -8,11 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact) {
+func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat) {
 	router := log.Log{Router: app,Handler: handlerLog,}
 	router.Logs()
 	subrouter := app.Group("/api/v1/")
-	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi)
+	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat)
 	apiMessage.ApiUser()
 	apiMessage.ApiContact()
+	apiMessage.ApiChat()
 }

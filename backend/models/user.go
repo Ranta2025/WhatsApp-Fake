@@ -16,6 +16,9 @@ type UserDataBase struct{
 
 	ContactsAdded []ContactDataBase `gorm:"foreignKey:IdUser"`
 	ContactsWhereIAmAdded []ContactDataBase `gorm:"foreignKey:IdContact"`
+
+	MessageAdd []Message `gorm:"foreignKey:IdUser"`
+	MessageWhereIAmAdded []Message `gorm:"foreignKey:IdReceptor"`
 }
 
 

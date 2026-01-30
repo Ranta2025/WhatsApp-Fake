@@ -27,12 +27,12 @@ func main() {
 	}
 	data.Exec("DELETE FROM user_data_bases, contact_data_bases")
 	handlerLog := GetHandlerLog(data, rd)
-	handlerApiMessage := GetHandlerApi(client, data)
+	handlerContact, handlerChat := GetHandlerApi(client, data)
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
 	app.Welcome()
-	routers.Router(*handlerLog, app.app, *handlerApiMessage)
+	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat)
 	app.Run()
 }
 
@@ -65,9 +65,11 @@ func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser {
 	return handler
 }
 
-func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) *handlers.HandlerContact {
+func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerChat) {
 	repo := repos.InitRepoContact(mongodb, data)
-	service := services.InitServiceApiMessage(repo)
-	handler := handlers.InitHandlerApiMessage(service)
-	return handler
+	serviceMessage := services.InitServiceMessage(repo)
+	serviceContact := services.InitServiceContact(repo)
+	handlerContact := handlers.InitHandlerApiMessage(serviceContact)
+	handlerChat := handlers.InitHandlerChat(serviceMessage)
+	return handlerContact, handlerChat
 }

@@ -70,7 +70,7 @@ func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.C
 	return count > 0
 }
 
-func (ap *ApiContact) PutStatus(id_user uint, id_contact uint,status string,ctx context.Context) error {
+func (ap *ApiContact) PutStatus(id_user uint, id_contact uint, status string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return ap.data.Model(&models.ContactDataBase{}).
@@ -133,4 +133,51 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 		Order("contact_data_bases.created_at DESC").
 		Scan(&contacts)
 	return &contacts, result.Error
+}
+
+func (app *ApiContact) CreateMessage(message models.Message, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return app.data.Model(&models.Message{}).WithContext(c).Create(&message).Error
+}
+
+func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Context) ([]models.Message, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var messages []models.Message
+	result := app.data.Model(&models.Message{}).WithContext(c).
+		Where("(id_user = ? AND id_receptor = ?) OR (id_user = ? AND id_receptor = ?)", id_user, id_contact, id_contact, id_user).
+		Order("time ASC").
+		Scan(&messages)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return messages, nil
+}
+
+func (app *ApiContact) PutStatusMessageDelivered(id_message uint, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return app.data.Model(&models.Message{}).WithContext(c).
+		Where("id_receptor = ?", id_message).
+		Where("status = ?", "sent").
+		Update("status", "delivered").Error
+}
+
+func (app *ApiContact) PutStatusMessageSeen(id_message uint, id_user uint, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return app.data.Model(&models.Message{}).WithContext(c).
+		Where("id = ? AND id_receptor = ?", id_message, id_user).
+		Where("status = ?", "delivered").
+		Update("status", "seen").Error
+}
+
+func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor uint, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return app.data.Model(&models.Message{}).WithContext(c).
+		Where("id_user = ? AND id_receptor = ?", id_sender, id_receptor).
+		Where("status = ?", "delivered").
+		Update("status", "seen").Error
 }

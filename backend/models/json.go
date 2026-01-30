@@ -18,3 +18,10 @@ type ContactPut struct {
 	ContactAdd
 	Username string 
 }
+
+
+type MessageGet struct{
+	Receptor string	`json:"receptor" binding:"required"`
+	Message string	`json:"message" binding:"required"`
+}
+

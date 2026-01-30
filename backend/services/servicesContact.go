@@ -13,7 +13,7 @@ type ServiceApiContact struct {
 	client *repos.ApiContact
 }
 
-func InitServiceApiMessage(cliente *repos.ApiContact) *ServiceApiContact {
+func InitServiceContact(cliente *repos.ApiContact) *ServiceApiContact {
 	return &ServiceApiContact{
 		client: cliente,
 	}
