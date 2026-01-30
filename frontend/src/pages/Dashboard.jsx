@@ -290,7 +290,7 @@ export default function Dashboard() {
             {/* Sidebar */}
             <div className="w-72 bg-white/10 backdrop-blur-xl border-r border-white/10 flex flex-col">
                 <div className="p-5 border-b border-white/10 flex justify-between items-center">
-                    <h1 className="text-xl font-bold">ApiChat</h1>
+                    <h1 className="text-xl font-bold">todus</h1>
                     <div className="w-3 h-3 bg-green-500 rounded-full" title="Conectado"></div>
                 </div>
                 
@@ -384,7 +384,7 @@ export default function Dashboard() {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col h-screen overflow-hidden">
                 {!selected ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center">
                         <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mb-6">
@@ -392,7 +392,7 @@ export default function Dashboard() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
                         </div>
-                        <h2 className="text-3xl font-bold mb-2">Bienvenido a ApiChat</h2>
+                        <h2 className="text-3xl font-bold mb-2">Bienvenido a todus</h2>
                         <p className="max-w-md text-indigo-300">
                             Selecciona un contacto para comenzar a chatear. 
                             <br/>
@@ -400,8 +400,8 @@ export default function Dashboard() {
                         </p>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col">
-                        <div className="p-4 border-b border-white/10 bg-white/5 flex items-center gap-3">
+                    <div className="flex flex-col h-full overflow-hidden">
+                        <div className="p-4 border-b border-white/10 bg-white/5 flex items-center gap-3 flex-shrink-0">
                             <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                                 {selected.Username?.charAt(0)?.toUpperCase()}
                             </div>
@@ -428,7 +428,7 @@ export default function Dashboard() {
                                 </div>
                             )}
                         </div>
-                        <div className="flex-1 flex flex-col text-indigo-200 p-4 space-y-3 overflow-y-auto">
+                        <div className="flex-1 overflow-y-auto flex flex-col text-indigo-200 p-4 space-y-3">
                             {(messagesByChat[getChatKey(selected)] || []).length === 0 ? (
                                 <div className="flex-1 flex items-center justify-center">
                                     <div className="text-center">
@@ -464,28 +464,52 @@ export default function Dashboard() {
                                 })
                             )}
                         </div>
+                        <div className="flex-shrink-0 p-4 bg-white/10 border-t border-white/10">
+                            <div className="flex gap-4">
+                                <input 
+                                    type="text" 
+                                    value={currentDraft}
+                                    onChange={handleInputChange}
+                                    placeholder="Escribe un mensaje..."
+                                    className="flex-1 p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300"
+                                    onKeyPress={(e) => {
+                                        if (e.key === 'Enter' && selected && currentDraft.trim()) {
+                                            handleSend();
+                                        }
+                                    }}
+                                />
+                                <button
+                                    className={`bg-gradient-to-r from-purple-600 to-indigo-600 px-6 rounded text-white font-medium transition ${selected && currentDraft.trim() ? 'hover:from-purple-500 hover:to-indigo-500' : 'opacity-50 cursor-not-allowed'}`}
+                                    disabled={!selected || !currentDraft.trim()}
+                                    onClick={handleSend}
+                                >
+                                    Enviar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 
-                <div className="p-4 bg-white/10 border-t border-white/10">
-                    <div className="flex gap-4">
-                        <input 
-                            type="text" 
-                            value={currentDraft}
-                            onChange={handleInputChange}
-                            placeholder={selected ? "Escribe un mensaje..." : "Selecciona un contacto para escribir"}
-                            className={`flex-1 p-3 rounded bg-white/5 border border-white/10 focus:outline-none ${selected ? '' : 'cursor-not-allowed opacity-50'}`}
-                            disabled={!selected}
-                        />
-                        <button
-                            className={`bg-gradient-to-r from-purple-600 to-indigo-600 px-6 rounded ${selected && currentDraft.trim() ? '' : 'opacity-50 cursor-not-allowed'}`}
-                            disabled={!selected || !currentDraft.trim()}
-                            onClick={handleSend}
-                        >
-                            Enviar
-                        </button>
+                {!selected && (
+                    <div className="flex-shrink-0 p-4 bg-white/10 border-t border-white/10">
+                        <div className="flex gap-4">
+                            <input 
+                                type="text" 
+                                value={currentDraft}
+                                onChange={handleInputChange}
+                                placeholder="Selecciona un contacto para escribir"
+                                className="flex-1 p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300 cursor-not-allowed opacity-50"
+                                disabled={true}
+                            />
+                            <button
+                                className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 rounded text-white font-medium opacity-50 cursor-not-allowed"
+                                disabled={true}
+                            >
+                                Enviar
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
             {showAdd && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
