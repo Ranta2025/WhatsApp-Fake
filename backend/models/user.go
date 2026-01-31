@@ -12,7 +12,7 @@ type User struct {
 type UserDataBase struct{
 	User
 	Password string `gorm:"size:70" json:"password" binding:"required"`
-	Activo bool `gorm:"default:true"`
+	Activo bool `gorm:"default:false"`
 
 	ContactsAdded []ContactDataBase `gorm:"foreignKey:IdUser"`
 	ContactsWhereIAmAdded []ContactDataBase `gorm:"foreignKey:IdContact"`

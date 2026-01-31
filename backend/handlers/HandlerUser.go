@@ -43,21 +43,13 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		username, exist := c.Get("username")
-		if !exist {
+		password, exist2 := c.Get("password")
+		if !(exist && exist2) {
 			c.JSON(401, gin.H{
 				"error": "no se encuentran los datos",
 			})
 			return
 		}
-		password, exist := c.Get("password")
-		if !exist {
-			c.JSON(401, gin.H{
-				"error": "no se encuentran los datos",
-			})
-			return
-		}
-		log.Println("[HANDLER] Username:", username.(string))
-		log.Println("[HANDLER] Password:", password.(string))
 		user := models.UserLogin{
 			Username: username.(string),
 			Password: password.(string),
@@ -70,7 +62,6 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			})
 			return
 		}
-		log.Println("[HANDLER] Login exitoso, token:", token)
 		c.SetCookie("token", token, 3600, "/api/v1/", "localhost", false, true)
 		c.JSON(200, gin.H{
 			"message": "LogIn exitoso",
@@ -86,3 +77,51 @@ func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 		})
 	}
 }
+
+func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		userActivate, exist := c.Get("usernameActivate")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener el username",
+			})
+			return
+		}
+		err := s.service.ActivateAccount(userActivate.(models.UserActivate), ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message": "cuenta activada",
+		})
+	}
+}
+
+func (s *HandlerUser) HandlerRecoverAccount() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		email, exist := c.Get("emailRecover")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener el email",
+			})
+			return
+		}
+		username, err := s.service.RecoverAccount(email.(string), ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message":  "codigo enviado al email",
+			"username": username,
+		})
+	}
+}
+

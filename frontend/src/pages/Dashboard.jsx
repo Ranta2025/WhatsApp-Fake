@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
@@ -19,6 +19,7 @@ export default function Dashboard() {
     const [drafts, setDrafts] = useState({});
     const [messagesByChat, setMessagesByChat] = useState({});
     const [answering, setAnswering] = useState(false);
+    const messagesContainerRef = useRef(null);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -285,6 +286,17 @@ export default function Dashboard() {
         };
     }, [contacts]);
 
+    // Scroll automático al final cuando cambian los mensajes
+    useEffect(() => {
+        if (messagesContainerRef.current && selected) {
+            const container = messagesContainerRef.current;
+            // Usar requestAnimationFrame para asegurar que el DOM se haya actualizado completamente
+            requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+    }, [messagesByChat, selected]);
+
     return (
         <div className="flex h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950 text-white overflow-hidden">
             {/* Sidebar */}
@@ -384,24 +396,45 @@ export default function Dashboard() {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col h-screen overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 {!selected ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center">
-                        <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
+                    <div className="flex flex-col h-full">
+                        <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center overflow-y-auto">
+                            <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mb-6">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                            </div>
+                            <h2 className="text-3xl font-bold mb-2">Bienvenido a todus</h2>
+                            <p className="max-w-md text-indigo-300">
+                                Selecciona un contacto para comenzar a chatear. 
+                                <br/>
+                                <span className="text-sm opacity-70">(Funcionalidad de chat y WebSockets en desarrollo)</span>
+                            </p>
                         </div>
-                        <h2 className="text-3xl font-bold mb-2">Bienvenido a todus</h2>
-                        <p className="max-w-md text-indigo-300">
-                            Selecciona un contacto para comenzar a chatear. 
-                            <br/>
-                            <span className="text-sm opacity-70">(Funcionalidad de chat y WebSockets en desarrollo)</span>
-                        </p>
+                        <div className="flex-shrink-0 p-4 bg-white/10 border-t border-white/10">
+                            <div className="flex gap-4">
+                                <input 
+                                    type="text" 
+                                    value={currentDraft}
+                                    onChange={handleInputChange}
+                                    placeholder="Selecciona un contacto para escribir"
+                                    className="flex-1 p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300 cursor-not-allowed opacity-50"
+                                    disabled={true}
+                                />
+                                <button
+                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 rounded text-white font-medium opacity-50 cursor-not-allowed"
+                                    disabled={true}
+                                >
+                                    Enviar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="p-4 border-b border-white/10 bg-white/5 flex items-center gap-3 flex-shrink-0">
+                    <div className="flex flex-col h-full min-h-0 relative">
+                        {/* Header fijo */}
+                        <div className="flex-shrink-0 p-4 border-b border-white/10 bg-white/5 flex items-center gap-3 z-10">
                             <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                                 {selected.Username?.charAt(0)?.toUpperCase()}
                             </div>
@@ -428,7 +461,11 @@ export default function Dashboard() {
                                 </div>
                             )}
                         </div>
-                        <div className="flex-1 overflow-y-auto flex flex-col text-indigo-200 p-4 space-y-3">
+                        {/* Área de mensajes con scroll independiente */}
+                        <div 
+                            ref={messagesContainerRef}
+                            className="flex-1 min-h-0 overflow-y-auto flex flex-col text-indigo-200 p-4 space-y-3 pb-32"
+                        >
                             {(messagesByChat[getChatKey(selected)] || []).length === 0 ? (
                                 <div className="flex-1 flex items-center justify-center">
                                     <div className="text-center">
@@ -464,7 +501,8 @@ export default function Dashboard() {
                                 })
                             )}
                         </div>
-                        <div className="flex-shrink-0 p-4 bg-white/10 border-t border-white/10">
+                        {/* Input fijo en la parte inferior - estilo WhatsApp */}
+                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/10 border-t border-white/10 z-20">
                             <div className="flex gap-4">
                                 <input 
                                     type="text" 
@@ -486,27 +524,6 @@ export default function Dashboard() {
                                     Enviar
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                )}
-
-                {!selected && (
-                    <div className="flex-shrink-0 p-4 bg-white/10 border-t border-white/10">
-                        <div className="flex gap-4">
-                            <input 
-                                type="text" 
-                                value={currentDraft}
-                                onChange={handleInputChange}
-                                placeholder="Selecciona un contacto para escribir"
-                                className="flex-1 p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300 cursor-not-allowed opacity-50"
-                                disabled={true}
-                            />
-                            <button
-                                className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 rounded text-white font-medium opacity-50 cursor-not-allowed"
-                                disabled={true}
-                            >
-                                Enviar
-                            </button>
                         </div>
                     </div>
                 )}

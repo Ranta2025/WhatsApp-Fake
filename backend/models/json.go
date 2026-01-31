@@ -25,3 +25,8 @@ type MessageGet struct{
 	Message string	`json:"message" binding:"required"`
 }
 
+type UserActivate struct {
+	Username string `json:"username" binding:"required"`
+	Code     string `json:"code" binding:"required"`
+}
+

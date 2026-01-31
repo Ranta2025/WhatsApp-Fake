@@ -133,3 +133,33 @@ func MiddlewareUsername() gin.HandlerFunc {
 		ctx.Next()
 	}
 }
+
+func MiddlewareActivateAccount() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var b models.UserActivate
+		if err := ctx.ShouldBindJSON(&b); err != nil || b.Username == "" || b.Code == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"message": "complete todos los campos",
+			})
+			ctx.Abort()
+			return
+		}
+		ctx.Set("usernameActivate", b.Username)
+		ctx.Next()
+	}
+}
+
+func MiddlewareRecoverAccount() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var gmail string
+		if err := ctx.ShouldBindJSON(&gmail); err != nil || gmail == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"message": "complete todos los campos",
+			})
+			ctx.Abort()
+			return
+		}
+		ctx.Set("gmailRecover", gmail)
+		ctx.Next()
+	}
+}

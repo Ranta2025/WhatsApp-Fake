@@ -11,29 +11,27 @@ import (
 	"gorm/backend/services"
 	"gorm/backend/utils"
 	"log"
-
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
 
 func main() {
 	utils.LoadEnv()
-	defer database.DisconnectMongo()
-	data, client, rd, err := database.GetConection()
+	data, rd, err := database.GetConection()
 	if err != nil {
 		log.Fatal(err)
 	}
 	data.Exec("DELETE FROM user_data_bases, contact_data_bases")
 	handlerLog := GetHandlerLog(data, rd)
-	handlerContact, handlerChat := GetHandlerApi(client, data)
+	handlerContact, handlerChat := GetHandlerApi(data)
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
 	app.Welcome()
 	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat)
 	app.Run()
+    
 }
 
 type app struct {
@@ -65,8 +63,8 @@ func GetHandlerLog(data *gorm.DB, rd *redis.Client) *handlers.HandlerUser {
 	return handler
 }
 
-func GetHandlerApi(mongodb *mongo.Client, data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerChat) {
-	repo := repos.InitRepoContact(mongodb, data)
+func GetHandlerApi(data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerChat) {
+	repo := repos.InitRepoContact(data)
 	serviceMessage := services.InitServiceMessage(repo)
 	serviceContact := services.InitServiceContact(repo)
 	handlerContact := handlers.InitHandlerApiMessage(serviceContact)

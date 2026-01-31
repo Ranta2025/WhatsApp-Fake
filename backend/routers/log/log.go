@@ -16,4 +16,6 @@ func (rout *Log) Logs(){
 	rout.Router.POST("/LogIn", middleware.MiddlewareLogIn(), rout.Handler.HandlerLogIn())
 	rout.Router.POST("/register", middleware.MiddlewareLogOut(), rout.Handler.HandlerLogOut())
 	rout.Router.POST("/logout", rout.Handler.HandlerLogoutSession())
+	rout.Router.POST("/activate", middleware.MiddlewareActivateAccount(), rout.Handler.HandlerActivateAccount())
+	rout.Router.POST("/recover", middleware.MiddlewareRecoverAccount(), rout.Handler.HandlerRecoverAccount())
 }

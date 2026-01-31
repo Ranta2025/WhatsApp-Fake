@@ -8,19 +8,15 @@ import (
 	"log"
 	"strings"
 	"time"
-
-	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
 
 type ApiContact struct {
-	mongo *mongo.Client
 	data  *gorm.DB
 }
 
-func InitRepoContact(mongo *mongo.Client, data *gorm.DB) *ApiContact {
+func InitRepoContact(data *gorm.DB) *ApiContact {
 	return &ApiContact{
-		mongo: mongo,
 		data:  data,
 	}
 }

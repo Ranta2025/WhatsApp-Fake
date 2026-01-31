@@ -79,3 +79,37 @@ func (db *RepositoriesUser) GetPassword(username string, c context.Context) (str
 	}
 	return password, true
 }
+
+func (db *RepositoriesUser) GetActivo(username string, c context.Context) (bool, bool) {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	var activo bool
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("activo").Where("username = ?", username).Scan(&activo)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return false, false
+		}
+		return false, false
+	}
+	return activo, true
+}
+
+func (db *RepositoriesUser) ActivateAccount(username string, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return  db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("activo", true).Error
+}
+
+func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) (string, bool) {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	var username string
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("username").Where("gmail = ?", email).Scan(&username)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return "", false
+		}
+		return "", false
+	}
+	return username, true
+}
