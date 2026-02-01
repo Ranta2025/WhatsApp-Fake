@@ -18,11 +18,22 @@ func GetRespositorieUser(db *gorm.DB) *RepositoriesUser {
 	return &RepositoriesUser{db: db}
 }
 
+// BeginTx inicia una transacción
+func (db *RepositoriesUser) BeginTx() *gorm.DB {
+	return db.db.Begin()
+}
+
 func (db *RepositoriesUser) CreateUser(user models.UserDataBase, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
-	user.Activo = true
 	return db.db.WithContext(ctx).Create(&user).Error
+}
+
+// CreateUserTx crea usuario dentro de una transacción
+func (db *RepositoriesUser) CreateUserTx(tx *gorm.DB, user models.UserDataBase, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return tx.WithContext(ctx).Create(&user).Error
 }
 
 func (db *RepositoriesUser) UsernameExist(username string, c context.Context) bool {
@@ -49,6 +60,20 @@ func (db *RepositoriesUser) UsernameExist(username string, c context.Context) bo
 	return true
 }
 
+func (db *RepositoriesUser) GetGmail(username string, c context.Context) (string, bool) {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	var gmail string
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("gmail").Where("username = ?", username).Scan(&gmail)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return "", false
+		}
+		return "", false
+	}
+	return gmail, true
+}
+
 func (db *RepositoriesUser) EmailExist(email string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -60,7 +85,7 @@ func (db *RepositoriesUser) EmailExist(email string, c context.Context) (string,
 		}
 		return "", false
 	}
-	if gmail == ""{
+	if gmail == "" {
 		return "", false
 	}
 	return gmail, true
@@ -97,7 +122,27 @@ func (db *RepositoriesUser) GetActivo(username string, c context.Context) (bool,
 func (db *RepositoriesUser) ActivateAccount(username string, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
-	return  db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("activo", true).Error
+	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("activo", true).Error
+}
+
+func (db *RepositoriesUser) ChangePassword(username string, newPassword string, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("password", newPassword).Error
+}
+
+func (db *RepositoriesUser) GetBlocked(username string, c context.Context) (bool, bool) {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	var bloqueado bool
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("bloqueado").Where("username = ?", username).Scan(&bloqueado)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return false, false
+		}
+		return false, false
+	}
+	return bloqueado, true
 }
 
 func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) (string, bool) {
@@ -112,4 +157,60 @@ func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) 
 		return "", false
 	}
 	return username, true
+}
+
+func (db *RepositoriesUser) TelephonExist(telephon string, c context.Context) bool {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	var telephonDB string
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("telephon").Where("telephon = ?", telephon).Scan(&telephonDB)
+	log.Println("[REPO] Buscando telefono:", telephon)
+	log.Println("[REPO] Resultado de búsqueda:", telephonDB)
+	log.Println("[REPO] Error:", result.Error)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			log.Println("[REPO] Telefono NO existe")
+			return false
+		}
+		log.Println("[REPO] Error en query:", result.Error)
+		return false
+	}
+	if telephonDB == "" {
+		log.Println("[REPO] Telefono NO existe (vacío)")
+		return false
+	}
+	log.Println("[REPO] Telefono EXISTE")
+	return true
+}
+
+func (db *RepositoriesUser) BlockUser(username string, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("bloqueado", true).Error
+}
+
+func (db *RepositoriesUser) UnblockUserByEmail(email string, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("gmail = ?", email).Update("bloqueado", false).Error
+}
+
+// UnblockUserByEmailTx desbloquea usuario dentro de una transacción
+func (db *RepositoriesUser) UnblockUserByEmailTx(tx *gorm.DB, email string, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return tx.Model(&models.UserDataBase{}).WithContext(ctx).Where("gmail = ?", email).Update("bloqueado", false).Error
+}
+
+func (db *RepositoriesUser) ChangePasswordByEmail(email string, newPassword string, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("gmail = ?", email).Update("password", newPassword).Error
+}
+
+// ChangePasswordByEmailTx cambia contraseña dentro de una transacción
+func (db *RepositoriesUser) ChangePasswordByEmailTx(tx *gorm.DB, email string, newPassword string, c context.Context) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	return tx.Model(&models.UserDataBase{}).WithContext(ctx).Where("gmail = ?", email).Update("password", newPassword).Error
 }

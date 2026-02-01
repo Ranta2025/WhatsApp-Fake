@@ -21,6 +21,13 @@ export default function Login() {
             const msg = (typeof data === 'string')
                 ? data
                 : data?.error || data?.message || err?.message || 'Credenciales inválidas o error de conexión';
+            
+            // Si el usuario está bloqueado, redirigir a la página de desbloqueo
+            if (msg.toLowerCase().includes('bloqueado')) {
+                navigate('/unblock-account', { state: { username: username } });
+                return;
+            }
+            
             setError(msg);
         }
     };
@@ -65,6 +72,14 @@ export default function Login() {
                         >
                             {showPassword ? 'Ocultar' : 'Ver'}
                         </button>
+                    </div>
+                    <div className="flex justify-between items-center text-xs mt-2">
+                        <Link to="/recover-password" className="text-indigo-300 hover:text-white">
+                            ¿Olvidaste tu contraseña?
+                        </Link>
+                        <Link to="/unblock-account" className="text-orange-300 hover:text-white">
+                            ¿Cuenta bloqueada?
+                        </Link>
                     </div>
                 </div>
                 <button

@@ -1,0 +1,270 @@
+import { useState } from 'react';
+import api from '../api/axios';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import AuthLayout from '../components/AuthLayout';
+
+export default function UnblockAccount() {
+    const [step, setStep] = useState(1);
+    const [gmail, setGmail] = useState('');
+    const [code, setCode] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Si viene desde el login con email pre-cargado
+    const preloadedEmail = location.state?.gmail || '';
+
+    useState(() => {
+        if (preloadedEmail) {
+            setGmail(preloadedEmail);
+        }
+    }, []);
+
+    // STEP 1: Solicitar código de desbloqueo
+    const handleStep1 = async (e) => {
+        e.preventDefault();
+        setError('');
+        
+        if (!gmail.trim()) {
+            setError('Por favor ingresa tu email');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const response = await api.post('/resend-code', {
+                gmail: gmail
+            });
+            setStep(2);
+        } catch (err) {
+            const data = err?.response?.data;
+            const msg = (typeof data === 'string')
+                ? data
+                : data?.message || data?.error || 'Email no encontrado o error al enviar código';
+            setError(msg);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // STEP 2: Verificar código
+    const handleStep2 = (e) => {
+        e.preventDefault();
+        setError('');
+        
+        if (!code.trim()) {
+            setError('Por favor ingresa el código');
+            return;
+        }
+        setStep(3);
+    };
+
+    // STEP 3: Cambiar contraseña y desbloquear
+    const handleStep3 = async (e) => {
+        e.preventDefault();
+        setError('');
+        
+        if (!newPassword.trim() || !confirmPassword.trim()) {
+            setError('Por favor completa todos los campos');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setError('Las contraseñas no coinciden');
+            return;
+        }
+
+        if (newPassword.length < 8) {
+            setError('La contraseña debe tener mínimo 8 caracteres');
+            return;
+        }
+
+        // Validaciones de contraseña
+        if (!/[0-9]/.test(newPassword)) {
+            setError('La contraseña debe contener algún número');
+            return;
+        }
+
+        if (!/[A-Z]/.test(newPassword)) {
+            setError('La contraseña debe contener alguna mayúscula');
+            return;
+        }
+
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+            setError('La contraseña debe contener algún caracter especial');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Operación atómica: desbloquear + cambiar contraseña en una sola llamada
+            await api.post('/unlock-account', {
+                email: gmail,
+                code: code,
+                password: newPassword
+            });
+
+            alert('¡Cuenta desbloqueada exitosamente! Ya puedes iniciar sesión con tu nueva contraseña.');
+            navigate('/');
+        } catch (err) {
+            const data = err?.response?.data;
+            const msg = (typeof data === 'string')
+                ? data
+                : data?.message || data?.error || 'Error al desbloquear cuenta';
+            setError(msg);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <AuthLayout
+            title={
+                step === 1
+                    ? 'Desbloquear cuenta'
+                    : step === 2
+                    ? 'Verifica el código'
+                    : 'Nueva contraseña'
+            }
+            subtitle={
+                step === 1
+                    ? 'Tu cuenta fue bloqueada por intentos fallidos. Ingresa tu email para recibir un código de desbloqueo.'
+                    : step === 2
+                    ? 'Ingresa el código enviado a tu email'
+                    : 'Crea una nueva contraseña para tu cuenta'
+            }
+            footer={(
+                <span>
+                    ¿Necesitas ayuda? <Link to="/" className="text-indigo-300 hover:text-white">Volver al login</Link>
+                </span>
+            )}
+        >
+            {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+
+            {/* STEP 1: Email */}
+            {step === 1 && (
+                <form onSubmit={handleStep1} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-indigo-200 mb-1">Email</label>
+                        <input
+                            type="email"
+                            value={gmail}
+                            onChange={(e) => setGmail(e.target.value)}
+                            className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                            placeholder="tu@email.com"
+                        />
+                        <p className="text-indigo-300 text-xs mt-2">
+                            Se enviará un código de desbloqueo a este email
+                        </p>
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
+                    >
+                        {loading ? 'Enviando...' : 'Enviar código'}
+                    </button>
+                </form>
+            )}
+
+            {/* STEP 2: Code */}
+            {step === 2 && (
+                <form onSubmit={handleStep2} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-indigo-200 mb-1">Código de Desbloqueo</label>
+                        <input
+                            type="text"
+                            value={code}
+                            onChange={(e) => setCode(e.target.value)}
+                            className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-center tracking-widest text-lg"
+                            placeholder="000000"
+                            maxLength="20"
+                        />
+                        <p className="text-indigo-300 text-xs mt-2">
+                            Revisa tu email para encontrar el código
+                        </p>
+                    </div>
+                    <button
+                        type="submit"
+                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition"
+                    >
+                        Verificar código
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setStep(1)}
+                        className="w-full bg-white/5 hover:bg-white/10 text-indigo-300 font-bold py-3 rounded-xl transition"
+                    >
+                        Volver
+                    </button>
+                </form>
+            )}
+
+            {/* STEP 3: New Password */}
+            {step === 3 && (
+                <form onSubmit={handleStep3} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-indigo-200 mb-1">Nueva Contraseña</label>
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="w-full p-3 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                                placeholder="Mínimo 8 caracteres"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((v) => !v)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-white text-sm"
+                            >
+                                {showPassword ? 'Ocultar' : 'Ver'}
+                            </button>
+                        </div>
+                        <p className="text-indigo-300 text-xs mt-1">
+                            Debe incluir: 8+ caracteres, mayúscula, número y caracter especial
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-indigo-200 mb-1">Confirmar Contraseña</label>
+                        <div className="relative">
+                            <input
+                                type={showConfirm ? 'text' : 'password'}
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                className="w-full p-3 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                                placeholder="Confirma tu contraseña"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirm((v) => !v)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-white text-sm"
+                            >
+                                {showConfirm ? 'Ocultar' : 'Ver'}
+                            </button>
+                        </div>
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
+                    >
+                        {loading ? 'Procesando...' : 'Desbloquear cuenta'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className="w-full bg-white/5 hover:bg-white/10 text-indigo-300 font-bold py-3 rounded-xl transition"
+                    >
+                        Volver
+                    </button>
+                </form>
+            )}
+        </AuthLayout>
+    );
+}

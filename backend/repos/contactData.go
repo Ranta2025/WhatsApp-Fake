@@ -21,6 +21,11 @@ func InitRepoContact(data *gorm.DB) *ApiContact {
 	}
 }
 
+// BeginTx inicia una transacción
+func (ap *ApiContact) BeginTx() *gorm.DB {
+	return ap.data.Begin()
+}
+
 func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -55,6 +60,13 @@ func (ap *ApiContact) AddContact(contact models.ContactDataBase, ctx context.Con
 	return ap.data.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
 }
 
+// AddContactTx agrega contacto dentro de una transacción
+func (ap *ApiContact) AddContactTx(tx *gorm.DB, contact models.ContactDataBase, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return tx.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
+}
+
 func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.Context) bool {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -70,6 +82,17 @@ func (ap *ApiContact) PutStatus(id_user uint, id_contact uint, status string, ct
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return ap.data.Model(&models.ContactDataBase{}).
+		WithContext(c).
+		Where("id_user = ? AND id_contact = ?", id_user, id_contact).
+		Or("id_user = ? AND id_contact = ?", id_contact, id_user).
+		Update("status", status).Error
+}
+
+// PutStatusTx actualiza status dentro de una transacción
+func (ap *ApiContact) PutStatusTx(tx *gorm.DB, id_user uint, id_contact uint, status string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return tx.Model(&models.ContactDataBase{}).
 		WithContext(c).
 		Where("id_user = ? AND id_contact = ?", id_user, id_contact).
 		Or("id_user = ? AND id_contact = ?", id_contact, id_user).

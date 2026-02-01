@@ -67,15 +67,55 @@ func (ch *CacheUser) CacheActivo(username string, ctx context.Context) (bool, er
 	return activoReturn, nil
 }
 
-func (ch *CacheUser) SetCodigo(username string ,codigo string, ctx context.Context) (error) {
+func (ch *CacheUser) SetCodigo(tipoCodigo string, username string ,codigo string, ctx context.Context) (error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Set(c,"codigo:"+username, codigo, 10 * time.Minute).Err()
+	return ch.rd.Set(c,"codigo"+tipoCodigo+":"+username, codigo, 10 * time.Minute).Err()
 }
 
-func (ch *CacheUser) GetCodigo(username string, ctx context.Context) (string, error) {
+func (ch *CacheUser) GetCodigo(tipoCodigo string, username string, ctx context.Context) (string, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	codigo, err := ch.rd.Get(c, username).Result()
+	codigo, err := ch.rd.Get(c, "codigo"+tipoCodigo+":"+username).Result()
 	return codigo, err
+}
+
+func (ch *CacheUser) CacheBloqueado(username string, ctx context.Context) (bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	bloqueado, err := ch.rd.Get(c, "bloqueado:"+username).Result()
+	if err != nil {
+		bloqueadoDB, exist := ch.repo.GetBlocked(username, c)
+		if !exist {
+			log.Println("[CACHE] bloqueado no existe en BD para:", username)
+			return false, errors.New("bloqueado inexistente")
+		}
+		err := ch.rd.Set(c, "bloqueado:"+username, bloqueadoDB, 2*time.Minute)
+		if err.Err() != nil {
+			return false, err.Err()
+		}
+		return bloqueadoDB, nil
+	}
+	bloqueadoReturn,_ := strconv.ParseBool(bloqueado)
+	return bloqueadoReturn, nil
+}
+
+func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (int, error) { 
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	intentos, err := ch.rd.Get(c, "intentos:"+username).Result()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	intentosInt, err := strconv.Atoi(intentos)
+	if err != nil {
+		return 0, err
+	}
+	return intentosInt, nil
+}
+
+func (ch *CacheUser) SetIntentosFallidos(username string, intentos int, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Set(c, "intentos:"+username, strconv.Itoa(intentos), 30 * time.Minute).Err()
 }

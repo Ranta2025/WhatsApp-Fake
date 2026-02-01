@@ -30,3 +30,19 @@ type UserActivate struct {
 	Code     string `json:"code" binding:"required"`
 }
 
+type UserRecover struct {
+	Email string `json:"email" binding:"required"`
+	Code string `json:"code" binding:"required"`
+}
+
+type UserChangePassword struct {
+	Gmail string `json:"gmail" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type UserRecoverAndChange struct {
+	Email string `json:"email" binding:"required"`
+	Code string `json:"code" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+

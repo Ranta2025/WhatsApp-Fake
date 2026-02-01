@@ -3,6 +3,10 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import ActivateAccount from './pages/ActivateAccount';
+import RecoverPassword from './pages/RecoverPassword';
+import ActivateExisting from './pages/ActivateExisting';
+import UnblockAccount from './pages/UnblockAccount';
 
 const PrivateRoute = ({ children }) => {
     const { user, loading } = useAuth();
@@ -19,6 +23,10 @@ function App() {
             <Routes>
                 <Route path="/" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/activate" element={<ActivateAccount />} />
+                <Route path="/activate-existing" element={<ActivateExisting />} />
+                <Route path="/recover-password" element={<RecoverPassword />} />
+                <Route path="/unblock-account" element={<UnblockAccount />} />
                 <Route 
                     path="/dashboard" 
                     element={

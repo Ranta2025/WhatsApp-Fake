@@ -63,21 +63,38 @@ func (sr *ServiceApiContact) AddContact(username string, number string, ctx cont
 
 	exist := sr.client.ExistContactAdd(contact.IdUser, contact.IdContact, ctx)
 	existContact := sr.client.ExistContactAdd(contact.IdContact, contact.IdUser, ctx)
+	
+	// Iniciar transacción para operaciones de contacto
+	tx := sr.client.BeginTx()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	
 	if exist && existContact {
-		if err := sr.client.PutStatus(contact.IdUser,contact.IdContact, "accepted", ctx); err != nil {
+		if err := sr.client.PutStatusTx(tx, contact.IdUser, contact.IdContact, "accepted", ctx); err != nil {
+			tx.Rollback()
 			return nil, errors.New("error al cambiar status del contacto")
 		}
 	} else {
 		if !exist {
-			if err := sr.client.AddContact(contact, ctx); err != nil {
+			if err := sr.client.AddContactTx(tx, contact, ctx); err != nil {
+				tx.Rollback()
 				return nil, errors.New("error al registrar contacto")
 			}
 		}
 		if !existContact {
-			if err := sr.client.AddContact(contactAdd, ctx); err != nil {
+			if err := sr.client.AddContactTx(tx, contactAdd, ctx); err != nil {
+				tx.Rollback()
 				return nil, errors.New("error al registrar contacto")
 			}
 		}
+	}
+	
+	// Commit transacción
+	if err := tx.Commit().Error; err != nil {
+		return nil, errors.New("error al completar operación de contacto")
 	}
 
 	contactChat, err := sr.client.GetContactNumber(number, ctx)

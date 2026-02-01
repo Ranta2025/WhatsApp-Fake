@@ -30,8 +30,7 @@ export default function Register() {
         }
         try {
             await api.post('/register', formData);
-            await login(formData.username, formData.password);
-            navigate('/dashboard');
+            navigate('/activate', { state: { username: formData.username, gmail: formData.email } });
         } catch (err) {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
@@ -46,20 +45,35 @@ export default function Register() {
             title="Crear tu cuenta"
             subtitle="Únete a ApiChat para conversar con tus contactos"
             footer={(
-                <span>
-                    ¿Ya tienes cuenta? <Link to="/" className="text-indigo-300 hover:text-white">Inicia sesión</Link>
-                </span>
+                <div className="space-y-2 text-center">
+                    <div>
+                        <span className="text-gray-300">
+                            ¿Ya tienes cuenta?{' '}
+                            <Link to="/" className="text-indigo-300 hover:text-white font-semibold">
+                                Inicia sesión
+                            </Link>
+                        </span>
+                    </div>
+                    <div>
+                        <span className="text-gray-300">
+                            ¿Cuenta inactiva?{' '}
+                            <Link to="/activate-existing" className="text-indigo-300 hover:text-white font-semibold">
+                                Activar cuenta
+                            </Link>
+                        </span>
+                    </div>
+                </div>
             )}
         >
-            {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {error && <p className="text-red-400 text-sm mb-3 text-center">{error}</p>}
+            <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
                     <label className="block text-sm font-medium text-indigo-200 mb-1">Usuario</label>
                     <input
                         type="text"
                         name="username"
                         onChange={handleChange}
-                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        className="w-full p-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-sm"
                         placeholder="Mínimo 5 caracteres"
                     />
                 </div>
@@ -69,7 +83,7 @@ export default function Register() {
                         type="email"
                         name="email"
                         onChange={handleChange}
-                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        className="w-full p-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-sm"
                         placeholder="ejemplo@gmail.com"
                     />
                 </div>
@@ -79,7 +93,7 @@ export default function Register() {
                         type="text"
                         name="numero"
                         onChange={handleChange}
-                        className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                        className="w-full p-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-sm"
                         placeholder="8 dígitos"
                     />
                 </div>
@@ -90,8 +104,8 @@ export default function Register() {
                             type={showPassword ? 'text' : 'password'}
                             name="password"
                             onChange={handleChange}
-                            className="w-full p-3 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
-                            placeholder="Mínimo 8 caracteres, número, mayúsculas, especial"
+                            className="w-full p-2.5 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-sm"
+                            placeholder="Min. 8 caracteres, número, mayúscula"
                         />
                         <button
                             type="button"
@@ -111,7 +125,7 @@ export default function Register() {
                             name="confirm"
                             value={confirm}
                             onChange={(e) => setConfirm(e.target.value)}
-                            className="w-full p-3 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
+                            className="w-full p-2.5 pr-12 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-sm"
                             placeholder="Repite tu contraseña"
                         />
                         <button
@@ -126,7 +140,7 @@ export default function Register() {
                 </div>
                 <button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition"
+                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 rounded-xl transition"
                 >
                     Registrarse
                 </button>

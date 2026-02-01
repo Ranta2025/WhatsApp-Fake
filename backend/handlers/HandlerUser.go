@@ -3,6 +3,7 @@ package handlers
 import (
 	"gorm/backend/models"
 	"gorm/backend/services"
+	"gorm/backend/utils"
 	"log"
 	"net/http"
 
@@ -95,6 +96,14 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 			})
 			return
 		}
+		token, err := utils.GenerateToken(userActivate.(models.UserActivate).Username)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "error al generar token",
+			})
+			return
+		}
+		c.SetCookie("token", token, 3600, "/api/v1/", "localhost", false, true)
 		c.JSON(200, gin.H{
 			"message": "cuenta activada",
 		})
@@ -104,14 +113,14 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 func (s *HandlerUser) HandlerRecoverAccount() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		email, exist := c.Get("emailRecover")
+		username, exist := c.Get("userRecover")
 		if !exist {
 			c.JSON(400, gin.H{
-				"message": "error al obtener el email",
+				"message": "error al obtener el username",
 			})
 			return
 		}
-		username, err := s.service.RecoverAccount(email.(string), ctx)
+		username, err := s.service.RecoverAccount(username.(string), ctx)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{
 				"message": err.Error(),
@@ -119,9 +128,100 @@ func (s *HandlerUser) HandlerRecoverAccount() gin.HandlerFunc {
 			return
 		}
 		c.JSON(200, gin.H{
-			"message":  "codigo enviado al email",
+			"message":  "codigo reenviado al email",
 			"username": username,
 		})
 	}
 }
 
+func (s *HandlerUser) HandlerResendCode() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		userActivate, exist := c.Get("gmailResend")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener el gmail",
+			})
+			return
+		}
+		err := s.service.ResendCode(userActivate.(string), ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message":  "codigo reenviado al email",
+		})
+	}
+}
+
+func (s *HandlerUser) HandlerRecoverCuenta() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		userRecover, exist := c.Get("recoverCuenta")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener el gmail",
+			})
+			return
+		}
+		err := s.service.RecoverCuenta(userRecover.(models.UserRecover), ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message": "usuario recuperado",
+		})
+	}
+}
+
+func (s *HandlerUser) HandlerChangePassword() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		userChange, exist := c.Get("changePassword")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener el usuario",
+			})
+			return
+		}
+		err := s.service.ChangePassword(userChange.(models.UserChangePassword), ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message": "contraseña cambiada",
+		})
+	}
+}
+func (s *HandlerUser) HandlerRecoverAndChangePassword() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		userRecover, exist := c.Get("recoverAndChange")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener los datos",
+			})
+			return
+		}
+		data := userRecover.(models.UserRecoverAndChange)
+		err := s.service.RecoverAndChangePassword(data.Email, data.Code, data.Password, ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message": "cuenta desbloqueada y contraseña cambiada exitosamente",
+		})
+	}
+}
