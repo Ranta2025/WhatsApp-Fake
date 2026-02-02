@@ -266,6 +266,76 @@ func (s *ServicesUser) ChangePassword(user models.UserChangePassword, ctx contex
 	return nil
 }
 
+// SendForgotPasswordCode envía código para recuperar contraseña
+func (s *ServicesUser) SendForgotPasswordCode(email string, ctx context.Context) error {
+	_, exist := s.repo.EmailExist(email, ctx)
+	if !exist {
+		return errors.New("email no existe")
+	}
+
+	codigo, err := utils.GenerarCodigo(utils.Config{
+		Longitud:                6,
+		IncluirMayuscula:        false,
+		IncluirMinuscula:        false,
+		IncluirNumero:           true,
+		IncluirCaracterEspecial: false,
+	})
+	if err != nil {
+		return errors.New("error al generar codigo")
+	}
+	err = s.cache.SetCodigo("forgot", email, codigo, ctx)
+	if err != nil {
+		return errors.New("error al guardar codigo")
+	}
+	err = utils.SendEmail(email, "Código de recuperación de contraseña", "Su código de recuperación es: "+codigo)
+	if err != nil {
+		log.Println("[SERVICE] Error enviando email:", err.Error())
+		return errors.New("error al enviar codigo")
+	}
+	return nil
+}
+
+// ForgotPasswordChange verifica código y cambia contraseña en una transacción
+func (s *ServicesUser) ForgotPasswordChange(email, code, newPassword string, ctx context.Context) error {
+	_, exist := s.repo.EmailExist(email, ctx)
+	if !exist {
+		return errors.New("email no existe")
+	}
+
+	// Verificar código
+	codigoCache, err := s.cache.GetCodigo("forgot", email, ctx)
+	if err != nil {
+		return errors.New("error al obtener el codigo")
+	}
+	if codigoCache != code {
+		return errors.New("codigo incorrecto")
+	}
+
+	// Hashear nueva contraseña
+	hash_password, err := utils.Hash(newPassword)
+	if err != nil {
+		return errors.New("error al procesar la contraseña")
+	}
+
+	// Iniciar transacción
+	tx := s.repo.BeginTx()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Cambiar contraseña
+	err = s.repo.ChangePasswordByEmailTx(tx, email, hash_password, ctx)
+	if err != nil {
+		tx.Rollback()
+		return errors.New("error al cambiar la contraseña")
+	}
+
+	// Commit si todo fue exitoso
+	return tx.Commit().Error
+}
+
 // Nueva función que combina desbloqueo + cambio de contraseña en 1 transacción
 func (s *ServicesUser) RecoverAndChangePassword(email, code, newPassword string, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(email, ctx)

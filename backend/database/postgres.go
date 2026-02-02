@@ -54,6 +54,7 @@ func Conection() (*gorm.DB, error) {
 		fmt.Println("Error al migrar base de datos")
 		return nil, err
 	}
+	data.Exec("ALTER TABLE contact_data_bases ALTER COLUMN status TYPE VARCHAR(25);")
 	data.Exec(`DO $$ BEGIN
 		IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_contact_data_bases_user') THEN
 			ALTER TABLE contact_data_bases DROP CONSTRAINT fk_contact_data_bases_user;

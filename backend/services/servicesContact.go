@@ -53,17 +53,17 @@ func (sr *ServiceApiContact) AddContact(username string, number string, ctx cont
 	contact := models.ContactDataBase{
 		IdUser:    uint(id_user),
 		IdContact: uint(id_contact),
-		Status:    "accepted",
+		Status:    "pending_sent", // El que envía tiene "pending_sent"
 	}
 	contactAdd := models.ContactDataBase{
 		IdUser:    uint(id_contact),
 		IdContact: uint(id_user),
-		Status:    "pending",
+		Status:    "pending_received", // El que recibe tiene "pending_received" y puede aceptar/rechazar
 	}
 
 	exist := sr.client.ExistContactAdd(contact.IdUser, contact.IdContact, ctx)
 	existContact := sr.client.ExistContactAdd(contact.IdContact, contact.IdUser, ctx)
-	
+
 	// Iniciar transacción para operaciones de contacto
 	tx := sr.client.BeginTx()
 	defer func() {
@@ -71,7 +71,7 @@ func (sr *ServiceApiContact) AddContact(username string, number string, ctx cont
 			tx.Rollback()
 		}
 	}()
-	
+
 	if exist && existContact {
 		if err := sr.client.PutStatusTx(tx, contact.IdUser, contact.IdContact, "accepted", ctx); err != nil {
 			tx.Rollback()
@@ -91,7 +91,7 @@ func (sr *ServiceApiContact) AddContact(username string, number string, ctx cont
 			}
 		}
 	}
-	
+
 	// Commit transacción
 	if err := tx.Commit().Error; err != nil {
 		return nil, errors.New("error al completar operación de contacto")
@@ -127,22 +127,41 @@ func (sr *ServiceApiContact) ServiceGetContactByNumber(number string, ctx contex
 
 func (sr *ServiceApiContact) ServiceContactPut(contact models.ContactPut, ctx context.Context) error {
 	id_user, err := sr.client.GetIdUsername(contact.Username, ctx)
-	if  err != nil {
+	if err != nil {
 		return err
 	}
 	id_contact, err := sr.client.GetIdUsername(contact.UsernameAdd, ctx)
 	if err != nil {
 		return err
 	}
-	
+
 	var status string
 	if answer := strings.ToLower(contact.Answer); answer == "yes" {
 		status = "accepted"
-	}else {
-		status = "rechazed"
+	} else {
+		status = "rejected"
 	}
-	err = sr.client.PutStatus(uint(id_user), uint(id_contact), status, ctx)
-	return err
+
+	// Actualizar estado para AMBOS usuarios
+	tx := sr.client.BeginTx()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := sr.client.PutStatusTx(tx, uint(id_user), uint(id_contact), status, ctx); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := sr.client.PutStatusTx(tx, uint(id_contact), uint(id_user), status, ctx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	return nil
 }
-
-

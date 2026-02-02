@@ -23,6 +23,8 @@ services:
       - "8080:8080"
     networks:
       - backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   mongo:
     image: mongo:7
@@ -93,3 +95,5 @@ volumes:
 networks:
   backend:
     driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true"

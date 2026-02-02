@@ -11,6 +11,7 @@ import (
 	"gorm/backend/services"
 	"gorm/backend/utils"
 	"log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -22,16 +23,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	data.Exec("DELETE FROM user_data_bases, contact_data_bases")
 	handlerLog := GetHandlerLog(data, rd)
-	handlerContact, handlerChat := GetHandlerApi(data)
+
+	// Crear servicios y handlers con inyección de dependencias
+	handlerContact, handlerChat, wsService := GetHandlerApiWithWS(data)
+	handlerWS := handlers.InitHandlerWebSocket(wsService)
+
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
 	app.Welcome()
-	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat)
+	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerWS)
 	app.Run()
-    
 }
 
 type app struct {
@@ -39,7 +42,7 @@ type app struct {
 }
 
 func (a *app) Run() {
-	a.app.Run(":8080")
+	a.app.Run("0.0.0.0:8080") // Escuchar en todas las interfaces (0.0.0.0) para acceso desde red
 }
 
 func (a *app) Welcome() {
@@ -70,4 +73,25 @@ func GetHandlerApi(data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerCh
 	handlerContact := handlers.InitHandlerApiMessage(serviceContact)
 	handlerChat := handlers.InitHandlerChat(serviceMessage)
 	return handlerContact, handlerChat
+}
+
+func GetHandlerApiWithWS(data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerChat, *services.ServiceWebSocket) {
+	repo := repos.InitRepoContact(data)
+	serviceMessage := services.InitServiceMessage(repo)
+	serviceContact := services.InitServiceContact(repo)
+
+	// Crear WebSocket service
+	wsService := services.InitServiceWebSocket(repo, serviceMessage)
+
+	handlerContact := handlers.InitHandlerApiMessage(serviceContact)
+	handlerChat := handlers.InitHandlerChat(serviceMessage)
+	return handlerContact, handlerChat, wsService
+}
+
+func GetHandlerWebSocket(data *gorm.DB, handlerChat *handlers.HandlerChat) *handlers.HandlerWebSocket {
+	repo := repos.InitRepoContact(data)
+	chatService := services.InitServiceMessage(repo)
+	wsService := services.InitServiceWebSocket(repo, chatService)
+	handlerWS := handlers.InitHandlerWebSocket(wsService)
+	return handlerWS
 }

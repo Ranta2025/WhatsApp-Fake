@@ -19,26 +19,25 @@ func InitHandlerApiMessage(services *services.ServiceApiContact) *HandlerContact
 	}
 }
 
-
 func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		if !exist {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener datos",
+				"error": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		user, err := hd.service.ServicesGetUser(username.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusNotImplemented, gin.H{
-				"message":err.Error(),
+				"message": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
-		ctx.IndentedJSON(200,user)
+		ctx.IndentedJSON(200, user)
 	}
 }
 
@@ -46,20 +45,20 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		usernameUpedate, exist2 := ctx.Get("usernameUpdate")
-		if !exist || !exist2  {
+		if !exist || !exist2 {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":"error al obtener datos",
+				"message": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		user, err := hd.service.ServicePutUser(username.(string), usernameUpedate.(string), ctx)
-		if err != nil{
+		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":err.Error(),
+				"message": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		token, err := utils.GenerateToken(user.Username)
 		if err != nil {
@@ -67,11 +66,13 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 				"messaje": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
-		ctx.SetCookie("token", token, 3600, "/api/v1/","localhost",false,true)
+		ctx.SetSameSite(http.SameSiteLaxMode)
+		ctx.SetCookie("token", token, 3600, "/", "", false, true)
 		ctx.JSON(200, gin.H{
-			"message":user,
+			"message": user,
+			"token":   token,
 		})
 	}
 }
@@ -80,24 +81,24 @@ func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		number, exist2 := ctx.Get("number")
-		if !exist || !exist2  {
+		if !exist || !exist2 {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":"error al obtener datos",
+				"message": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 
 		contact, err := hd.service.AddContact(username.(string), number.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message":err.Error(),
+				"message": err.Error(),
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 		ctx.JSON(201, gin.H{
-			"contacto creado":contact,
+			"contacto creado": contact,
 		})
 	}
 }
@@ -107,19 +108,19 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 		username, exist := ctx.Get("username")
 		if !exist {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener datos",
+				"error": "error al obtener datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 
 		contacts, err := hd.service.ServiceGetContacts(username.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener chats",
+				"error": "error al obtener chats",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
 
 		ctx.IndentedJSON(200, contacts)
@@ -128,28 +129,28 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 
 func (hd *HandlerContact) ContactPut() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username,exist := ctx.Get("username")
+		username, exist := ctx.Get("username")
 		contactadd, existContact := ctx.Get("answerContact")
-		if !(exist && existContact){
+		if !(exist && existContact) {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener datos",
+				"error": "error al obtener datos",
 			})
-			return 
+			return
 		}
 		contact := models.ContactPut{
 			ContactAdd: contactadd.(models.ContactAdd),
-			Username: username.(string),
+			Username:   username.(string),
 		}
 
 		err := hd.service.ServiceContactPut(contact, ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al cambiar status",
+				"error": "error al cambiar status",
 			})
-			return 
+			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{
-			"message":"status actualizado",
+			"message": "status actualizado",
 		})
 	}
 }

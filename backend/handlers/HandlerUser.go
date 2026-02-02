@@ -35,8 +35,21 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 			})
 			return
 		}
+
+		// Generar token para el usuario registrado
+		token, err := utils.GenerateToken(user.(models.UserDataBase).Username)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "usuario creado pero error al generar token",
+			})
+			return
+		}
+
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie("token", token, 3600, "/", "", false, true)
 		c.JSON(201, gin.H{
 			"message": "user create",
+			"token":   token,
 		})
 	}
 }
@@ -63,16 +76,19 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			})
 			return
 		}
-		c.SetCookie("token", token, 3600, "/api/v1/", "localhost", false, true)
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie("token", token, 3600, "/", "", false, true)
 		c.JSON(200, gin.H{
 			"message": "LogIn exitoso",
+			"token":   token,
 		})
 	}
 }
 
 func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.SetCookie("token", "", -1, "api/v1/", "localhost", false, true)
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie("token", "", -1, "/", "", false, true)
 		c.JSON(200, gin.H{
 			"message": "logout",
 		})
@@ -103,9 +119,11 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 			})
 			return
 		}
-		c.SetCookie("token", token, 3600, "/api/v1/", "localhost", false, true)
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie("token", token, 3600, "/", "", false, true)
 		c.JSON(200, gin.H{
 			"message": "cuenta activada",
+			"token":   token,
 		})
 	}
 }
@@ -152,7 +170,7 @@ func (s *HandlerUser) HandlerResendCode() gin.HandlerFunc {
 			return
 		}
 		c.JSON(200, gin.H{
-			"message":  "codigo reenviado al email",
+			"message": "codigo reenviado al email",
 		})
 	}
 }
@@ -222,6 +240,53 @@ func (s *HandlerUser) HandlerRecoverAndChangePassword() gin.HandlerFunc {
 		}
 		c.JSON(200, gin.H{
 			"message": "cuenta desbloqueada y contraseña cambiada exitosamente",
+		})
+	}
+}
+
+func (s *HandlerUser) HandlerSendForgotPasswordCode() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		email, exist := c.Get("emailForgot")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener el email",
+			})
+			return
+		}
+		err := s.service.SendForgotPasswordCode(email.(string), ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message": "código enviado al email",
+		})
+	}
+}
+
+func (s *HandlerUser) HandlerForgotPasswordChange() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		userForgot, exist := c.Get("forgotPassword")
+		if !exist {
+			c.JSON(400, gin.H{
+				"message": "error al obtener los datos",
+			})
+			return
+		}
+		data := userForgot.(models.UserForgotPassword)
+		err := s.service.ForgotPasswordChange(data.Email, data.Code, data.Password, ctx)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, gin.H{
+			"message": "contraseña cambiada exitosamente",
 		})
 	}
 }

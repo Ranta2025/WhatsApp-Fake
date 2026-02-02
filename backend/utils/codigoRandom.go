@@ -3,8 +3,10 @@ package utils
 import (
 	"crypto/rand"
 	"errors"
+	"log"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
 
 	"gopkg.in/gomail.v2"
@@ -63,6 +65,17 @@ func SendEmail(to string, subject string, body string) error {
 	if pass == "" {
 		return errors.New("GMAIL_PASSWORD no configurada en variables de entorno")
 	}
+	host := os.Getenv("SMTP_HOST")
+	if host == "" {
+		host = "smtp.gmail.com"
+	}
+	port := 587
+	if portEnv := os.Getenv("SMTP_PORT"); portEnv != "" {
+		if p, err := strconv.Atoi(portEnv); err == nil {
+			port = p
+		}
+	}
+	useSSL := os.Getenv("SMTP_SSL") == "true"
 
 	m := gomail.NewMessage()
 	m.SetHeader("From", from)
@@ -70,8 +83,20 @@ func SendEmail(to string, subject string, body string) error {
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/plain", body)
 
-	d := gomail.NewDialer("smtp.gmail.com", 587, from, pass)
+	d := gomail.NewDialer(host, port, from, pass)
+	d.SSL = useSSL
 	if err := d.DialAndSend(m); err != nil {
+		log.Printf("[EMAIL] Error enviando (host=%s port=%d ssl=%v): %v", host, port, useSSL, err)
+		// Fallback a SSL directo en 465 (útil si 587 está bloqueado)
+		if port != 465 {
+			dSSL := gomail.NewDialer(host, 465, from, pass)
+			dSSL.SSL = true
+			if err2 := dSSL.DialAndSend(m); err2 != nil {
+				log.Printf("[EMAIL] Error enviando fallback 465: %v", err2)
+				return err2
+			}
+			return nil
+		}
 		return err
 	}
 	return nil

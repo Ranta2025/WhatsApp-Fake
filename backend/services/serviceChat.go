@@ -31,7 +31,7 @@ func (rp *ServiceChat) ServiceCreatMessage(message models.MessageCreat, ctx cont
 		IdUser:     uint(id_user),
 		IdReceptor: uint(id_receptor),
 		Message:    message.Message,
-		Status:     "sent",
+		Status:     "enviado",
 		Time:       time.Now(),
 	}
 
@@ -40,11 +40,12 @@ func (rp *ServiceChat) ServiceCreatMessage(message models.MessageCreat, ctx cont
 		return schemas.Message{}, err
 	}
 	return schemas.Message{
-		Username: message.Username,
-		Receptor: message.MessageGet.Receptor,
-		Message:  message.Message,
-		Status:   "sent",
-		Time:     messageDB.Time,
+		MessageID: messageDB.ID,
+		Username:  message.Username,
+		Receptor:  message.MessageGet.Receptor,
+		Message:   message.Message,
+		Status:    "enviado",
+		Time:      messageDB.Time,
 	}, nil
 }
 
@@ -69,11 +70,12 @@ func convertMessagesToSchemas(messagesDB []models.Message, username string, cont
 	var messages []schemas.Message
 	for _, msg := range messagesDB {
 		message := schemas.Message{
-			Username: "",
-			Receptor: "",
-			Message:  msg.Message,
-			Status:   msg.Status,
-			Time:     msg.Time,
+			MessageID: msg.ID,
+			Username:  "",
+			Receptor:  "",
+			Message:   msg.Message,
+			Status:    msg.Status,
+			Time:      msg.Time,
 		}
 		if msg.IdUser == uint(id_user) {
 			message.Username = username

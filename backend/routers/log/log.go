@@ -8,11 +8,11 @@ import (
 )
 
 type Log struct {
-	Router *gin.Engine
+	Router  *gin.Engine
 	Handler handlers.HandlerUser
 }
 
-func (rout *Log) Logs(){
+func (rout *Log) Logs() {
 	rout.Router.POST("/LogIn", middleware.MiddlewareLogIn(), rout.Handler.HandlerLogIn())
 	rout.Router.POST("/register", middleware.MiddlewareLogOut(), rout.Handler.HandlerLogOut())
 	rout.Router.POST("/logout", rout.Handler.HandlerLogoutSession())
@@ -22,4 +22,6 @@ func (rout *Log) Logs(){
 	rout.Router.POST("/recover-cuenta", middleware.MiddlewareRecoverCuenta(), rout.Handler.HandlerRecoverCuenta())
 	rout.Router.PUT("/change-password", middleware.MiddlewareChangePassword(), rout.Handler.HandlerChangePassword())
 	rout.Router.POST("/unlock-account", middleware.MiddlewareRecoverAndChangePassword(), rout.Handler.HandlerRecoverAndChangePassword())
+	rout.Router.POST("/forgot-password-send", middleware.MiddlewareSendForgotPasswordCode(), rout.Handler.HandlerSendForgotPasswordCode())
+	rout.Router.POST("/forgot-password-change", middleware.MiddlewareForgotPasswordChange(), rout.Handler.HandlerForgotPasswordChange())
 }

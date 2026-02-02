@@ -21,6 +21,8 @@ export default function Dashboard() {
     const [answering, setAnswering] = useState(false);
     const messagesContainerRef = useRef(null);
 
+    const isContactOnline = () => false;
+
     useEffect(() => {
         const fetchProfile = async () => {
             try {
@@ -34,6 +36,7 @@ export default function Dashboard() {
     }, []);
 
     useEffect(() => {
+        let timer;
         const fetchContacts = async () => {
             try {
                 const { data } = await api.get('/api/v1/contact');
@@ -43,6 +46,10 @@ export default function Dashboard() {
             }
         };
         fetchContacts();
+        timer = setInterval(fetchContacts, 3000);
+        return () => {
+            if (timer) clearInterval(timer);
+        };
     }, []);
 
     const toggleProfile = () => setShowProfile((v) => !v);
@@ -68,11 +75,11 @@ export default function Dashboard() {
     const getUnreadCount = (contact) => {
         const key = getChatKey(contact);
         const arr = messagesByChat[key] || [];
-        return arr.filter((m) => m.Username === contact.Username && m.Status !== 'seen').length;
+        return arr.filter((m) => m.Username === contact.Username && m.Status !== 'visto').length;
     };
     const getStatusIcon = (status) => {
         const base = "w-4 h-4";
-        if (status === 'seen') {
+        if (status === 'visto') {
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
                     <path fill="#f59e0b" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
@@ -80,7 +87,7 @@ export default function Dashboard() {
                 </svg>
             );
         }
-        if (status === 'delivered') {
+        if (status === 'entregado') {
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
                     <path fill="#fcd34d" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
@@ -303,7 +310,10 @@ export default function Dashboard() {
             <div className="w-72 bg-white/10 backdrop-blur-xl border-r border-white/10 flex flex-col">
                 <div className="p-5 border-b border-white/10 flex justify-between items-center">
                     <h1 className="text-xl font-bold">todus</h1>
-                    <div className="w-3 h-3 bg-green-500 rounded-full" title="Conectado"></div>
+                    <div 
+                        className="w-3 h-3 rounded-full bg-gray-500"
+                        title="Desconectado"
+                    ></div>
                 </div>
                 
                 <div className="p-4 border-b border-white/10">
@@ -332,12 +342,17 @@ export default function Dashboard() {
                                 onClick={() => setSelected(c)}
                                 className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Username === c.Username ? 'ring-1 ring-indigo-400' : ''}`}
                             >
-                                <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
+                                <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
                                     {c.Username?.charAt(0)?.toUpperCase()}
+                                                                    {isContactOnline(c.Username) && (
+                                                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                                                    )}
                                 </div>
                                 <div className="flex-1">
                                     <div className="font-medium">{c.Username}</div>
-                                    <div className="text-xs text-indigo-200">{c.Number}</div>
+                                    <div className="text-xs text-indigo-200">
+                                        {isContactOnline(c.Username) ? 'En línea' : c.Number}
+                                    </div>
                                 </div>
                                 {c.Status === 'pending' && (
                                     <span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">pendiente</span>
@@ -435,12 +450,21 @@ export default function Dashboard() {
                     <div className="flex flex-col h-full min-h-0 relative">
                         {/* Header fijo */}
                         <div className="flex-shrink-0 p-4 border-b border-white/10 bg-white/5 flex items-center gap-3 z-10">
-                            <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
+                            <div className="relative w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                                 {selected.Username?.charAt(0)?.toUpperCase()}
+                                                            {isContactOnline(selected.Username) && (
+                                                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white/5"></div>
+                                                            )}
                             </div>
                             <div className="flex-1">
                                 <div className="font-bold">{selected.Username}</div>
-                                <div className="text-xs text-indigo-300">{selected.Number}</div>
+                                <div className="text-xs text-indigo-300">
+                                    {isContactOnline(selected.Username) ? (
+                                        <span className="text-green-400">● En línea</span>
+                                    ) : (
+                                        selected.Number
+                                    )}
+                                </div>
                             </div>
                             {selected.Status === 'pending' && (
                                 <div className="flex gap-2">

@@ -4,7 +4,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 
 export default function RecoverPassword() {
-    const [username, setUsername] = useState('');
+    const [step, setStep] = useState(1);
+    const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -18,22 +19,22 @@ export default function RecoverPassword() {
         e.preventDefault();
         setError('');
         
-        if (!username.trim()) {
-            setError('Por favor ingresa tu username');
+        if (!email.trim()) {
+            setError('Por favor ingresa tu email');
             return;
         }
 
         setLoading(true);
         try {
-            const response = await api.post('/activate-cuenta', {
-                username: username
+            const response = await api.post('/forgot-password-send', {
+                email: email
             });
             setStep(2);
         } catch (err) {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
                 ? data
-                : data?.message || data?.error || 'Username no encontrado';
+                : data?.message || data?.error || 'Email no encontrado';
             setError(msg);
         } finally {
             setLoading(false);
@@ -70,13 +71,30 @@ export default function RecoverPassword() {
             return;
         }
 
+        // Validaciones de contraseña
+        if (!/[0-9]/.test(newPassword)) {
+            setError('La contraseña debe contener algún número');
+            return;
+        }
+
+        if (!/[A-Z]/.test(newPassword)) {
+            setError('La contraseña debe contener alguna mayúscula');
+            return;
+        }
+
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+            setError('La contraseña debe contener algún caracter especial');
+            return;
+        }
+
         setLoading(true);
         try {
-            await api.post('/activate', {
-                username: username,
+            await api.post('/forgot-password-change', {
+                email: email,
                 code: code,
-                newPassword: newPassword
+                password: newPassword
             });
+            alert('¡Contraseña cambiada exitosamente! Ya puedes iniciar sesión.');
             navigate('/');
         } catch (err) {
             const data = err?.response?.data;
@@ -100,7 +118,7 @@ export default function RecoverPassword() {
             }
             subtitle={
                 step === 1
-                    ? 'Ingresa tu username para recibir un código'
+                    ? 'Ingresa tu email para recibir un código'
                     : step === 2
                     ? 'Ingresa el código enviado a tu email'
                     : 'Crea tu nueva contraseña'
@@ -117,13 +135,13 @@ export default function RecoverPassword() {
             {step === 1 && (
                 <form onSubmit={handleStep1} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-indigo-200 mb-1">Username</label>
+                        <label className="block text-sm font-medium text-indigo-200 mb-1">Email</label>
                         <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400"
-                            placeholder="Tu username"
+                            placeholder="tu@email.com"
                         />
                     </div>
                     <button

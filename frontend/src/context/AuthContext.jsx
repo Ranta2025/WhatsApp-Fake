@@ -12,8 +12,10 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (username, password) => {
         try {
-            await api.post('/LogIn', { username, password });
-            // Como tu backend usa cookies, no necesitamos guardar token en localStorage manualmente
+            const { data } = await api.post('/LogIn', { username, password });
+            if (data?.token) {
+                localStorage.setItem('token', data.token);
+            }
             setUser({ username }); // Guardamos datos básicos del usuario
             return true;
         } catch (error) {
@@ -25,6 +27,7 @@ export const AuthProvider = ({ children }) => {
     const logout = async () => {
         try {
             await api.post('/logout');
+            localStorage.removeItem('token');
             setUser(null);
         } catch (error) {
             console.error("Logout error:", error);

@@ -275,3 +275,64 @@ func MiddlewareRecoverAndChangePassword() gin.HandlerFunc {
 		ctx.Next()
 	}
 }
+
+
+func MiddlewareSendForgotPasswordCode() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var request struct {
+			Email string `json:\"email\"`
+		}
+		if err := ctx.ShouldBindJSON(&request); err != nil || request.Email == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"message": "complete todos los campos",
+			})
+			ctx.Abort()
+			return
+		}
+		ctx.Set("emailForgot", request.Email)
+		ctx.Next()
+	}
+}
+
+func MiddlewareForgotPasswordChange() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var request models.UserForgotPassword
+		if err := ctx.ShouldBindJSON(&request); err != nil || request.Email == "" || request.Code == "" || request.Password == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"message": "complete todos los campos",
+			})
+			ctx.Abort()
+			return
+		}
+		if !utils.ValidationPasswordLen(request.Password) {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "La contraseña debe contener mas de 8 caracteres",
+			})
+			ctx.Abort()
+			return
+		}
+		if !utils.ValidationPasswordNumber(request.Password) {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "La contraseña debe contener algun numero",
+			})
+			ctx.Abort()
+			return
+		}
+		if !utils.ValidationPasswordCharacterSpecial(request.Password) {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "La contraseña debe contener algun caracter especial",
+			})
+			ctx.Abort()
+			return
+		}
+		if !utils.ValidationPasswordUpper(request.Password) {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "La contraseña debe contener alguna mayuscula",
+			})
+			ctx.Abort()
+			return
+		}
+		ctx.Set("forgotPassword", request)
+		ctx.Next()
+	}
+}

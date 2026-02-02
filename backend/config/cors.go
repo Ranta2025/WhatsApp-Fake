@@ -14,21 +14,25 @@ func Cors() gin.HandlerFunc {
 			"http://127.0.0.1:8080",
 			"http://localhost:5173",
 			"http://127.0.0.1:5173",
+			"http://10.33.225.131:5173",
+			"http://10.33.225.131:8080",
+			"http://10.50.249.108:8080",
+			"http://10.50.249.108:5173",
 		},
-		AllowMethods:[]string{ "GET", "POST", "PUT", "OPTIONS" },
-		AllowHeaders:[]string{
+		AllowMethods: []string{"GET", "POST", "PUT", "OPTIONS"},
+		AllowHeaders: []string{
 			"origin",
 			"Content-Type",
 			"Accept",
 			"Authorization",
 			"X-Requested-With",
 		},
-		ExposeHeaders:[]string{
+		ExposeHeaders: []string{
 			"Content-Length",
 			"Content-Type",
 			"Authorization",
 		},
-		AllowCredentials:true,
-		MaxAge:12*time.Hour,
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	})
 }

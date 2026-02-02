@@ -29,7 +29,11 @@ export default function Register() {
             return;
         }
         try {
-            await api.post('/register', formData);
+            const { data } = await api.post('/register', formData);
+            // Guardar token si viene en la respuesta
+            if (data?.token) {
+                localStorage.setItem('token', data.token);
+            }
             navigate('/activate', { state: { username: formData.username, gmail: formData.email } });
         } catch (err) {
             const data = err?.response?.data;
