@@ -3,14 +3,11 @@ package main
 import (
 	"gorm/backend/cache"
 	"gorm/backend/config"
-	"gorm/backend/database"
 	"gorm/backend/handlers"
 	"gorm/backend/middleware"
 	"gorm/backend/repos"
-	"gorm/backend/routers"
 	"gorm/backend/services"
 	"gorm/backend/utils"
-	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -19,21 +16,10 @@ import (
 
 func main() {
 	utils.LoadEnv()
-	data, rd, err := database.GetConection()
-	if err != nil {
-		log.Fatal(err)
-	}
-	handlerLog := GetHandlerLog(data, rd)
-
-	// Crear servicios y handlers con inyección de dependencias
-	handlerContact, handlerChat, wsService := GetHandlerApiWithWS(data)
-	handlerWS := handlers.InitHandlerWebSocket(wsService)
-
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
 	app.Welcome()
-	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerWS)
 	app.Run()
 }
 
@@ -75,23 +61,3 @@ func GetHandlerApi(data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerCh
 	return handlerContact, handlerChat
 }
 
-func GetHandlerApiWithWS(data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerChat, *services.ServiceWebSocket) {
-	repo := repos.InitRepoContact(data)
-	serviceMessage := services.InitServiceMessage(repo)
-	serviceContact := services.InitServiceContact(repo)
-
-	// Crear WebSocket service
-	wsService := services.InitServiceWebSocket(repo, serviceMessage)
-
-	handlerContact := handlers.InitHandlerApiMessage(serviceContact)
-	handlerChat := handlers.InitHandlerChat(serviceMessage)
-	return handlerContact, handlerChat, wsService
-}
-
-func GetHandlerWebSocket(data *gorm.DB, handlerChat *handlers.HandlerChat) *handlers.HandlerWebSocket {
-	repo := repos.InitRepoContact(data)
-	chatService := services.InitServiceMessage(repo)
-	wsService := services.InitServiceWebSocket(repo, chatService)
-	handlerWS := handlers.InitHandlerWebSocket(wsService)
-	return handlerWS
-}
