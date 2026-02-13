@@ -13,8 +13,13 @@ export const AuthProvider = ({ children }) => {
     const login = async (username, password) => {
         try {
             const { data } = await api.post('/LogIn', { username, password });
+            console.log('[AUTH] Respuesta de login:', data);
             if (data?.token) {
+                console.log('[AUTH] Guardando token en localStorage:', data.token);
                 localStorage.setItem('token', data.token);
+                console.log('[AUTH] Token guardado, verificando:', localStorage.getItem('token'));
+            } else {
+                console.warn('[AUTH] No se recibió token en la respuesta');
             }
             setUser({ username }); // Guardamos datos básicos del usuario
             return true;

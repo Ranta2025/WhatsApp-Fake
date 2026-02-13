@@ -3,10 +3,10 @@ package schemas
 import "time"
 
 type Message struct {
-	MessageID uint
-	Username  string
-	Receptor  string
-	Message   string
-	Status    string
-	Time      time.Time
+	MessageID uint      `json:"MessageID"`
+	Username  string    `json:"Username"`
+	Receptor  string    `json:"Receptor"`
+	Message   string    `json:"Message"`
+	Status    string    `json:"Status"`
+	Time      time.Time `json:"Time"`
 }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
@@ -21,4 +22,9 @@ type Message struct {
 type MessageCreat struct {
 	MessageGet
 	Username string
+}
+
+type BaseMessage struct {
+    Type    string          `json:"type"`    // "chat", "contact", "auth"
+    Payload json.RawMessage `json:"payload"` // El contenido específico
 }

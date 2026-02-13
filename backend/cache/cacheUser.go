@@ -32,14 +32,14 @@ func (ch *CacheUser) CachePassword(username string, ctx context.Context) (string
 			log.Println("[CACHE] Password no existe en BD para:", username)
 			return "", errors.New("contraseña inexistente")
 		}
-		log.Println("[CACHE] Password encontrada en BD:", passwordDB)
+		log.Println("[CACHE] Password encontrada en BD")
 		err := ch.rd.Set(c, "password:"+username, passwordDB, 2*time.Minute)
 		if err.Err() != nil {
 			return "", err.Err()
 		}
 		return passwordDB, nil
 	}
-	log.Println("[CACHE] Password encontrada en Redis:", password)
+	log.Println("[CACHE] Password encontrada en Redis")
 	return password, nil
 }
 
@@ -63,14 +63,14 @@ func (ch *CacheUser) CacheActivo(username string, ctx context.Context) (bool, er
 		return activoDB, nil
 	}
 	log.Println("[CACHE] activo encontrada en Redis:", activo)
-	activoReturn,_ := strconv.ParseBool(activo)
+	activoReturn, _ := strconv.ParseBool(activo)
 	return activoReturn, nil
 }
 
-func (ch *CacheUser) SetCodigo(tipoCodigo string, username string ,codigo string, ctx context.Context) (error) {
+func (ch *CacheUser) SetCodigo(tipoCodigo string, username string, codigo string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Set(c,"codigo"+tipoCodigo+":"+username, codigo, 10 * time.Minute).Err()
+	return ch.rd.Set(c, "codigo"+tipoCodigo+":"+username, codigo, 10*time.Minute).Err()
 }
 
 func (ch *CacheUser) GetCodigo(tipoCodigo string, username string, ctx context.Context) (string, error) {
@@ -96,11 +96,11 @@ func (ch *CacheUser) CacheBloqueado(username string, ctx context.Context) (bool,
 		}
 		return bloqueadoDB, nil
 	}
-	bloqueadoReturn,_ := strconv.ParseBool(bloqueado)
+	bloqueadoReturn, _ := strconv.ParseBool(bloqueado)
 	return bloqueadoReturn, nil
 }
 
-func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (int, error) { 
+func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	intentos, err := ch.rd.Get(c, "intentos:"+username).Result()
@@ -117,5 +117,5 @@ func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (
 func (ch *CacheUser) SetIntentosFallidos(username string, intentos int, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Set(c, "intentos:"+username, strconv.Itoa(intentos), 30 * time.Minute).Err()
+	return ch.rd.Set(c, "intentos:"+username, strconv.Itoa(intentos), 30*time.Minute).Err()
 }

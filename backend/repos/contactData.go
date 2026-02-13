@@ -168,10 +168,10 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 	return &contacts, result.Error
 }
 
-func (app *ApiContact) CreateMessage(message models.Message, ctx context.Context) error {
+func (app *ApiContact) CreateMessage(message *models.Message, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return app.data.Model(&models.Message{}).WithContext(c).Create(&message).Error
+	return app.data.Model(&models.Message{}).WithContext(c).Create(message).Error
 }
 
 func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Context) ([]models.Message, error) {

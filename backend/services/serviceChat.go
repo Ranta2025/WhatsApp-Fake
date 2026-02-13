@@ -5,6 +5,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/repos"
 	"gorm/backend/schemas"
+	"log"
 	"time"
 )
 
@@ -19,6 +20,10 @@ func InitServiceMessage(repo *repos.ApiContact) *ServiceChat {
 }
 
 func (rp *ServiceChat) ServiceCreatMessage(message models.MessageCreat, ctx context.Context) (schemas.Message, error) {
+	return rp.ServiceCreatMessageWithStatus(message, "enviado", ctx)
+}
+
+func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat, status string, ctx context.Context) (schemas.Message, error) {
 	id_user, err := rp.repo.GetIdUsername(message.Username, ctx)
 	if err != nil {
 		return schemas.Message{}, err
@@ -31,20 +36,24 @@ func (rp *ServiceChat) ServiceCreatMessage(message models.MessageCreat, ctx cont
 		IdUser:     uint(id_user),
 		IdReceptor: uint(id_receptor),
 		Message:    message.Message,
-		Status:     "enviado",
+		Status:     status,
 		Time:       time.Now(),
 	}
 
-	err = rp.repo.CreateMessage(messageDB, ctx)
+	err = rp.repo.CreateMessage(&messageDB, ctx)
 	if err != nil {
 		return schemas.Message{}, err
 	}
+
+	log.Printf("[SERVICE] Mensaje guardado en BD. ID generado: %d", messageDB.ID)
+	log.Printf("[SERVICE] messageDB completo: %+v", messageDB)
+
 	return schemas.Message{
 		MessageID: messageDB.ID,
 		Username:  message.Username,
 		Receptor:  message.MessageGet.Receptor,
 		Message:   message.Message,
-		Status:    "enviado",
+		Status:    status,
 		Time:      messageDB.Time,
 	}, nil
 }

@@ -15,7 +15,7 @@ type Log struct {
 func (rout *Log) Logs() {
 	rout.Router.POST("/LogIn", middleware.MiddlewareLogIn(), rout.Handler.HandlerLogIn())
 	rout.Router.POST("/register", middleware.MiddlewareLogOut(), rout.Handler.HandlerLogOut())
-	rout.Router.POST("/logout", rout.Handler.HandlerLogoutSession())
+	rout.Router.POST("/logout", middleware.MiddlewareTokenValidation(), rout.Handler.HandlerLogoutSession())
 	rout.Router.POST("/activate", middleware.MiddlewareActivateAccount(), rout.Handler.HandlerActivateAccount())
 	rout.Router.POST("/activate-cuenta", middleware.MiddlewareRecoverAccount(), rout.Handler.HandlerRecoverAccount())
 	rout.Router.POST("/resend-code", middleware.MiddlewareResendCode(), rout.Handler.HandlerResendCode())

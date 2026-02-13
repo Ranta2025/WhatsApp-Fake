@@ -24,6 +24,14 @@ type MessageGet struct {
 	Message  string `json:"message" binding:"required"`
 }
 
+type MessageRead struct {
+	From string `json:"from" binding:"required"`
+}
+
+type TypingIndicator struct {
+	To string `json:"to" binding:"required"`
+}
+
 type UserActivate struct {
 	Username string `json:"username" binding:"required"`
 	Code     string `json:"code" binding:"required"`

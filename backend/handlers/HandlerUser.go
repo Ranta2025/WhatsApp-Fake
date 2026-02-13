@@ -4,6 +4,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/utils"
+	"gorm/backend/websocket"
 	"log"
 	"net/http"
 
@@ -12,10 +13,11 @@ import (
 
 type HandlerUser struct {
 	service *services.ServicesUser
+	hub     *websocket.Hub
 }
 
-func GetHandlerUser(service *services.ServicesUser) *HandlerUser {
-	return &HandlerUser{service}
+func GetHandlerUser(service *services.ServicesUser, hub *websocket.Hub) *HandlerUser {
+	return &HandlerUser{service: service, hub: hub}
 }
 
 func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
@@ -76,8 +78,11 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			})
 			return
 		}
+		log.Printf("[HANDLER] Login exitoso, generando cookie y token para usuario: %s", username)
+		log.Printf("[HANDLER] Token generado: %v", token)
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("token", token, 3600, "/", "", false, true)
+		log.Printf("[HANDLER] Cookie establecida, enviando respuesta JSON con token")
 		c.JSON(200, gin.H{
 			"message": "LogIn exitoso",
 			"token":   token,
@@ -87,6 +92,15 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 
 func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Obtener el username antes de eliminar el token
+		username, exist := c.Get("username")
+		if exist && username != nil {
+			// Notificar a los contactos que el usuario está offline
+			if s.hub != nil {
+				s.hub.NotifyContactsOffline(username.(string))
+			}
+		}
+
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("token", "", -1, "/", "", false, true)
 		c.JSON(200, gin.H{

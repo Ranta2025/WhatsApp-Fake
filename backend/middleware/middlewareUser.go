@@ -280,7 +280,7 @@ func MiddlewareRecoverAndChangePassword() gin.HandlerFunc {
 func MiddlewareSendForgotPasswordCode() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
-			Email string `json:\"email\"`
+			Email string `json:"email"`
 		}
 		if err := ctx.ShouldBindJSON(&request); err != nil || request.Email == "" {
 			ctx.JSON(http.StatusBadRequest, gin.H{

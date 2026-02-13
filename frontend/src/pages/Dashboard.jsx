@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useWebSocket } from '../hooks/useWebSocket';
 import api from '../api/axios';
 
 export default function Dashboard() {
     const { user, logout, updateUsername } = useAuth();
+    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, on, off } = useWebSocket();
     const [profile, setProfile] = useState(null);
     const [error, setError] = useState('');
     const [showProfile, setShowProfile] = useState(false);
@@ -19,9 +21,13 @@ export default function Dashboard() {
     const [drafts, setDrafts] = useState({});
     const [messagesByChat, setMessagesByChat] = useState({});
     const [answering, setAnswering] = useState(false);
+    const [onlineUsers, setOnlineUsers] = useState(new Set());
+    const [typingUsers, setTypingUsers] = useState(new Set()); // Usuarios que están escribiendo
     const messagesContainerRef = useRef(null);
+    const typingTimeoutRef = useRef(null); // Para debounce del typing indicator
 
-    const isContactOnline = () => false;
+    const isContactOnline = (username) => onlineUsers.has(username);
+    const isContactTyping = (username) => typingUsers.has(username);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -35,8 +41,220 @@ export default function Dashboard() {
         fetchProfile();
     }, []);
 
+    // Escuchar mensajes del WebSocket
     useEffect(() => {
-        let timer;
+        const handleIncomingMessage = (messageData) => {
+            console.log('Mensaje recibido por WebSocket:', messageData);
+            
+            // messageData es un schemas.Message del backend
+            const { Username, Receptor, MessageID, Message, Status, Time } = messageData;
+            
+            // Determinar con quién es el chat
+            let contactUsername;
+            if (Username === user?.username) {
+                // Mensaje enviado por mí
+                contactUsername = Receptor;
+            } else {
+                // Mensaje recibido
+                contactUsername = Username;
+            }
+            
+            // Usar directamente el username como key (no necesitamos el objeto contact)
+            const key = contactUsername;
+            
+            console.log('Guardando mensaje para contacto:', contactUsername, 'Key:', key);
+            
+            // Actualizar el estado de mensajes
+            setMessagesByChat((prev) => {
+                const existing = prev[key] || [];
+                
+                // Si es un mensaje enviado por mí, puede ser una confirmación de un mensaje temporal
+                if (Username === user?.username) {
+                    // Buscar si hay un mensaje temporal con el mismo contenido y receptor
+                    // MessageID del servidor es número, el temporal es string que empieza con 'temp-'
+                    const tempIndex = existing.findIndex(m => 
+                        typeof m.MessageID === 'string' && m.MessageID.startsWith('temp-') && 
+                        m.Message === Message && 
+                        m.Receptor === Receptor
+                    );
+                    
+                    if (tempIndex !== -1) {
+                        // Reemplazar el mensaje temporal con el mensaje real del servidor
+                        console.log('Reemplazando mensaje temporal con mensaje real:', MessageID);
+                        const updated = [...existing];
+                        updated[tempIndex] = messageData;
+                        return {
+                            ...prev,
+                            [key]: updated
+                        };
+                    }
+                } else {
+                    // Es un mensaje recibido de otro usuario
+                    // Si el chat está abierto, marcarlo como visto localmente
+                    if (selected?.Username === contactUsername) {
+                        // Buscar si hay un mensaje temporal para reemplazar (aunque poco probable para mensajes recibidos)
+                        const tempIndex = existing.findIndex(m => 
+                            typeof m.MessageID === 'string' && m.MessageID.startsWith('temp-') && 
+                            m.Message === Message
+                        );
+                        
+                        if (tempIndex !== -1) {
+                            const updated = [...existing];
+                            updated[tempIndex] = { ...messageData, Status: 'visto' };
+                            return {
+                                ...prev,
+                                [key]: updated
+                            };
+                        }
+                    }
+                }
+                
+                // Verificar si el mensaje ya existe (por MessageID)
+                const alreadyExists = existing.some(m => m.MessageID === MessageID);
+                if (alreadyExists) {
+                    // Actualizar el mensaje existente (por si cambió el estado)
+                    console.log('Actualizando mensaje existente:', MessageID);
+                    
+                    // Si el mensaje es recibido Y el chat está abierto, marcarlo como visto localmente
+                    const shouldMarkAsRead = (Username !== user?.username && selected?.Username === contactUsername);
+                    
+                    return {
+                        ...prev,
+                        [key]: existing.map(m => {
+                            if (m.MessageID === MessageID) {
+                                return shouldMarkAsRead ? { ...messageData, Status: 'visto' } : messageData;
+                            }
+                            return m;
+                        })
+                    };
+                } else {
+                    // Agregar nuevo mensaje
+                    console.log('Agregando nuevo mensaje:', MessageID);
+                    
+                    // Si el mensaje es recibido Y el chat está abierto, marcarlo como visto localmente
+                    const messageToAdd = (Username !== user?.username && selected?.Username === contactUsername)
+                        ? { ...messageData, Status: 'visto' }
+                        : messageData;
+                    
+                    return {
+                        ...prev,
+                        [key]: [...existing, messageToAdd]
+                    };
+                }
+            });
+
+            // Si el mensaje es recibido (no enviado por mí) Y el chat está abierto, marcar como visto en el servidor
+            if (Username !== user?.username && selected?.Username === contactUsername && isConnected) {
+                console.log('[AUTO-READ] Marcando como visto porque el chat está abierto:', contactUsername);
+                sendReadConfirmation(contactUsername);
+            }
+        };
+
+        const handleReadConfirmation = (readData) => {
+            console.log('Confirmación de lectura recibida:', readData);
+            
+            if (!readData || !readData.from || !user?.username) {
+                console.warn('Datos de confirmación inválidos:', readData);
+                return;
+            }
+            
+            // readData = { from: "usuario_que_leyó" }
+            const { from } = readData;
+            
+            // Usar directamente el username como key
+            const key = from;
+            
+            // Actualizar todos los mensajes enviados a ese contacto a "visto"
+            setMessagesByChat((prev) => {
+                const existing = prev[key] || [];
+                return {
+                    ...prev,
+                    [key]: existing.map(m => {
+                        if (!m) return m; // Skip null/undefined
+                        return m.Username === user.username && m.Status !== 'visto'
+                            ? { ...m, Status: 'visto' }
+                            : m;
+                    })
+                };
+            });
+        };
+
+        on('message', handleIncomingMessage);
+        on('read', handleReadConfirmation);
+
+        return () => {
+            off('message', handleIncomingMessage);
+            off('read', handleReadConfirmation);
+        };
+    }, [on, off, user, selected, isConnected, sendReadConfirmation]);
+
+    // Escuchar eventos de presencia (online/offline)
+    useEffect(() => {
+        const handleContactsOnline = (contacts) => {
+            console.log('[DASHBOARD] Contactos online iniciales:', contacts);
+            console.log('[DASHBOARD] Tipo de contacts:', typeof contacts, Array.isArray(contacts));
+            setOnlineUsers(new Set(contacts));
+        };
+
+        const handleUserOnline = (username) => {
+            console.log('[DASHBOARD] Usuario conectado:', username);
+            setOnlineUsers(prev => {
+                const newSet = new Set([...prev, username]);
+                console.log('[DASHBOARD] Estado online actualizado:', Array.from(newSet));
+                return newSet;
+            });
+        };
+
+        const handleUserOffline = (username) => {
+            console.log('[DASHBOARD] Usuario desconectado:', username);
+            setOnlineUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(username);
+                console.log('[DASHBOARD] Estado online actualizado:', Array.from(newSet));
+                return newSet;
+            });
+        };
+
+        on('contacts_online', handleContactsOnline);
+        on('online', handleUserOnline);
+        on('offline', handleUserOffline);
+
+        return () => {
+            off('contacts_online', handleContactsOnline);
+            off('online', handleUserOnline);
+            off('offline', handleUserOffline);
+        };
+    }, [on, off]);
+
+    // Escuchar eventos de typing
+    useEffect(() => {
+        const handleTyping = (typingData) => {
+            if (!typingData || !typingData.from) return;
+            
+            const { from } = typingData;
+            console.log('[DASHBOARD] Usuario escribiendo:', from);
+            
+            // Agregar al conjunto de usuarios escribiendo
+            setTypingUsers(prev => new Set([...prev, from]));
+            
+            // Remover después de 3 segundos (timeout de inactividad)
+            setTimeout(() => {
+                setTypingUsers(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(from);
+                    return newSet;
+                });
+            }, 3000);
+        };
+
+        on('typing', handleTyping);
+
+        return () => {
+            off('typing', handleTyping);
+        };
+    }, [on, off]);
+
+    useEffect(() => {
         const fetchContacts = async () => {
             try {
                 const { data } = await api.get('/api/v1/contact');
@@ -45,11 +263,10 @@ export default function Dashboard() {
                 setAddMsg('No se pudo cargar contactos');
             }
         };
+        // Cargar contactos solo una vez al montar
         fetchContacts();
-        timer = setInterval(fetchContacts, 3000);
-        return () => {
-            if (timer) clearInterval(timer);
-        };
+        
+        // Si necesitas refrescar contactos, el backend enviará notificaciones por WebSocket
     }, []);
 
     const toggleProfile = () => setShowProfile((v) => !v);
@@ -59,8 +276,9 @@ export default function Dashboard() {
         setStatus('');
     };
     const getChatKey = (contact) => {
-        if (!contact) return '';
-        return `${contact.Username || ''}-${contact.Number || ''}`;
+        if (!contact || !contact.Username) return '';
+        // Simplificado: usar solo username como key única
+        return contact.Username;
     };
     const currentDraft = selected ? drafts[getChatKey(selected)] || '' : '';
     const handleInputChange = (e) => {
@@ -71,11 +289,33 @@ export default function Dashboard() {
             ...prev,
             [key]: value,
         }));
+
+        // Enviar indicador de "escribiendo" solo si hay texto y WebSocket conectado
+        if (value.trim() && isConnected && selected.Username) {
+            // Limpiar timeout previo
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+
+            // Enviar indicador de typing
+            console.log('[TYPING] Enviando indicador a:', selected.Username);
+            const sent = sendTypingIndicator(selected.Username);
+            console.log('[TYPING] Indicador enviado:', sent);
+
+            // Configurar timeout para dejar de enviar (debounce de 2 segundos)
+            typingTimeoutRef.current = setTimeout(() => {
+                typingTimeoutRef.current = null;
+            }, 2000);
+        }
     };
     const getUnreadCount = (contact) => {
+        if (!contact || !contact.Username) return 0;
+        // Si es el contacto actualmente seleccionado, no mostrar contador
+        if (selected && selected.Username === contact.Username) return 0;
+        
         const key = getChatKey(contact);
         const arr = messagesByChat[key] || [];
-        return arr.filter((m) => m.Username === contact.Username && m.Status !== 'visto').length;
+        return arr.filter((m) => m && m.Username === contact.Username && m.Status !== 'visto').length;
     };
     const getStatusIcon = (status) => {
         const base = "w-4 h-4";
@@ -105,22 +345,66 @@ export default function Dashboard() {
         if (!selected) return;
         const trimmed = currentDraft.trim();
         if (!trimmed) return;
+        if (!user?.username) {
+            console.error('Usuario no autenticado');
+            return;
+        }
         const key = getChatKey(selected);
-        try {
-            await api.post('/api/v1/chat', {
-                receptor: selected.Username,
-                message: trimmed,
-            });
-            const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
-            setMessagesByChat((prev) => ({
-                ...prev,
-                [key]: Array.isArray(data) ? data : [],
-            }));
-            setDrafts((prev) => ({
-                ...prev,
-                [key]: '',
-            }));
-        } catch {}
+        
+        // Usar WebSocket siempre que esté disponible
+        if (isConnected) {
+            const sent = sendMessage(selected.Username, trimmed);
+            if (sent) {
+                // Crear mensaje temporal optimista (aparece inmediatamente en la UI)
+                const tempMessage = {
+                    MessageID: `temp-${Date.now()}`, // ID temporal
+                    Username: user.username,
+                    Receptor: selected.Username,
+                    Message: trimmed,
+                    Status: 'enviado',
+                    Time: new Date().toISOString()
+                };
+                
+                console.log('[SEND] Agregando mensaje optimista:', tempMessage);
+                
+                // Agregar mensaje optimistamente al estado
+                setMessagesByChat((prev) => {
+                    const existing = prev[key] || [];
+                    return {
+                        ...prev,
+                        [key]: [...existing, tempMessage]
+                    };
+                });
+                
+                // Limpiar el draft inmediatamente
+                setDrafts((prev) => ({
+                    ...prev,
+                    [key]: '',
+                }));
+            } else {
+                console.error('No se pudo enviar el mensaje por WebSocket');
+            }
+        } else {
+            // Fallback a HTTP solo si WebSocket no está conectado
+            console.warn('WebSocket desconectado, usando fallback HTTP');
+            try {
+                await api.post('/api/v1/chat', {
+                    receptor: selected.Username,
+                    message: trimmed,
+                });
+                const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
+                setMessagesByChat((prev) => ({
+                    ...prev,
+                    [key]: Array.isArray(data) ? data : [],
+                }));
+                setDrafts((prev) => ({
+                    ...prev,
+                    [key]: '',
+                }));
+            } catch (err) {
+                console.error('Error enviando mensaje por HTTP:', err);
+            }
+        }
     };
     const submitEdit = async (e) => {
         e.preventDefault();
@@ -217,53 +501,81 @@ export default function Dashboard() {
         }
     };
 
+    // Marcar mensajes como entregados una sola vez al inicio
     useEffect(() => {
-        let timer;
         const putDelivered = async () => {
             try {
                 await api.put('/api/v1/chat');
             } catch {}
         };
         putDelivered();
-        timer = setInterval(putDelivered, 3000);
-        return () => {
-            if (timer) clearInterval(timer);
-        };
+        // Ya no hacemos polling, WebSocket maneja las actualizaciones en tiempo real
     }, []);
 
     useEffect(() => {
         if (!selected) return;
         const key = getChatKey(selected);
         let active = true;
+        
+        // Cargar historial de mensajes solo una vez al seleccionar contacto
         const fetchMessages = async () => {
             try {
-                const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
-                if (!active) return;
-                setMessagesByChat((prev) => ({
-                    ...prev,
-                    [key]: Array.isArray(data) ? data : [],
-                }));
+                // Solo cargar historial si no lo tenemos ya
+                if (!messagesByChat[key] || messagesByChat[key].length === 0) {
+                    const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
+                    if (!active) return;
+                    setMessagesByChat((prev) => ({
+                        ...prev,
+                        [key]: Array.isArray(data) ? data : [],
+                    }));
+                }
             } catch {}
         };
-        const markSeen = async () => {
-            try {
-                await api.put(`/api/v1/chat/${selected.Username}`);
-            } catch {}
-        };
+        
         fetchMessages();
-        markSeen();
-        const intervalId = setInterval(fetchMessages, 3000);
-        const seenIntervalId = setInterval(markSeen, 3000);
+        
+        // Marcar como visto SOLO cuando el usuario entra al chat
+        // Usar setTimeout para dar tiempo a que se carguen los mensajes primero
+        const markTimer = setTimeout(() => {
+            if (!active) return;
+            
+            // Marcar todos los mensajes del contacto como vistos localmente (limpia el contador)
+            setMessagesByChat((prev) => {
+                const existing = prev[key] || [];
+                const updated = existing.map(m => {
+                    if (!m) return m; // Skip null/undefined messages
+                    return m.Username === selected.Username && m.Status !== 'visto'
+                        ? { ...m, Status: 'visto' }
+                        : m;
+                });
+                return {
+                    ...prev,
+                    [key]: updated
+                };
+            });
+            
+            // Notificar al servidor por WebSocket o HTTP
+            if (isConnected) {
+                sendReadConfirmation(selected.Username);
+            } else {
+                // Fallback HTTP solo si WebSocket está desconectado
+                api.put(`/api/v1/chat/${selected.Username}`).catch(() => {});
+            }
+        }, 300); // Pequeño delay para asegurar que los mensajes se cargaron
+        
+        // Los mensajes nuevos llegarán por WebSocket, no necesitamos polling
+        
         return () => {
             active = false;
-            clearInterval(intervalId);
-            clearInterval(seenIntervalId);
+            clearTimeout(markTimer);
         };
-    }, [selected]);
+    }, [selected, isConnected, sendReadConfirmation]);
 
     useEffect(() => {
         if (!contacts || contacts.length === 0) return;
         let active = true;
+        
+        // Cargar historial inicial de todos los chats solo una vez
         const fetchAllChats = async () => {
             try {
                 const results = await Promise.all(
@@ -285,11 +597,12 @@ export default function Dashboard() {
                 });
             } catch {}
         };
+        
         fetchAllChats();
-        const id = setInterval(fetchAllChats, 3000);
+        // Los mensajes nuevos llegarán por WebSocket, no necesitamos polling
+        
         return () => {
             active = false;
-            clearInterval(id);
         };
     }, [contacts]);
 
@@ -309,10 +622,10 @@ export default function Dashboard() {
             {/* Sidebar */}
             <div className="w-72 bg-white/10 backdrop-blur-xl border-r border-white/10 flex flex-col">
                 <div className="p-5 border-b border-white/10 flex justify-between items-center">
-                    <h1 className="text-xl font-bold">todus</h1>
+                    <h1 className="text-xl font-bold">todos</h1>
                     <div 
-                        className="w-3 h-3 rounded-full bg-gray-500"
-                        title="Desconectado"
+                        className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}`}
+                        title={isConnected ? "Conectado" : "Desconectado"}
                     ></div>
                 </div>
                 
@@ -377,7 +690,12 @@ export default function Dashboard() {
                         </div>
                         <div className="overflow-hidden">
                             <div className="font-bold truncate">{user?.username}</div>
-                            <div className="text-xs text-green-400">En línea</div>
+                            <div className="text-xs flex items-center gap-1">
+                                <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`}></span>
+                                <span className={isConnected ? 'text-green-400' : 'text-red-400'}>
+                                    {isConnected ? 'En línea' : 'Desconectado'}
+                                </span>
+                            </div>
                             {error && <div className="text-xs text-red-400">{error}</div>}
                             {showProfile && profile && (
                                 <div className="mt-2 text-xs text-indigo-100">
@@ -422,10 +740,14 @@ export default function Dashboard() {
                             </div>
                             <h2 className="text-3xl font-bold mb-2">Bienvenido a todus</h2>
                             <p className="max-w-md text-indigo-300">
-                                Selecciona un contacto para comenzar a chatear. 
-                                <br/>
-                                <span className="text-sm opacity-70">(Funcionalidad de chat y WebSockets en desarrollo)</span>
+                                Selecciona un contacto para comenzar a chatear.
                             </p>
+                            <div className="mt-4 flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`}></span>
+                                <span className="text-sm text-indigo-300">
+                                    {isConnected ? 'WebSocket conectado' : 'WebSocket desconectado'}
+                                </span>
+                            </div>
                         </div>
                         <div className="flex-shrink-0 p-4 bg-white/10 border-t border-white/10">
                             <div className="flex gap-4">
@@ -459,7 +781,9 @@ export default function Dashboard() {
                             <div className="flex-1">
                                 <div className="font-bold">{selected.Username}</div>
                                 <div className="text-xs text-indigo-300">
-                                    {isContactOnline(selected.Username) ? (
+                                    {isContactTyping(selected.Username) ? (
+                                        <span className="text-blue-400 italic">escribiendo...</span>
+                                    ) : isContactOnline(selected.Username) ? (
                                         <span className="text-green-400">● En línea</span>
                                     ) : (
                                         selected.Number
@@ -498,13 +822,20 @@ export default function Dashboard() {
                                 </div>
                             ) : (
                                 (messagesByChat[getChatKey(selected)] || []).map((m, idx) => {
+                                    // Validar que el mensaje tenga los campos requeridos
+                                    if (!m || !m.Message) {
+                                        console.warn('Mensaje inválido detectado:', m);
+                                        return null;
+                                    }
+                                    
                                     const isMine = m.Username === user?.username;
-                                    const text = m.Message;
-                                    const statusMsg = isMine ? m.Status : '';
+                                    const text = m.Message || '';
+                                    const statusMsg = isMine ? (m.Status || 'enviado') : '';
                                     const timeStr = m.Time ? new Date(m.Time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                    
                                     return (
                                         <div
-                                            key={idx}
+                                            key={m.MessageID || `msg-${idx}`}
                                             className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
                                         >
                                             <div
@@ -517,7 +848,7 @@ export default function Dashboard() {
                                                 <div>{text}</div>
                                                 <div className="text-[10px] opacity-80 mt-1 flex items-center gap-1 justify-end">
                                                     <span>{timeStr}</span>
-                                                    {isMine && <span>{getStatusIcon(m.Status)}</span>}
+                                                    {isMine && <span>{getStatusIcon(statusMsg)}</span>}
                                                 </div>
                                             </div>
                                         </div>

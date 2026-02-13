@@ -1,1 +1,79 @@
+# ==========================================
+# DOCUMENTATION (Educational/Reference)
+# ==========================================
+docs/
+
+# ==========================================
+# ENVIRONMENT CONFIGURATION
+# ==========================================
 *.env
+*.txt
+*.env.local
+.env.*.local
+!.env.example
+
+# ==========================================
+# BACKEND (Go)
+# ==========================================
+# Build artifacts
+backend/bin/
+backend/dist/
+backend/*.o
+backend/*.a
+backend/*.so
+
+# Go modules
+go.sum
+vendor/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# ==========================================
+# FRONTEND (React/Node)
+# ==========================================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/npm-debug.log
+frontend/yarn-error.log
+frontend/.next/
+frontend/out/
+
+# ==========================================
+# DATABASE & CACHE
+# ==========================================
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+redis_data/
+
+# ==========================================
+# DOCKER
+# ==========================================
+docker-compose.override.yml
+.docker/
+
+# ==========================================
+# OS SPECIFIC
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE Settings
+.vscode/settings.json
+.vscode/launch.json
+.idea/*

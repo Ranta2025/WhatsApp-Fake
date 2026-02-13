@@ -88,7 +88,6 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 
 func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string, error) {
 	log.Println("[SERVICE] Iniciando LogIn para usuario:", user.Username)
-	log.Println("[SERVICE] Contraseña recibida:", user.Password)
 	exist := s.repo.UsernameExist(user.Username, ctx)
 	log.Println("[SERVICE] ¿Usuario existe?:", exist)
 	if !exist {
