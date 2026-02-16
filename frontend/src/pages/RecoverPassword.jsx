@@ -95,7 +95,7 @@ export default function RecoverPassword() {
                 password: newPassword
             });
             alert('¡Contraseña cambiada exitosamente! Ya puedes iniciar sesión.');
-            navigate('/');
+            navigate('/login');
         } catch (err) {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
@@ -125,7 +125,7 @@ export default function RecoverPassword() {
             }
             footer={(
                 <span>
-                    ¿Recuerdas tu contraseña? <Link to="/" className="text-indigo-300 hover:text-white">Inicia sesión</Link>
+                    ¿Recuerdas tu contraseña? <Link to="/login" className="text-indigo-300 hover:text-white">Inicia sesión</Link>
                 </span>
             )}
         >

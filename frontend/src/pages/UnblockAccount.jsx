@@ -110,7 +110,7 @@ export default function UnblockAccount() {
             });
 
             alert('¡Cuenta desbloqueada exitosamente! Ya puedes iniciar sesión con tu nueva contraseña.');
-            navigate('/');
+            navigate('/login');
         } catch (err) {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
@@ -140,7 +140,7 @@ export default function UnblockAccount() {
             }
             footer={(
                 <span>
-                    ¿Necesitas ayuda? <Link to="/" className="text-indigo-300 hover:text-white">Volver al login</Link>
+                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver al login</Link>
                 </span>
             )}
         >

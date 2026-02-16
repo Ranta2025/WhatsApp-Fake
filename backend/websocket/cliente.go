@@ -26,10 +26,11 @@ const (
 )
 
 type Client struct {
-	Username    string
-	Conn        *websocket.Conn
-	Send        chan []byte
-	ServiceChat *services.ServiceChat
+	Username       string
+	Conn           *websocket.Conn
+	Send           chan []byte
+	ServiceChat    *services.ServiceChat
+	ServiceContact *services.ServiceApiContact
 }
 
 func (c *Client) readPump(hub *Hub) {
@@ -76,6 +77,12 @@ func (c *Client) readPump(hub *Hub) {
 
 		case "typing":
 			c.handleTypingIndicator(hub, baseMsg.Payload)
+
+		case "contact_accept":
+			c.handleContactAccept(hub, baseMsg.Payload)
+
+		case "contact_reject":
+			c.handleContactReject(hub, baseMsg.Payload)
 
 		default:
 			log.Printf("Tipo de mensaje desconocido: %s", baseMsg.Type)
@@ -231,4 +238,110 @@ func (c *Client) handleTypingIndicator(hub *Hub, payload json.RawMessage) {
 		notificationBytes, _ := json.Marshal(notification)
 		hub.SendTo(typingData.To, notificationBytes)
 	}
+}
+
+// handleContactAccept maneja la aceptación de una solicitud de contacto por WebSocket
+func (c *Client) handleContactAccept(hub *Hub, payload json.RawMessage) {
+	// 1. Deserializar el payload (necesitamos el username de quien envió la solicitud)
+	var contactData struct {
+		Username string `json:"username"`
+	}
+	if err := json.Unmarshal(payload, &contactData); err != nil {
+		log.Println("Error al deserializar contact accept:", err)
+		c.Send <- []byte(`{"type":"error","error":"Formato inválido"}`)
+		return
+	}
+
+	// 2. Crear objeto ContactPut con answer "yes"
+	contactPut := models.ContactPut{
+		ContactAdd: models.ContactAdd{
+			UsernameAdd: contactData.Username,
+			Answer:      "yes",
+		},
+		Username: c.Username,
+	}
+
+	// 3. Llamar al servicio para actualizar el estado
+	ctx := context.Background()
+	err := c.ServiceContact.ServiceContactPut(contactPut, ctx)
+	if err != nil {
+		log.Println("Error al aceptar contacto:", err)
+		c.Send <- []byte(`{"type":"error","error":"Error al aceptar contacto"}`)
+		return
+	}
+
+	// 4. Obtener información del usuario que responde
+	responder, errResponder := c.ServiceContact.ServicesGetUser(c.Username, ctx)
+	if errResponder != nil {
+		log.Println("Error al obtener información del usuario:", errResponder)
+		return
+	}
+
+	// 5. Notificar al remitente original que su solicitud fue aceptada
+	hub.NotifyContactResponse(contactData.Username, responder.Username, responder.Telephon, true)
+
+	// 6. Confirmar al usuario que aceptó
+	confirmMsg, _ := json.Marshal(map[string]interface{}{
+		"type": "contact_accepted",
+		"payload": map[string]interface{}{
+			"username": contactData.Username,
+			"status":   "accepted",
+		},
+	})
+	c.Send <- confirmMsg
+
+	log.Printf("Usuario %s aceptó solicitud de contacto de %s", c.Username, contactData.Username)
+}
+
+// handleContactReject maneja el rechazo de una solicitud de contacto por WebSocket
+func (c *Client) handleContactReject(hub *Hub, payload json.RawMessage) {
+	// 1. Deserializar el payload
+	var contactData struct {
+		Username string `json:"username"`
+	}
+	if err := json.Unmarshal(payload, &contactData); err != nil {
+		log.Println("Error al deserializar contact reject:", err)
+		c.Send <- []byte(`{"type":"error","error":"Formato inválido"}`)
+		return
+	}
+
+	// 2. Crear objeto ContactPut con answer "no"
+	contactPut := models.ContactPut{
+		ContactAdd: models.ContactAdd{
+			UsernameAdd: contactData.Username,
+			Answer:      "no",
+		},
+		Username: c.Username,
+	}
+
+	// 3. Llamar al servicio para actualizar el estado
+	ctx := context.Background()
+	err := c.ServiceContact.ServiceContactPut(contactPut, ctx)
+	if err != nil {
+		log.Println("Error al rechazar contacto:", err)
+		c.Send <- []byte(`{"type":"error","error":"Error al rechazar contacto"}`)
+		return
+	}
+
+	// 4. Obtener información del usuario que responde
+	responder, errResponder := c.ServiceContact.ServicesGetUser(c.Username, ctx)
+	if errResponder != nil {
+		log.Println("Error al obtener información del usuario:", errResponder)
+		return
+	}
+
+	// 5. Notificar al remitente original que su solicitud fue rechazada
+	hub.NotifyContactResponse(contactData.Username, responder.Username, responder.Telephon, false)
+
+	// 6. Confirmar al usuario que rechazó
+	confirmMsg, _ := json.Marshal(map[string]interface{}{
+		"type": "contact_rejected",
+		"payload": map[string]interface{}{
+			"username": contactData.Username,
+			"status":   "rejected",
+		},
+	})
+	c.Send <- confirmMsg
+
+	log.Printf("Usuario %s rechazó solicitud de contacto de %s", c.Username, contactData.Username)
 }

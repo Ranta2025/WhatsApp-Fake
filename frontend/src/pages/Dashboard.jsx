@@ -5,7 +5,7 @@ import api from '../api/axios';
 
 export default function Dashboard() {
     const { user, logout, updateUsername } = useAuth();
-    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, on, off } = useWebSocket();
+    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, acceptContact, rejectContact, on, off } = useWebSocket();
     const [profile, setProfile] = useState(null);
     const [error, setError] = useState('');
     const [showProfile, setShowProfile] = useState(false);
@@ -23,6 +23,7 @@ export default function Dashboard() {
     const [answering, setAnswering] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState(new Set());
     const [typingUsers, setTypingUsers] = useState(new Set()); // Usuarios que están escribiendo
+    const [sidebarOpen, setSidebarOpen] = useState(false); // Estado para sidebar en móvil
     const messagesContainerRef = useRef(null);
     const typingTimeoutRef = useRef(null); // Para debounce del typing indicator
 
@@ -193,7 +194,13 @@ export default function Dashboard() {
         const handleContactsOnline = (contacts) => {
             console.log('[DASHBOARD] Contactos online iniciales:', contacts);
             console.log('[DASHBOARD] Tipo de contacts:', typeof contacts, Array.isArray(contacts));
-            setOnlineUsers(new Set(contacts));
+            console.log('[DASHBOARD] Valor de contacts:', JSON.stringify(contacts));
+            if (Array.isArray(contacts)) {
+                setOnlineUsers(new Set(contacts));
+            } else {
+                console.error('[DASHBOARD] contacts no es un array:', contacts);
+                setOnlineUsers(new Set());
+            }
         };
 
         const handleUserOnline = (username) => {
@@ -254,6 +261,127 @@ export default function Dashboard() {
         };
     }, [on, off]);
 
+    // Escuchar eventos de solicitudes de contacto
+    useEffect(() => {
+        const handleContactRequest = (payload) => {
+            console.log('[DASHBOARD] Nueva solicitud de contacto:', payload);
+            // payload = { username, number, status: "pending_received" }
+            
+            // Mostrar notificación
+            alert(`¡Nueva solicitud de contacto de ${payload.username} (${payload.number})!`);
+            
+            // Agregar a la lista de contactos con estado pending_received
+            const newContact = {
+                Username: payload.username,
+                Number: payload.number,
+                Status: payload.status
+            };
+            
+            setContacts(prev => {
+                // Verificar si ya existe el contacto
+                const exists = prev.some(c => c.Username === payload.username);
+                if (exists) {
+                    // Actualizar el contacto existente
+                    return prev.map(c => 
+                        c.Username === payload.username 
+                            ? { ...c, Status: payload.status } 
+                            : c
+                    );
+                } else {
+                    // Agregar nuevo contacto
+                    return [newContact, ...prev];
+                }
+            });
+        };
+
+        const handleContactResponse = (payload) => {
+            console.log('[DASHBOARD] Respuesta de contacto recibida:', payload);
+            // payload = { username, number, status: "accepted" | "rejected", accepted: true/false }
+            
+            if (payload.accepted) {
+                alert(`¡${payload.username} aceptó tu solicitud de contacto!`);
+                
+                // Actualizar el estado del contacto a "accepted"
+                setContacts(prev => prev.map(c => 
+                    c.Username === payload.username 
+                        ? { ...c, Status: 'accepted' } 
+                        : c
+                ));
+                
+                // Si el contacto está seleccionado, actualizar también
+                setSelected(prev => {
+                    if (prev && prev.Username === payload.username) {
+                        return { ...prev, Status: 'accepted' };
+                    }
+                    return prev;
+                });
+            } else {
+                alert(`${payload.username} rechazó tu solicitud de contacto.`);
+                
+                // Remover el contacto de la lista
+                setContacts(prev => prev.filter(c => c.Username !== payload.username));
+                
+                // Si el contacto rechazado está seleccionado, deseleccionarlo
+                setSelected(prev => {
+                    if (prev && prev.Username === payload.username) {
+                        return null;
+                    }
+                    return prev;
+                });
+            }
+        };
+
+        const handleContactAccepted = (payload) => {
+            console.log('[DASHBOARD] Confirmación de aceptación:', payload);
+            // payload = { username, status: "accepted" }
+            // Este evento lo recibe el usuario que ACEPTÓ la solicitud
+            
+            // Actualizar el contacto a "accepted" en su lista
+            setContacts(prev => prev.map(c => 
+                c.Username === payload.username 
+                    ? { ...c, Status: 'accepted' } 
+                    : c
+            ));
+            
+            // Si el contacto está seleccionado, actualizar también
+            setSelected(prev => {
+                if (prev && prev.Username === payload.username) {
+                    return { ...prev, Status: 'accepted' };
+                }
+                return prev;
+            });
+        };
+
+        const handleContactRejected = (payload) => {
+            console.log('[DASHBOARD] Confirmación de rechazo:', payload);
+            // payload = { username, status: "rejected" }
+            // Este evento lo recibe el usuario que RECHAZÓ la solicitud
+            
+            // Remover el contacto de la lista
+            setContacts(prev => prev.filter(c => c.Username !== payload.username));
+            
+            // Si el contacto está seleccionado, deseleccionarlo
+            setSelected(prev => {
+                if (prev && prev.Username === payload.username) {
+                    return null;
+                }
+                return prev;
+            });
+        };
+
+        on('contact_request', handleContactRequest);
+        on('contact_response', handleContactResponse);
+        on('contact_accepted', handleContactAccepted);
+        on('contact_rejected', handleContactRejected);
+
+        return () => {
+            off('contact_request', handleContactRequest);
+            off('contact_response', handleContactResponse);
+            off('contact_accepted', handleContactAccepted);
+            off('contact_rejected', handleContactRejected);
+        };
+    }, [on, off]);
+
     useEffect(() => {
         const fetchContacts = async () => {
             try {
@@ -289,6 +417,11 @@ export default function Dashboard() {
             ...prev,
             [key]: value,
         }));
+        
+        // Cerrar sidebar en móvil cuando se empieza a escribir
+        if (sidebarOpen) {
+            setSidebarOpen(false);
+        }
 
         // Enviar indicador de "escribiendo" solo si hay texto y WebSocket conectado
         if (value.trim() && isConnected && selected.Username) {
@@ -434,6 +567,34 @@ export default function Dashboard() {
         if (!selected) return;
         setAnswering(true);
         setStatus('');
+        
+        // Usar WebSocket si está conectado
+        if (isConnected) {
+            console.log('[CONTACT] Respondiendo solicitud por WebSocket:', ans);
+            
+            if (ans === 'yes') {
+                acceptContact(selected.Username);
+                // Actualizar localmente de forma optimista
+                setContacts(prev => prev.map(c => 
+                    c.Username === selected.Username 
+                        ? { ...c, Status: 'accepted' } 
+                        : c
+                ));
+                setSelected(prev => prev ? { ...prev, Status: 'accepted' } : null);
+                setStatus('Contacto aceptado');
+            } else {
+                rejectContact(selected.Username);
+                // Remover localmente de forma optimista
+                setContacts(prev => prev.filter(c => c.Username !== selected.Username));
+                setSelected(null);
+                setStatus('Contacto rechazado');
+            }
+            
+            setAnswering(false);
+            return;
+        }
+        
+        // Fallback a HTTP si WebSocket no está conectado
         try {
             const { data: resp } = await api.put('/api/v1/contact', {
                 username_add: selected.Username,
@@ -618,9 +779,22 @@ export default function Dashboard() {
     }, [messagesByChat, selected]);
 
     return (
-        <div className="flex h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950 text-white overflow-hidden">
+        <div className="flex h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950 text-white overflow-hidden relative">
+            {/* Overlay backdrop para móvil */}
+            {sidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                ></div>
+            )}
+            
             {/* Sidebar */}
-            <div className="w-72 bg-white/10 backdrop-blur-xl border-r border-white/10 flex flex-col">
+            <div className={`
+                w-72 bg-white/10 backdrop-blur-xl border-r border-white/10 flex flex-col
+                fixed lg:static inset-y-0 left-0 z-50
+                transform transition-transform duration-300 ease-in-out
+                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            `}>
                 <div className="p-5 border-b border-white/10 flex justify-between items-center">
                     <h1 className="text-xl font-bold">todos</h1>
                     <div 
@@ -652,7 +826,11 @@ export default function Dashboard() {
                         {contacts.map((c, idx) => (
                             <button
                                 key={idx}
-                                onClick={() => setSelected(c)}
+                                onClick={() => {
+                                    setSelected(c);
+                                    // Cerrar sidebar en móvil al seleccionar contacto
+                                    setSidebarOpen(false);
+                                }}
                                 className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Username === c.Username ? 'ring-1 ring-indigo-400' : ''}`}
                             >
                                 <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
@@ -667,6 +845,12 @@ export default function Dashboard() {
                                         {isContactOnline(c.Username) ? 'En línea' : c.Number}
                                     </div>
                                 </div>
+                                {c.Status === 'pending_received' && (
+                                    <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300 animate-pulse">¡Solicitud!</span>
+                                )}
+                                {c.Status === 'pending_sent' && (
+                                    <span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">Esperando...</span>
+                                )}
                                 {c.Status === 'pending' && (
                                     <span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">pendiente</span>
                                 )}
@@ -729,16 +913,27 @@ export default function Dashboard() {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0">
                 {!selected ? (
-                    <div className="flex flex-col h-full">
+                    <div className="flex flex-col h-full relative">
+                        {/* Botón hamburguesa para móvil - flotante cuando no hay chat seleccionado */}
+                        <button
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            className="lg:hidden absolute top-4 left-4 p-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-lg z-20 hover:shadow-xl transition-all"
+                            aria-label="Toggle sidebar"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+                        
                         <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center overflow-y-auto">
                             <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mb-6">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                 </svg>
                             </div>
-                            <h2 className="text-3xl font-bold mb-2">Bienvenido a todus</h2>
+                            <h2 className="text-3xl font-bold mb-2">Bienvenido a todos</h2>
                             <p className="max-w-md text-indigo-300">
                                 Selecciona un contacto para comenzar a chatear.
                             </p>
@@ -769,9 +964,19 @@ export default function Dashboard() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col h-full min-h-0 relative">
+                    <div className="flex flex-col h-full overflow-hidden">
                         {/* Header fijo */}
-                        <div className="flex-shrink-0 p-4 border-b border-white/10 bg-white/5 flex items-center gap-3 z-10">
+                        <div className="flex-shrink-0 p-3 border-b border-white/10 bg-white/5 flex items-center gap-2">
+                            {/* Botón hamburguesa para móvil */}
+                            <button
+                                onClick={() => setSidebarOpen(!sidebarOpen)}
+                                className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                aria-label="Toggle sidebar"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                            </button>
                             <div className="relative w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
                                 {selected.Username?.charAt(0)?.toUpperCase()}
                                                             {isContactOnline(selected.Username) && (
@@ -790,29 +995,34 @@ export default function Dashboard() {
                                     )}
                                 </div>
                             </div>
-                            {selected.Status === 'pending' && (
+                            {(selected.Status === 'pending_received' || selected.Status === 'pending') && (
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => answerContact('yes')}
                                         disabled={answering}
-                                        className={`px-3 py-1 rounded ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-green-600/30 text-green-200`}
+                                        className={`px-3 py-1 rounded text-sm ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-green-600/30 hover:bg-green-600/50 text-green-200`}
                                     >
-                                        Yes
+                                        ✓ Aceptar
                                     </button>
                                     <button
                                         onClick={() => answerContact('no')}
                                         disabled={answering}
-                                        className={`px-3 py-1 rounded ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-red-600/30 text-red-200`}
+                                        className={`px-3 py-1 rounded text-sm ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-red-600/30 hover:bg-red-600/50 text-red-200`}
                                     >
-                                        No
+                                        ✗ Rechazar
                                     </button>
                                 </div>
                             )}
+                            {selected.Status === 'pending_sent' && (
+                                <div className="text-xs px-3 py-1 rounded bg-yellow-500/20 text-yellow-300">
+                                    Esperando respuesta...
+                                </div>
+                            )}
                         </div>
-                        {/* Área de mensajes con scroll independiente */}
+                        {/* Área de mensajes - altura flexible */}
                         <div 
                             ref={messagesContainerRef}
-                            className="flex-1 min-h-0 overflow-y-auto flex flex-col text-indigo-200 p-4 space-y-3 pb-32"
+                            className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col text-indigo-200 p-3 space-y-2"
                         >
                             {(messagesByChat[getChatKey(selected)] || []).length === 0 ? (
                                 <div className="flex-1 flex items-center justify-center">
@@ -856,15 +1066,23 @@ export default function Dashboard() {
                                 })
                             )}
                         </div>
-                        {/* Input fijo en la parte inferior - estilo WhatsApp */}
-                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/10 border-t border-white/10 z-20">
-                            <div className="flex gap-4">
+                        {/* Input fijo - siempre visible */}
+                        <div className="flex-shrink-0 p-2 sm:p-3 bg-white/10 border-t border-white/10">
+                            <div className="flex gap-2 items-center">
                                 <input 
                                     type="text" 
                                     value={currentDraft}
                                     onChange={handleInputChange}
-                                    placeholder="Escribe un mensaje..."
-                                    className="flex-1 p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300"
+                                    placeholder="Mensaje..."
+                                    className="flex-1 p-2 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300 text-sm"
+                                    onFocus={() => {
+                                        // Scroll automático cuando aparece el teclado móvil
+                                        setTimeout(() => {
+                                            if (messagesContainerRef.current) {
+                                                messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+                                            }
+                                        }, 300);
+                                    }}
                                     onKeyPress={(e) => {
                                         if (e.key === 'Enter' && selected && currentDraft.trim()) {
                                             handleSend();
@@ -872,11 +1090,11 @@ export default function Dashboard() {
                                     }}
                                 />
                                 <button
-                                    className={`bg-gradient-to-r from-purple-600 to-indigo-600 px-6 rounded text-white font-medium transition ${selected && currentDraft.trim() ? 'hover:from-purple-500 hover:to-indigo-500' : 'opacity-50 cursor-not-allowed'}`}
+                                    className={`bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 rounded text-white font-medium text-sm ${selected && currentDraft.trim() ? 'hover:from-purple-500 hover:to-indigo-500' : 'opacity-50'}`}
                                     disabled={!selected || !currentDraft.trim()}
                                     onClick={handleSend}
                                 >
-                                    Enviar
+                                    ➤
                                 </button>
                             </div>
                         </div>

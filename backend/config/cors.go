@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -9,17 +10,35 @@ import (
 
 func Cors() gin.HandlerFunc {
 	return cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:8080",
-			"http://127.0.0.1:8080",
-			"http://localhost:5173",
-			"http://127.0.0.1:5173",
-			"http://10.33.225.131:5173",
-			"http://10.33.225.131:8080",
-			"http://10.50.148.131:8080",
-			"http://10.50.148.131.5173",
-			"http://10.50.249.108:8080",
-			"http://10.50.249.108:5173",
+		AllowOriginFunc: func(origin string) bool {
+			// Permitir localhost y IPs locales
+			localOrigins := []string{
+				"http://localhost:8080",
+				"http://127.0.0.1:8080",
+				"http://localhost:5173",
+				"http://127.0.0.1:5173",
+				"http://10.33.225.131:5173",
+				"http://10.33.225.131:8080",
+				"http://10.50.148.131:8080",
+				"http://10.50.148.131.5173",
+				"http://10.50.249.108:8080",
+				"http://10.50.249.108:5173",
+			}
+
+			for _, allowed := range localOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+
+			// Permitir URLs de ngrok (tanto http como https)
+			if strings.Contains(origin, ".ngrok-free.app") ||
+				strings.Contains(origin, ".ngrok.io") ||
+				strings.Contains(origin, ".ngrok.app") {
+				return true
+			}
+
+			return false
 		},
 		AllowMethods: []string{"GET", "POST", "PUT", "OPTIONS"},
 		AllowHeaders: []string{

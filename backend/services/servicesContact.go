@@ -101,6 +101,12 @@ func (sr *ServiceApiContact) AddContact(username string, number string, ctx cont
 	if err != nil {
 		return nil, err
 	}
+	// Establecer el status correcto desde la perspectiva del usuario que envía
+	if exist && existContact {
+		contactChat.Status = "accepted"
+	} else {
+		contactChat.Status = "pending_sent"
+	}
 	return contactChat, nil
 }
 

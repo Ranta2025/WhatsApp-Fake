@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -13,7 +14,7 @@ const PrivateRoute = ({ children }) => {
     
     if (loading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Cargando...</div>;
     
-    return user ? children : <Navigate to="/" />;
+    return user ? children : <Navigate to="/login" />;
 };
 
 function App() {
@@ -21,7 +22,8 @@ function App() {
     <AuthProvider>
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<Login />} />
+                <Route path="/" element={<Welcome />} />
+                <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/activate" element={<ActivateAccount />} />
                 <Route path="/activate-existing" element={<ActivateExisting />} />

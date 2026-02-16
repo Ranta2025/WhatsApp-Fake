@@ -41,7 +41,7 @@ export default function ActivateExisting() {
             subtitle="Ingresa tu username para recibir un código de activación"
             footer={(
                 <span>
-                    ¿Necesitas ayuda? <Link to="/" className="text-indigo-300 hover:text-white">Volver al login</Link>
+                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver al login</Link>
                 </span>
             )}
         >

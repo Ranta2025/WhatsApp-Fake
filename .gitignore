@@ -1,13 +1,24 @@
 # ==========================================
 # DOCUMENTATION (Educational/Reference)
 # ==========================================
-docs/
+# Ignorar material educativo/lecciones personales
+docs/guides/
+docs/testing/
+docs/project/
+docs/*.txt
+
+# Mantener documentación del proyecto:
+# - docs/BUG_REPORT_SYSTEM.md
+# - docs/NGROK_GUIDE.md
+# - docs/WEBSOCKET_GUIDE.md
+# - docs/README.md
+# - docs/INDEX.md
+# - etc.
 
 # ==========================================
 # ENVIRONMENT CONFIGURATION
 # ==========================================
 *.env
-*.txt
 *.env.local
 .env.*.local
 !.env.example
@@ -22,8 +33,14 @@ backend/*.o
 backend/*.a
 backend/*.so
 
+# Compiled binaries (root level)
+*.exe
+server-new
+server.linux
+coverage
+
 # Go modules
-go.sum
+# go.sum debe subirse a Git para verificación de integridad
 vendor/
 
 # IDE/Editor
@@ -64,6 +81,8 @@ redis_data/
 # DOCKER
 # ==========================================
 docker-compose.override.yml
+docker/ngrok.yml
+docker/.env
 .docker/
 
 # ==========================================

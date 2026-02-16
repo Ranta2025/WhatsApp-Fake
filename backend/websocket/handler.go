@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"gorm/backend/services"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -13,7 +14,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func HandleWebSocket(hub *Hub, chatService *services.ServiceChat) gin.HandlerFunc {
+func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, exist := c.Get("username")
 		if !exist {
@@ -27,22 +28,27 @@ func HandleWebSocket(hub *Hub, chatService *services.ServiceChat) gin.HandlerFun
 		}
 
 		client := &Client{
-			Username:    username.(string),
-			Conn:        conn,
-			Send:        make(chan []byte, 256),
-			ServiceChat: chatService,
+			Username:       username.(string),
+			Conn:           conn,
+			Send:           make(chan []byte, 256),
+			ServiceChat:    chatService,
+			ServiceContact: contactService,
 		}
 		hub.Register <- client
 
-		// Enviar lista inicial de contactos online
-		onlineContacts := hub.GetOnlineContacts(username.(string))
-		initialMsg, _ := json.Marshal(map[string]interface{}{
-			"type": "contacts_online",
-			"payload": map[string]interface{}{
-				"contacts": onlineContacts,
-			},
-		})
-		client.Send <- initialMsg
+		// Enviar lista inicial de contactos online después de un pequeño delay
+		// para asegurar que los listeners del cliente estén registrados
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			onlineContacts := hub.GetOnlineContacts(username.(string))
+			initialMsg, _ := json.Marshal(map[string]interface{}{
+				"type": "contacts_online",
+				"payload": map[string]interface{}{
+					"contacts": onlineContacts,
+				},
+			})
+			client.Send <- initialMsg
+		}()
 
 		go client.writePump()
 		client.readPump(hub)

@@ -10,6 +10,7 @@ class WebSocketManager {
         this.onlineStatusHandlers = [];
         this.connectionStateHandlers = [];
         this.heartbeatInterval = null;
+        this.lastContactsOnline = null; // Guardar último estado de contactos online
         this.setupBrowserEventListeners();
     }
 
@@ -60,14 +61,31 @@ class WebSocketManager {
         }
 
         this.isIntentionallyClosed = false;
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        
+        // Construir URL del WebSocket
+        let wsUrl;
+        if (import.meta.env.VITE_BACKEND_URL) {
+            // Si hay una URL del backend configurada (para ngrok)
+            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+            const protocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
+            const host = backendUrl.replace(/^https?:\/\//, '');
+            wsUrl = `${protocol}//${host}/api/v1/ws`;
+        } else if (window.location.hostname.includes('ngrok')) {
+            // Si estamos en ngrok, usar el mismo dominio (nginx maneja el routing)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${window.location.host}/api/v1/ws`;
+        } else {
+            // Fallback: desarrollo local - usar el hostname actual
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${window.location.hostname}:8080/api/v1/ws`;
+        }
         
         // WebSocket no puede enviar headers personalizados, usamos query param como fallback
         const storedToken = localStorage.getItem('token');
         console.log('[WS] Token en localStorage:', storedToken ? 'SI (presente)' : 'NO (ausente)');
         console.log('[WS] Token value:', storedToken);
         const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}` : '';
-        const wsUrl = `${protocol}//${window.location.hostname}:8080/api/v1/ws${tokenQuery}`;
+        wsUrl = `${wsUrl}${tokenQuery}`;
         console.log('[WS] Conectando a:', wsUrl);
 
         try {
@@ -90,6 +108,7 @@ class WebSocketManager {
         this.ws.onclose = (event) => {
             console.log('WebSocket desconectado:', event.code, event.reason);
             this.stopHeartbeat();
+            this.lastContactsOnline = null; // Limpiar estado al desconectar
             this.notifyConnectionState('disconnected');
             
             if (!this.isIntentionallyClosed) {
@@ -133,6 +152,7 @@ class WebSocketManager {
             case 'contacts_online':
                 // Lista inicial de contactos online
                 console.log('[WS] Contactos online iniciales recibidos:', payload.contacts);
+                this.lastContactsOnline = payload.contacts || []; // Guardar para listeners tardíos
                 this.notifyHandlers('contacts_online', payload.contacts || []);
                 break;
             case 'online':
@@ -144,6 +164,26 @@ class WebSocketManager {
                 // Un contacto se desconectó
                 console.log('[WS] Contacto desconectado:', payload.username);
                 this.notifyHandlers('offline', payload.username);
+                break;
+            case 'contact_request':
+                // Nueva solicitud de contacto recibida
+                console.log('[WS] Solicitud de contacto recibida:', payload);
+                this.notifyHandlers('contact_request', payload);
+                break;
+            case 'contact_response':
+                // Respuesta a una solicitud de contacto enviada
+                console.log('[WS] Respuesta de contacto recibida:', payload);
+                this.notifyHandlers('contact_response', payload);
+                break;
+            case 'contact_accepted':
+                // Confirmación de que aceptaste una solicitud
+                console.log('[WS] Contacto aceptado confirmado:', payload);
+                this.notifyHandlers('contact_accepted', payload);
+                break;
+            case 'contact_rejected':
+                // Confirmación de que rechazaste una solicitud
+                console.log('[WS] Contacto rechazado confirmado:', payload);
+                this.notifyHandlers('contact_rejected', payload);
                 break;
             case 'pong':
                 console.log('Pong recibido del servidor');
@@ -188,6 +228,13 @@ class WebSocketManager {
             this.messageHandlers.set(event, []);
         }
         this.messageHandlers.get(event).push(handler);
+        
+        // Si alguien se registra para 'contacts_online' y ya tenemos datos, enviárselos inmediatamente
+        if (event === 'contacts_online' && this.lastContactsOnline !== null) {
+            console.log('[WS] Enviando contactos online guardados a listener tardío:', this.lastContactsOnline);
+            // Usar setTimeout para evitar ejecución síncrona durante el registro
+            setTimeout(() => handler(this.lastContactsOnline), 0);
+        }
     }
 
     off(event, handler) {
@@ -259,8 +306,9 @@ class WebSocketManager {
 
         const msg = {
             type: 'contact_accept',
-            from: username,
-            timestamp: new Date().toISOString()
+            payload: {
+                username: username
+            }
         };
 
         this.ws.send(JSON.stringify(msg));
@@ -272,8 +320,9 @@ class WebSocketManager {
 
         const msg = {
             type: 'contact_reject',
-            from: username,
-            timestamp: new Date().toISOString()
+            payload: {
+                username: username
+            }
         };
 
         this.ws.send(JSON.stringify(msg));

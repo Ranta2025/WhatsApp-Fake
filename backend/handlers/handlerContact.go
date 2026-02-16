@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/utils"
+	"gorm/backend/websocket"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,11 +13,13 @@ import (
 
 type HandlerContact struct {
 	service *services.ServiceApiContact
+	hub     *websocket.Hub
 }
 
-func InitHandlerApiMessage(services *services.ServiceApiContact) *HandlerContact {
+func InitHandlerApiMessage(services *services.ServiceApiContact, hub *websocket.Hub) *HandlerContact {
 	return &HandlerContact{
 		service: services,
+		hub:     hub,
 	}
 }
 
@@ -97,6 +101,17 @@ func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
+
+		// Enviar notificación WebSocket al receptor de la solicitud
+		if hd.hub != nil {
+			// Obtener información del usuario que envía la solicitud
+			sender, errSender := hd.service.ServicesGetUser(username.(string), ctx)
+			if errSender == nil {
+				// Notificar al receptor (contact.Username) que recibió una solicitud
+				hd.hub.NotifyContactRequest(contact.Username, sender.Username, sender.Telephon)
+			}
+		}
+
 		ctx.JSON(201, gin.H{
 			"contacto creado": contact,
 		})
@@ -149,6 +164,48 @@ func (hd *HandlerContact) ContactPut() gin.HandlerFunc {
 			})
 			return
 		}
+
+		// Enviar notificaciones WebSocket
+		if hd.hub != nil {
+			// Obtener información del usuario que responde (el que acepta/rechaza)
+			responder, errResponder := hd.service.ServicesGetUser(username.(string), ctx)
+			if errResponder == nil {
+				// Determinar si fue aceptado o rechazado
+				accepted := contact.Answer == "yes" || contact.Answer == "Yes" || contact.Answer == "YES"
+
+				// 1. Notificar al usuario que envió la solicitud original (contact.UsernameAdd)
+				hd.hub.NotifyContactResponse(contact.UsernameAdd, responder.Username, responder.Telephon, accepted)
+
+				// 2. Confirmar al usuario que acepta/rechaza (username)
+				client, exists := hd.hub.GetClient(username.(string))
+
+				if exists {
+					var confirmMsg []byte
+					if accepted {
+						confirmMsg, _ = json.Marshal(map[string]interface{}{
+							"type": "contact_accepted",
+							"payload": map[string]interface{}{
+								"username": contact.UsernameAdd,
+								"status":   "accepted",
+							},
+						})
+					} else {
+						confirmMsg, _ = json.Marshal(map[string]interface{}{
+							"type": "contact_rejected",
+							"payload": map[string]interface{}{
+								"username": contact.UsernameAdd,
+								"status":   "rejected",
+							},
+						})
+					}
+					select {
+					case client.Send <- confirmMsg:
+					default:
+					}
+				}
+			}
+		}
+
 		ctx.JSON(http.StatusOK, gin.H{
 			"message": "status actualizado",
 		})

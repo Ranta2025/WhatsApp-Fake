@@ -11,13 +11,13 @@ import (
 
 // TestInitHandlerContact test para inicializar handler de contactos
 func TestInitHandlerContact(t *testing.T) {
-	handler := InitHandlerApiMessage(nil)
+	handler := InitHandlerApiMessage(nil, nil)
 	assert.NotNil(t, handler)
 }
 
 // TestHandlerGetUserMissing test para obtener usuario sin datos
 func TestHandlerGetUserMissing(t *testing.T) {
-	handler := &HandlerContact{service: nil}
+	handler := &HandlerContact{service: nil, hub: nil}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

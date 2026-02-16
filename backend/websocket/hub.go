@@ -71,10 +71,24 @@ func (h *Hub) SendTo(username string, msg []byte) {
 	}
 }
 
+// GetClient obtiene un cliente de forma thread-safe
+func (h *Hub) GetClient(username string) (*Client, bool) {
+	h.mu.RLock()
+	client, exists := h.Clients[username]
+	h.mu.RUnlock()
+	return client, exists
+}
+
 // NotifyContactsOnline notifica a los contactos que un usuario está online
 func (h *Hub) NotifyContactsOnline(username string) {
 	contacts := h.getUserContacts(username)
 	fmt.Printf("[HUB] NotifyContactsOnline para %s. Contactos encontrados: %v\n", username, contacts)
+
+	if len(contacts) == 0 {
+		fmt.Printf("[HUB] No hay contactos aceptados para notificar a %s\n", username)
+		return
+	}
+
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type": "online",
 		"payload": map[string]interface{}{
@@ -146,4 +160,76 @@ func (h *Hub) getUserContacts(username string) []string {
 	}
 
 	return usernames
+}
+
+// NotifyContactRequest notifica a un usuario que recibió una solicitud de contacto
+func (h *Hub) NotifyContactRequest(recipientUsername string, senderUsername string, senderNumber string) {
+	h.mu.RLock()
+	client, exists := h.Clients[recipientUsername]
+	h.mu.RUnlock()
+
+	if !exists {
+		fmt.Printf("[HUB] Usuario %s no está conectado para recibir solicitud de contacto de %s\n", recipientUsername, senderUsername)
+		return
+	}
+
+	msg, err := json.Marshal(map[string]interface{}{
+		"type": "contact_request",
+		"payload": map[string]interface{}{
+			"username": senderUsername,
+			"number":   senderNumber,
+			"status":   "pending_received",
+		},
+	})
+	if err != nil {
+		fmt.Printf("[HUB] Error al serializar solicitud de contacto: %v\n", err)
+		return
+	}
+
+	fmt.Printf("[HUB] Enviando solicitud de contacto de %s a %s\n", senderUsername, recipientUsername)
+	select {
+	case client.Send <- msg:
+		fmt.Printf("[HUB] Solicitud de contacto enviada exitosamente\n")
+	default:
+		fmt.Printf("[HUB] No se pudo enviar solicitud de contacto, canal lleno\n")
+	}
+}
+
+// NotifyContactResponse notifica a un usuario sobre la respuesta a su solicitud de contacto
+func (h *Hub) NotifyContactResponse(recipientUsername string, responderUsername string, responderNumber string, accepted bool) {
+	h.mu.RLock()
+	client, exists := h.Clients[recipientUsername]
+	h.mu.RUnlock()
+
+	if !exists {
+		fmt.Printf("[HUB] Usuario %s no está conectado para recibir respuesta de contacto de %s\n", recipientUsername, responderUsername)
+		return
+	}
+
+	status := "rejected"
+	if accepted {
+		status = "accepted"
+	}
+
+	msg, err := json.Marshal(map[string]interface{}{
+		"type": "contact_response",
+		"payload": map[string]interface{}{
+			"username": responderUsername,
+			"number":   responderNumber,
+			"status":   status,
+			"accepted": accepted,
+		},
+	})
+	if err != nil {
+		fmt.Printf("[HUB] Error al serializar respuesta de contacto: %v\n", err)
+		return
+	}
+
+	fmt.Printf("[HUB] Enviando respuesta de contacto de %s a %s (accepted: %v)\n", responderUsername, recipientUsername, accepted)
+	select {
+	case client.Send <- msg:
+		fmt.Printf("[HUB] Respuesta de contacto enviada exitosamente\n")
+	default:
+		fmt.Printf("[HUB] No se pudo enviar respuesta de contacto, canal lleno\n")
+	}
 }

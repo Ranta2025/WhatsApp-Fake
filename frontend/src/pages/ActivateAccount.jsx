@@ -102,7 +102,7 @@ export default function ActivateAccount() {
             subtitle={isBloqueado ? "Tu cuenta ha sido bloqueada" : "Ingresa el código enviado a tu email"}
             footer={(
                 <span>
-                    ¿Necesitas ayuda? <Link to="/" className="text-indigo-300 hover:text-white">Volver al login</Link>
+                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver al login</Link>
                 </span>
             )}
         >
@@ -112,7 +112,7 @@ export default function ActivateAccount() {
             {isBloqueado ? (
                 <div className="text-center py-8">
                     <p className="text-red-400 mb-4">Tu cuenta ha sido bloqueada. Por favor contacta con soporte para más información.</p>
-                    <Link to="/" className="text-indigo-300 hover:text-white underline">
+                    <Link to="/login" className="text-indigo-300 hover:text-white underline">
                         Volver al inicio
                     </Link>
                 </div>

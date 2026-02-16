@@ -33,15 +33,23 @@ export default function Login() {
     };
 
     return (
-        <AuthLayout
-            title="Bienvenido de nuevo"
-            subtitle="Inicia sesión para continuar"
-            footer={(
-                <span>
-                    ¿No tienes cuenta? <Link to="/register" className="text-indigo-300 hover:text-white">Regístrate</Link>
-                </span>
-            )}
-        >
+        <>
+            <Link 
+                to="/" 
+                className="fixed top-4 left-4 text-white hover:text-indigo-300 transition flex items-center gap-2 z-50"
+            >
+                <span className="text-xl">←</span>
+                <span className="text-sm font-medium">Volver a inicio</span>
+            </Link>
+            <AuthLayout
+                title="Bienvenido de nuevo"
+                subtitle="Inicia sesión para continuar"
+                footer={
+                    <span>
+                        ¿No tienes cuenta? <Link to="/register" className="text-indigo-300 hover:text-white">Regístrate</Link>
+                    </span>
+                }
+            >
             {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -89,6 +97,7 @@ export default function Login() {
                     Entrar
                 </button>
             </form>
-        </AuthLayout>
+            </AuthLayout>
+        </>
     );
 }

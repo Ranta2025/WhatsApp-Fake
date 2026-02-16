@@ -146,7 +146,7 @@ func (app *ApiContact) GetContactNumber(number string, ctx context.Context) (*mo
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	contact.Status = "accepted"
+	// No establecer status aquí, se debe obtener de la relación de contacto
 	return &contact, nil
 }
 

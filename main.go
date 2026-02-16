@@ -28,15 +28,19 @@ func main() {
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
 
-	handlerContact, handlerChat, serviceChat, repo := GetHandlerApi(db)
+	// Obtener repositorio primero
+	repo := repos.InitRepoContact(db)
 
 	// Inicializar Hub de WebSocket con repositorio para obtener contactos
 	hub := websocket.NewHub(repo)
 	go hub.Run()
 
+	// Ahora inicializar handlers con el hub
+	handlerContact, handlerChat, serviceChat, serviceContact := GetHandlerApi(db, hub)
 	handlerLog := GetHandlerLog(db, rd, hub)
+	handlerBugReport := GetHandlerBugReport()
 
-	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, hub, serviceChat)
+	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, hub, serviceChat, serviceContact, handlerBugReport)
 
 	app.Welcome()
 	app.Run()
@@ -71,11 +75,17 @@ func GetHandlerLog(data *gorm.DB, rd *redis.Client, hub *websocket.Hub) *handler
 	return handler
 }
 
-func GetHandlerApi(data *gorm.DB) (*handlers.HandlerContact, *handlers.HandlerChat, *services.ServiceChat, *repos.ApiContact) {
+func GetHandlerApi(data *gorm.DB, hub *websocket.Hub) (*handlers.HandlerContact, *handlers.HandlerChat, *services.ServiceChat, *services.ServiceApiContact) {
 	repo := repos.InitRepoContact(data)
 	serviceMessage := services.InitServiceMessage(repo)
 	serviceContact := services.InitServiceContact(repo)
-	handlerContact := handlers.InitHandlerApiMessage(serviceContact)
+	handlerContact := handlers.InitHandlerApiMessage(serviceContact, hub)
 	handlerChat := handlers.InitHandlerChat(serviceMessage)
-	return handlerContact, handlerChat, serviceMessage, repo
+	return handlerContact, handlerChat, serviceMessage, serviceContact
+}
+
+func GetHandlerBugReport() *handlers.HandlerBugReport {
+	service := services.InitServiceBugReport()
+	handler := handlers.InitHandlerBugReport(service)
+	return handler
 }

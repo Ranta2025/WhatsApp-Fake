@@ -15,15 +15,17 @@ type RouterApiMessage struct {
 	handlerChat    *handlers.HandlerChat
 	hub            *websocket.Hub
 	chatService    *services.ServiceChat
+	contactService *services.ServiceApiContact
 }
 
-func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, hub *websocket.Hub, chatService *services.ServiceChat) *RouterApiMessage {
+func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, hub *websocket.Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact) *RouterApiMessage {
 	rout := &RouterApiMessage{
 		app:            app,
 		handlerContact: handler,
 		handlerChat:    handlerChat,
 		hub:            hub,
 		chatService:    chatService,
+		contactService: contactService,
 	}
 	rout.app.Use(middleware.MiddlewareTokenValidation())
 	return rout
@@ -47,5 +49,5 @@ func (rt *RouterApiMessage) ApiChat() {
 }
 
 func (rt *RouterApiMessage) ApiWebSocket() {
-	rt.app.GET("ws", websocket.HandleWebSocket(rt.hub, rt.chatService))
+	rt.app.GET("ws", websocket.HandleWebSocket(rt.hub, rt.chatService, rt.contactService))
 }

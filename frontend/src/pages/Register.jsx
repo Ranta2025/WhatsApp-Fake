@@ -45,30 +45,38 @@ export default function Register() {
     };
 
     return (
-        <AuthLayout
-            title="Crear tu cuenta"
-            subtitle="Únete a ApiChat para conversar con tus contactos"
-            footer={(
-                <div className="space-y-2 text-center">
-                    <div>
-                        <span className="text-gray-300">
-                            ¿Ya tienes cuenta?{' '}
-                            <Link to="/" className="text-indigo-300 hover:text-white font-semibold">
-                                Inicia sesión
-                            </Link>
-                        </span>
+        <>
+            <Link 
+                to="/" 
+                className="fixed top-4 left-4 text-white hover:text-indigo-300 transition flex items-center gap-2 z-50"
+            >
+                <span className="text-xl">←</span>
+                <span className="text-sm font-medium">Volver a inicio</span>
+            </Link>
+            <AuthLayout
+                title="Crear tu cuenta"
+                subtitle="Únete a todos para conversar con tus contactos"
+                footer={() => (
+                    <div className="space-y-2 text-center">
+                        <div>
+                            <span className="text-gray-300">
+                                ¿Ya tienes cuenta?{' '}
+                                <Link to="/login" className="text-indigo-300 hover:text-white font-semibold">
+                                    Inicia sesión
+                                </Link>
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-gray-300">
+                                ¿Cuenta inactiva?{' '}
+                                <Link to="/activate-existing" className="text-indigo-300 hover:text-white font-semibold">
+                                    Activar cuenta
+                                </Link>
+                            </span>
+                        </div>
                     </div>
-                    <div>
-                        <span className="text-gray-300">
-                            ¿Cuenta inactiva?{' '}
-                            <Link to="/activate-existing" className="text-indigo-300 hover:text-white font-semibold">
-                                Activar cuenta
-                            </Link>
-                        </span>
-                    </div>
-                </div>
-            )}
-        >
+                )}
+            >
             {error && <p className="text-red-400 text-sm mb-3 text-center">{error}</p>}
             <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
@@ -149,6 +157,7 @@ export default function Register() {
                     Registrarse
                 </button>
             </form>
-        </AuthLayout>
+            </AuthLayout>
+        </>
     );
 }
