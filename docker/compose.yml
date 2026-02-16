@@ -4,13 +4,12 @@ services:
       context: ..
       dockerfile: docker/dockerfile
     container_name: gorm-app
+    env_file:
+      - ../.env
     environment:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      SECRETKEY: ${SECRETKEY}
-      GMAIL_FROM: ${GMAIL_FROM}
-      GMAIL_PASSWORD: ${GMAIL_PASSWORD}
     depends_on:
       - postgres
       - redis
