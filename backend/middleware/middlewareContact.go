@@ -9,38 +9,32 @@ import (
 
 func MiddlewareContact() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		var number string
-		if err := ctx.ShouldBindJSON(&number); err != nil {
+		var contactAdd models.ContactAdd
+		if err := ctx.ShouldBindJSON(&contactAdd); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "Introdusca numero",
+				"error": "Datos incompletos: se requiere número y nombre del contacto",
 			})
 			ctx.Abort()
 			return
 		}
 
-		if len(number) != 8 {
+		if len(contactAdd.Number) != 8 {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "El numero de telefono tiene que contener 8 caracteres",
+				"error": "El número de teléfono debe contener 8 caracteres",
 			})
 			ctx.Abort()
 			return
 		}
 
-		ctx.Set("number", number)
-	}
-}
-
-func MiddlewareContactPut() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var useradd models.ContactAdd
-		if err := ctx.ShouldBindJSON(&useradd); err != nil {
+		if len(contactAdd.ContactName) == 0 {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error":"no se recibieron todos los parametros necesarios",
+				"error": "El nombre del contacto no puede estar vacío",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
-		ctx.Set("answerContact", useradd)
+
+		ctx.Set("contactAdd", contactAdd)
 		ctx.Next()
 	}
 }

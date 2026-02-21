@@ -1,12 +1,13 @@
 package handlers
 
 import (
-	"encoding/json"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/utils"
 	"gorm/backend/websocket"
+	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +28,7 @@ func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		if !exist {
-			ctx.JSON(http.StatusBadGateway, gin.H{
+			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "error al obtener datos",
 			})
 			ctx.Abort()
@@ -35,8 +36,8 @@ func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 		}
 		user, err := hd.service.ServicesGetUser(username.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusNotImplemented, gin.H{
-				"message": err.Error(),
+			ctx.JSON(http.StatusNotFound, gin.H{
+				"error": err.Error(),
 			})
 			ctx.Abort()
 			return
@@ -50,30 +51,42 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 		username, exist := ctx.Get("username")
 		usernameUpedate, exist2 := ctx.Get("usernameUpdate")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message": "error al obtener datos",
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener datos",
 			})
 			ctx.Abort()
 			return
 		}
-		user, err := hd.service.ServicePutUser(username.(string), usernameUpedate.(string), ctx)
+
+		oldUsername := username.(string)
+		newUsername := usernameUpedate.(string)
+
+		user, err := hd.service.ServicePutUser(oldUsername, newUsername, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message": err.Error(),
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
 			})
 			ctx.Abort()
 			return
 		}
-		token, err := utils.GenerateToken(user.Username)
+
+		// Notificar a los contactos sobre el cambio de username
+		if hd.hub != nil {
+			hd.hub.NotifyUsernameChange(oldUsername, newUsername)
+		}
+
+		token, err := utils.GenerateToken(user.Username, user.Telephon)
 		if err != nil {
-			ctx.JSON(501, gin.H{
-				"messaje": err.Error(),
+			log.Printf("[HANDLER] Error generando token: %v", err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": "error interno del servidor",
 			})
 			ctx.Abort()
 			return
 		}
+		secure := os.Getenv("ENV") == "production"
 		ctx.SetSameSite(http.SameSiteLaxMode)
-		ctx.SetCookie("token", token, 3600, "/", "", false, true)
+		ctx.SetCookie("token", token, int(utils.AccessTokenDuration.Seconds()), "/", "", secure, true)
 		ctx.JSON(200, gin.H{
 			"message": user,
 			"token":   token,
@@ -84,36 +97,29 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
-		number, exist2 := ctx.Get("number")
+		contactAdd, exist2 := ctx.Get("contactAdd")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message": "error al obtener datos",
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener datos",
 			})
 			ctx.Abort()
 			return
 		}
 
-		contact, err := hd.service.AddContact(username.(string), number.(string), ctx)
+		contact, err := hd.service.AddContact(username.(string), contactAdd.(models.ContactAdd), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"message": err.Error(),
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
 			})
 			ctx.Abort()
 			return
 		}
 
-		// Enviar notificación WebSocket al receptor de la solicitud
-		if hd.hub != nil {
-			// Obtener información del usuario que envía la solicitud
-			sender, errSender := hd.service.ServicesGetUser(username.(string), ctx)
-			if errSender == nil {
-				// Notificar al receptor (contact.Username) que recibió una solicitud
-				hd.hub.NotifyContactRequest(contact.Username, sender.Username, sender.Telephon)
-			}
-		}
+		// En el flujo WhatsApp NO se notifica al receptor cuando alguien lo agrega
+		// El receptor solo se entera cuando recibe un mensaje
 
 		ctx.JSON(201, gin.H{
-			"contacto creado": contact,
+			"contact": contact,
 		})
 	}
 }
@@ -122,7 +128,7 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		username, exist := ctx.Get("username")
 		if !exist {
-			ctx.JSON(http.StatusBadGateway, gin.H{
+			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "error al obtener datos",
 			})
 			ctx.Abort()
@@ -131,83 +137,13 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 
 		contacts, err := hd.service.ServiceGetContacts(username.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error": "error al obtener chats",
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
 			})
 			ctx.Abort()
 			return
 		}
 
 		ctx.IndentedJSON(200, contacts)
-	}
-}
-
-func (hd *HandlerContact) ContactPut() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
-		contactadd, existContact := ctx.Get("answerContact")
-		if !(exist && existContact) {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error": "error al obtener datos",
-			})
-			return
-		}
-		contact := models.ContactPut{
-			ContactAdd: contactadd.(models.ContactAdd),
-			Username:   username.(string),
-		}
-
-		err := hd.service.ServiceContactPut(contact, ctx)
-		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error": "error al cambiar status",
-			})
-			return
-		}
-
-		// Enviar notificaciones WebSocket
-		if hd.hub != nil {
-			// Obtener información del usuario que responde (el que acepta/rechaza)
-			responder, errResponder := hd.service.ServicesGetUser(username.(string), ctx)
-			if errResponder == nil {
-				// Determinar si fue aceptado o rechazado
-				accepted := contact.Answer == "yes" || contact.Answer == "Yes" || contact.Answer == "YES"
-
-				// 1. Notificar al usuario que envió la solicitud original (contact.UsernameAdd)
-				hd.hub.NotifyContactResponse(contact.UsernameAdd, responder.Username, responder.Telephon, accepted)
-
-				// 2. Confirmar al usuario que acepta/rechaza (username)
-				client, exists := hd.hub.GetClient(username.(string))
-
-				if exists {
-					var confirmMsg []byte
-					if accepted {
-						confirmMsg, _ = json.Marshal(map[string]interface{}{
-							"type": "contact_accepted",
-							"payload": map[string]interface{}{
-								"username": contact.UsernameAdd,
-								"status":   "accepted",
-							},
-						})
-					} else {
-						confirmMsg, _ = json.Marshal(map[string]interface{}{
-							"type": "contact_rejected",
-							"payload": map[string]interface{}{
-								"username": contact.UsernameAdd,
-								"status":   "rejected",
-							},
-						})
-					}
-					select {
-					case client.Send <- confirmMsg:
-					default:
-					}
-				}
-			}
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{
-			"message": "status actualizado",
-		})
 	}
 }

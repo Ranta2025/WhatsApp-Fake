@@ -2,10 +2,17 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import api from '../api/axios';
+import {
+    requestNotificationPermission,
+    showNativeNotification,
+    getNotificationPermission,
+    onNotificationClick,
+    offNotificationClick
+} from '../utils/notifications.js';
 
 export default function Dashboard() {
     const { user, logout, updateUsername } = useAuth();
-    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, acceptContact, rejectContact, on, off } = useWebSocket();
+    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, on, off } = useWebSocket();
     const [profile, setProfile] = useState(null);
     const [error, setError] = useState('');
     const [showProfile, setShowProfile] = useState(false);
@@ -15,20 +22,99 @@ export default function Dashboard() {
     const [contacts, setContacts] = useState([]);
     const [selected, setSelected] = useState(null);
     const [numberInput, setNumberInput] = useState('');
+    const [contactNameInput, setContactNameInput] = useState('');
     const [addMsg, setAddMsg] = useState('');
-    const [showAdd, setShowAdd] = useState(false);
-    const [showSearch, setShowSearch] = useState(false);
+    const [sidebarView, setSidebarView] = useState('contacts'); // 'contacts' o 'chats'
+    const [showAddContactForm, setShowAddContactForm] = useState(false);
     const [drafts, setDrafts] = useState({});
     const [messagesByChat, setMessagesByChat] = useState({});
-    const [answering, setAnswering] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState(new Set());
     const [typingUsers, setTypingUsers] = useState(new Set()); // Usuarios que están escribiendo
     const [sidebarOpen, setSidebarOpen] = useState(false); // Estado para sidebar en móvil
+    const [replyingTo, setReplyingTo] = useState(null); // Mensaje al que se está respondiendo
+    const [allChatGroups, setAllChatGroups] = useState({}); // metadata de todos los chats {telephon -> ChatGroup}
+    const [toasts, setToasts] = useState([]); // notificaciones toast {id, senderName, message, telephon}
+    const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
+    // Estado de carga inicial (pantalla splash)
+    const [loadingProfile, setLoadingProfile] = useState(true);
+    const [loadingContacts, setLoadingContacts] = useState(true);
+    const [loadingChats, setLoadingChats] = useState(true);
+    const isInitialLoading = loadingProfile || loadingContacts;
     const messagesContainerRef = useRef(null);
     const typingTimeoutRef = useRef(null); // Para debounce del typing indicator
+    // Refs que siempre apuntan al valor actualizado (evitan closures stale en handlers WS)
+    const contactsRef = useRef([]);
+    const profileRef = useRef(null);
+    const selectedRef = useRef(null);
 
-    const isContactOnline = (username) => onlineUsers.has(username);
-    const isContactTyping = (username) => typingUsers.has(username);
+    // Mostrar notificación (nativa del SO, toast in-app solo como fallback)
+    const showToast = (telephon, senderName, message) => {
+        // 1. Intentar notificación nativa del sistema operativo
+        const nativeShown = showNativeNotification({
+            title: senderName,
+            body: message.length > 100 ? message.substring(0, 100) + '...' : message,
+            tag: `chat-${telephon}`, // Agrupa por contacto
+            data: { telephon }
+        });
+
+        // 2. Toast in-app SOLO si la notificación nativa no se pudo mostrar
+        if (!nativeShown) {
+            const id = Date.now();
+            setToasts(prev => [...prev, { id, telephon, senderName, message }]);
+            setTimeout(() => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            }, 4000);
+        }
+    };
+    const dismissToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+    // Solicitar permiso de notificaciones al montar
+    useEffect(() => {
+        // Solicitar automáticamente si aún no se ha decidido
+        if (getNotificationPermission() === 'default') {
+            requestNotificationPermission().then(perm => setNotifPermission(perm));
+        }
+    }, []);
+
+    // Escuchar clicks en notificaciones nativas para abrir el chat correspondiente
+    useEffect(() => {
+        const handleNotifClick = ({ telephon }) => {
+            const contact = contactsRef.current.find(c => c.Number === telephon);
+            if (contact) {
+                setSelected(contact);
+                setSidebarOpen(false);
+            }
+        };
+
+        onNotificationClick(handleNotifClick);
+
+        // También escuchar el evento de fallback (Notification API directa)
+        const handleWindowNotifClick = (e) => handleNotifClick(e.detail);
+        window.addEventListener('notification-click', handleWindowNotifClick);
+
+        return () => {
+            offNotificationClick(handleNotifClick);
+            window.removeEventListener('notification-click', handleWindowNotifClick);
+        };
+    }, []);
+
+    // onlineUsers ahora contiene números de teléfono (telephon), no usernames
+    const isContactOnline = (telephon) => onlineUsers.has(telephon);
+    // typingUsers ahora contiene números de teléfono (telephon), no usernames
+    const isContactTyping = (telephon) => typingUsers.has(telephon);
+
+    // Mantener refs siempre sincronizados con sus estados
+    useEffect(() => {
+        contactsRef.current = contacts;
+    }, [contacts]);
+
+    useEffect(() => {
+        profileRef.current = profile;
+    }, [profile]);
+
+    useEffect(() => {
+        selectedRef.current = selected;
+    }, [selected]);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -37,88 +123,74 @@ export default function Dashboard() {
                 setProfile(data);
             } catch {
                 setError('No se pudo cargar el perfil');
+            } finally {
+                setLoadingProfile(false);
             }
         };
         fetchProfile();
     }, []);
 
     // Escuchar mensajes del WebSocket
+    // IMPORTANTE: usar profileRef / selectedRef / contactsRef (no los estados directos)
+    // para evitar stale closures — los refs siempre tienen el valor actual.
     useEffect(() => {
         const handleIncomingMessage = (messageData) => {
             console.log('Mensaje recibido por WebSocket:', messageData);
             
-            // messageData es un schemas.Message del backend
-            const { Username, Receptor, MessageID, Message, Status, Time } = messageData;
+            // Leer siempre desde los refs (nunca stale)
+            const myTelephon = profileRef.current?.Telephon;
+            const currentSelected = selectedRef.current;
+
+            const { SenderTelephon, Receptor, MessageID, Message } = messageData;
             
             // Determinar con quién es el chat
-            let contactUsername;
-            if (Username === user?.username) {
-                // Mensaje enviado por mí
-                contactUsername = Receptor;
+            let contactNumber;
+            if (SenderTelephon === myTelephon) {
+                contactNumber = Receptor;
             } else {
-                // Mensaje recibido
-                contactUsername = Username;
+                contactNumber = SenderTelephon;
             }
             
-            // Usar directamente el username como key (no necesitamos el objeto contact)
-            const key = contactUsername;
-            
-            console.log('Guardando mensaje para contacto:', contactUsername, 'Key:', key);
+            const key = contactNumber;
+            console.log('Guardando mensaje para contacto:', contactNumber, 'Key:', key);
             
             // Actualizar el estado de mensajes
             setMessagesByChat((prev) => {
                 const existing = prev[key] || [];
                 
-                // Si es un mensaje enviado por mí, puede ser una confirmación de un mensaje temporal
-                if (Username === user?.username) {
-                    // Buscar si hay un mensaje temporal con el mismo contenido y receptor
-                    // MessageID del servidor es número, el temporal es string que empieza con 'temp-'
+                if (SenderTelephon === myTelephon) {
+                    // Confirmación de mensaje propio: reemplazar el optimista temporal
                     const tempIndex = existing.findIndex(m => 
                         typeof m.MessageID === 'string' && m.MessageID.startsWith('temp-') && 
                         m.Message === Message && 
                         m.Receptor === Receptor
                     );
-                    
                     if (tempIndex !== -1) {
-                        // Reemplazar el mensaje temporal con el mensaje real del servidor
                         console.log('Reemplazando mensaje temporal con mensaje real:', MessageID);
                         const updated = [...existing];
                         updated[tempIndex] = messageData;
-                        return {
-                            ...prev,
-                            [key]: updated
-                        };
+                        return { ...prev, [key]: updated };
                     }
                 } else {
-                    // Es un mensaje recibido de otro usuario
-                    // Si el chat está abierto, marcarlo como visto localmente
-                    if (selected?.Username === contactUsername) {
-                        // Buscar si hay un mensaje temporal para reemplazar (aunque poco probable para mensajes recibidos)
+                    // Mensaje recibido: si el chat está abierto, marcarlo visto localmente
+                    if (currentSelected?.Number === contactNumber) {
                         const tempIndex = existing.findIndex(m => 
                             typeof m.MessageID === 'string' && m.MessageID.startsWith('temp-') && 
                             m.Message === Message
                         );
-                        
                         if (tempIndex !== -1) {
                             const updated = [...existing];
                             updated[tempIndex] = { ...messageData, Status: 'visto' };
-                            return {
-                                ...prev,
-                                [key]: updated
-                            };
+                            return { ...prev, [key]: updated };
                         }
                     }
                 }
                 
-                // Verificar si el mensaje ya existe (por MessageID)
+                // Verificar si el mensaje ya existe
                 const alreadyExists = existing.some(m => m.MessageID === MessageID);
                 if (alreadyExists) {
-                    // Actualizar el mensaje existente (por si cambió el estado)
                     console.log('Actualizando mensaje existente:', MessageID);
-                    
-                    // Si el mensaje es recibido Y el chat está abierto, marcarlo como visto localmente
-                    const shouldMarkAsRead = (Username !== user?.username && selected?.Username === contactUsername);
-                    
+                    const shouldMarkAsRead = (SenderTelephon !== myTelephon && currentSelected?.Number === contactNumber);
                     return {
                         ...prev,
                         [key]: existing.map(m => {
@@ -129,50 +201,73 @@ export default function Dashboard() {
                         })
                     };
                 } else {
-                    // Agregar nuevo mensaje
                     console.log('Agregando nuevo mensaje:', MessageID);
-                    
-                    // Si el mensaje es recibido Y el chat está abierto, marcarlo como visto localmente
-                    const messageToAdd = (Username !== user?.username && selected?.Username === contactUsername)
+                    const messageToAdd = (SenderTelephon !== myTelephon && currentSelected?.Number === contactNumber)
                         ? { ...messageData, Status: 'visto' }
                         : messageData;
-                    
-                    return {
-                        ...prev,
-                        [key]: [...existing, messageToAdd]
-                    };
+                    return { ...prev, [key]: [...existing, messageToAdd] };
                 }
             });
 
-            // Si el mensaje es recibido (no enviado por mí) Y el chat está abierto, marcar como visto en el servidor
-            if (Username !== user?.username && selected?.Username === contactUsername && isConnected) {
-                console.log('[AUTO-READ] Marcando como visto porque el chat está abierto:', contactUsername);
-                sendReadConfirmation(contactUsername);
+            // Auto-read si el chat está abierto
+            if (SenderTelephon !== myTelephon && currentSelected?.Number === contactNumber && isConnected) {
+                console.log('[AUTO-READ] Marcando como visto porque el chat está abierto:', contactNumber);
+                sendReadConfirmation(contactNumber);
+            }
+
+            // Toast: solo si el mensaje es de otro y ese chat NO está abierto ahora mismo
+            if (SenderTelephon !== myTelephon && currentSelected?.Number !== contactNumber) {
+                const existingContact = contactsRef.current.find(c => c.Number === SenderTelephon);
+                const senderName = existingContact?.ContactName || existingContact?.Username || SenderTelephon;
+                showToast(SenderTelephon, senderName, messageData.Message);
+            }
+
+            // Actualizar allChatGroups para el remitente
+            if (SenderTelephon !== myTelephon) {
+                setAllChatGroups(prev => {
+                    if (prev[SenderTelephon]) {
+                        const isNowContact = contactsRef.current.some(
+                            c => c.Number === SenderTelephon && c.Status === 'accepted'
+                        );
+                        if (prev[SenderTelephon].IsContact === isNowContact) return prev;
+                        return { ...prev, [SenderTelephon]: { ...prev[SenderTelephon], IsContact: isNowContact } };
+                    }
+                    const existingContact = contactsRef.current.find(
+                        c => c.Number === SenderTelephon && c.Status === 'accepted'
+                    );
+                    return {
+                        ...prev,
+                        [SenderTelephon]: {
+                            ContactTelephon: SenderTelephon,
+                            ContactUsername: existingContact?.Username || SenderTelephon,
+                            ContactName: existingContact?.ContactName || '',
+                            IsContact: !!existingContact,
+                            Messages: []
+                        }
+                    };
+                });
             }
         };
 
         const handleReadConfirmation = (readData) => {
             console.log('Confirmación de lectura recibida:', readData);
             
-            if (!readData || !readData.from || !user?.username) {
+            const myTelephon = profileRef.current?.Telephon;
+            if (!readData || !readData.from || !myTelephon) {
                 console.warn('Datos de confirmación inválidos:', readData);
                 return;
             }
             
-            // readData = { from: "usuario_que_leyó" }
             const { from } = readData;
-            
-            // Usar directamente el username como key
             const key = from;
             
-            // Actualizar todos los mensajes enviados a ese contacto a "visto"
             setMessagesByChat((prev) => {
                 const existing = prev[key] || [];
                 return {
                     ...prev,
                     [key]: existing.map(m => {
-                        if (!m) return m; // Skip null/undefined
-                        return m.Username === user.username && m.Status !== 'visto'
+                        if (!m) return m;
+                        return m.SenderTelephon === myTelephon && m.Status !== 'visto'
                             ? { ...m, Status: 'visto' }
                             : m;
                     })
@@ -187,7 +282,7 @@ export default function Dashboard() {
             off('message', handleIncomingMessage);
             off('read', handleReadConfirmation);
         };
-    }, [on, off, user, selected, isConnected, sendReadConfirmation]);
+    }, [on, off, isConnected, sendReadConfirmation]); // profile/selected/contacts leídos desde refs → no en deps
 
     // Escuchar eventos de presencia (online/offline)
     useEffect(() => {
@@ -196,6 +291,7 @@ export default function Dashboard() {
             console.log('[DASHBOARD] Tipo de contacts:', typeof contacts, Array.isArray(contacts));
             console.log('[DASHBOARD] Valor de contacts:', JSON.stringify(contacts));
             if (Array.isArray(contacts)) {
+                // contacts es un array de telephons
                 setOnlineUsers(new Set(contacts));
             } else {
                 console.error('[DASHBOARD] contacts no es un array:', contacts);
@@ -203,23 +299,29 @@ export default function Dashboard() {
             }
         };
 
-        const handleUserOnline = (username) => {
-            console.log('[DASHBOARD] Usuario conectado:', username);
-            setOnlineUsers(prev => {
-                const newSet = new Set([...prev, username]);
-                console.log('[DASHBOARD] Estado online actualizado:', Array.from(newSet));
-                return newSet;
-            });
+        const handleUserOnline = (payload) => {
+            console.log('[DASHBOARD] Usuario conectado:', payload);
+            // payload.telephon contiene el número de teléfono del usuario que se conectó
+            if (payload && payload.telephon) {
+                setOnlineUsers(prev => {
+                    const newSet = new Set([...prev, payload.telephon]);
+                    console.log('[DASHBOARD] Estado online actualizado:', Array.from(newSet));
+                    return newSet;
+                });
+            }
         };
 
-        const handleUserOffline = (username) => {
-            console.log('[DASHBOARD] Usuario desconectado:', username);
-            setOnlineUsers(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(username);
-                console.log('[DASHBOARD] Estado online actualizado:', Array.from(newSet));
-                return newSet;
-            });
+        const handleUserOffline = (payload) => {
+            console.log('[DASHBOARD] Usuario desconectado:', payload);
+            // payload.telephon contiene el número de teléfono del usuario que se desconectó
+            if (payload && payload.telephon) {
+                setOnlineUsers(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(payload.telephon);
+                    console.log('[DASHBOARD] Estado online actualizado:', Array.from(newSet));
+                    return newSet;
+                });
+            }
         };
 
         on('contacts_online', handleContactsOnline);
@@ -261,124 +363,91 @@ export default function Dashboard() {
         };
     }, [on, off]);
 
-    // Escuchar eventos de solicitudes de contacto
+    // Escuchar cambios de username de contactos
     useEffect(() => {
-        const handleContactRequest = (payload) => {
-            console.log('[DASHBOARD] Nueva solicitud de contacto:', payload);
-            // payload = { username, number, status: "pending_received" }
+        const handleUsernameChanged = (payload) => {
+            console.log('[DASHBOARD] Evento username_changed recibido:', payload);
             
-            // Mostrar notificación
-            alert(`¡Nueva solicitud de contacto de ${payload.username} (${payload.number})!`);
+            const { old_username, new_username } = payload;
             
-            // Agregar a la lista de contactos con estado pending_received
-            const newContact = {
-                Username: payload.username,
-                Number: payload.number,
-                Status: payload.status
-            };
-            
-            setContacts(prev => {
-                // Verificar si ya existe el contacto
-                const exists = prev.some(c => c.Username === payload.username);
-                if (exists) {
-                    // Actualizar el contacto existente
-                    return prev.map(c => 
-                        c.Username === payload.username 
-                            ? { ...c, Status: payload.status } 
-                            : c
-                    );
-                } else {
-                    // Agregar nuevo contacto
-                    return [newContact, ...prev];
-                }
-            });
-        };
-
-        const handleContactResponse = (payload) => {
-            console.log('[DASHBOARD] Respuesta de contacto recibida:', payload);
-            // payload = { username, number, status: "accepted" | "rejected", accepted: true/false }
-            
-            if (payload.accepted) {
-                alert(`¡${payload.username} aceptó tu solicitud de contacto!`);
-                
-                // Actualizar el estado del contacto a "accepted"
-                setContacts(prev => prev.map(c => 
-                    c.Username === payload.username 
-                        ? { ...c, Status: 'accepted' } 
-                        : c
-                ));
-                
-                // Si el contacto está seleccionado, actualizar también
-                setSelected(prev => {
-                    if (prev && prev.Username === payload.username) {
-                        return { ...prev, Status: 'accepted' };
-                    }
-                    return prev;
-                });
-            } else {
-                alert(`${payload.username} rechazó tu solicitud de contacto.`);
-                
-                // Remover el contacto de la lista
-                setContacts(prev => prev.filter(c => c.Username !== payload.username));
-                
-                // Si el contacto rechazado está seleccionado, deseleccionarlo
-                setSelected(prev => {
-                    if (prev && prev.Username === payload.username) {
-                        return null;
-                    }
-                    return prev;
-                });
+            // Validar que tenemos los datos necesarios
+            if (!old_username || !new_username) {
+                console.error('[DASHBOARD] Evento username_changed inválido:', payload);
+                return;
             }
-        };
-
-        const handleContactAccepted = (payload) => {
-            console.log('[DASHBOARD] Confirmación de aceptación:', payload);
-            // payload = { username, status: "accepted" }
-            // Este evento lo recibe el usuario que ACEPTÓ la solicitud
             
-            // Actualizar el contacto a "accepted" en su lista
+            // IMPORTANTE: Si el nuevo username es el mío, significa que YO cambié mi nombre
+            // Este evento fue enviado a mis contactos, no debo procesarlo yo mismo
+            if (user?.username === new_username) {
+                console.log('[DASHBOARD] Ignorando evento: yo cambié mi propio nombre');
+                return;
+            }
+            
+            console.log(`[DASHBOARD] Procesando cambio de contacto: ${old_username} -> ${new_username}`);
+            
+            // Actualizar la lista de contactos
             setContacts(prev => prev.map(c => 
-                c.Username === payload.username 
-                    ? { ...c, Status: 'accepted' } 
+                c.Username === old_username 
+                    ? { ...c, Username: new_username } 
                     : c
             ));
             
             // Si el contacto está seleccionado, actualizar también
             setSelected(prev => {
-                if (prev && prev.Username === payload.username) {
-                    return { ...prev, Status: 'accepted' };
+                if (prev && prev.Username === old_username) {
+                    const updated = { ...prev, Username: new_username };
+                    console.log(`[DASHBOARD] ✅ SELECTED actualizado: "${old_username}" -> "${new_username}"`, updated);
+                    return updated;
+                }
+                console.log('[DASHBOARD] Selected no requiere actualización:', prev?.Username);
+                return prev;
+            });
+            
+            // Actualizar mensajes en cache (actualizar la key del chat)
+            // No eliminamos la key antigua para evitar reordenamiento del objeto
+            setMessagesByChat(prev => {
+                const oldKey = old_username;
+                const newKey = new_username;
+                
+                if (prev[oldKey]) {
+                    // Copiar mensajes a la nueva key sin eliminar la antigua
+                    // Esto mantiene el orden del objeto estable
+                    return {
+                        ...prev,
+                        [newKey]: prev[oldKey]
+                    };
                 }
                 return prev;
             });
-        };
-
-        const handleContactRejected = (payload) => {
-            console.log('[DASHBOARD] Confirmación de rechazo:', payload);
-            // payload = { username, status: "rejected" }
-            // Este evento lo recibe el usuario que RECHAZÓ la solicitud
             
-            // Remover el contacto de la lista
-            setContacts(prev => prev.filter(c => c.Username !== payload.username));
-            
-            // Si el contacto está seleccionado, deseleccionarlo
-            setSelected(prev => {
-                if (prev && prev.Username === payload.username) {
-                    return null;
+            // Actualizar drafts
+            setDrafts(prev => {
+                const oldKey = old_username;
+                const newKey = new_username;
+                
+                if (prev[oldKey]) {
+                    // Copiar draft a la nueva key sin eliminar la antigua
+                    return {
+                        ...prev,
+                        [newKey]: prev[oldKey]
+                    };
                 }
                 return prev;
             });
+            
+            // onlineUsers contiene telephons (no cambian al cambiar username), no hay nada que actualizar
+            
+            // Actualizar usuarios escribiendo si aplica (typing también usa telephon)
+            // El telephon no cambia al cambiar username, así que no hay nada que actualizar
+            
+            // Mostrar notificación
+            console.log(`[DASHBOARD] ${old_username} cambió su nombre a ${new_username}`);
         };
 
-        on('contact_request', handleContactRequest);
-        on('contact_response', handleContactResponse);
-        on('contact_accepted', handleContactAccepted);
-        on('contact_rejected', handleContactRejected);
+        on('username_changed', handleUsernameChanged);
 
         return () => {
-            off('contact_request', handleContactRequest);
-            off('contact_response', handleContactResponse);
-            off('contact_accepted', handleContactAccepted);
-            off('contact_rejected', handleContactRejected);
+            off('username_changed', handleUsernameChanged);
         };
     }, [on, off]);
 
@@ -386,15 +455,16 @@ export default function Dashboard() {
         const fetchContacts = async () => {
             try {
                 const { data } = await api.get('/api/v1/contact');
-                setContacts(Array.isArray(data) ? data : []);
+                const list = Array.isArray(data) ? data : [];
+                setContacts(list);
+                contactsRef.current = list; // mantener ref sincronizada
             } catch (e) {
                 setAddMsg('No se pudo cargar contactos');
+            } finally {
+                setLoadingContacts(false);
             }
         };
-        // Cargar contactos solo una vez al montar
         fetchContacts();
-        
-        // Si necesitas refrescar contactos, el backend enviará notificaciones por WebSocket
     }, []);
 
     const toggleProfile = () => setShowProfile((v) => !v);
@@ -404,9 +474,9 @@ export default function Dashboard() {
         setStatus('');
     };
     const getChatKey = (contact) => {
-        if (!contact || !contact.Username) return '';
-        // Simplificado: usar solo username como key única
-        return contact.Username;
+        if (!contact || !contact.Number) return '';
+        // Usar número de teléfono como key única (telephon es el identificador inmutable)
+        return contact.Number;
     };
     const currentDraft = selected ? drafts[getChatKey(selected)] || '' : '';
     const handleInputChange = (e) => {
@@ -424,15 +494,15 @@ export default function Dashboard() {
         }
 
         // Enviar indicador de "escribiendo" solo si hay texto y WebSocket conectado
-        if (value.trim() && isConnected && selected.Username) {
+        if (value.trim() && isConnected && selected.Number) {
             // Limpiar timeout previo
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
             }
 
             // Enviar indicador de typing
-            console.log('[TYPING] Enviando indicador a:', selected.Username);
-            const sent = sendTypingIndicator(selected.Username);
+            console.log('[TYPING] Enviando indicador a:', selected.Number);
+            const sent = sendTypingIndicator(selected.Number);
             console.log('[TYPING] Indicador enviado:', sent);
 
             // Configurar timeout para dejar de enviar (debounce de 2 segundos)
@@ -442,13 +512,14 @@ export default function Dashboard() {
         }
     };
     const getUnreadCount = (contact) => {
-        if (!contact || !contact.Username) return 0;
+        if (!contact || !contact.Number) return 0;
         // Si es el contacto actualmente seleccionado, no mostrar contador
-        if (selected && selected.Username === contact.Username) return 0;
+        if (selected && selected.Number === contact.Number) return 0;
         
         const key = getChatKey(contact);
         const arr = messagesByChat[key] || [];
-        return arr.filter((m) => m && m.Username === contact.Username && m.Status !== 'visto').length;
+        // Contar mensajes donde el remitente (m.SenderTelephon) es el contacto y no están vistos
+        return arr.filter((m) => m && m.SenderTelephon === contact.Number && m.Status !== 'visto').length;
     };
     const getStatusIcon = (status) => {
         const base = "w-4 h-4";
@@ -475,27 +546,37 @@ export default function Dashboard() {
         );
     };
     const handleSend = async () => {
-        if (!selected) return;
+        if (!selected || !selected.Number) {
+            console.error('No hay contacto seleccionado o falta el número');
+            return;
+        }
         const trimmed = currentDraft.trim();
         if (!trimmed) return;
-        if (!user?.username) {
-            console.error('Usuario no autenticado');
+        if (!profile?.Telephon) {
+            console.error('Usuario no autenticado o perfil no cargado');
             return;
         }
         const key = getChatKey(selected);
         
         // Usar WebSocket siempre que esté disponible
         if (isConnected) {
-            const sent = sendMessage(selected.Username, trimmed);
+            console.log(`[SEND] → Enviando mensaje a: "${selected.Number}" (selected completo:`, selected, ')');
+            const sent = sendMessage(selected.Number, trimmed, replyingTo);
             if (sent) {
                 // Crear mensaje temporal optimista (aparece inmediatamente en la UI)
                 const tempMessage = {
                     MessageID: `temp-${Date.now()}`, // ID temporal
-                    Username: user.username,
-                    Receptor: selected.Username,
+                    SenderTelephon: profile.Telephon,
+                    Receptor: selected.Number,
                     Message: trimmed,
                     Status: 'enviado',
-                    Time: new Date().toISOString()
+                    Time: new Date().toISOString(),
+                    // Incluir campos de reply si existe
+                    ...(replyingTo && {
+                        ReplyToMessageID: replyingTo.MessageID,
+                        ReplyToTelephon: replyingTo.SenderTelephon,
+                        ReplyToMessage: replyingTo.Message
+                    })
                 };
                 
                 console.log('[SEND] Agregando mensaje optimista:', tempMessage);
@@ -509,11 +590,12 @@ export default function Dashboard() {
                     };
                 });
                 
-                // Limpiar el draft inmediatamente
+                // Limpiar el draft y la respuesta inmediatamente
                 setDrafts((prev) => ({
                     ...prev,
                     [key]: '',
                 }));
+                setReplyingTo(null);
             } else {
                 console.error('No se pudo enviar el mensaje por WebSocket');
             }
@@ -521,11 +603,20 @@ export default function Dashboard() {
             // Fallback a HTTP solo si WebSocket no está conectado
             console.warn('WebSocket desconectado, usando fallback HTTP');
             try {
-                await api.post('/api/v1/chat', {
-                    receptor: selected.Username,
+                const payload = {
+                    receptor: selected.Number,
                     message: trimmed,
-                });
-                const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
+                };
+                
+                // Agregar campos de reply si existe
+                if (replyingTo) {
+                    payload.replyToMessageID = replyingTo.MessageID;
+                    payload.replyToTelephon = replyingTo.SenderTelephon;
+                    payload.replyToMessage = replyingTo.Message;
+                }
+                
+                await api.post('/api/v1/chat', payload);
+                const { data } = await api.get(`/api/v1/chat/${selected.Number}`);
                 setMessagesByChat((prev) => ({
                     ...prev,
                     [key]: Array.isArray(data) ? data : [],
@@ -534,11 +625,27 @@ export default function Dashboard() {
                     ...prev,
                     [key]: '',
                 }));
+                setReplyingTo(null);
             } catch (err) {
                 console.error('Error enviando mensaje por HTTP:', err);
             }
         }
     };
+    
+    // Funciones para manejar respuestas a mensajes
+    const handleReplyToMessage = (message) => {
+        setReplyingTo(message);
+        // Enfocar el input después de seleccionar
+        setTimeout(() => {
+            const input = document.querySelector('input[placeholder="Mensaje..."]');
+            if (input) input.focus();
+        }, 100);
+    };
+    
+    const cancelReply = () => {
+        setReplyingTo(null);
+    };
+    
     const submitEdit = async (e) => {
         e.preventDefault();
         const nu = newUsername.trim();
@@ -551,101 +658,101 @@ export default function Dashboard() {
             return;
         }
         try {
-            await api.put('/api/v1/user', { username: nu });
+            const response = await api.put('/api/v1/user', { username: nu });
+            
+            // Guardar el nuevo token si viene en la respuesta
+            if (response.data?.token) {
+                localStorage.setItem('token', response.data.token);
+                console.log('[AUTH] Nuevo token guardado después de cambiar username');
+            }
+            
+            const oldUsername = user.username;
+            
             updateUsername(nu);
+            
+            // IMPORTANTE: Actualizar el username en TODOS mis mensajes enviados
+            // para que sigan apareciendo como "míos" después del cambio
+            setMessagesByChat(prev => {
+                const updated = {};
+                for (const [key, messages] of Object.entries(prev)) {
+                    updated[key] = messages.map(m => {
+                        // Si el mensaje fue enviado por mí (con mi telephon antiguo)
+                        // actualizarlo al nuevo telephon
+                        if (m.SenderTelephon === oldUsername) {
+                            return { ...m, SenderTelephon: nu };
+                        }
+                        return m;
+                    });
+                }
+                return updated;
+            });
+            
             const { data } = await api.get('/api/v1/user');
             setProfile(data);
             setShowEdit(false);
             setStatus('Nombre actualizado');
+            
+            // No es necesario reconectar WebSocket, el Hub ya actualizó el username del cliente
+            console.log('[AUTH] Username actualizado, WebSocket mantiene conexión');
         } catch (err) {
             const d = err?.response?.data;
             const msg = typeof d === 'string' ? d : d?.message || d?.error || err?.message || 'Error al actualizar';
             setStatus(msg);
         }
     };
-    const answerContact = async (ans) => {
-        if (!selected) return;
-        setAnswering(true);
-        setStatus('');
-        
-        // Usar WebSocket si está conectado
-        if (isConnected) {
-            console.log('[CONTACT] Respondiendo solicitud por WebSocket:', ans);
-            
-            if (ans === 'yes') {
-                acceptContact(selected.Username);
-                // Actualizar localmente de forma optimista
-                setContacts(prev => prev.map(c => 
-                    c.Username === selected.Username 
-                        ? { ...c, Status: 'accepted' } 
-                        : c
-                ));
-                setSelected(prev => prev ? { ...prev, Status: 'accepted' } : null);
-                setStatus('Contacto aceptado');
-            } else {
-                rejectContact(selected.Username);
-                // Remover localmente de forma optimista
-                setContacts(prev => prev.filter(c => c.Username !== selected.Username));
-                setSelected(null);
-                setStatus('Contacto rechazado');
-            }
-            
-            setAnswering(false);
-            return;
-        }
-        
-        // Fallback a HTTP si WebSocket no está conectado
-        try {
-            const { data: resp } = await api.put('/api/v1/contact', {
-                username_add: selected.Username,
-                answare: ans,
-            });
-            const ok = resp && (resp.message === 'status actualizado');
-            if (!ok) {
-                const msg = typeof resp === 'string' ? resp : (resp?.message || 'Error al actualizar contacto');
-                setStatus(msg);
-                return;
-            }
-            const { data } = await api.get('/api/v1/contact');
-            const refreshed = Array.isArray(data) ? data : [];
-            setContacts(refreshed);
-            const still = refreshed.find(c => c.Username === selected.Username);
-            if (!still) {
-                setSelected(null);
-                setStatus(ans === 'yes' ? 'Contacto aceptado' : 'Contacto rechazado');
-                return;
-            }
-            setSelected(still);
-            setStatus(ans === 'yes' ? 'Contacto aceptado' : 'Contacto rechazado');
-        } catch (err) {
-            const d = err?.response?.data;
-            const msg = typeof d === 'string' ? d : d?.message || d?.error || 'Error al actualizar contacto';
-            setStatus(msg);
-        } finally {
-            setAnswering(false);
-        }
-    };
     const submitAddContact = async (e) => {
         e.preventDefault();
         setAddMsg('');
         const n = numberInput.trim();
+        const cn = contactNameInput.trim();
         if (n.length !== 8) {
             setAddMsg('El número debe tener 8 dígitos');
             return;
         }
+        if (!cn) {
+            setAddMsg('Debes ingresar un nombre para el contacto');
+            return;
+        }
         try {
-            const { data } = await api.post('/api/v1/contact', JSON.stringify(n));
-            const created = data?.['contacto creado'];
+            const { data } = await api.post('/api/v1/contact', { number: n, contact_name: cn });
+            const created = data?.contact || data?.['contacto creado'];
             if (created) {
                 setContacts((prev) => [created, ...prev]);
                 try {
                     const { data: refreshed } = await api.get('/api/v1/contact');
-                    setContacts(Array.isArray(refreshed) ? refreshed : []);
+                    const list = Array.isArray(refreshed) ? refreshed : [];
+                    setContacts(list);
+                    contactsRef.current = list;
                 } catch {}
+                // Marcar el grupo como contacto agregado para que desaparezca el banner
+                const addedNumber = n;
+                setAllChatGroups(prev => {
+                    if (!prev[addedNumber]) return prev;
+                    return {
+                        ...prev,
+                        [addedNumber]: {
+                            ...prev[addedNumber],
+                            IsContact: true,
+                            ContactName: cn
+                        }
+                    };
+                });
                 setNumberInput('');
-                setAddMsg('Contacto creado');
+                setContactNameInput('');
+                setAddMsg('Contacto creado exitosamente');
+                
+                // Abrir chat automáticamente con el nuevo contacto
+                setTimeout(() => {
+                    setSelected(created);
+                    setShowAddContactForm(false);
+                    setSidebarView('contacts');
+                    setSidebarOpen(false);
+                }, 1000);
             } else {
                 setAddMsg('Contacto creado');
+                setTimeout(() => {
+                    setShowAddContactForm(false);
+                }, 1500);
             }
         } catch (err) {
             const d = err?.response?.data;
@@ -655,7 +762,7 @@ export default function Dashboard() {
                     const { data: refreshed } = await api.get('/api/v1/contact');
                     setContacts(Array.isArray(refreshed) ? refreshed : []);
                 } catch {}
-                setAddMsg('Contacto creado');
+                setAddMsg('Contacto ya existe');
             } else {
                 setAddMsg(msg);
             }
@@ -683,7 +790,7 @@ export default function Dashboard() {
             try {
                 // Solo cargar historial si no lo tenemos ya
                 if (!messagesByChat[key] || messagesByChat[key].length === 0) {
-                    const { data } = await api.get(`/api/v1/chat/${selected.Username}`);
+                    const { data } = await api.get(`/api/v1/chat/${selected.Number}`);
                     if (!active) return;
                     setMessagesByChat((prev) => ({
                         ...prev,
@@ -705,7 +812,8 @@ export default function Dashboard() {
                 const existing = prev[key] || [];
                 const updated = existing.map(m => {
                     if (!m) return m; // Skip null/undefined messages
-                    return m.Username === selected.Username && m.Status !== 'visto'
+                    // m.SenderTelephon ahora es el número del remitente, comparar con selected.Number
+                    return m.SenderTelephon === selected.Number && m.Status !== 'visto'
                         ? { ...m, Status: 'visto' }
                         : m;
                 });
@@ -717,10 +825,10 @@ export default function Dashboard() {
             
             // Notificar al servidor por WebSocket o HTTP
             if (isConnected) {
-                sendReadConfirmation(selected.Username);
+                sendReadConfirmation(selected.Number);
             } else {
                 // Fallback HTTP solo si WebSocket está desconectado
-                api.put(`/api/v1/chat/${selected.Username}`).catch(() => {});
+                api.put(`/api/v1/chat/${selected.Number}`).catch(() => {});
             }
         }, 300); // Pequeño delay para asegurar que los mensajes se cargaron
         
@@ -732,40 +840,43 @@ export default function Dashboard() {
         };
     }, [selected, isConnected, sendReadConfirmation]);
 
+    // Cargar TODOS los chats (incluye contactos no agregados) desde el nuevo endpoint.
+    // Se dispara cuando llega el perfil (telephon listo) o cuando cambia la lista de contactos.
     useEffect(() => {
-        if (!contacts || contacts.length === 0) return;
+        if (!profile?.Telephon) return; // esperar a que el perfil esté cargado
         let active = true;
-        
-        // Cargar historial inicial de todos los chats solo una vez
         const fetchAllChats = async () => {
             try {
-                const results = await Promise.all(
-                    contacts.map((c) =>
-                        api.get(`/api/v1/chat/${c.Username}`)
-                            .then(({ data }) => ({ key: getChatKey(c), data }))
-                            .catch(() => ({ key: getChatKey(c), data: null }))
-                    )
-                );
-                if (!active) return;
+                const { data } = await api.get('/api/v1/chats');
+                if (!active || !Array.isArray(data)) return;
                 setMessagesByChat((prev) => {
                     const next = { ...prev };
-                    results.forEach(({ key, data }) => {
-                        if (Array.isArray(data)) {
-                            next[key] = data;
+                    data.forEach((group) => {
+                        const key = group.ContactTelephon;
+                        // Solo rellenar si aún no tenemos mensajes de ese chat
+                        if (!next[key] || next[key].length === 0) {
+                            next[key] = Array.isArray(group.Messages) ? group.Messages : [];
+                        }
+                    });
+                    return next;
+                });
+                // Guardar metadatos de todos los grupos; respetar IsContact calculado por el backend
+                setAllChatGroups(prev => {
+                    const next = { ...prev };
+                    data.forEach((g) => {
+                        // Si ya tenemos entrada local más reciente (ej. mensaje WS reciente), no pisar IsContact:true
+                        const existing = next[g.ContactTelephon];
+                        if (!existing || !existing.IsContact) {
+                            next[g.ContactTelephon] = g;
                         }
                     });
                     return next;
                 });
             } catch {}
         };
-        
         fetchAllChats();
-        // Los mensajes nuevos llegarán por WebSocket, no necesitamos polling
-        
-        return () => {
-            active = false;
-        };
-    }, [contacts]);
+        return () => { active = false; };
+    }, [profile?.Telephon, contacts.length]); // re-ejecutar cuando el perfil carga o cambian contacts
 
     // Scroll automático al final cuando cambian los mensajes
     useEffect(() => {
@@ -779,7 +890,43 @@ export default function Dashboard() {
     }, [messagesByChat, selected]);
 
     return (
-        <div className="flex h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950 text-white overflow-hidden relative">
+        <div className="flex h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950 text-white overflow-hidden relative" style={{height: '100dvh'}}>
+
+            {/* Pantalla de carga estilo WhatsApp Web */}
+            {isInitialLoading && (
+                <div className="absolute inset-0 z-[99999] flex flex-col items-center justify-center bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950">
+                    <div className="flex flex-col items-center gap-6 animate-fade-in">
+                        {/* Logo / Icono */}
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-2xl shadow-purple-500/30">
+                            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                        </div>
+
+                        {/* Nombre app */}
+                        <h1 className="text-3xl font-bold text-white tracking-wide">todos</h1>
+
+                        {/* Barra de progreso animada */}
+                        <div className="w-56 h-1 bg-white/10 rounded-full overflow-hidden mt-2">
+                            <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-400 rounded-full animate-loading-bar"></div>
+                        </div>
+
+                        {/* Texto de estado */}
+                        <p className="text-white/50 text-sm mt-1">
+                            {loadingProfile ? 'Cargando perfil...' : loadingContacts ? 'Cargando contactos...' : 'Conectando...'}
+                        </p>
+
+                        {/* Encriptación */}
+                        <div className="flex items-center gap-2 mt-4 text-white/30 text-xs">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            <span>Tus mensajes están protegidos</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Overlay backdrop para móvil */}
             {sidebarOpen && (
                 <div 
@@ -806,65 +953,192 @@ export default function Dashboard() {
                 <div className="p-4 border-b border-white/10">
                     <div className="flex gap-2">
                         <button
-                            onClick={() => { setShowAdd(true); setAddMsg(''); }}
-                            className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded text-sm transition"
+                            onClick={() => {
+                                setSidebarView('chats');
+                                setShowAddContactForm(false);
+                            }}
+                            className={`flex-1 py-2 rounded text-sm transition ${
+                                sidebarView === 'chats' 
+                                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
+                                    : 'bg-white/10 hover:bg-white/20 text-indigo-200'
+                            }`}
                         >
-                            Añadir
+                            Chats
                         </button>
                         <button
-                            onClick={() => setShowSearch(true)}
-                            className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded text-sm transition"
+                            onClick={() => {
+                                setSidebarView('contacts');
+                                setShowAddContactForm(false);
+                            }}
+                            className={`flex-1 py-2 rounded text-sm transition ${
+                                sidebarView === 'contacts' 
+                                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
+                                    : 'bg-white/10 hover:bg-white/20 text-indigo-200'
+                            }`}
                         >
-                            Buscar
+                            Contactos
                         </button>
                     </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
-                    <div className="text-indigo-200 text-sm mb-2 uppercase">Contactos</div>
-                    <div>
-                        {contacts.map((c, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => {
-                                    setSelected(c);
-                                    // Cerrar sidebar en móvil al seleccionar contacto
-                                    setSidebarOpen(false);
-                                }}
-                                className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Username === c.Username ? 'ring-1 ring-indigo-400' : ''}`}
-                            >
-                                <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
-                                    {c.Username?.charAt(0)?.toUpperCase()}
-                                                                    {isContactOnline(c.Username) && (
-                                                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
-                                                                    )}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="font-medium">{c.Username}</div>
-                                    <div className="text-xs text-indigo-200">
-                                        {isContactOnline(c.Username) ? 'En línea' : c.Number}
+                    {/* Vista de Chats Activos */}
+                    {sidebarView === 'chats' && (
+                        <>
+                            <div className="text-indigo-200 text-sm mb-2 uppercase">Chats Activos</div>
+                            <div className="space-y-2">
+                                {Object.keys(messagesByChat).length > 0 ? (
+                                    Object.keys(messagesByChat).map((contactNumber) => {
+                                        const messages = messagesByChat[contactNumber] || [];
+                                        const lastMessage = messages[messages.length - 1];
+                                        // contactNumber es el telephon, buscar contacto por Number
+                                        const contact = contacts.find(c => c.Number === contactNumber);
+                                        const group = allChatGroups[contactNumber];
+                                        // Nombre a mostrar: nombre personalizado > username del grupo > número
+                                        const displayName = contact?.ContactName || group?.ContactName || group?.ContactUsername || contactNumber;
+                                        const isUnknown = group && !group.IsContact;
+                                        
+                                        return (
+                                            <button
+                                                key={contactNumber}
+                                                onClick={() => {
+                                                    const contactToSelect = contact || {
+                                                        Number: contactNumber,
+                                                        Username: group?.ContactUsername || contactNumber,
+                                                        ContactName: group?.ContactName || null,
+                                                        Status: 'unknown'
+                                                    };
+                                                    setSelected(contactToSelect);
+                                                    setSidebarOpen(false);
+                                                }}
+                                                className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Number === contactNumber ? 'ring-1 ring-indigo-400' : ''}`}
+                                            >
+                                                <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
+                                                    {displayName?.charAt(0)?.toUpperCase()}
+                                                    {isContactOnline(contactNumber) && (
+                                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 overflow-hidden">
+                                                    <div className="font-medium flex items-center gap-1">
+                                                        {displayName}
+                                                        {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
+                                                    </div>
+                                                    <div className="text-xs text-indigo-200 truncate">
+                                                        {lastMessage?.Message || 'Sin mensajes'}
+                                                    </div>
+                                                </div>
+                                                {getUnreadCount(contact || {Number: contactNumber}) > 0 && (
+                                                    <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                                        {getUnreadCount(contact || {Number: contactNumber})}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="text-center text-indigo-200 py-8">
+                                        No tienes conversaciones activas
                                     </div>
-                                </div>
-                                {c.Status === 'pending_received' && (
-                                    <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300 animate-pulse">¡Solicitud!</span>
                                 )}
-                                {c.Status === 'pending_sent' && (
-                                    <span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">Esperando...</span>
-                                )}
-                                {c.Status === 'pending' && (
-                                    <span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">pendiente</span>
-                                )}
-                                {getUnreadCount(c) > 0 && (
-                                    <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                                        {getUnreadCount(c)}
-                                    </span>
-                                )}
-                            </button>
-                        ))}
-                        {contacts.length === 0 && (
-                            <div className="text-sm text-indigo-300">Sin contactos</div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Vista de Contactos */}
+                    {sidebarView === 'contacts' && !showAddContactForm && (
+                        <>
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-indigo-200 text-sm uppercase">Mis Contactos</div>
+                                <button
+                                    onClick={() => {
+                                        setShowAddContactForm(true);
+                                        setAddMsg('');
+                                        setNumberInput('');
+                                        setContactNameInput('');
+                                    }}
+                                    className="text-xs bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-3 py-1 rounded"
+                                >
+                                    + Agregar
+                                </button>
+                            </div>
+                            <div>
+                        {contacts.filter(c => c.Status === 'accepted').length > 0 ? (
+                            contacts.filter(c => c.Status === 'accepted').map((c, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => {
+                                        setSelected(c);
+                                        setSidebarOpen(false);
+                                    }}
+                                    className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Number === c.Number ? 'ring-1 ring-indigo-400' : ''}`}
+                                >
+                                    <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
+                                        {(c.ContactName || c.Username)?.charAt(0)?.toUpperCase()}
+                                        {isContactOnline(c.Number) && (
+                                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="font-medium">{c.ContactName || c.Username}</div>
+                                        <div className="text-xs text-indigo-200">
+                                            {isContactOnline(c.Number) ? 'En línea' : c.Number}
+                                        </div>
+                                    </div>
+                                    {getUnreadCount(c) > 0 && (
+                                        <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                            {getUnreadCount(c)}
+                                        </span>
+                                    )}
+                                </button>
+                            ))
+                        ) : (
+                            <div className="text-center text-indigo-200 py-8">
+                                No tienes contactos aún
+                            </div>
                         )}
                     </div>
+                        </>
+                    )}
+
+                    {/* Formulario Agregar Contacto */}
+                    {sidebarView === 'contacts' && showAddContactForm && (
+                        <>
+                            <div className="text-indigo-200 text-sm mb-3 uppercase">Añadir Contacto</div>
+                            <form onSubmit={submitAddContact} className="space-y-3">
+                                <input
+                                    type="text"
+                                    value={contactNameInput}
+                                    onChange={(e) => setContactNameInput(e.target.value)}
+                                    className="w-full p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300"
+                                    placeholder="Nombre del contacto"
+                                />
+                                <input
+                                    type="text"
+                                    value={numberInput}
+                                    onChange={(e) => setNumberInput(e.target.value)}
+                                    className="w-full p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300"
+                                    placeholder="Número (8 dígitos)"
+                                />
+                                {addMsg && <div className="text-xs text-indigo-200">{addMsg}</div>}
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAddContactForm(false)}
+                                        className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-2 rounded"
+                                    >
+                                        Añadir
+                                    </button>
+                                </div>
+                            </form>
+                        </>
+                    )}
                 </div>
 
                 <div className="p-4 bg-white/10 border-t border-white/10">
@@ -964,9 +1238,10 @@ export default function Dashboard() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col h-full overflow-hidden">
+                    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                         {/* Header fijo */}
-                        <div className="flex-shrink-0 p-3 border-b border-white/10 bg-white/5 flex items-center gap-2">
+                        <div className="flex-shrink-0 p-3 border-b border-white/10 bg-white/5 flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
                             {/* Botón hamburguesa para móvil */}
                             <button
                                 onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -978,46 +1253,58 @@ export default function Dashboard() {
                                 </svg>
                             </button>
                             <div className="relative w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
-                                {selected.Username?.charAt(0)?.toUpperCase()}
-                                                            {isContactOnline(selected.Username) && (
+                                {(selected.ContactName || selected.Username)?.charAt(0)?.toUpperCase()}
+                                                            {isContactOnline(selected.Number) && (
                                                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white/5"></div>
                                                             )}
                             </div>
                             <div className="flex-1">
-                                <div className="font-bold">{selected.Username}</div>
+                                <div className="font-bold">{selected.ContactName || selected.Username}</div>
                                 <div className="text-xs text-indigo-300">
-                                    {isContactTyping(selected.Username) ? (
+                                    {isContactTyping(selected.Number) ? (
                                         <span className="text-blue-400 italic">escribiendo...</span>
-                                    ) : isContactOnline(selected.Username) ? (
+                                    ) : isContactOnline(selected.Number) ? (
                                         <span className="text-green-400">● En línea</span>
                                     ) : (
                                         selected.Number
                                     )}
                                 </div>
                             </div>
-                            {(selected.Status === 'pending_received' || selected.Status === 'pending') && (
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => answerContact('yes')}
-                                        disabled={answering}
-                                        className={`px-3 py-1 rounded text-sm ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-green-600/30 hover:bg-green-600/50 text-green-200`}
-                                    >
-                                        ✓ Aceptar
-                                    </button>
-                                    <button
-                                        onClick={() => answerContact('no')}
-                                        disabled={answering}
-                                        className={`px-3 py-1 rounded text-sm ${answering ? 'opacity-50 cursor-not-allowed' : ''} bg-red-600/30 hover:bg-red-600/50 text-red-200`}
-                                    >
-                                        ✗ Rechazar
-                                    </button>
-                                </div>
-                            )}
-                            {selected.Status === 'pending_sent' && (
-                                <div className="text-xs px-3 py-1 rounded bg-yellow-500/20 text-yellow-300">
-                                    Esperando respuesta...
-                                </div>
-                            )}
+                            </div>
+                            {/* Banner de contacto no agregado */}
+                            {(() => {
+                                const group = allChatGroups[selected.Number];
+                                const isUnknown = group && !group.IsContact;
+                                if (!isUnknown) return null;
+                                return (
+                                    <div className="flex items-center justify-between bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2 text-xs">
+                                        <span className="text-yellow-200">⚠️ Este número no está en tus contactos</span>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setNumberInput(selected.Number);
+                                                    setSidebarView('contacts');
+                                                    setShowAddContactForm(true);
+                                                    setSidebarOpen(true);
+                                                }}
+                                                className="px-2 py-1 bg-green-600/40 hover:bg-green-600/60 text-green-200 rounded"
+                                            >
+                                                + Agregar
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    if (!window.confirm(`¿Bloquear a ${selected.Number}?`)) return;
+                                                    // TODO: llamar endpoint de bloqueo cuando exista
+                                                    alert('Funcionalidad de bloqueo próximamente');
+                                                }}
+                                                className="px-2 py-1 bg-red-600/40 hover:bg-red-600/60 text-red-200 rounded"
+                                            >
+                                                Bloquear
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                         {/* Área de mensajes - altura flexible */}
                         <div 
@@ -1038,10 +1325,12 @@ export default function Dashboard() {
                                         return null;
                                     }
                                     
-                                    const isMine = m.Username === user?.username;
+                                    // m.SenderTelephon ahora contiene el número de teléfono del remitente
+                                    const isMine = m.SenderTelephon === profile?.Telephon;
                                     const text = m.Message || '';
                                     const statusMsg = isMine ? (m.Status || 'enviado') : '';
                                     const timeStr = m.Time ? new Date(m.Time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                    const hasReply = m.ReplyToMessageID && m.ReplyToMessage;
                                     
                                     return (
                                         <div
@@ -1049,12 +1338,21 @@ export default function Dashboard() {
                                             className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
                                         >
                                             <div
-                                                className={`max-w-xs px-3 py-2 rounded-2xl text-sm ${
+                                                className={`max-w-xs px-3 py-2 rounded-2xl text-sm cursor-pointer transition-opacity hover:opacity-90 ${
                                                     isMine
                                                         ? 'bg-indigo-600 text-white rounded-br-none'
                                                         : 'bg-white/10 text-indigo-100 rounded-bl-none'
                                                 }`}
+                                                onClick={() => handleReplyToMessage(m)}
+                                                title="Click para responder"
                                             >
+                                                {/* Mostrar cita si es una respuesta */}
+                                                {hasReply && (
+                                                    <div className={`mb-2 pl-2 border-l-2 ${isMine ? 'border-white/40' : 'border-indigo-400'} text-xs opacity-70 italic`}>
+                                                        <div className="font-semibold">{m.ReplyToUsername}</div>
+                                                        <div className="truncate">{m.ReplyToMessage}</div>
+                                                    </div>
+                                                )}
                                                 <div>{text}</div>
                                                 <div className="text-[10px] opacity-80 mt-1 flex items-center gap-1 justify-end">
                                                     <span>{timeStr}</span>
@@ -1067,8 +1365,32 @@ export default function Dashboard() {
                             )}
                         </div>
                         {/* Input fijo - siempre visible */}
-                        <div className="flex-shrink-0 p-2 sm:p-3 bg-white/10 border-t border-white/10">
-                            <div className="flex gap-2 items-center">
+                        <div className="flex-shrink-0 bg-white/10 border-t border-white/10">
+                            {/* Barra de "Respondiendo a..." */}
+                            {replyingTo && (
+                                <div className="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-semibold text-indigo-300">
+                                            Respondiendo a mensaje
+                                        </div>
+                                        <div className="text-xs text-indigo-200 truncate opacity-70">
+                                            {replyingTo.Message}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={cancelReply}
+                                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                                        aria-label="Cancelar respuesta"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            )}
+                            
+                            {/* Área del input */}
+                            <div className="p-2 sm:p-3 flex gap-2 items-center">
                                 <input 
                                     type="text" 
                                     value={currentDraft}
@@ -1090,8 +1412,12 @@ export default function Dashboard() {
                                     }}
                                 />
                                 <button
-                                    className={`bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 rounded text-white font-medium text-sm ${selected && currentDraft.trim() ? 'hover:from-purple-500 hover:to-indigo-500' : 'opacity-50'}`}
-                                    disabled={!selected || !currentDraft.trim()}
+                                    className={`bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 rounded text-white font-medium text-sm ${
+                                        selected && currentDraft.trim() && profile?.Telephon 
+                                            ? 'hover:from-purple-500 hover:to-indigo-500' 
+                                            : 'opacity-50 cursor-not-allowed'
+                                    }`}
+                                    disabled={!selected || !currentDraft.trim() || !profile?.Telephon}
                                     onClick={handleSend}
                                 >
                                     ➤
@@ -1101,55 +1427,6 @@ export default function Dashboard() {
                     </div>
                 )}
             </div>
-            {showAdd && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-                    <div className="w-full max-w-sm bg-white/10 border border-white/20 rounded-xl p-6">
-                        <h3 className="text-lg font-bold mb-3">Añadir contacto por número</h3>
-                        <form onSubmit={submitAddContact} className="space-y-4">
-                            <input
-                                type="text"
-                                value={numberInput}
-                                onChange={(e) => setNumberInput(e.target.value)}
-                                className="w-full p-3 rounded bg-white/5 border border-white/10 focus:outline-none"
-                                placeholder="Número (8 dígitos)"
-                            />
-                            {addMsg && <div className="text-xs text-indigo-200">{addMsg}</div>}
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAdd(false)}
-                                    className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-2 rounded"
-                                >
-                                    Añadir
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-            {showSearch && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-                    <div className="w-full max-w-sm bg-white/10 border border-white/20 rounded-xl p-6">
-                        <h3 className="text-lg font-bold mb-3">Buscar contactos</h3>
-                        <div className="text-sm text-indigo-200 mb-4">Próximamente...</div>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowSearch(false)}
-                                className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded"
-                            >
-                                Cerrar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             {showEdit && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
                     <div className="w-full max-w-sm bg-white/10 border border-white/20 rounded-xl p-6">
@@ -1182,6 +1459,57 @@ export default function Dashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Banner para activar notificaciones nativas */}
+            {notifPermission === 'default' && (
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-sm">
+                    <span className="text-xl">🔔</span>
+                    <div className="flex-1 text-sm">
+                        <div className="font-semibold">Activa las notificaciones</div>
+                        <div className="text-indigo-200 text-xs mt-0.5">Recibe mensajes aunque no estés en la app</div>
+                    </div>
+                    <button
+                        onClick={async () => {
+                            const perm = await requestNotificationPermission();
+                            setNotifPermission(perm);
+                        }}
+                        className="bg-white text-indigo-700 font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition flex-shrink-0"
+                    >
+                        Activar
+                    </button>
+                    <button
+                        onClick={() => setNotifPermission('dismissed')}
+                        className="text-white/50 hover:text-white text-lg leading-none"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
+
+            {/* Notificaciones Toast */}
+            <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none">
+                {toasts.map(toast => (
+                    <div
+                        key={toast.id}
+                        className="pointer-events-auto flex items-start gap-3 bg-gray-900/95 border border-white/10 backdrop-blur-xl text-white px-4 py-3 rounded-xl shadow-2xl w-72 animate-slide-in"
+                        style={{ animation: 'slideIn 0.25s ease-out' }}
+                    >
+                        <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center font-bold text-sm">
+                            {toast.senderName?.charAt(0)?.toUpperCase()}
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <div className="font-semibold text-sm truncate">{toast.senderName}</div>
+                            <div className="text-xs text-indigo-200 truncate mt-0.5">{toast.message}</div>
+                        </div>
+                        <button
+                            onClick={() => dismissToast(toast.id)}
+                            className="text-white/40 hover:text-white/80 text-lg leading-none flex-shrink-0 mt-0.5"
+                        >
+                            ×
+                        </button>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

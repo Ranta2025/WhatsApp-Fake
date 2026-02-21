@@ -120,7 +120,13 @@ func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string
 		return "", errors.New("Credenciales invalidas")
 	}
 
-	token, err := utils.GenerateToken(user.Username)
+	// Obtener el telephon del usuario para generar el token
+	telephon, exist := s.repo.GetTelephonByUsername(user.Username, ctx)
+	if !exist {
+		return "", errors.New("error al obtener telephon del usuario")
+	}
+
+	token, err := utils.GenerateToken(user.Username, telephon)
 	if err != nil {
 		return "", err
 	}
@@ -381,4 +387,31 @@ func (s *ServicesUser) RecoverAndChangePassword(email, code, newPassword string,
 
 	// Commit si todo fue exitoso
 	return tx.Commit().Error
+}
+
+// GetTelephonByUsername obtiene el telephon de un usuario dado su username
+func (s *ServicesUser) GetTelephonByUsername(username string, ctx context.Context) (string, bool) {
+	return s.repo.GetTelephonByUsername(username, ctx)
+}
+
+// SaveRefreshToken guarda un refresh token en Redis para el usuario
+func (s *ServicesUser) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
+	return s.cache.SaveRefreshToken(username, refreshToken, ctx)
+}
+
+// ValidateRefreshToken valida que el refresh token enviado coincida con el almacenado
+func (s *ServicesUser) ValidateRefreshToken(username string, refreshToken string, ctx context.Context) error {
+	stored, err := s.cache.GetRefreshToken(username, ctx)
+	if err != nil {
+		return errors.New("refresh token expirado o inexistente")
+	}
+	if stored != refreshToken {
+		return errors.New("refresh token invalido")
+	}
+	return nil
+}
+
+// DeleteRefreshToken elimina el refresh token (logout)
+func (s *ServicesUser) DeleteRefreshToken(username string, ctx context.Context) error {
+	return s.cache.DeleteRefreshToken(username, ctx)
 }

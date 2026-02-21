@@ -25,7 +25,7 @@ func TestHandlerGetUserMissing(t *testing.T) {
 
 	handler.HandlerGetUser()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestHandlerPutUserMissing test para actualizar usuario sin datos
@@ -38,7 +38,7 @@ func TestHandlerPutUserMissing(t *testing.T) {
 
 	handler.HandlerPutUser()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestHandlerAddContactMissing test para agregar contacto sin datos
@@ -51,7 +51,7 @@ func TestHandlerAddContactMissing(t *testing.T) {
 
 	handler.HandlerAddContact()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestHandlerContactsMissing test para obtener contactos sin datos
@@ -64,18 +64,5 @@ func TestHandlerContactsMissing(t *testing.T) {
 
 	handler.HandlerContacts()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
-}
-
-// TestContactPutMissing test para actualizar estado de contacto sin datos
-func TestContactPutMissing(t *testing.T) {
-	handler := &HandlerContact{service: nil}
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("PUT", "/contact/status", nil)
-
-	handler.ContactPut()(c)
-
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

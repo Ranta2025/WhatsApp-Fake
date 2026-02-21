@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"gorm/backend/repos"
+	"gorm/backend/utils"
 	"log"
 	"strconv"
 	"time"
@@ -20,27 +21,38 @@ func InitChacheUser(rd *redis.Client, repo *repos.RepositoriesUser) *CacheUser {
 	return &CacheUser{rd, repo}
 }
 
+// --- Refresh Token en Redis ---
+
+// SaveRefreshToken guarda un refresh token en Redis asociado al username
+func (ch *CacheUser) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Set(c, "refresh:"+username, refreshToken, utils.RefreshTokenDuration).Err()
+}
+
+// GetRefreshToken obtiene el refresh token almacenado para un username
+func (ch *CacheUser) GetRefreshToken(username string, ctx context.Context) (string, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Get(c, "refresh:"+username).Result()
+}
+
+// DeleteRefreshToken elimina el refresh token de un username (logout)
+func (ch *CacheUser) DeleteRefreshToken(username string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Del(c, "refresh:"+username).Err()
+}
+
 func (ch *CacheUser) CachePassword(username string, ctx context.Context) (string, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	log.Println("[CACHE] Buscando password para:", username)
-	password, err := ch.rd.Get(c, "password:"+username).Result()
-	if err != nil {
-		log.Println("[CACHE] No encontrado en Redis, buscando en BD")
-		passwordDB, exist := ch.repo.GetPassword(username, c)
-		if !exist {
-			log.Println("[CACHE] Password no existe en BD para:", username)
-			return "", errors.New("contraseña inexistente")
-		}
-		log.Println("[CACHE] Password encontrada en BD")
-		err := ch.rd.Set(c, "password:"+username, passwordDB, 2*time.Minute)
-		if err.Err() != nil {
-			return "", err.Err()
-		}
-		return passwordDB, nil
+	// Consulta directa a BD — no cacheamos hashes de password en Redis por seguridad
+	passwordDB, exist := ch.repo.GetPassword(username, c)
+	if !exist {
+		return "", errors.New("contraseña inexistente")
 	}
-	log.Println("[CACHE] Password encontrada en Redis")
-	return password, nil
+	return passwordDB, nil
 }
 
 func (ch *CacheUser) CacheActivo(username string, ctx context.Context) (bool, error) {

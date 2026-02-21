@@ -1,44 +1,85 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"log"
 	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func GenerateToken(username string) (string, error) {
+// jwtSecret almacena la clave secreta validada al inicio
+var jwtSecret []byte
+
+// Duración del access token (15 minutos)
+const AccessTokenDuration = 15 * time.Minute
+
+// Duración del refresh token (7 días)
+const RefreshTokenDuration = 7 * 24 * time.Hour
+
+// ValidateJWTSecret verifica que SECRETKEY esté configurada y sea suficientemente larga.
+// Debe llamarse al arrancar la aplicación; hace log.Fatal si no está configurada.
+func ValidateJWTSecret() {
+	key := os.Getenv("SECRETKEY")
+	if len(key) < 32 {
+		log.Fatal("[FATAL] SECRETKEY no está configurada o es demasiado corta (mínimo 32 caracteres)")
+	}
+	jwtSecret = []byte(key)
+}
+
+func GenerateToken(username string, telephon string) (string, error) {
 	claim := jwt.MapClaims{}
 	claim["username"] = username
-	claim["exp"] = time.Now().Add(24 * time.Hour).Unix()
+	claim["telephon"] = telephon
+	claim["exp"] = time.Now().Add(AccessTokenDuration).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
-	hash_token,err := token.SignedString([]byte(os.Getenv("SECRETKEY")))
+	hash_token, err := token.SignedString(jwtSecret)
 	if err != nil {
-		return "", errors.New("Error al crear token")
+		return "", errors.New("error al crear token")
 	}
 	return hash_token, nil
 }
 
-func DecodeToken(token string) (string, error) {
+// GenerateRefreshToken genera un refresh token aleatorio de 64 bytes (128 hex chars)
+func GenerateRefreshToken() (string, error) {
+	b := make([]byte, 64)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", errors.New("error al generar refresh token")
+	}
+	return hex.EncodeToString(b), nil
+}
 
-	tokenDecode, err := jwt.Parse(token,func(t *jwt.Token) (interface{}, error) {
+// DecodeToken decodifica el token y devuelve username y telephon
+func DecodeToken(token string) (string, string, error) {
+	tokenDecode, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
 		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
-			return nil, errors.New("Token invalido")
+			return nil, errors.New("token invalido")
 		}
-		return []byte(os.Getenv("SECRETKEY")),nil
+		return jwtSecret, nil
 	})
 
-	if err != nil || !tokenDecode.Valid{
-		return "", errors.New("Token invallido")
+	if err != nil || !tokenDecode.Valid {
+		return "", "", errors.New("token invalido")
 	}
 
-	claims, flag := tokenDecode.Claims.(jwt.MapClaims)
-	if !flag {
-		return "",errors.New("Error al extraer datos del token")
+	claims, ok := tokenDecode.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", "", errors.New("error al extraer datos del token")
 	}
-	username := claims["username"].(string)
 
-	return username, nil
+	username, ok := claims["username"].(string)
+	if !ok {
+		return "", "", errors.New("token claims invalidos")
+	}
+	telephon, ok := claims["telephon"].(string)
+	if !ok {
+		return "", "", errors.New("token claims invalidos")
+	}
+
+	return username, telephon, nil
 }

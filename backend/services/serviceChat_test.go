@@ -65,7 +65,7 @@ func TestConvertMessagesToSchemas(t *testing.T) {
 // TestServiceCreatMessageMissingUser test para crear mensaje sin usuario
 func TestServiceCreatMessageMissingUser(t *testing.T) {
 	message := models.MessageCreat{
-		Username: "nonexistent",
+		Telephon: "nonexistent",
 		MessageGet: models.MessageGet{
 			Receptor: "receptor",
 			Message:  "Hello",

@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"gorm/backend/config"
 	"gorm/backend/services"
 	"net/http"
 	"time"
@@ -11,13 +12,20 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // Conexiones directas sin Origin (ej: clientes nativos)
+		}
+		return config.IsAllowedOrigin(origin)
+	},
 }
 
 func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, exist := c.Get("username")
-		if !exist {
+		telephon, exist2 := c.Get("telephon")
+		if !exist || !exist2 {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Usuario no autenticado"})
 			return
 		}
@@ -29,6 +37,7 @@ func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService
 
 		client := &Client{
 			Username:       username.(string),
+			Telephon:       telephon.(string),
 			Conn:           conn,
 			Send:           make(chan []byte, 256),
 			ServiceChat:    chatService,
@@ -40,7 +49,7 @@ func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService
 		// para asegurar que los listeners del cliente estén registrados
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			onlineContacts := hub.GetOnlineContacts(username.(string))
+			onlineContacts := hub.GetOnlineContacts(telephon.(string))
 			initialMsg, _ := json.Marshal(map[string]interface{}{
 				"type": "contacts_online",
 				"payload": map[string]interface{}{

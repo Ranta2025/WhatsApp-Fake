@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gorm/backend/models"
 	"gorm/backend/repos"
 	"sync"
 )
 
 type Hub struct {
 	mu        sync.RWMutex
-	Clients   map[string]*Client
+	Clients   map[string]*Client // Key: telephon (número de teléfono)
 	Register  chan *Client
 	Remove    chan *Client
 	Broadcast chan []byte
@@ -32,19 +33,19 @@ func (h *Hub) Run() {
 		select {
 		case c := <-h.Register:
 			h.mu.Lock()
-			h.Clients[c.Username] = c
+			h.Clients[c.Telephon] = c
 			h.mu.Unlock()
-			fmt.Printf("[HUB] Usuario registrado: %s. Total clientes: %d\n", c.Username, len(h.Clients))
+			fmt.Printf("[HUB] Usuario registrado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
 			// Notificar a los contactos que este usuario está online
-			h.NotifyContactsOnline(c.Username)
+			h.NotifyContactsOnline(c.Telephon)
 
 		case c := <-h.Remove:
 			h.mu.Lock()
-			delete(h.Clients, c.Username)
+			delete(h.Clients, c.Telephon)
 			h.mu.Unlock()
-			fmt.Printf("[HUB] Usuario desconectado: %s. Total clientes: %d\n", c.Username, len(h.Clients))
+			fmt.Printf("[HUB] Usuario desconectado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
 			// Notificar a los contactos que este usuario está offline
-			h.NotifyContactsOffline(c.Username)
+			h.NotifyContactsOffline(c.Telephon)
 
 		case msg := <-h.Broadcast:
 			h.mu.RLock()
@@ -56,10 +57,10 @@ func (h *Hub) Run() {
 	}
 }
 
-// SendTo envía un mensaje privado a un usuario específico (chat 1 a 1)
-func (h *Hub) SendTo(username string, msg []byte) {
+// SendTo envía un mensaje privado a un usuario específico (chat 1 a 1) usando el telephon
+func (h *Hub) SendTo(telephon string, msg []byte) {
 	h.mu.RLock()
-	client, exists := h.Clients[username]
+	client, exists := h.Clients[telephon]
 	h.mu.RUnlock()
 
 	if exists {
@@ -71,21 +72,45 @@ func (h *Hub) SendTo(username string, msg []byte) {
 	}
 }
 
-// GetClient obtiene un cliente de forma thread-safe
-func (h *Hub) GetClient(username string) (*Client, bool) {
+// GetClient obtiene un cliente de forma thread-safe usando el telephon
+func (h *Hub) GetClient(telephon string) (*Client, bool) {
 	h.mu.RLock()
-	client, exists := h.Clients[username]
+	client, exists := h.Clients[telephon]
 	h.mu.RUnlock()
 	return client, exists
 }
 
-// NotifyContactsOnline notifica a los contactos que un usuario está online
-func (h *Hub) NotifyContactsOnline(username string) {
-	contacts := h.getUserContacts(username)
-	fmt.Printf("[HUB] NotifyContactsOnline para %s. Contactos encontrados: %v\n", username, contacts)
+// UpdateClientUsername actualiza el username de un cliente conectado (solo para UI, la clave sigue siendo telephon)
+func (h *Hub) UpdateClientUsername(oldUsername string, newUsername string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Buscar el cliente por username (iterar sobre todos)
+	for telephon, client := range h.Clients {
+		if client.Username == oldUsername {
+			// Actualizar el username en el cliente (solo para mostrar)
+			client.Username = newUsername
+			fmt.Printf("[HUB] Username actualizado: %s -> %s (tel: %s)\n", oldUsername, newUsername, telephon)
+			return
+		}
+	}
+	fmt.Printf("[HUB] Cliente con username %s no encontrado\n", oldUsername)
+}
+
+// NotifyContactsOnline notifica a los contactos que un usuario está online (usa telephon)
+func (h *Hub) NotifyContactsOnline(telephon string) {
+	contacts := h.getUserContactsTelephons(telephon)
+	fmt.Printf("[HUB] NotifyContactsOnline para tel: %s. Contactos encontrados: %v\n", telephon, contacts)
 
 	if len(contacts) == 0 {
-		fmt.Printf("[HUB] No hay contactos aceptados para notificar a %s\n", username)
+		fmt.Printf("[HUB] No hay contactos aceptados para notificar (tel: %s)\n", telephon)
+		return
+	}
+
+	// Obtener el username para enviarlo en la notificación
+	username, err := h.repo.GetUsernameByTelephon(telephon, context.Background())
+	if err != nil {
+		fmt.Printf("[HUB] Error obteniendo username para tel %s: %v\n", telephon, err)
 		return
 	}
 
@@ -93,83 +118,116 @@ func (h *Hub) NotifyContactsOnline(username string) {
 		"type": "online",
 		"payload": map[string]interface{}{
 			"username": username,
+			"telephon": telephon,
 		},
 	})
 
-	for _, contactUsername := range contacts {
-		fmt.Printf("[HUB] Enviando notificación online de %s a %s\n", username, contactUsername)
-		h.SendTo(contactUsername, msg)
+	for _, contactTelephon := range contacts {
+		fmt.Printf("[HUB] Enviando notificación online de %s (tel: %s) a tel: %s\n", username, telephon, contactTelephon)
+		h.SendTo(contactTelephon, msg)
 	}
 }
 
-// NotifyContactsOffline notifica a los contactos que un usuario está offline
-func (h *Hub) NotifyContactsOffline(username string) {
-	contacts := h.getUserContacts(username)
+// NotifyContactsOffline notifica a los contactos que un usuario está offline (usa telephon)
+func (h *Hub) NotifyContactsOffline(telephon string) {
+	contacts := h.getUserContactsTelephons(telephon)
+
+	// Obtener el username para enviarlo en la notificación
+	username, err := h.repo.GetUsernameByTelephon(telephon, context.Background())
+	if err != nil {
+		fmt.Printf("[HUB] Error obteniendo username para tel %s: %v\n", telephon, err)
+		return
+	}
+
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type": "offline",
 		"payload": map[string]interface{}{
 			"username": username,
+			"telephon": telephon,
 		},
 	})
 
-	for _, contactUsername := range contacts {
-		h.SendTo(contactUsername, msg)
+	for _, contactTelephon := range contacts {
+		h.SendTo(contactTelephon, msg)
 	}
 }
 
-// GetOnlineContacts devuelve la lista de contactos de un usuario que están online
-func (h *Hub) GetOnlineContacts(username string) []string {
-	contacts := h.getUserContacts(username)
+// GetOnlineContacts devuelve la lista de contactos de un usuario que están online (usa telephon)
+func (h *Hub) GetOnlineContacts(telephon string) []string {
+	contactTelephons := h.getUserContactsTelephons(telephon)
 	onlineContacts := []string{}
 
 	h.mu.RLock()
-	for _, contactUsername := range contacts {
-		if _, isOnline := h.Clients[contactUsername]; isOnline {
-			onlineContacts = append(onlineContacts, contactUsername)
+	for _, contactTelephon := range contactTelephons {
+		if _, isOnline := h.Clients[contactTelephon]; isOnline {
+			onlineContacts = append(onlineContacts, contactTelephon)
 		}
 	}
 	h.mu.RUnlock()
 
-	fmt.Printf("[HUB] GetOnlineContacts para %s. Total contactos: %d, Online: %d (%v)\n", username, len(contacts), len(onlineContacts), onlineContacts)
+	fmt.Printf("[HUB] GetOnlineContacts para tel: %s. Total contactos: %d, Online: %d (%v)\n", telephon, len(contactTelephons), len(onlineContacts), onlineContacts)
 	return onlineContacts
 }
 
-// getUserContacts obtiene la lista de usernames de contactos de un usuario
-func (h *Hub) getUserContacts(username string) []string {
+// getUserContactsTelephons obtiene la lista BIDIRECCIONAL de telephons relacionados:
+// personas que YO tengo agregadas + personas que ME tienen agregado a mí
+func (h *Hub) getUserContactsTelephons(telephon string) []string {
 	if h.repo == nil {
 		return []string{}
 	}
 
-	// Obtener el ID del usuario
-	id, err := h.repo.GetIdUsername(username, context.Background())
+	id, err := h.repo.GetIdByTelephon(telephon, context.Background())
 	if err != nil {
 		return []string{}
 	}
 
-	// Obtener contactos
-	contacts, err := h.repo.GetContactsNumber(uint(id), context.Background())
-	if err != nil || contacts == nil {
-		return []string{}
+	// Dirección 1: personas que YO tengo agregadas
+	contacts, err := h.repo.GetContactsTelephons(uint(id), context.Background())
+	if err != nil {
+		contacts = &[]models.ContactChat{}
 	}
 
-	usernames := []string{}
-	for _, contact := range *contacts {
-		if contact.Status == "accepted" {
-			usernames = append(usernames, contact.Username)
+	// Dirección 2: personas que ME tienen agregado a mí
+	reverse, err := h.repo.GetUsersWhoHaveMeAsContactTelephons(uint(id), context.Background())
+	if err != nil {
+		reverse = []string{}
+	}
+
+	// Unión sin duplicados
+	seen := make(map[string]struct{})
+	var result []string
+	for _, c := range *contacts {
+		if c.Status == "accepted" {
+			if _, ok := seen[c.Number]; !ok {
+				seen[c.Number] = struct{}{}
+				result = append(result, c.Number)
+			}
 		}
 	}
-
-	return usernames
+	for _, t := range reverse {
+		if _, ok := seen[t]; !ok {
+			seen[t] = struct{}{}
+			result = append(result, t)
+		}
+	}
+	return result
 }
 
 // NotifyContactRequest notifica a un usuario que recibió una solicitud de contacto
 func (h *Hub) NotifyContactRequest(recipientUsername string, senderUsername string, senderNumber string) {
+	// Convertir username a telephon para buscar el cliente
+	recipientTelephon, err := h.repo.GetTelephonByUsername(recipientUsername, context.Background())
+	if err != nil {
+		fmt.Printf("[HUB] Error obteniendo teléfono de %s: %v\n", recipientUsername, err)
+		return
+	}
+
 	h.mu.RLock()
-	client, exists := h.Clients[recipientUsername]
+	client, exists := h.Clients[recipientTelephon]
 	h.mu.RUnlock()
 
 	if !exists {
-		fmt.Printf("[HUB] Usuario %s no está conectado para recibir solicitud de contacto de %s\n", recipientUsername, senderUsername)
+		fmt.Printf("[HUB] Usuario %s (tel: %s) no está conectado para recibir solicitud de contacto de %s\n", recipientUsername, recipientTelephon, senderUsername)
 		return
 	}
 
@@ -186,7 +244,7 @@ func (h *Hub) NotifyContactRequest(recipientUsername string, senderUsername stri
 		return
 	}
 
-	fmt.Printf("[HUB] Enviando solicitud de contacto de %s a %s\n", senderUsername, recipientUsername)
+	fmt.Printf("[HUB] Enviando solicitud de contacto de %s a %s (tel: %s)\n", senderUsername, recipientUsername, recipientTelephon)
 	select {
 	case client.Send <- msg:
 		fmt.Printf("[HUB] Solicitud de contacto enviada exitosamente\n")
@@ -197,12 +255,19 @@ func (h *Hub) NotifyContactRequest(recipientUsername string, senderUsername stri
 
 // NotifyContactResponse notifica a un usuario sobre la respuesta a su solicitud de contacto
 func (h *Hub) NotifyContactResponse(recipientUsername string, responderUsername string, responderNumber string, accepted bool) {
+	// Convertir username a telephon
+	recipientTelephon, err := h.repo.GetTelephonByUsername(recipientUsername, context.Background())
+	if err != nil {
+		fmt.Printf("[HUB] Error obteniendo teléfono de %s: %v\n", recipientUsername, err)
+		return
+	}
+
 	h.mu.RLock()
-	client, exists := h.Clients[recipientUsername]
+	client, exists := h.Clients[recipientTelephon]
 	h.mu.RUnlock()
 
 	if !exists {
-		fmt.Printf("[HUB] Usuario %s no está conectado para recibir respuesta de contacto de %s\n", recipientUsername, responderUsername)
+		fmt.Printf("[HUB] Usuario %s (tel: %s) no está conectado para recibir respuesta de contacto de %s\n", recipientUsername, recipientTelephon, responderUsername)
 		return
 	}
 
@@ -225,11 +290,75 @@ func (h *Hub) NotifyContactResponse(recipientUsername string, responderUsername 
 		return
 	}
 
-	fmt.Printf("[HUB] Enviando respuesta de contacto de %s a %s (accepted: %v)\n", responderUsername, recipientUsername, accepted)
+	fmt.Printf("[HUB] Enviando respuesta de contacto de %s a %s (tel: %s, accepted: %v)\n", responderUsername, recipientUsername, recipientTelephon, accepted)
 	select {
 	case client.Send <- msg:
 		fmt.Printf("[HUB] Respuesta de contacto enviada exitosamente\n")
 	default:
 		fmt.Printf("[HUB] No se pudo enviar respuesta de contacto, canal lleno\n")
 	}
+}
+
+// NotifyUsernameChange notifica a los contactos de un usuario que cambió su username
+func (h *Hub) NotifyUsernameChange(oldUsername string, newUsername string) {
+	fmt.Printf("[HUB] === INICIO NotifyUsernameChange: %s -> %s ===\n", oldUsername, newUsername)
+
+	// Obtener el telephon del usuario para actualizar el cliente
+	telephon, err := h.repo.GetTelephonByUsername(newUsername, context.Background())
+	if err != nil {
+		fmt.Printf("[HUB] Error obteniendo teléfono para username %s: %v\n", newUsername, err)
+		return
+	}
+
+	// Actualizar el username en el cliente si está conectado
+	h.UpdateClientUsername(oldUsername, newUsername)
+
+	// Verificar que el cambio se aplicó correctamente
+	if client, exists := h.GetClient(telephon); exists {
+		fmt.Printf("[HUB] ✓ Cliente CONFIRMADO con nuevo username: %s (tel: %s)\n", client.Username, telephon)
+	} else {
+		fmt.Printf("[HUB] ⚠ Cliente NO estaba conectado (tel: %s)\n", telephon)
+	}
+
+	// Obtener contactos del usuario (usando el telephon)
+	contacts := h.getUserContactsTelephons(telephon)
+	fmt.Printf("[HUB] Notificando cambio de username de %s a %s. Contactos: %v\n", oldUsername, newUsername, contacts)
+
+	if len(contacts) == 0 {
+		fmt.Printf("[HUB] No hay contactos para notificar el cambio de username\n")
+		return
+	}
+
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type": "username_changed",
+		"payload": map[string]interface{}{
+			"old_username": oldUsername,
+			"new_username": newUsername,
+			"telephon":     telephon,
+		},
+	})
+
+	for _, contactTelephon := range contacts {
+		fmt.Printf("[HUB] Enviando notificación de cambio de username a tel: %s\n", contactTelephon)
+		h.SendTo(contactTelephon, msg)
+	}
+
+	// Notificar que el usuario sigue en línea con el nuevo nombre
+	// Solo si el cliente está conectado
+	if _, isOnline := h.GetClient(telephon); isOnline {
+		onlineMsg, _ := json.Marshal(map[string]interface{}{
+			"type": "online",
+			"payload": map[string]interface{}{
+				"username": newUsername,
+				"telephon": telephon,
+			},
+		})
+
+		for _, contactTelephon := range contacts {
+			h.SendTo(contactTelephon, onlineMsg)
+		}
+		fmt.Printf("[HUB] Notificado estado online con nuevo username %s (tel: %s)\n", newUsername, telephon)
+	}
+
+	fmt.Printf("[HUB] === FIN NotifyUsernameChange ===\n")
 }

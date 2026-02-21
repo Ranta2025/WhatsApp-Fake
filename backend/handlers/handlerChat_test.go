@@ -25,7 +25,7 @@ func TestHandlerPostChatMissingData(t *testing.T) {
 
 	handler.HandlerPostChat()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestHandlerGetChatsMissingData test para obtener mensajes sin datos
@@ -38,7 +38,7 @@ func TestHandlerGetChatsMissingData(t *testing.T) {
 
 	handler.HandlerGetChats()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestHandlerPutChatMissingData test para actualizar estado sin datos
@@ -51,7 +51,7 @@ func TestHandlerPutChatMissingData(t *testing.T) {
 
 	handler.HandlerPutChat()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestHandlerPutAllChatMissingData test para actualizar todos sin datos
@@ -64,5 +64,5 @@ func TestHandlerPutAllChatMissingData(t *testing.T) {
 
 	handler.HandlerPutAllChat()(c)
 
-	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

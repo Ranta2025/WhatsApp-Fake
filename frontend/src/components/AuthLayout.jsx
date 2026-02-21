@@ -25,7 +25,7 @@ export default function AuthLayout({ children, title, subtitle, footer }) {
             {footer && (
               <div className="px-6 pb-4 pt-2 border-t border-white/10">
                 <div className="text-center text-xs text-indigo-200">
-                  {footer}
+                  {typeof footer === 'function' ? footer() : footer}
                 </div>
               </div>
             )}

@@ -145,6 +145,23 @@ func (db *RepositoriesUser) GetBlocked(username string, c context.Context) (bool
 	return bloqueado, true
 }
 
+func (db *RepositoriesUser) GetTelephonByUsername(username string, c context.Context) (string, bool) {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	var telephon string
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("telephon").Where("username = ?", username).Scan(&telephon)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return "", false
+		}
+		return "", false
+	}
+	if telephon == "" {
+		return "", false
+	}
+	return telephon, true
+}
+
 func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()

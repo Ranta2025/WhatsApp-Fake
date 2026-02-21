@@ -22,11 +22,6 @@ func InitRepoContact(data *gorm.DB) *ApiContact {
 	}
 }
 
-// BeginTx inicia una transacción
-func (ap *ApiContact) BeginTx() *gorm.DB {
-	return ap.data.Begin()
-}
-
 func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -61,56 +56,15 @@ func (ap *ApiContact) AddContact(contact models.ContactDataBase, ctx context.Con
 	return ap.data.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
 }
 
-// AddContactTx agrega contacto dentro de una transacción
-func (ap *ApiContact) AddContactTx(tx *gorm.DB, contact models.ContactDataBase, ctx context.Context) error {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return tx.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
-}
-
-func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.Context) bool {
+func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var count int64
 	result := ap.data.Model(&models.ContactDataBase{}).WithContext(c).Where("id_user = ?", idUser).Where("id_contact = ?", IdContact).Count(&count)
 	if result.Error != nil {
-		return false
+		return false, result.Error
 	}
-	return count > 0
-}
-
-// GetContactStatus obtiene el status de un contacto
-func (ap *ApiContact) GetContactStatus(idUser uint, idContact uint, ctx context.Context) (string, error) {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	var contact models.ContactDataBase
-	result := ap.data.Model(&models.ContactDataBase{}).WithContext(c).
-		Where("id_user = ? AND id_contact = ?", idUser, idContact).
-		First(&contact)
-	if result.Error != nil {
-		return "", result.Error
-	}
-	return contact.Status, nil
-}
-
-func (ap *ApiContact) PutStatus(id_user uint, id_contact uint, status string, ctx context.Context) error {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return ap.data.Model(&models.ContactDataBase{}).
-		WithContext(c).
-		Where("id_user = ? AND id_contact = ?", id_user, id_contact).
-		Or("id_user = ? AND id_contact = ?", id_contact, id_user).
-		Update("status", status).Error
-}
-
-// PutStatusTx actualiza status dentro de una transacción
-func (ap *ApiContact) PutStatusTx(tx *gorm.DB, id_user uint, id_contact uint, status string, ctx context.Context) error {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return tx.Model(&models.ContactDataBase{}).
-		WithContext(c).
-		Where("id_user = ? AND id_contact = ?", id_user, id_contact).
-		Update("status", status).Error
+	return count > 0, nil
 }
 
 func (app *ApiContact) GetIdUsername(username string, ctx context.Context) (int, error) {
@@ -158,7 +112,8 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 		Select(`
 			user_data_bases.username AS username,
 			user_data_bases.telephon AS number,
-			contact_data_bases.status AS status
+			contact_data_bases.status AS status,
+			contact_data_bases.contact_name AS contact_name
 		`).
 		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_contact").
 		Where("contact_data_bases.id_user = ?", id).
@@ -197,15 +152,6 @@ func (app *ApiContact) PutStatusMessageDelivered(id_message uint, ctx context.Co
 		Update("status", "entregado").Error
 }
 
-func (app *ApiContact) PutStatusMessageSeen(id_message uint, id_user uint, ctx context.Context) error {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND id_receptor = ?", id_message, id_user).
-		Where("status = ?", "entregado").
-		Update("status", "visto").Error
-}
-
 func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor uint, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -215,26 +161,122 @@ func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor
 		Update("status", "visto").Error
 }
 
-// PutStatusMessageDeliveredByContact actualiza mensajes de un remitente específico a "entregado"
-func (app *ApiContact) PutStatusMessageDeliveredByContact(id_sender uint, id_receptor uint, ctx context.Context) error {
+// GetAllMessagesForUser obtiene todos los mensajes donde el usuario es remitente o receptor
+func (app *ApiContact) GetAllMessagesForUser(id_user uint, ctx context.Context) ([]models.Message, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return app.data.Model(&models.Message{}).WithContext(c).
-		Where("id_user = ? AND id_receptor = ?", id_sender, id_receptor).
-		Where("status = ?", "enviado").
-		Update("status", "entregado").Error
+	var messages []models.Message
+	result := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id_user = ? OR id_receptor = ?", id_user, id_user).
+		Order("time ASC").
+		Scan(&messages)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return messages, nil
 }
 
-// GetUserByNumber obtiene un usuario por su número de teléfono
-func (app *ApiContact) GetUserByNumber(number string, ctx context.Context) (*models.UserDataBase, error) {
+// GetAddedContactIDs devuelve el conjunto de IDs de contactos que el usuario tiene agregados
+func (app *ApiContact) GetAddedContactIDs(id_user uint, ctx context.Context) (map[uint]string, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	type row struct {
+		IdContact   uint
+		ContactName string
+	}
+	var rows []row
+	result := app.data.Model(&models.ContactDataBase{}).WithContext(c).
+		Select("id_contact, contact_name").
+		Where("id_user = ? AND status != ?", id_user, "rechazed").
+		Scan(&rows)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	m := make(map[uint]string, len(rows))
+	for _, r := range rows {
+		m[r.IdContact] = r.ContactName
+	}
+	return m, nil
+}
+
+// GetUserByID obtiene un usuario por su ID primario
+func (app *ApiContact) GetUserByID(id uint, ctx context.Context) (*models.UserDataBase, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var user models.UserDataBase
 	result := app.data.Model(&models.UserDataBase{}).WithContext(c).
-		Where("telephon = ?", strings.TrimSpace(number)).
+		Where("id = ?", id).
 		First(&user)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return &user, nil
+}
+
+// GetUsernameByTelephon obtiene el username por número de teléfono
+func (app *ApiContact) GetUsernameByTelephon(telephon string, ctx context.Context) (string, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var username string
+	result := app.data.Model(&models.UserDataBase{}).WithContext(c).Select("username").Where("telephon = ?", telephon).Scan(&username)
+	if result.Error != nil || username == "" {
+		return "", errors.New("username no encontrado")
+	}
+	return username, nil
+}
+
+// GetTelephonByUsername obtiene el número de teléfono por username
+func (app *ApiContact) GetTelephonByUsername(username string, ctx context.Context) (string, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var telephon string
+	result := app.data.Model(&models.UserDataBase{}).WithContext(c).Select("telephon").Where("username = ?", username).Scan(&telephon)
+	if result.Error != nil || telephon == "" {
+		return "", errors.New("telefono no encontrado")
+	}
+	return telephon, nil
+}
+
+// GetIdByTelephon obtiene el ID de usuario por número de teléfono
+func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var id int
+	result := app.data.Model(&models.UserDataBase{}).WithContext(c).Select("id").Where("telephon = ?", telephon).Scan(&id)
+	if result.Error != nil || id == 0 {
+		return -1, errors.New("id usuario no encontrado")
+	}
+	return id, nil
+}
+
+// GetContactsTelephons obtiene lista de contactos con sus números de teléfono (personas que YO tengo agregadas)
+func (app *ApiContact) GetContactsTelephons(id uint, ctx context.Context) (*[]models.ContactChat, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var contacts []models.ContactChat
+	result := app.data.WithContext(c).Table("user_data_bases").
+		Select(`
+			user_data_bases.username AS username,
+			user_data_bases.telephon AS number,
+			contact_data_bases.status AS status
+		`).
+		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_contact").
+		Where("contact_data_bases.id_user = ?", id).
+		Where("NOT contact_data_bases.status = ?", "rechazed").
+		Order("contact_data_bases.created_at DESC").
+		Scan(&contacts)
+	return &contacts, result.Error
+}
+
+// GetUsersWhoHaveMeAsContactTelephons obtiene los números de teléfono de usuarios que ME tienen agregado a mí
+func (app *ApiContact) GetUsersWhoHaveMeAsContactTelephons(myID uint, ctx context.Context) ([]string, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var telephons []string
+	result := app.data.WithContext(c).Table("user_data_bases").
+		Select("user_data_bases.telephon").
+		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_user").
+		Where("contact_data_bases.id_contact = ? AND contact_data_bases.status != ?", myID, "rechazed").
+		Scan(&telephons)
+	return telephons, result.Error
 }

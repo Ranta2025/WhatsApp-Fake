@@ -7,7 +7,6 @@ class WebSocketManager {
         this.reconnectDelay = 3000;
         this.isIntentionallyClosed = false;
         this.messageHandlers = new Map();
-        this.onlineStatusHandlers = [];
         this.connectionStateHandlers = [];
         this.heartbeatInterval = null;
         this.lastContactsOnline = null; // Guardar último estado de contactos online
@@ -156,34 +155,19 @@ class WebSocketManager {
                 this.notifyHandlers('contacts_online', payload.contacts || []);
                 break;
             case 'online':
-                // Un contacto se conectó
-                console.log('[WS] Contacto conectado:', payload.username);
-                this.notifyHandlers('online', payload.username);
+                // Un contacto se conectó - notificar con payload completo {username, telephon}
+                console.log('[WS] Contacto conectado:', payload.telephon, payload.username);
+                this.notifyHandlers('online', payload);
                 break;
             case 'offline':
-                // Un contacto se desconectó
-                console.log('[WS] Contacto desconectado:', payload.username);
-                this.notifyHandlers('offline', payload.username);
+                // Un contacto se desconectó - notificar con payload completo {username, telephon}
+                console.log('[WS] Contacto desconectado:', payload.telephon, payload.username);
+                this.notifyHandlers('offline', payload);
                 break;
-            case 'contact_request':
-                // Nueva solicitud de contacto recibida
-                console.log('[WS] Solicitud de contacto recibida:', payload);
-                this.notifyHandlers('contact_request', payload);
-                break;
-            case 'contact_response':
-                // Respuesta a una solicitud de contacto enviada
-                console.log('[WS] Respuesta de contacto recibida:', payload);
-                this.notifyHandlers('contact_response', payload);
-                break;
-            case 'contact_accepted':
-                // Confirmación de que aceptaste una solicitud
-                console.log('[WS] Contacto aceptado confirmado:', payload);
-                this.notifyHandlers('contact_accepted', payload);
-                break;
-            case 'contact_rejected':
-                // Confirmación de que rechazaste una solicitud
-                console.log('[WS] Contacto rechazado confirmado:', payload);
-                this.notifyHandlers('contact_rejected', payload);
+            case 'username_changed':
+                // Un contacto cambió su nombre de usuario
+                console.log('[WS] Contacto cambió username:', payload);
+                this.notifyHandlers('username_changed', payload);
                 break;
             case 'pong':
                 console.log('Pong recibido del servidor');
@@ -195,12 +179,6 @@ class WebSocketManager {
             default:
                 console.log('Tipo de mensaje desconocido:', type, data);
         }
-    }
-
-    handleOnlineStatus(username, online) {
-        this.onlineStatusHandlers.forEach(handler => {
-            handler(username, online);
-        });
     }
 
     notifyHandlers(event, data) {
@@ -247,26 +225,39 @@ class WebSocketManager {
         }
     }
 
-    onOnlineStatus(handler) {
-        this.onlineStatusHandlers.push(handler);
-    }
-
+    // Registra un listener para cambios de estado de conexión
     onConnectionState(handler) {
         this.connectionStateHandlers.push(handler);
+        // Devolver función para desuscribirse
+        return () => {
+            const index = this.connectionStateHandlers.indexOf(handler);
+            if (index > -1) {
+                this.connectionStateHandlers.splice(index, 1);
+            }
+        };
     }
 
-    sendMessage(to, message) {
+    sendMessage(to, message, replyTo = null) {
         if (!this.isConnected()) {
             console.error('WebSocket no conectado');
             return false;
         }
 
+        const payload = {
+            receptor: to,
+            message: message
+        };
+        
+        // Agregar campos de reply si existe
+        if (replyTo) {
+            payload.replyToMessageID = replyTo.MessageID;
+            payload.replyToTelephon = replyTo.SenderTelephon;
+            payload.replyToMessage = replyTo.Message;
+        }
+
         const msg = {
             type: 'chat',
-            payload: {
-                receptor: to,
-                message: message
-            }
+            payload: payload
         };
 
         this.ws.send(JSON.stringify(msg));
@@ -294,34 +285,6 @@ class WebSocketManager {
             type: 'typing',
             payload: {
                 to: to
-            }
-        };
-
-        this.ws.send(JSON.stringify(msg));
-        return true;
-    }
-
-    acceptContact(username) {
-        if (!this.isConnected()) return false;
-
-        const msg = {
-            type: 'contact_accept',
-            payload: {
-                username: username
-            }
-        };
-
-        this.ws.send(JSON.stringify(msg));
-        return true;
-    }
-
-    rejectContact(username) {
-        if (!this.isConnected()) return false;
-
-        const msg = {
-            type: 'contact_reject',
-            payload: {
-                username: username
             }
         };
 

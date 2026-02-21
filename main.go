@@ -19,6 +19,7 @@ import (
 
 func main() {
 	utils.LoadEnv()
+	utils.ValidateJWTSecret()
 	db, rd, err := database.GetConection()
 	if err != nil {
 		panic(err)

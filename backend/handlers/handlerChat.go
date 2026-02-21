@@ -4,6 +4,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,18 +20,18 @@ func InitHandlerChat(service *services.ServiceChat) *HandlerChat {
 
 func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		telephon, exist := ctx.Get("telephon")
 		message, exist2 := ctx.Get("message")
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener los datos",
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener los datos",
 			})
 			ctx.Abort()
-			return 
-		} 
+			return
+		}
 		messageExtract := models.MessageCreat{
 			MessageGet: message.(models.MessageGet),
-			Username: username.(string),
+			Telephon:   telephon.(string),
 		}
 
 		message, err := hd.service.ServiceCreatMessage(messageExtract, ctx)
@@ -49,16 +50,17 @@ func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 
 func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		// Usar telephon del token (identificador inmutable)
+		telephon, exist := ctx.Get("telephon")
 		contact, exist2 := ctx.Get("contact")
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener los datos",
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener los datos",
 			})
 			ctx.Abort()
-			return 
+			return
 		}
-		message, err := hd.service.ServiceGetMessages(username.(string), contact.(string), ctx)
+		message, err := hd.service.ServiceGetMessages(telephon.(string), contact.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
@@ -72,16 +74,17 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 
 func (hd *HandlerChat) HandlerPutChat() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		// Usar telephon del token (identificador inmutable)
+		telephon, exist := ctx.Get("telephon")
 		contact, exist2 := ctx.Get("contact")
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener los datos",
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener los datos",
 			})
-			return 
+			return
 		}
 
-		err := hd.service.ServicePutMessageStatusDelivered(username.(string), contact.(string), ctx)
+		err := hd.service.ServicePutMessageStatusDelivered(telephon.(string), contact.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
@@ -95,17 +98,41 @@ func (hd *HandlerChat) HandlerPutChat() gin.HandlerFunc {
 	}
 }
 
+// HandlerGetAllChats devuelve todos los chats del usuario agrupados por contacto.
+// Si IsContact=false el front debe mostrar opciones para agregar o bloquear al remitente.
+func (hd *HandlerChat) HandlerGetAllChats() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		if !exist {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener los datos",
+			})
+			ctx.Abort()
+			return
+		}
+		chats, err := hd.service.ServiceGetAllChats(telephon.(string), ctx)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			ctx.Abort()
+			return
+		}
+		ctx.IndentedJSON(http.StatusOK, chats)
+	}
+}
+
 func (hd *HandlerChat) HandlerPutAllChat() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadGateway, gin.H{
-				"error":"error al obtener los datos",
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener los datos",
 			})
-			return 
+			return
 		}
 
-		err := hd.service.ServicePutAllMessageStatusDelivered(username.(string), ctx)
+		err := hd.service.ServicePutAllMessageStatusDelivered(telephon.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),

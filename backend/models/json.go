@@ -10,26 +10,26 @@ type Username struct {
 }
 
 type ContactAdd struct {
-	UsernameAdd string `json:"username_add" binding:"required"`
-	Answer      string `json:"answare" binding:"required"`
-}
-
-type ContactPut struct {
-	ContactAdd
-	Username string
+	Number      string `json:"number" binding:"required"`       // Número de teléfono del contacto
+	ContactName string `json:"contact_name" binding:"required"` // Nombre que le quieres poner al contacto
 }
 
 type MessageGet struct {
-	Receptor string `json:"receptor" binding:"required"`
+	Receptor string `json:"receptor" binding:"required"` // Número de teléfono del receptor
 	Message  string `json:"message" binding:"required"`
+
+	// Campos para responder mensajes
+	ReplyToMessageID *uint   `json:"replyToMessageID,omitempty"`
+	ReplyToTelephon  *string `json:"replyToTelephon,omitempty"` // Número de teléfono del autor del mensaje original
+	ReplyToMessage   *string `json:"replyToMessage,omitempty"`
 }
 
 type MessageRead struct {
-	From string `json:"from" binding:"required"`
+	From string `json:"from" binding:"required"` // Número de teléfono del remitente
 }
 
 type TypingIndicator struct {
-	To string `json:"to" binding:"required"`
+	To string `json:"to" binding:"required"` // Número de teléfono del receptor
 }
 
 type UserActivate struct {

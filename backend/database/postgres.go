@@ -55,6 +55,14 @@ func Conection() (*gorm.DB, error) {
 		return nil, err
 	}
 	data.Exec("ALTER TABLE contact_data_bases ALTER COLUMN status TYPE VARCHAR(25);")
+
+	// Índice único parcial: evita contactos duplicados pero permite soft-deletes
+	// Solo aplica a filas donde deleted_at IS NULL
+	data.Exec(`DROP INDEX IF EXISTS idx_user_contact`)
+	data.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_contact_active
+		ON contact_data_bases (id_user, id_contact)
+		WHERE deleted_at IS NULL`)
+
 	data.Exec(`DO $$ BEGIN
 		IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_contact_data_bases_user') THEN
 			ALTER TABLE contact_data_bases DROP CONSTRAINT fk_contact_data_bases_user;

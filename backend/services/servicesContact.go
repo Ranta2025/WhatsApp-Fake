@@ -6,7 +6,6 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/repos"
 	"gorm/backend/schemas"
-	"strings"
 )
 
 type ServiceApiContact struct {
@@ -17,6 +16,11 @@ func InitServiceContact(cliente *repos.ApiContact) *ServiceApiContact {
 	return &ServiceApiContact{
 		client: cliente,
 	}
+}
+
+// GetTelephonByUsername helper para obtener el telephon de un username
+func (sr *ServiceApiContact) GetTelephonByUsername(username string, ctx context.Context) (string, error) {
+	return sr.client.GetTelephonByUsername(username, ctx)
 }
 
 func (sr *ServiceApiContact) ServicesGetUser(username string, ctx context.Context) (*schemas.UserGet, error) {
@@ -40,73 +44,56 @@ func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate stri
 	return user, nil
 }
 
-func (sr *ServiceApiContact) AddContact(username string, number string, ctx context.Context) (*models.ContactChat, error) {
+func (sr *ServiceApiContact) AddContact(username string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
+	// Obtener ID del usuario que agrega
 	id_user, err := sr.client.GetIdUsername(username, ctx)
 	if err != nil {
 		return nil, err
 	}
-	id_contact, err := sr.client.GetNumberUsername(number, ctx)
+
+	// Obtener ID del contacto por número
+	id_contact, err := sr.client.GetNumberUsername(contactAdd.Number, ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	// Evitar que el usuario se agregue a sí mismo
+	if id_user == id_contact {
+		return nil, errors.New("no puedes agregarte a ti mismo como contacto")
+	}
+
+	// Verificar si el contacto ya existe
+	exist, err := sr.client.ExistContactAdd(uint(id_user), uint(id_contact), ctx)
+	if err != nil {
+		return nil, errors.New("error al verificar contacto")
+	}
+	if exist {
+		return nil, errors.New("contacto ya existente")
+	}
+
+	// Crear el contacto solo para el usuario que lo agrega (unidireccional)
 	contact := models.ContactDataBase{
-		IdUser:    uint(id_user),
-		IdContact: uint(id_contact),
-		Status:    "pending_sent", // El que envía tiene "pending_sent"
-	}
-	contactAdd := models.ContactDataBase{
-		IdUser:    uint(id_contact),
-		IdContact: uint(id_user),
-		Status:    "pending_received", // El que recibe tiene "pending_received" y puede aceptar/rechazar
+		IdUser:      uint(id_user),
+		IdContact:   uint(id_contact),
+		Status:      "accepted", // Directamente aceptado, no hay pending
+		ContactName: contactAdd.ContactName,
 	}
 
-	exist := sr.client.ExistContactAdd(contact.IdUser, contact.IdContact, ctx)
-	existContact := sr.client.ExistContactAdd(contact.IdContact, contact.IdUser, ctx)
-
-	// Iniciar transacción para operaciones de contacto
-	tx := sr.client.BeginTx()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if exist && existContact {
-		if err := sr.client.PutStatusTx(tx, contact.IdUser, contact.IdContact, "accepted", ctx); err != nil {
-			tx.Rollback()
-			return nil, errors.New("error al cambiar status del contacto")
-		}
-	} else {
-		if !exist {
-			if err := sr.client.AddContactTx(tx, contact, ctx); err != nil {
-				tx.Rollback()
-				return nil, errors.New("error al registrar contacto")
-			}
-		}
-		if !existContact {
-			if err := sr.client.AddContactTx(tx, contactAdd, ctx); err != nil {
-				tx.Rollback()
-				return nil, errors.New("error al registrar contacto")
-			}
-		}
+	// Guardar en la base de datos
+	if err := sr.client.AddContact(contact, ctx); err != nil {
+		return nil, errors.New("error al registrar contacto")
 	}
 
-	// Commit transacción
-	if err := tx.Commit().Error; err != nil {
-		return nil, errors.New("error al completar operación de contacto")
-	}
-
-	contactChat, err := sr.client.GetContactNumber(number, ctx)
+	// Obtener información del contacto agregado
+	contactChat, err := sr.client.GetContactNumber(contactAdd.Number, ctx)
 	if err != nil {
 		return nil, err
 	}
-	// Establecer el status correcto desde la perspectiva del usuario que envía
-	if exist && existContact {
-		contactChat.Status = "accepted"
-	} else {
-		contactChat.Status = "pending_sent"
-	}
+
+	// Establecer el nombre personalizado
+	contactChat.ContactName = contactAdd.ContactName
+	contactChat.Status = "accepted"
+
 	return contactChat, nil
 }
 
@@ -124,50 +111,4 @@ func (sr *ServiceApiContact) ServiceGetContacts(username string, ctx context.Con
 		return nil, errors.New("Error al extraer contactos")
 	}
 	return contacts, nil
-}
-
-func (sr *ServiceApiContact) ServiceGetContactByNumber(number string, ctx context.Context) (*models.ContactChat, error) {
-	contact, err := sr.client.GetContactNumber(number, ctx)
-	return contact, err
-}
-
-func (sr *ServiceApiContact) ServiceContactPut(contact models.ContactPut, ctx context.Context) error {
-	id_user, err := sr.client.GetIdUsername(contact.Username, ctx)
-	if err != nil {
-		return err
-	}
-	id_contact, err := sr.client.GetIdUsername(contact.UsernameAdd, ctx)
-	if err != nil {
-		return err
-	}
-
-	var status string
-	if answer := strings.ToLower(contact.Answer); answer == "yes" {
-		status = "accepted"
-	} else {
-		status = "rejected"
-	}
-
-	// Actualizar estado para AMBOS usuarios
-	tx := sr.client.BeginTx()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if err := sr.client.PutStatusTx(tx, uint(id_user), uint(id_contact), status, ctx); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := sr.client.PutStatusTx(tx, uint(id_contact), uint(id_user), status, ctx); err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return err
-	}
-
-	return nil
 }

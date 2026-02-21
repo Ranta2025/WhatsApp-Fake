@@ -15,10 +15,11 @@ export function useWebSocket() {
             setConnectionState(state);
             setIsConnected(state === 'connected');
         };
-        wsManager.onConnectionState(connectionHandler);
+        const unsubscribe = wsManager.onConnectionState(connectionHandler);
 
         // Cleanup al desmontar
         return () => {
+            unsubscribe();
             wsManager.disconnect();
         };
     }, []);
@@ -37,8 +38,8 @@ export function useWebSocket() {
         wsManager.off(event, handler);
     }, []);
 
-    const sendMessage = useCallback((to, message) => {
-        return wsManager.sendMessage(to, message);
+    const sendMessage = useCallback((to, message, replyTo = null) => {
+        return wsManager.sendMessage(to, message, replyTo);
     }, []);
 
     const sendReadConfirmation = useCallback((from) => {
@@ -47,18 +48,6 @@ export function useWebSocket() {
 
     const sendTypingIndicator = useCallback((to) => {
         return wsManager.sendTypingIndicator(to);
-    }, []);
-
-    const onOnlineStatus = useCallback((handler) => {
-        wsManager.onOnlineStatus(handler);
-    }, []);
-
-    const acceptContact = useCallback((username) => {
-        return wsManager.acceptContact(username);
-    }, []);
-
-    const rejectContact = useCallback((username) => {
-        return wsManager.rejectContact(username);
     }, []);
 
     // Cleanup de handlers al desmontar
@@ -79,49 +68,6 @@ export function useWebSocket() {
         off,
         sendMessage,
         sendReadConfirmation,
-        sendTypingIndicator,
-        onOnlineStatus,
-        acceptContact,
-        rejectContact
+        sendTypingIndicator
     };
-}
-
-export function useOnlineStatus() {
-    const [onlineUsers, setOnlineUsers] = useState(new Set());
-
-    useEffect(() => {
-        // Handler para lista inicial de contactos
-        const contactListHandler = (contacts) => {
-            const online = new Set(
-                contacts.filter(c => c.online).map(c => c.username)
-            );
-            setOnlineUsers(online);
-        };
-
-        // Handler para cambios de estado online/offline
-        const onlineHandler = (username, isOnline) => {
-            setOnlineUsers(prev => {
-                const newSet = new Set(prev);
-                if (isOnline) {
-                    newSet.add(username);
-                } else {
-                    newSet.delete(username);
-                }
-                return newSet;
-            });
-        };
-
-        wsManager.on('contact_list', contactListHandler);
-        wsManager.onOnlineStatus(onlineHandler);
-
-        return () => {
-            wsManager.off('contact_list', contactListHandler);
-        };
-    }, []);
-
-    const isOnline = useCallback((username) => {
-        return onlineUsers.has(username);
-    }, [onlineUsers]);
-
-    return { onlineUsers: Array.from(onlineUsers), isOnline };
 }

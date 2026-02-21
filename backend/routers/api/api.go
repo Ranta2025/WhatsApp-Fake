@@ -39,15 +39,16 @@ func (rt *RouterApiMessage) ApiUser() {
 func (rt *RouterApiMessage) ApiContact() {
 	rt.app.POST("contact", middleware.MiddlewareContact(), rt.handlerContact.HandlerAddContact())
 	rt.app.GET("contact", rt.handlerContact.HandlerContacts())
-	rt.app.PUT("contact", middleware.MiddlewareContactPut(), rt.handlerContact.ContactPut())
 }
 func (rt *RouterApiMessage) ApiChat() {
-	rt.app.POST("chat", middleware.MiddlewareChat(), rt.handlerChat.HandlerPostChat())
-	rt.app.GET("chat/:contact", middleware.MiddlewateGetChat(), rt.handlerChat.HandlerGetChats())
-	rt.app.PUT("chat/:contact", middleware.MiddlewareChatPutStatus(), rt.handlerChat.HandlerPutChat())
-	rt.app.PUT("chat", rt.handlerChat.HandlerPutAllChat())
+	rt.app.POST("chat", middleware.MiddlewareTokenWithTelephon(), middleware.MiddlewareChat(), rt.handlerChat.HandlerPostChat())
+	rt.app.GET("chat/:contact", middleware.MiddlewareTokenWithTelephon(), middleware.MiddlewateGetChat(), rt.handlerChat.HandlerGetChats())
+	rt.app.GET("chats", middleware.MiddlewareTokenWithTelephon(), rt.handlerChat.HandlerGetAllChats())
+	rt.app.PUT("chat/:contact", middleware.MiddlewareTokenWithTelephon(), middleware.MiddlewareChatPutStatus(), rt.handlerChat.HandlerPutChat())
+	rt.app.PUT("chat", middleware.MiddlewareTokenWithTelephon(), rt.handlerChat.HandlerPutAllChat())
 }
 
 func (rt *RouterApiMessage) ApiWebSocket() {
-	rt.app.GET("ws", websocket.HandleWebSocket(rt.hub, rt.chatService, rt.contactService))
+	// Usar el middleware con telephon para WebSocket
+	rt.app.GET("ws", middleware.MiddlewareTokenWithTelephon(), websocket.HandleWebSocket(rt.hub, rt.chatService, rt.contactService))
 }
