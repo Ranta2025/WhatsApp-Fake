@@ -16,15 +16,6 @@ var localOrigins = []string{
 	"http://127.0.0.1:8080",
 	"http://localhost:5173",
 	"http://127.0.0.1:5173",
-	"http://10.33.225.131:5173",
-	"http://10.33.225.131:8080",
-	"http://10.33.225.131",
-	"http://10.64.222.131:8080",
-	"http://10.64.222.131:5173",
-	"http://10.64.222.131",
-	"http://10.50.249.108:8080",
-	"http://10.50.249.108:5173",
-	"http://10.50.249.108",
 	"https://cereous-dewayne-sunshiny.ngrok-free.dev",
 }
 
@@ -56,7 +47,8 @@ func IsAllowedOrigin(origin string) bool {
 	if strings.Contains(origin, ".ngrok-free.app") ||
 		strings.Contains(origin, ".ngrok.io") ||
 		strings.Contains(origin, ".ngrok.app") ||
-		strings.Contains(origin, "ngrok-free.dev") {
+		strings.Contains(origin, "ngrok-free.dev") ||
+		strings.Contains(origin, ".trycloudflare.com") {
 		return true
 	}
 	log.Printf("[CORS] Origin RECHAZADO: %s", origin)

@@ -1,20 +1,26 @@
 package database
 
 import (
+	"github.com/minio/minio-go/v7"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
-func GetConection() (*gorm.DB, *redis.Client, error){
+func GetConection() (*gorm.DB, *redis.Client, *minio.Client, error) {
 	data, err := Conection()
 	if err != nil {
-		return nil,nil, err
+		return nil, nil, nil, err
 	}
-	
 
 	rd, err := GetRedis()
-	if err != nil{
-		return nil,nil,err
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	return data, rd, nil
+
+	mc, err := GetMinio()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return data, rd, mc, nil
 }

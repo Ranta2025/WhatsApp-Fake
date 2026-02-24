@@ -1,39 +1,32 @@
 #!/bin/bash
 
-# Script para mostrar las URLs públicas de ngrok
+# Script para mostrar la URL pública de Cloudflare Tunnel
 
-echo "🔍 Obteniendo URLs de ngrok..."
+echo "🔍 Obteniendo URL de Cloudflare Tunnel..."
 echo ""
 
-# Verificar si ngrok está corriendo
-if ! docker ps | grep -q ngrok; then
-    echo "❌ El contenedor de ngrok no está corriendo"
-    echo "Inicia tu aplicación con: cd docker && docker-compose up -d"
+# Verificar si cloudflared está corriendo
+if ! docker ps | grep -q cloudflared; then
+    echo "❌ El contenedor de cloudflared no está corriendo"
+    echo "Inicia tu aplicación con: docker compose -f docker/compose.yml up -d"
     exit 1
 fi
 
-# Esperar un momento para que ngrok se inicialice
-sleep 2
+# Extraer la URL de los logs (cloudflared la imprime en stderr)
+publicUrl=$(docker logs cloudflared 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1)
 
-# Obtener las URLs de la API de ngrok
-TUNNELS=$(curl -s http://localhost:4040/api/tunnels)
-
-if [ -z "$TUNNELS" ]; then
-    echo "❌ No se pudo conectar con ngrok"
-    echo "Verifica los logs: docker logs ngrok"
+if [ -z "$publicUrl" ]; then
+    echo "❌ No se encontró la URL. Espera unos segundos y vuelve a intentarlo."
+    echo "Verifica los logs: docker logs cloudflared"
     exit 1
 fi
 
-echo "✅ URLs públicas de ngrok:"
+echo "✅ URL pública de Cloudflare Tunnel:"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-# Extraer y mostrar las URLs
-echo "$TUNNELS" | jq -r '.tunnels[] | "📍 \(.name | ascii_upcase)\n   URL: \(.public_url)\n   Destino: \(.config.addr)\n"'
-
+echo "   $publicUrl"
+echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "🌐 Interfaz web de ngrok: http://localhost:4040"
-echo ""
-echo "💡 Comparte la URL del FRONTEND con tus amigos"
+echo "💡 Comparte esta URL con tus amigos"
 echo ""

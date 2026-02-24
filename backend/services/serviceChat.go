@@ -286,24 +286,24 @@ func (rp *ServiceChat) ServiceEditMessage(telephonSender string, messageID uint,
 }
 
 func (rp *ServiceChat) ServiceDeleteMessage(telephonSender string, messageID uint, ctx context.Context) (schemas.Message, error) {
+	// Query 1: obtener ID del sender para verificar ownership
 	idSender, err := rp.repo.GetIdByTelephon(telephonSender, ctx)
 	if err != nil {
 		return schemas.Message{}, err
 	}
+	// Query 2+3: First + Delete en el repo
 	msgDB, err := rp.repo.DeleteMessageForSender(messageID, uint(idSender), ctx)
 	if err != nil {
 		return schemas.Message{}, err
 	}
-	senderTelephon := telephonSender
-	var receptorTelephon string
-	receptorUser, err := rp.repo.GetUserByID(msgDB.IdReceptor, ctx)
+	// Query 4: solo el telephon del receptor (no toda la fila)
+	receptorTelephon, err := rp.repo.GetTelephonByID(msgDB.IdReceptor, ctx)
 	if err != nil {
 		return schemas.Message{}, err
 	}
-	receptorTelephon = receptorUser.Telephon
 	return schemas.Message{
 		MessageID:        msgDB.ID,
-		SenderTelephon:   senderTelephon,
+		SenderTelephon:   telephonSender, // ya lo tenemos, sin query extra
 		Receptor:         receptorTelephon,
 		Message:          msgDB.Message,
 		Status:           msgDB.Status,
@@ -330,29 +330,40 @@ func (rp *ServiceChat) ServiceClearChat(telephonUser string, telephonContact str
 
 // ServiceDeleteMessageForMe elimina un mensaje solo para el usuario actual
 func (rp *ServiceChat) ServiceDeleteMessageForMe(telephonUser string, messageID uint, ctx context.Context) (schemas.Message, error) {
+	// Query 1: obtener ID del usuario actual
 	idUser, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
 	if err != nil {
 		return schemas.Message{}, err
 	}
+	// Query 2+3: First + Update en el repo
 	msgDB, err := rp.repo.DeleteMessageForMe(messageID, uint(idUser), ctx)
 	if err != nil {
 		return schemas.Message{}, err
 	}
 
-	// Obtener teléfonos para el schema
-	senderUser, err := rp.repo.GetUserByID(msgDB.IdUser, ctx)
-	if err != nil {
-		return schemas.Message{}, err
-	}
-	receptorUser, err := rp.repo.GetUserByID(msgDB.IdReceptor, ctx)
-	if err != nil {
-		return schemas.Message{}, err
+	// Ya tenemos telephonUser — determinamos si es sender o receptor
+	// para evitar consultar ambos y solo buscar el que falta (Query 4 en vez de 4+5)
+	var senderTelephon, receptorTelephon string
+	if msgDB.IdUser == uint(idUser) {
+		// El usuario actual es el emisor, telephon ya conocido
+		senderTelephon = telephonUser
+		receptorTelephon, err = rp.repo.GetTelephonByID(msgDB.IdReceptor, ctx)
+		if err != nil {
+			return schemas.Message{}, err
+		}
+	} else {
+		// El usuario actual es el receptor, telephon ya conocido
+		receptorTelephon = telephonUser
+		senderTelephon, err = rp.repo.GetTelephonByID(msgDB.IdUser, ctx)
+		if err != nil {
+			return schemas.Message{}, err
+		}
 	}
 
 	return schemas.Message{
 		MessageID:        msgDB.ID,
-		SenderTelephon:   senderUser.Telephon,
-		Receptor:         receptorUser.Telephon,
+		SenderTelephon:   senderTelephon,
+		Receptor:         receptorTelephon,
 		Message:          msgDB.Message,
 		Status:           msgDB.Status,
 		Time:             msgDB.Time,

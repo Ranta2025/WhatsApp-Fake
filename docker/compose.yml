@@ -10,9 +10,15 @@ services:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: media
+      MINIO_USE_SSL: "false"
     depends_on:
       - postgres
       - redis
+      - minio
     ports:
       - "8080:8080"
     networks:
@@ -61,6 +67,7 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - VITE_HMR_TIMEOUT=30000
       - VITE_HMR_OVERLAY=false
+      - VITE_HMR_CLIENT_PORT=443
     ports:
       - "5173:5173"
     depends_on:
@@ -81,17 +88,32 @@ services:
     networks:
       - backend
 
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: ngrok
+  minio:
+    image: minio/minio:latest
+    container_name: minio
     restart: unless-stopped
+    command: server /data --console-address ":9001"
     environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
-    command:
-      - "http"
-      - "nginx:80"
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - 4040:4040
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Consola web
+    volumes:
+      - minio_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 --url http://nginx:80
     depends_on:
       - nginx
     networks:
@@ -100,6 +122,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
 
 networks:
   backend:

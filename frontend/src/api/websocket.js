@@ -3,7 +3,7 @@ class WebSocketManager {
     constructor() {
         this.ws = null;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.maxReconnectAttempts = Infinity; // Siempre reconectar en móvil
         this.reconnectDelay = 3000;
         this.isIntentionallyClosed = false;
         this.messageHandlers = new Map();
@@ -26,16 +26,18 @@ class WebSocketManager {
         window.addEventListener('unload', closeConnection);
         window.addEventListener('pagehide', closeConnection);
 
-        // Manejar cuando el tab se oculta/muestra
+        // Manejar cuando el tab se oculta/muestra (crítico en móvil)
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Tab oculto - mantener conexión pero podría reducir actividad
                 console.log('Tab oculto - WebSocket activo en background');
             } else {
-                // Tab visible - reconectar si se desconectó
-                if (!this.isConnected() && !this.isIntentionallyClosed) {
-                    console.log('Tab visible - reconectando WebSocket');
-                    this.connect();
+                // Tab visible - resetear contador y reconectar si se desconectó
+                if (!this.isIntentionallyClosed) {
+                    this.reconnectAttempts = 0; // Resetear para que vuelva a intentar
+                    if (!this.isConnected()) {
+                        console.log('Tab visible - reconectando WebSocket');
+                        this.connect();
+                    }
                 }
             }
         });
@@ -69,8 +71,9 @@ class WebSocketManager {
             const protocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
             const host = backendUrl.replace(/^https?:\/\//, '');
             wsUrl = `${protocol}//${host}/api/v1/ws`;
-        } else if (window.location.hostname.includes('ngrok')) {
-            // Si estamos en ngrok, usar el mismo dominio (nginx maneja el routing)
+        } else if (window.location.hostname.includes('ngrok') ||
+                window.location.hostname.includes('trycloudflare')) {
+            // Si estamos en túnel público (ngrok o Cloudflare), usar el mismo dominio (nginx maneja el routing)
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             wsUrl = `${protocol}//${window.location.host}/api/v1/ws`;
         } else {
@@ -175,14 +178,11 @@ class WebSocketManager {
     }
 
     handleReconnect() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-            console.log(`Reintentando conexión (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-            setTimeout(() => this.connect(), this.reconnectDelay);
-        } else {
-            console.error('Máximo de reintentos alcanzado');
-            this.notifyConnectionState('failed');
-        }
+        this.reconnectAttempts++;
+        // Backoff exponencial: 3s, 6s, 12s... hasta 60s máximo
+        const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 60000);
+        console.log(`Reintentando conexión (intento ${this.reconnectAttempts}) en ${delay / 1000}s...`);
+        setTimeout(() => this.connect(), delay);
     }
 
     on(event, handler) {

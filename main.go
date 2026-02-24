@@ -20,10 +20,11 @@ import (
 func main() {
 	utils.LoadEnv()
 	utils.ValidateJWTSecret()
-	db, rd, err := database.GetConection()
+	db, rd, mc, err := database.GetConection()
 	if err != nil {
 		panic(err)
 	}
+	_ = mc // disponible para el handler de upload
 
 	app := GetApp()
 	app.app.Use(config.Cors())

@@ -317,6 +317,19 @@ func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (in
 	return id, nil
 }
 
+// GetTelephonByID obtiene solo el número de teléfono de un usuario por su ID (más eficiente que GetUserByID)
+func (app *ApiContact) GetTelephonByID(id uint, ctx context.Context) (string, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var telephon string
+	result := app.data.Model(&models.UserDataBase{}).WithContext(c).
+		Select("telephon").Where("id = ?", id).Scan(&telephon)
+	if result.Error != nil || telephon == "" {
+		return "", errors.New("telefono no encontrado para id")
+	}
+	return telephon, nil
+}
+
 // GetContactsTelephons obtiene lista de contactos con sus números de teléfono (personas que YO tengo agregadas)
 func (app *ApiContact) GetContactsTelephons(id uint, ctx context.Context) (*[]models.ContactChat, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)

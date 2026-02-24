@@ -1,40 +1,31 @@
 #!/bin/bash
 
-# Script para obtener la URL pública de ngrok
+# Script para obtener la URL pública de Cloudflare Tunnel
 
-echo "🔧 Obteniendo URL de ngrok"
+echo "🔧 Obteniendo URL de Cloudflare Tunnel"
 echo ""
 
-# Verificar si ngrok está corriendo
-if ! docker ps | grep -q ngrok; then
-    echo "❌ El contenedor de ngrok no está corriendo"
-    echo "Inicia tu aplicación con: cd docker && docker-compose up -d"
+# Verificar si cloudflared está corriendo
+if ! docker ps | grep -q cloudflared; then
+    echo "❌ El contenedor de cloudflared no está corriendo"
+    echo "Inicia tu aplicación con: docker compose -f docker/compose.yml up -d"
     exit 1
 fi
 
-# Esperar un momento para que ngrok se inicialice
-echo "⏳ Esperando a que ngrok se inicialice..."
-sleep 3
+# Esperar a que cloudflared establezca el túnel
+echo "⏳ Esperando a que Cloudflare Tunnel se inicialice..."
+sleep 5
 
-# Obtener las URLs de la API de ngrok
-response=$(curl -s http://localhost:4040/api/tunnels)
-
-if [ -z "$response" ]; then
-    echo "❌ No se pudo conectar con ngrok"
-    echo "Verifica los logs: docker logs ngrok"
-    exit 1
-fi
-
-# Extraer URL HTTPS usando jq
-publicUrl=$(echo "$response" | jq -r '.tunnels[] | select(.proto=="https") | .public_url' | head -n 1)
+# Extraer la URL de los logs (cloudflared la imprime en stderr)
+publicUrl=$(docker logs cloudflared 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1)
 
 if [ -z "$publicUrl" ]; then
-    echo "❌ No se encontró la URL de ngrok"
-    echo "Verifica los logs: docker logs ngrok"
+    echo "❌ No se encontró la URL de Cloudflare Tunnel"
+    echo "Verifica los logs: docker logs cloudflared"
     exit 1
 fi
 
-echo "✅ ngrok está funcionando correctamente!"
+echo "✅ Cloudflare Tunnel está funcionando correctamente!"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
@@ -45,11 +36,10 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "💡 Información importante:"
-echo "   • La primera vez verán una pantalla de advertencia de ngrok"
-echo "   • Deben dar click en 'Visit Site' para continuar"
-echo "   • Ver estado en tiempo real: http://localhost:4040"
+echo "   • La URL cambia cada vez que reinicias los contenedores"
+echo "   • No requiere cuenta ni token de Cloudflare"
 echo ""
 echo "🔧 Arquitectura:"
-echo "   Internet → ngrok → Nginx → Frontend (React) + Backend (Go API)"
+echo "   Internet → Cloudflare Tunnel → Nginx → Frontend (React) + Backend (Go API)"
 echo "   Todo está en el mismo dominio, Nginx maneja el routing"
 echo ""

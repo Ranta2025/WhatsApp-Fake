@@ -7,9 +7,10 @@ const getBaseURL = () => {
         return import.meta.env.VITE_BACKEND_URL;
     }
     
-    // Si estamos en producción/ngrok (mismo dominio para frontend y backend)
-    // usar rutas relativas
-    if (window.location.hostname.includes('ngrok')) {
+    // Si estamos en producción/túnel público (ngrok o Cloudflare Tunnel)
+    // usar rutas relativas — nginx maneja el routing
+    if (window.location.hostname.includes('ngrok') ||
+        window.location.hostname.includes('trycloudflare')) {
         return window.location.origin;
     }
     
