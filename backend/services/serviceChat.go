@@ -314,3 +314,51 @@ func (rp *ServiceChat) ServiceDeleteMessage(telephonSender string, messageID uin
 		ReplyToMessage:   msgDB.ReplyToMessage,
 	}, nil
 }
+
+// ServiceClearChat vacía el chat para el usuario actual con el contacto especificado
+func (rp *ServiceChat) ServiceClearChat(telephonUser string, telephonContact string, ctx context.Context) error {
+	id_user, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
+	if err != nil {
+		return err
+	}
+	id_contact, err := rp.repo.GetIdByTelephon(telephonContact, ctx)
+	if err != nil {
+		return err
+	}
+	return rp.repo.ClearChatForUser(uint(id_user), uint(id_contact), ctx)
+}
+
+// ServiceDeleteMessageForMe elimina un mensaje solo para el usuario actual
+func (rp *ServiceChat) ServiceDeleteMessageForMe(telephonUser string, messageID uint, ctx context.Context) (schemas.Message, error) {
+	idUser, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
+	if err != nil {
+		return schemas.Message{}, err
+	}
+	msgDB, err := rp.repo.DeleteMessageForMe(messageID, uint(idUser), ctx)
+	if err != nil {
+		return schemas.Message{}, err
+	}
+
+	// Obtener teléfonos para el schema
+	senderUser, err := rp.repo.GetUserByID(msgDB.IdUser, ctx)
+	if err != nil {
+		return schemas.Message{}, err
+	}
+	receptorUser, err := rp.repo.GetUserByID(msgDB.IdReceptor, ctx)
+	if err != nil {
+		return schemas.Message{}, err
+	}
+
+	return schemas.Message{
+		MessageID:        msgDB.ID,
+		SenderTelephon:   senderUser.Telephon,
+		Receptor:         receptorUser.Telephon,
+		Message:          msgDB.Message,
+		Status:           msgDB.Status,
+		Time:             msgDB.Time,
+		Edited:           msgDB.Edited,
+		ReplyToMessageID: msgDB.ReplyToMessageID,
+		ReplyToTelephon:  msgDB.ReplyToTelephon,
+		ReplyToMessage:   msgDB.ReplyToMessage,
+	}, nil
+}

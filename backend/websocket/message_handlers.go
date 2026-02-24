@@ -191,6 +191,146 @@ func (mh *MessageHandler) HandleEditMessage() {
 	}
 }
 
+// HandleCallOffer maneja cuando un usuario quiere llamar a otro
+func (mh *MessageHandler) HandleCallOffer() {
+	var callOffer models.CallOffer
+	if err := json.Unmarshal(mh.Payload, &callOffer); err != nil {
+		log.Println("Error al deserializar call_offer:", err)
+		return
+	}
+
+	// Registrar la llamada en la base de datos
+	if mh.Client.ServiceCall != nil {
+		ctx := context.Background()
+		if err := mh.Client.ServiceCall.CreateCallLog(mh.Client.Telephon, callOffer.To, callOffer.RoomID, callOffer.CallType, ctx); err != nil {
+			log.Printf("[WS] Error registrando llamada: %v", err)
+		}
+	}
+
+	_, recipientConnected := mh.Hub.GetClient(callOffer.To)
+	if recipientConnected {
+		notification := map[string]interface{}{
+			"type": "incoming_call",
+			"payload": map[string]interface{}{
+				"from":     mh.Client.Telephon,
+				"username": mh.Client.Username,
+				"roomID":   callOffer.RoomID,
+				"callType": callOffer.CallType,
+			},
+		}
+		notificationBytes, _ := json.Marshal(notification)
+		mh.Hub.SendTo(callOffer.To, notificationBytes)
+	} else {
+		// Receptor no conectado - marcar como no disponible
+		if mh.Client.ServiceCall != nil {
+			ctx := context.Background()
+			mh.Client.ServiceCall.MarkCallUnavailable(callOffer.RoomID, ctx)
+		}
+		errorMsg, _ := json.Marshal(map[string]interface{}{
+			"type": "call_unavailable",
+			"payload": map[string]interface{}{
+				"to":     callOffer.To,
+				"reason": "Usuario no disponible",
+			},
+		})
+		mh.Client.Send <- errorMsg
+	}
+	log.Printf("[WS] Llamada de %s a %s (sala: %s, tipo: %s)", mh.Client.Telephon, callOffer.To, callOffer.RoomID, callOffer.CallType)
+}
+
+// HandleCallAccept maneja cuando el receptor acepta la llamada
+func (mh *MessageHandler) HandleCallAccept() {
+	var callResp models.CallResponse
+	if err := json.Unmarshal(mh.Payload, &callResp); err != nil {
+		log.Println("Error al deserializar call_accept:", err)
+		return
+	}
+
+	// Marcar la llamada como contestada
+	if mh.Client.ServiceCall != nil {
+		ctx := context.Background()
+		if err := mh.Client.ServiceCall.MarkCallAnswered(callResp.RoomID, ctx); err != nil {
+			log.Printf("[WS] Error marcando llamada como contestada: %v", err)
+		}
+	}
+
+	_, callerConnected := mh.Hub.GetClient(callResp.To)
+	if callerConnected {
+		notification := map[string]interface{}{
+			"type": "call_accepted",
+			"payload": map[string]interface{}{
+				"from":   mh.Client.Telephon,
+				"roomID": callResp.RoomID,
+			},
+		}
+		notificationBytes, _ := json.Marshal(notification)
+		mh.Hub.SendTo(callResp.To, notificationBytes)
+	}
+	log.Printf("[WS] Llamada aceptada por %s para %s", mh.Client.Telephon, callResp.To)
+}
+
+// HandleCallReject maneja cuando el receptor rechaza la llamada
+func (mh *MessageHandler) HandleCallReject() {
+	var callResp models.CallResponse
+	if err := json.Unmarshal(mh.Payload, &callResp); err != nil {
+		log.Println("Error al deserializar call_reject:", err)
+		return
+	}
+
+	// Marcar la llamada como rechazada
+	if mh.Client.ServiceCall != nil {
+		ctx := context.Background()
+		if err := mh.Client.ServiceCall.MarkCallRejected(callResp.RoomID, ctx); err != nil {
+			log.Printf("[WS] Error marcando llamada como rechazada: %v", err)
+		}
+	}
+
+	_, callerConnected := mh.Hub.GetClient(callResp.To)
+	if callerConnected {
+		notification := map[string]interface{}{
+			"type": "call_rejected",
+			"payload": map[string]interface{}{
+				"from":   mh.Client.Telephon,
+				"roomID": callResp.RoomID,
+			},
+		}
+		notificationBytes, _ := json.Marshal(notification)
+		mh.Hub.SendTo(callResp.To, notificationBytes)
+	}
+	log.Printf("[WS] Llamada rechazada por %s para %s", mh.Client.Telephon, callResp.To)
+}
+
+// HandleCallEnd maneja cuando alguien cuelga la llamada
+func (mh *MessageHandler) HandleCallEnd() {
+	var callEnd models.CallEnd
+	if err := json.Unmarshal(mh.Payload, &callEnd); err != nil {
+		log.Println("Error al deserializar call_end:", err)
+		return
+	}
+
+	// Marcar la llamada como finalizada
+	if mh.Client.ServiceCall != nil {
+		ctx := context.Background()
+		if err := mh.Client.ServiceCall.MarkCallEnded(callEnd.RoomID, ctx); err != nil {
+			log.Printf("[WS] Error marcando llamada como finalizada: %v", err)
+		}
+	}
+
+	_, otherConnected := mh.Hub.GetClient(callEnd.To)
+	if otherConnected {
+		notification := map[string]interface{}{
+			"type": "call_ended",
+			"payload": map[string]interface{}{
+				"from":   mh.Client.Telephon,
+				"roomID": callEnd.RoomID,
+			},
+		}
+		notificationBytes, _ := json.Marshal(notification)
+		mh.Hub.SendTo(callEnd.To, notificationBytes)
+	}
+	log.Printf("[WS] Llamada finalizada por %s con %s", mh.Client.Telephon, callEnd.To)
+}
+
 func (mh *MessageHandler) HandleDeleteMessage() {
 	var msgDel models.MessageDelete
 	if err := json.Unmarshal(mh.Payload, &msgDel); err != nil {

@@ -1,7 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import api from '../api/axios';
+import CallRoom from '../components/CallRoom';
+import IncomingCall from '../components/IncomingCall';
+import CallHistory from '../components/CallHistory';
 import {
     requestNotificationPermission,
     showNativeNotification,
@@ -12,16 +15,42 @@ import {
 
 export default function Dashboard() {
     const { user, logout, updateUsername } = useAuth();
-    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, sendEditMessage, sendDeleteMessage, on, off } = useWebSocket();
+    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, sendEditMessage, sendDeleteMessage, sendCallOffer, sendCallAccept, sendCallReject, sendCallEnd, on, off } = useWebSocket();
         const [messageMenuOpen, setMessageMenuOpen] = useState(null); // MessageID del menú abierto
+
+    // ========== Estado de llamadas ==========
+    const [callState, setCallState] = useState(null);
+    // callState shape: { roomID, remoteTelephon, remoteName, callType, role: 'caller'|'receiver', status: 'ringing'|'active' } | null
+    const [incomingCall, setIncomingCall] = useState(null);
+    // incomingCall shape: { from, username, roomID, callType } | null
 
         // Manejar borrado de mensaje propio
         const handleDeleteMessage = (message) => {
-            if (!window.confirm('¿Seguro que quieres eliminar este mensaje?')) return;
+            if (!window.confirm('¿Seguro que quieres eliminar este mensaje para todos?')) return;
             if (isConnected && sendDeleteMessage) {
                 sendDeleteMessage(message.MessageID, selected?.Number);
             } else {
                 alert('No conectado. Intenta de nuevo.');
+            }
+            setMessageMenuOpen(null);
+        };
+
+        // Manejar borrado de mensaje solo para mí
+        const handleDeleteMessageForMe = async (message) => {
+            if (!window.confirm('¿Seguro que quieres eliminar este mensaje para ti?')) return;
+            try {
+                await api.delete(`/api/v1/message/${message.MessageID}/me`);
+                // Actualizar estado local
+                setMessagesByChat((prev) => {
+                    const updated = { ...prev };
+                    Object.keys(updated).forEach((key) => {
+                        updated[key] = (updated[key] || []).filter(m => m.MessageID !== message.MessageID);
+                    });
+                    return updated;
+                });
+            } catch (err) {
+                console.error('Error al eliminar mensaje para mí:', err);
+                alert('Error al eliminar el mensaje');
             }
             setMessageMenuOpen(null);
         };
@@ -36,7 +65,7 @@ export default function Dashboard() {
     const [numberInput, setNumberInput] = useState('');
     const [contactNameInput, setContactNameInput] = useState('');
     const [addMsg, setAddMsg] = useState('');
-    const [sidebarView, setSidebarView] = useState('contacts'); // 'contacts' o 'chats'
+    const [sidebarView, setSidebarView] = useState('contacts'); // 'contacts', 'chats' o 'calls'
     const [showAddContactForm, setShowAddContactForm] = useState(false);
     const [drafts, setDrafts] = useState({});
     const [messagesByChat, setMessagesByChat] = useState({});
@@ -506,6 +535,97 @@ export default function Dashboard() {
             off('typing', handleTyping);
         };
     }, [on, off]);
+
+    // ========== Listeners de llamadas ==========
+    useEffect(() => {
+        const handleIncomingCall = (payload) => {
+            console.log('[CALL] Llamada entrante:', payload);
+            // Si ya estamos en una llamada, rechazar automáticamente
+            if (callState) {
+                sendCallReject(payload.from, payload.roomID);
+                return;
+            }
+            setIncomingCall(payload);
+        };
+
+        const handleCallAccepted = (payload) => {
+            console.log('[CALL] Llamada aceptada:', payload);
+            setCallState(prev => prev ? { ...prev, status: 'active' } : prev);
+        };
+
+        const handleCallRejected = (payload) => {
+            console.log('[CALL] Llamada rechazada:', payload);
+            setCallState(null);
+            alert('La llamada fue rechazada');
+        };
+
+        const handleCallEnded = (payload) => {
+            console.log('[CALL] Llamada finalizada:', payload);
+            setCallState(null);
+        };
+
+        const handleCallUnavailable = (payload) => {
+            console.log('[CALL] Usuario no disponible:', payload);
+            setCallState(null);
+            alert(payload?.reason || 'Usuario no disponible');
+        };
+
+        on('incoming_call', handleIncomingCall);
+        on('call_accepted', handleCallAccepted);
+        on('call_rejected', handleCallRejected);
+        on('call_ended', handleCallEnded);
+        on('call_unavailable', handleCallUnavailable);
+
+        return () => {
+            off('incoming_call', handleIncomingCall);
+            off('call_accepted', handleCallAccepted);
+            off('call_rejected', handleCallRejected);
+            off('call_ended', handleCallEnded);
+            off('call_unavailable', handleCallUnavailable);
+        };
+    }, [on, off, callState, sendCallReject]);
+
+    // Funciones de llamada
+    const handleStartCall = useCallback((callType = 'video') => {
+        if (!selected || !isConnected) return;
+        const roomID = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        setCallState({
+            roomID,
+            remoteTelephon: selected.Number,
+            remoteName: selected.ContactName || selected.Username,
+            callType,
+            role: 'caller',
+            status: 'ringing'
+        });
+        sendCallOffer(selected.Number, roomID, callType);
+    }, [selected, isConnected, sendCallOffer]);
+
+    const handleAcceptIncomingCall = useCallback(() => {
+        if (!incomingCall) return;
+        sendCallAccept(incomingCall.from, incomingCall.roomID);
+        setCallState({
+            roomID: incomingCall.roomID,
+            remoteTelephon: incomingCall.from,
+            remoteName: incomingCall.username,
+            callType: incomingCall.callType,
+            role: 'receiver',
+            status: 'active'
+        });
+        setIncomingCall(null);
+    }, [incomingCall, sendCallAccept]);
+
+    const handleRejectIncomingCall = useCallback(() => {
+        if (!incomingCall) return;
+        sendCallReject(incomingCall.from, incomingCall.roomID);
+        setIncomingCall(null);
+    }, [incomingCall, sendCallReject]);
+
+    const handleEndCall = useCallback(() => {
+        if (callState) {
+            sendCallEnd(callState.remoteTelephon, callState.roomID);
+        }
+        setCallState(null);
+    }, [callState, sendCallEnd]);
 
     // Escuchar cambios de username de contactos
     useEffect(() => {
@@ -1202,6 +1322,19 @@ export default function Dashboard() {
                         </button>
                         <button
                             onClick={() => {
+                                setSidebarView('calls');
+                                setShowAddContactForm(false);
+                            }}
+                            className={`flex-1 py-2 rounded text-sm transition ${
+                                sidebarView === 'calls' 
+                                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
+                                    : 'bg-white/10 hover:bg-white/20 text-indigo-200'
+                            }`}
+                        >
+                            Llamadas
+                        </button>
+                        <button
+                            onClick={() => {
                                 setSidebarView('contacts');
                                 setShowAddContactForm(false);
                             }}
@@ -1292,6 +1425,26 @@ export default function Dashboard() {
                                 )}
                             </div>
                         </>
+                    )}
+
+                    {/* Vista de Llamadas */}
+                    {sidebarView === 'calls' && (
+                        <CallHistory
+                            contacts={contacts}
+                            onSelectContact={(contact) => {
+                                setSelected(contact);
+                                setSidebarOpen(false);
+                            }}
+                            onStartCall={(telephon, name, callType) => {
+                                // Seleccionar el contacto y lanzar llamada
+                                const contact = contacts.find(c => c.Number === telephon);
+                                const sel = contact || { Number: telephon, Username: name, ContactName: null, Status: 'unknown' };
+                                setSelected(sel);
+                                setSidebarOpen(false);
+                                // Pequeño delay para que el state se actualice
+                                setTimeout(() => handleStartCall(callType || 'video'), 100);
+                            }}
+                        />
                     )}
 
                     {/* Vista de Contactos */}
@@ -1505,33 +1658,37 @@ export default function Dashboard() {
                             </svg>
                         </button>
                         
-                        <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center overflow-y-auto">
-                            <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mb-6">
-                                <img src="/todos.svg" alt="todos" className="w-16 h-16" />
+                        <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center overflow-y-auto bg-[#0B0F19]"
+                            style={{
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234f46e5' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                            }}
+                        >
+                            <div className="w-32 h-32 bg-gradient-to-br from-indigo-500/20 to-purple-600/20 rounded-full flex items-center justify-center mb-8 shadow-lg shadow-indigo-500/10 border border-white/5 backdrop-blur-sm">
+                                <img src="/todos.svg" alt="todos" className="w-20 h-20 opacity-80" />
                             </div>
-                            <h2 className="text-3xl font-bold mb-2">Bienvenido a todos</h2>
-                            <p className="max-w-md text-indigo-300">
+                            <h2 className="text-4xl font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">Bienvenido a todos</h2>
+                            <p className="max-w-md text-indigo-200/70 text-lg">
                                 Selecciona un contacto para comenzar a chatear.
                             </p>
-                            <div className="mt-4 flex items-center gap-2">
-                                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></span>
-                                <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                                    {isConnected ? 'En línea' : 'Desconectado'}
+                            <div className="mt-6 flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5 backdrop-blur-sm">
+                                <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.6)]' : 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]'}`}></span>
+                                <span className={`text-sm font-medium ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
+                                    {isConnected ? 'Conectado al servidor' : 'Desconectado'}
                                 </span>
                             </div>
                         </div>
-                        <div className="flex-shrink-0 p-4 bg-white/10 border-t border-white/10">
-                            <div className="flex gap-4">
+                        <div className="flex-shrink-0 p-4 bg-gray-900/80 border-t border-white/10 backdrop-blur-md">
+                            <div className="flex gap-3">
                                 <input 
                                     type="text" 
                                     value={currentDraft}
                                     onChange={handleInputChange}
                                     placeholder="Selecciona un contacto para escribir"
-                                    className="flex-1 p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300 cursor-not-allowed opacity-50"
+                                    className="flex-1 p-3.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300/50 cursor-not-allowed opacity-50"
                                     disabled={true}
                                 />
                                 <button
-                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 rounded text-white font-medium opacity-50 cursor-not-allowed"
+                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 px-8 rounded-xl text-white font-medium opacity-50 cursor-not-allowed"
                                     disabled={true}
                                 >
                                     Enviar
@@ -1542,8 +1699,8 @@ export default function Dashboard() {
                 ) : (
                     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                         {/* Header fijo */}
-                        <div className="flex-shrink-0 p-3 border-b border-white/10 bg-white/5 flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
+                        <div className="flex-shrink-0 p-3 border-b border-white/10 bg-gray-900/80 backdrop-blur-md flex flex-col gap-2 z-10 shadow-sm">
+                            <div className="flex items-center gap-3">
                             {/* Botón hamburguesa para móvil */}
                             <button
                                 onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1554,23 +1711,70 @@ export default function Dashboard() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                                 </svg>
                             </button>
-                            <div className="relative w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
-                                {(selected.ContactName || selected.Username)?.charAt(0)?.toUpperCase()}
-                                                            {isContactOnline(selected.Number) && (
-                                                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white/5"></div>
-                                                            )}
+                            <div className="relative w-11 h-11 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                                <span className="text-lg font-bold text-white">
+                                    {(selected.ContactName || selected.Username)?.charAt(0)?.toUpperCase()}
+                                </span>
+                                {isContactOnline(selected.Number) && (
+                                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-gray-900 shadow-sm"></div>
+                                )}
                             </div>
-                            <div className="flex-1">
-                                <div className="font-bold">{selected.ContactName || selected.Username}</div>
-                                <div className="text-xs text-indigo-300">
+                            <div className="flex-1 min-w-0">
+                                <div className="font-bold text-[16px] truncate text-white">{selected.ContactName || selected.Username}</div>
+                                <div className="text-[13px] text-indigo-200/80 truncate">
                                     {isContactTyping(selected.Number) ? (
-                                        <span className="text-blue-400 italic">escribiendo...</span>
+                                        <span className="text-indigo-400 italic font-medium animate-pulse">escribiendo...</span>
                                     ) : isContactOnline(selected.Number) ? (
-                                        <span className="text-green-400">● En línea</span>
+                                        <span className="text-green-400 font-medium">en línea</span>
                                     ) : (
-                                        <span className="text-indigo-400">{getLastSeenText(selected.Number) || selected.Number}</span>
+                                        <span className="text-indigo-300/60">{getLastSeenText(selected.Number) || selected.Number}</span>
                                     )}
                                 </div>
+                            </div>
+                            {/* Botones de llamada */}
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => handleStartCall('audio')}
+                                    className="p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
+                                    title="Llamada de voz"
+                                    disabled={!isConnected}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => handleStartCall('video')}
+                                    className="p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
+                                    title="Videollamada"
+                                    disabled={!isConnected}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                                <div className="w-px h-6 bg-white/10 mx-1"></div>
+                                <button
+                                    onClick={async () => {
+                                    if (!window.confirm(`¿Seguro que quieres vaciar el chat con ${selected.ContactName || selected.Username}?`)) return;
+                                    try {
+                                        await api.delete(`/api/v1/chat/${selected.Number}`);
+                                        setMessagesByChat(prev => ({
+                                            ...prev,
+                                            [getChatKey(selected)]: []
+                                        }));
+                                    } catch (err) {
+                                        console.error('Error al vaciar chat:', err);
+                                        alert('Error al vaciar el chat');
+                                    }
+                                }}
+                                className="p-2.5 hover:bg-red-500/20 rounded-full transition-all text-red-400 hover:text-red-300 hover:scale-105 active:scale-95"
+                                title="Vaciar Chat"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
                             </div>
                             </div>
                             {/* Banner de contacto no agregado */}
@@ -1611,7 +1815,10 @@ export default function Dashboard() {
                         {/* Área de mensajes - altura flexible */}
                         <div 
                             ref={messagesContainerRef}
-                            className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col text-indigo-200 p-3 space-y-2"
+                            className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col text-indigo-200 p-4 space-y-3 relative bg-[#0B0F19]"
+                            style={{
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234f46e5' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                            }}
                         >
                             {(messagesByChat[getChatKey(selected)] || []).length === 0 ? (
                                 <div className="flex-1 flex items-center justify-center">
@@ -1669,19 +1876,19 @@ export default function Dashboard() {
                                     return (
                                         <React.Fragment key={m.MessageID || `msg-${idx}`}>
                                             {dateSeparator}
-                                            <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${isMenuOpen ? 'z-50 relative' : ''}`}>
                                                 <div
-                                                    className={`max-w-xs px-3 py-2 rounded-2xl text-sm transition-opacity hover:opacity-90 relative ${
+                                                    className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-[15px] shadow-sm transition-all hover:shadow-md relative group ${
                                                         isMine
-                                                            ? 'bg-indigo-600 text-white rounded-br-none'
-                                                            : 'bg-white/10 text-indigo-100 rounded-bl-none'
+                                                            ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-br-sm'
+                                                            : 'bg-white/10 backdrop-blur-md border border-white/5 text-indigo-50 rounded-bl-sm'
                                                     } ${m.isDeleting ? 'opacity-0 duration-400' : 'opacity-100'} animate-fade`}
-                                                    style={{ transition: 'opacity 0.4s' }}
+                                                    style={{ transition: 'all 0.3s ease' }}
                                                 >
                                                     {/* Mostrar cita si es una respuesta */}
                                                     {hasReply && (
-                                                        <div className={`mb-2 pl-2 border-l-2 ${isMine ? 'border-white/40' : 'border-indigo-400'} text-xs opacity-70 italic`}>
-                                                            <div className="font-semibold">{m.ReplyToUsername}</div>
+                                                        <div className={`mb-2 pl-3 py-1 border-l-4 ${isMine ? 'border-white/40 bg-white/10' : 'border-indigo-400 bg-indigo-900/20'} rounded-r-md text-xs opacity-90 italic cursor-pointer hover:opacity-100 transition-opacity`}>
+                                                            <div className="font-bold text-[11px] mb-0.5">{m.ReplyToUsername}</div>
                                                             <div className="truncate">{m.ReplyToMessage}</div>
                                                         </div>
                                                     )}
@@ -1707,41 +1914,58 @@ export default function Dashboard() {
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            <div onClick={() => handleReplyToMessage(m)} title="Click para responder">{text}</div>
-                                                            <div className="text-[10px] opacity-80 mt-1 flex flex-col items-end gap-0.5">
-                                                                <div className="flex items-center gap-1">
-                                                                    <span>{timeStr}</span>
-                                                                    {isMine && <span>{getStatusIcon(statusMsg)}</span>}
-                                                                </div>
+                                                            <div onClick={() => handleReplyToMessage(m)} title="Doble click para responder" onDoubleClick={() => handleReplyToMessage(m)} className="cursor-text leading-relaxed break-words">{text}</div>
+                                                            <div className="text-[10px] opacity-70 mt-1.5 flex items-center justify-end gap-1.5 font-medium">
                                                                 {m.Edited && (
-                                                                    <span className="italic opacity-60">editado</span>
+                                                                    <span className="italic opacity-60 mr-1">editado</span>
+                                                                )}
+                                                                <span>{timeStr}</span>
+                                                                {isMine && <span className="ml-0.5">{getStatusIcon(statusMsg)}</span>}
+                                                            </div>
+                                                            {/* Menú de opciones del mensaje */}
+                                                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                                <button
+                                                                    className="text-xs text-white/80 hover:text-white bg-black/20 hover:bg-black/40 backdrop-blur-sm w-6 h-6 flex items-center justify-center rounded-full transition-all"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setMessageMenuOpen(messageMenuOpen === m.MessageID ? null : m.MessageID);
+                                                                    }}
+                                                                    title="Opciones"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                                    </svg>
+                                                                </button>
+                                                                {isMenuOpen && (
+                                                                    <div className={`absolute ${isMine ? 'right-0' : 'left-0'} mt-1 w-40 bg-gray-900/95 backdrop-blur-xl text-white rounded-xl shadow-2xl z-[9999] text-sm border border-white/10 overflow-hidden transform origin-top-right transition-all`}>
+                                                                        {isMine && (
+                                                                            <>
+                                                                                <button
+                                                                                    className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors flex items-center gap-2"
+                                                                                    onClick={(e) => { e.stopPropagation(); handleEditMessage(m); setMessageMenuOpen(null); }}
+                                                                                >
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                                                    Editar
+                                                                                </button>
+                                                                                <button
+                                                                                    className="w-full text-left px-4 py-2.5 hover:bg-red-500/20 text-red-400 transition-colors flex items-center gap-2"
+                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteMessage(m); setMessageMenuOpen(null); }}
+                                                                                >
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                                                    Eliminar para todos
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+                                                                        <button
+                                                                            className="w-full text-left px-4 py-2.5 hover:bg-red-500/20 text-red-400 transition-colors flex items-center gap-2"
+                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteMessageForMe(m); setMessageMenuOpen(null); }}
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                                            Eliminar para mí
+                                                                        </button>
+                                                                    </div>
                                                                 )}
                                                             </div>
-                                                            {/* Botón editar solo para mensajes propios */}
-                                                            {isMine && (
-                                                                <div className="absolute top-1 right-1">
-                                                                    <button
-                                                                        className="text-xs text-white/60 hover:text-white/90 bg-indigo-700/40 px-1 py-0.5 rounded"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setMessageMenuOpen(messageMenuOpen === m.MessageID ? null : m.MessageID);
-                                                                        }}
-                                                                        title="Opciones"
-                                                                    >⋮</button>
-                                                                    {isMenuOpen && (
-                                                                        <div className="absolute right-0 mt-1 w-32 bg-gray-900 text-white rounded shadow-2xl z-[9999] text-xs border border-gray-800">
-                                                                            <button
-                                                                                className="w-full text-left px-4 py-2 hover:bg-indigo-700 hover:text-white transition"
-                                                                                onClick={(e) => { e.stopPropagation(); handleEditMessage(m); setMessageMenuOpen(null); }}
-                                                                            >Editar</button>
-                                                                            <button
-                                                                                className="w-full text-left px-4 py-2 hover:bg-red-600 text-red-300 hover:text-white transition font-semibold"
-                                                                                onClick={(e) => { e.stopPropagation(); handleDeleteMessage(m); setMessageMenuOpen(null); }}
-                                                                            >Eliminar</button>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -1777,37 +2001,53 @@ export default function Dashboard() {
                             )}
                             
                             {/* Área del input */}
-                            <div className="p-2 sm:p-3 flex gap-2 items-center">
-                                <input 
-                                    type="text" 
-                                    value={currentDraft}
-                                    onChange={handleInputChange}
-                                    placeholder="Mensaje..."
-                                    className="flex-1 p-2 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300 text-sm"
-                                    onFocus={() => {
-                                        // Scroll automático cuando aparece el teclado móvil
-                                        setTimeout(() => {
-                                            if (messagesContainerRef.current) {
-                                                messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+                            <div className="p-3 sm:p-4 flex gap-3 items-end bg-gray-900/50 backdrop-blur-md">
+                                <div className="flex-1 relative">
+                                    <textarea 
+                                        value={currentDraft}
+                                        onChange={handleInputChange}
+                                        placeholder="Escribe un mensaje..."
+                                        className="w-full p-3 pr-10 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:border-indigo-500/50 focus:bg-white/10 text-white placeholder-indigo-300/50 text-[15px] resize-none min-h-[44px] max-h-[120px] transition-all"
+                                        rows={1}
+                                        onInput={(e) => {
+                                            e.target.style.height = 'auto';
+                                            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                                        }}
+                                        onFocus={() => {
+                                            // Scroll automático cuando aparece el teclado móvil
+                                            setTimeout(() => {
+                                                if (messagesContainerRef.current) {
+                                                    messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+                                                }
+                                            }, 300);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                if (selected && currentDraft.trim()) {
+                                                    handleSend();
+                                                    e.target.style.height = 'auto';
+                                                }
                                             }
-                                        }, 300);
-                                    }}
-                                    onKeyPress={(e) => {
-                                        if (e.key === 'Enter' && selected && currentDraft.trim()) {
-                                            handleSend();
-                                        }
-                                    }}
-                                />
+                                        }}
+                                    />
+                                </div>
                                 <button
-                                    className={`bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 rounded text-white font-medium text-sm ${
+                                    className={`h-[44px] w-[44px] flex items-center justify-center rounded-full text-white transition-all transform ${
                                         selected && currentDraft.trim() && profile?.Telephon 
-                                            ? 'hover:from-purple-500 hover:to-indigo-500' 
-                                            : 'opacity-50 cursor-not-allowed'
+                                            ? 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:scale-105 hover:shadow-lg hover:shadow-indigo-500/25 active:scale-95' 
+                                            : 'bg-white/5 text-white/30 cursor-not-allowed'
                                     }`}
                                     disabled={!selected || !currentDraft.trim() || !profile?.Telephon}
-                                    onClick={handleSend}
+                                    onClick={() => {
+                                        handleSend();
+                                        const textarea = document.querySelector('textarea');
+                                        if (textarea) textarea.style.height = 'auto';
+                                    }}
                                 >
-                                    ➤
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 ml-1">
+                                        <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                                    </svg>
                                 </button>
                             </div>
                         </div>
@@ -1897,6 +2137,66 @@ export default function Dashboard() {
                     </div>
                 ))}
             </div>
+
+            {/* ========== UI de Llamadas ========== */}
+            {/* Llamada entrante */}
+            {incomingCall && (
+                <IncomingCall
+                    callerName={incomingCall.username}
+                    callerNumber={incomingCall.from}
+                    callType={incomingCall.callType}
+                    onAccept={handleAcceptIncomingCall}
+                    onReject={handleRejectIncomingCall}
+                />
+            )}
+
+            {/* Sala de llamada activa */}
+            {callState && callState.status === 'active' && (
+                <CallRoom
+                    roomID={callState.roomID}
+                    userID={profile?.Telephon || user?.username}
+                    userName={user?.username}
+                    callType={callState.callType}
+                    onCallEnd={handleEndCall}
+                />
+            )}
+
+            {/* Llamada saliente esperando respuesta */}
+            {callState && callState.status === 'ringing' && callState.role === 'caller' && (
+                <div className="fixed inset-0 z-[9998] bg-black/80 backdrop-blur-md flex items-center justify-center">
+                    <div className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-[2rem] p-10 w-80 text-center shadow-2xl border border-white/10 relative overflow-hidden">
+                        {/* Efecto de ondas de fondo */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+                            <div className="w-40 h-40 border border-indigo-500 rounded-full animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
+                            <div className="absolute w-56 h-56 border border-purple-500 rounded-full animate-[ping_2.5s_cubic-bezier(0,0,0.2,1)_infinite_0.5s]"></div>
+                        </div>
+                        
+                        <div className="relative mx-auto w-28 h-28 mb-8 z-10">
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full animate-pulse opacity-50 blur-md"></div>
+                            <div className="relative w-28 h-28 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-xl border-4 border-gray-800">
+                                {callState.remoteName?.charAt(0)?.toUpperCase()}
+                            </div>
+                        </div>
+                        <h3 className="text-white text-2xl font-bold mb-2 z-10 relative">{callState.remoteName}</h3>
+                        <p className="text-indigo-300 text-base mb-10 z-10 relative flex items-center justify-center gap-2">
+                            {callState.callType === 'video' ? (
+                                <><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 animate-pulse" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" /></svg> Videollamando...</>
+                            ) : (
+                                <><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 animate-pulse" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg> Llamando...</>
+                            )}
+                        </p>
+                        <button
+                            onClick={handleEndCall}
+                            className="w-16 h-16 mx-auto bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(239,68,68,0.4)] z-10 relative"
+                            title="Cancelar llamada"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

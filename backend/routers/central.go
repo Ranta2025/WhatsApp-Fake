@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, hub *websocket.Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, handlerBugReport *handlers.HandlerBugReport) {
+func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, handlerBugReport *handlers.HandlerBugReport, callService *services.ServiceCall) {
 	// Middleware de recuperación de panics
 	app.Use(gin.Recovery())
 
@@ -22,9 +22,10 @@ func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handler
 	app.POST("/api/v1/bug-report", handlerBugReport.HandleReportBug())
 
 	subrouter := app.Group("/api/v1/")
-	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, hub, chatService, contactService)
+	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, handlerCall, hub, chatService, contactService, callService)
 	apiMessage.ApiUser()
 	apiMessage.ApiContact()
 	apiMessage.ApiChat()
+	apiMessage.ApiCall()
 	apiMessage.ApiWebSocket()
 }

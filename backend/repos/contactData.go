@@ -162,7 +162,7 @@ func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Co
 	defer cancel()
 	var messages []models.Message
 	result := app.data.Model(&models.Message{}).WithContext(c).
-		Where("(id_user = ? AND id_receptor = ?) OR (id_user = ? AND id_receptor = ?)", id_user, id_contact, id_contact, id_user).
+		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false).
 		Order("time ASC").
 		Scan(&messages)
 	if result.Error != nil {
@@ -208,18 +208,40 @@ func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor
 }
 
 // GetAllMessagesForUser obtiene todos los mensajes donde el usuario es remitente o receptor
+// y que no han sido borrados por él (Clear Chat)
 func (app *ApiContact) GetAllMessagesForUser(id_user uint, ctx context.Context) ([]models.Message, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var messages []models.Message
 	result := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id_user = ? OR id_receptor = ?", id_user, id_user).
+		Where("(id_user = ? AND deleted_by_sender = ?) OR (id_receptor = ? AND deleted_by_receiver = ?)", id_user, false, id_user, false).
 		Order("time ASC").
 		Scan(&messages)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return messages, nil
+}
+
+// ClearChatForUser marca todos los mensajes entre id_user y id_contact como borrados para id_user
+func (app *ApiContact) ClearChatForUser(id_user uint, id_contact uint, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// 1. Mensajes donde el usuario es el remitente
+	err1 := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id_user = ? AND id_receptor = ?", id_user, id_contact).
+		Update("deleted_by_sender", true).Error
+
+	// 2. Mensajes donde el usuario es el receptor
+	err2 := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id_user = ? AND id_receptor = ?", id_contact, id_user).
+		Update("deleted_by_receiver", true).Error
+
+	if err1 != nil {
+		return err1
+	}
+	return err2
 }
 
 // GetAddedContactIDs devuelve el conjunto de IDs de contactos que el usuario tiene agregados
@@ -397,5 +419,34 @@ func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx
 	if del.RowsAffected == 0 {
 		return nil, errors.New("mensaje no encontrado o no tienes permiso para eliminarlo")
 	}
+	return &msg, nil
+}
+
+// DeleteMessageForMe marca un mensaje como borrado solo para el usuario actual
+func (app *ApiContact) DeleteMessageForMe(messageID uint, userID uint, ctx context.Context) (*models.Message, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var msg models.Message
+	find := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id = ? AND (id_user = ? OR id_receptor = ?)", messageID, userID, userID).
+		First(&msg)
+	if find.Error != nil {
+		return nil, find.Error
+	}
+
+	// Actualizar la bandera correspondiente
+	updates := map[string]interface{}{}
+	if msg.IdUser == userID {
+		updates["deleted_by_sender"] = true
+	}
+	if msg.IdReceptor == userID {
+		updates["deleted_by_receiver"] = true
+	}
+
+	update := app.data.Model(&models.Message{}).WithContext(c).Where("id = ?", messageID).Updates(updates)
+	if update.Error != nil {
+		return nil, update.Error
+	}
+
 	return &msg, nil
 }

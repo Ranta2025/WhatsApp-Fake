@@ -17,6 +17,9 @@ type Message struct {
 
 	Edited bool `gorm:"default:false"` // true si el mensaje fue editado
 
+	DeletedBySender   bool `gorm:"default:false"` // true si el remitente vació el chat
+	DeletedByReceiver bool `gorm:"default:false"` // true si el receptor vació el chat
+
 	// Campos para responder mensajes
 	ReplyToMessageID *uint   `gorm:"index"`                            // ID del mensaje al que responde (nullable)
 	ReplyToTelephon  *string `gorm:"column:reply_to_username;size:50"` // Número de teléfono del autor del mensaje original (columna legacy: reply_to_username)

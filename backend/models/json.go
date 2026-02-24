@@ -74,3 +74,20 @@ type GetContactPut struct {
 	Number      string `json:"number" binding:"required,e164"`
 	ContactName string `json:"contact_name" binding:"required"`
 }
+
+// Call signaling models
+type CallOffer struct {
+	To       string `json:"to" binding:"required"`       // Teléfono del receptor
+	RoomID   string `json:"roomID" binding:"required"`   // ID de la sala de ZegoCloud
+	CallType string `json:"callType" binding:"required"` // "video" o "audio"
+}
+
+type CallResponse struct {
+	To     string `json:"to" binding:"required"`     // Teléfono del que llamó
+	RoomID string `json:"roomID" binding:"required"` // ID de la sala
+}
+
+type CallEnd struct {
+	To     string `json:"to" binding:"required"`
+	RoomID string `json:"roomID" binding:"required"`
+}

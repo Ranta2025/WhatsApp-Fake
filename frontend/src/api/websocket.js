@@ -1,20 +1,5 @@
 // WebSocket Manager para el chat
 class WebSocketManager {
-        sendDeleteMessage(messageID, receptor) {
-            if (!this.isConnected()) {
-                console.error('WebSocket no conectado');
-                return false;
-            }
-            const msg = {
-                type: 'delete_message',
-                payload: {
-                    messageID,
-                    receptor
-                }
-            };
-            this.ws.send(JSON.stringify(msg));
-            return true;
-        }
     constructor() {
         this.ws = null;
         this.reconnectAttempts = 0;
@@ -24,7 +9,7 @@ class WebSocketManager {
         this.messageHandlers = new Map();
         this.connectionStateHandlers = [];
         this.heartbeatInterval = null;
-        this.lastContactsOnline = null; // Guardar último estado de contactos online
+        this.lastContactsOnline = null;
         this.setupBrowserEventListeners();
     }
 
@@ -91,7 +76,8 @@ class WebSocketManager {
         } else {
             // Fallback: desarrollo local - usar el hostname actual
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            wsUrl = `${protocol}//${window.location.hostname}:8080/api/v1/ws`;
+            const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
+            wsUrl = `${protocol}//${host}:8080/api/v1/ws`;
         }
         
         // WebSocket no puede enviar headers personalizados, usamos query param como fallback
@@ -149,72 +135,33 @@ class WebSocketManager {
         const { type, payload } = data;
         console.log('[WS] Mensaje recibido:', { type, payload });
 
-        switch (type) {
-            case 'chat':
-                // El backend envía el mensaje completo en payload
-                this.notifyHandlers('message', payload);
-                break;
-            case 'edit_message':
-                // Notificar edición de mensaje
-                this.notifyHandlers('edit_message', payload);
-                break;
-            case 'delete_message':
-                // Notificar eliminación de mensaje
-                this.notifyHandlers('delete_message', payload);
-                break;
-            case 'read':
-                // Confirmación de que alguien leyó mis mensajes
-                this.notifyHandlers('read', payload);
-                break;
-            case 'message_delivered':
-                // Un contacto se conectó y recibió mis mensajes (enviado → entregado)
-                this.notifyHandlers('message_delivered', payload);
-                break;
-            case 'typing':
-                // Notificación de que alguien está escribiendo
-                console.log('[WS] Usuario escribiendo:', payload.from);
-                this.notifyHandlers('typing', payload);
-                break;
-            case 'contacts_online':
-                // Lista inicial de contactos online
-                console.log('[WS] Contactos online iniciales recibidos:', payload.contacts);
-                this.lastContactsOnline = payload.contacts || []; // Guardar para listeners tardíos
-                this.notifyHandlers('contacts_online', payload.contacts || []);
-                break;
-            case 'online':
-                // Un contacto se conectó - notificar con payload completo {username, telephon}
-                console.log('[WS] Contacto conectado:', payload.telephon, payload.username);
-                this.notifyHandlers('online', payload);
-                break;
-            case 'offline':
-                // Un contacto se desconectó - notificar con payload completo {username, telephon}
-                console.log('[WS] Contacto desconectado:', payload.telephon, payload.username);
-                this.notifyHandlers('offline', payload);
-                break;
-            case 'contact_request':
-                // Alguien me envió una solicitud de contacto
-                console.log('[WS] Solicitud de contacto recibida:', payload);
-                this.notifyHandlers('contact_request', payload);
-                break;
-            case 'contact_response':
-                // Respuesta a mi solicitud de contacto (aceptada/rechazada)
-                console.log('[WS] Respuesta de contacto recibida:', payload);
-                this.notifyHandlers('contact_response', payload);
-                break;
-            case 'username_changed':
-                // Un contacto cambió su nombre de usuario
-                console.log('[WS] Contacto cambió username:', payload);
-                this.notifyHandlers('username_changed', payload);
-                break;
-            case 'pong':
-                console.log('Pong recibido del servidor');
-                break;
-            case 'error':
-                console.error('Error del servidor:', data.error);
-                this.notifyHandlers('error', data);
-                break;
-            default:
-                console.log('Tipo de mensaje desconocido:', type, data);
+        // Casos especiales que necesitan transformación antes de notificar
+        if (type === 'pong') {
+            console.log('Pong recibido del servidor');
+            return;
+        }
+
+        if (type === 'error') {
+            console.error('Error del servidor:', data.error);
+            this.notifyHandlers('error', data);
+            return;
+        }
+
+        if (type === 'contacts_online') {
+            this.lastContactsOnline = payload.contacts || [];
+            this.notifyHandlers('contacts_online', this.lastContactsOnline);
+            return;
+        }
+
+        // Ruteo genérico: el type del mensaje se mapea directo al event handler
+        // Esto cubre: chat, edit_message, delete_message, read, message_delivered,
+        // typing, online, offline, contact_request, contact_response,
+        // username_changed, incoming_call, call_accepted, call_rejected,
+        // call_ended, call_unavailable, y cualquier tipo futuro
+        if (type === 'chat') {
+            this.notifyHandlers('message', payload);
+        } else {
+            this.notifyHandlers(type, payload);
         }
     }
 
@@ -275,79 +222,60 @@ class WebSocketManager {
     }
 
     sendMessage(to, message, replyTo = null) {
-        if (!this.isConnected()) {
-            console.error('WebSocket no conectado');
-            return false;
-        }
-
-        const payload = {
-            receptor: to,
-            message: message
-        };
-        
-        // Agregar campos de reply si existe
+        const payload = { receptor: to, message };
         if (replyTo) {
             payload.replyToMessageID = replyTo.MessageID;
             payload.replyToTelephon = replyTo.SenderTelephon;
             payload.replyToMessage = replyTo.Message;
         }
-
-        const msg = {
-            type: 'chat',
-            payload: payload
-        };
-
-        this.ws.send(JSON.stringify(msg));
-        return true;
+        return this._send('chat', payload);
     }
 
     sendReadConfirmation(from) {
-        if (!this.isConnected()) return false;
-
-        const msg = {
-            type: 'read',
-            payload: {
-                from: from
-            }
-        };
-
-        this.ws.send(JSON.stringify(msg));
-        return true;
+        return this._send('read', { from });
     }
 
     sendTypingIndicator(to) {
-        if (!this.isConnected()) return false;
-
-        const msg = {
-            type: 'typing',
-            payload: {
-                to: to
-            }
-        };
-
-        this.ws.send(JSON.stringify(msg));
-        return true;
+        return this._send('typing', { to });
     }
 
     sendEditMessage(messageID, receptor, newContent) {
-        if (!this.isConnected()) {
-            console.error('WebSocket no conectado');
-            return false;
-        }
-        const msg = {
-            type: 'edit_message',
-            payload: {
-                messageID,
-                receptor,
-                message: newContent
-            }
-        };
-        this.ws.send(JSON.stringify(msg));
-        return true;
+        return this._send('edit_message', { messageID, receptor, message: newContent });
+    }
+
+    sendDeleteMessage(messageID, receptor) {
+        return this._send('delete_message', { messageID, receptor });
+    }
+
+    // --- Call signaling methods ---
+    sendCallOffer(to, roomID, callType = 'video') {
+        return this._send('call_offer', { to, roomID, callType });
+    }
+
+    sendCallAccept(to, roomID) {
+        return this._send('call_accept', { to, roomID });
+    }
+
+    sendCallReject(to, roomID) {
+        return this._send('call_reject', { to, roomID });
+    }
+
+    sendCallEnd(to, roomID) {
+        return this._send('call_end', { to, roomID });
     }
 
     isConnected() {
         return this.ws && this.ws.readyState === WebSocket.OPEN;
+    }
+
+    // Helper genérico para enviar mensajes al WebSocket
+    _send(type, payload) {
+        if (!this.isConnected()) {
+            console.error('WebSocket no conectado');
+            return false;
+        }
+        this.ws.send(JSON.stringify({ type, payload }));
+        return true;
     }
 
     disconnect() {

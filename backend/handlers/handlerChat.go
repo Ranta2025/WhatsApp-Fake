@@ -6,6 +6,7 @@ import (
 	"gorm/backend/services"
 	"gorm/backend/websocket"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -184,5 +185,77 @@ func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
 		}
 
 		ctx.JSON(http.StatusOK, updatedMsg)
+	}
+}
+
+func (hd *HandlerChat) HandlerClearChat() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephonUser, exist := ctx.Get("telephon")
+		if !exist {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener el telefono del usuario",
+			})
+			return
+		}
+
+		telephonContact := ctx.Param("contact")
+		if telephonContact == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "el contacto es requerido",
+			})
+			return
+		}
+
+		err := hd.service.ServiceClearChat(telephonUser.(string), telephonContact, ctx)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "Chat vaciado correctamente",
+		})
+	}
+}
+
+func (hd *HandlerChat) HandlerDeleteMessageForMe() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephonUser, exist := ctx.Get("telephon")
+		if !exist {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener el telefono del usuario",
+			})
+			return
+		}
+
+		messageIDStr := ctx.Param("id")
+		if messageIDStr == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "el id del mensaje es requerido",
+			})
+			return
+		}
+
+		var messageID uint
+		if id, err := strconv.ParseUint(messageIDStr, 10, 32); err == nil {
+			messageID = uint(id)
+		} else {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "id de mensaje inválido",
+			})
+			return
+		}
+
+		deletedMsg, err := hd.service.ServiceDeleteMessageForMe(telephonUser.(string), messageID, ctx)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, deletedMsg)
 	}
 }

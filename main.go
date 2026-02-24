@@ -41,7 +41,11 @@ func main() {
 	handlerLog := GetHandlerLog(db, rd, hub)
 	handlerBugReport := GetHandlerBugReport()
 
-	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, hub, serviceChat, serviceContact, handlerBugReport)
+	// Inicializar servicio de llamadas con el mismo repo
+	serviceCall := services.InitServiceCall(repo)
+	handlerCall := handlers.InitHandlerCall(serviceCall)
+
+	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall)
 
 	app.Welcome()
 	app.Run()

@@ -57,6 +57,22 @@ export function useWebSocket() {
         return wsManager.sendEditMessage(messageID, receptor, newContent);
     }, []);
 
+    const sendCallOffer = useCallback((to, roomID, callType) => {
+        return wsManager.sendCallOffer(to, roomID, callType);
+    }, []);
+
+    const sendCallAccept = useCallback((to, roomID) => {
+        return wsManager.sendCallAccept(to, roomID);
+    }, []);
+
+    const sendCallReject = useCallback((to, roomID) => {
+        return wsManager.sendCallReject(to, roomID);
+    }, []);
+
+    const sendCallEnd = useCallback((to, roomID) => {
+        return wsManager.sendCallEnd(to, roomID);
+    }, []);
+
     // Cleanup de handlers al desmontar
     useEffect(() => {
         return () => {
@@ -77,6 +93,10 @@ export function useWebSocket() {
         sendReadConfirmation,
         sendTypingIndicator,
         sendEditMessage,
-        sendDeleteMessage
+        sendDeleteMessage,
+        sendCallOffer,
+        sendCallAccept,
+        sendCallReject,
+        sendCallEnd
     };
 }

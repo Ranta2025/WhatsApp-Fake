@@ -77,13 +77,13 @@ export default function Welcome() {
                             </button>
                             <Link 
                                 to="/login" 
-                                className="px-4 py-2 text-white hover:text-indigo-300 transition"
+                                className="px-4 py-2 text-white hover:text-indigo-300 transition-colors font-medium"
                             >
                                 Iniciar Sesión
                             </Link>
                             <Link 
                                 to="/register" 
-                                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-lg transition"
+                                className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Registrarse
                             </Link>
@@ -107,13 +107,13 @@ export default function Welcome() {
                         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                             <Link 
                                 to="/register" 
-                                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl transition transform hover:scale-105 shadow-lg"
+                                className="px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Comenzar Gratis
                             </Link>
                             <Link 
                                 to="/login" 
-                                className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition border border-white/20"
+                                className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all duration-200 border border-white/20 hover:border-white/40 backdrop-blur-sm"
                             >
                                 Ya tengo cuenta
                             </Link>
@@ -173,7 +173,7 @@ export default function Welcome() {
                     
                     <div className="space-y-12">
                         <div className="flex flex-col md:flex-row items-center gap-8">
-                            <div className="w-20 h-20 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
+                            <div className="w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/30">
                                 1
                             </div>
                             <div className="flex-1 text-center md:text-left">
@@ -185,7 +185,7 @@ export default function Welcome() {
                         </div>
                         
                         <div className="flex flex-col md:flex-row items-center gap-8">
-                            <div className="w-20 h-20 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
+                            <div className="w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/30">
                                 2
                             </div>
                             <div className="flex-1 text-center md:text-left">
@@ -197,7 +197,7 @@ export default function Welcome() {
                         </div>
                         
                         <div className="flex flex-col md:flex-row items-center gap-8">
-                            <div className="w-20 h-20 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
+                            <div className="w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/30">
                                 3
                             </div>
                             <div className="flex-1 text-center md:text-left">
@@ -222,7 +222,7 @@ export default function Welcome() {
                     </p>
                     <Link 
                         to="/register" 
-                        className="inline-block px-10 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-lg rounded-xl transition transform hover:scale-105 shadow-xl"
+                        className="inline-block px-10 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold text-lg rounded-xl shadow-xl shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                     >
                         Crear Cuenta Ahora
                     </Link>

@@ -1,0 +1,152 @@
+package services
+
+import (
+	"context"
+	"gorm/backend/models"
+	"gorm/backend/repos"
+	"gorm/backend/schemas"
+	"log"
+	"math"
+	"time"
+)
+
+type ServiceCall struct {
+	repo *repos.ApiContact
+}
+
+func InitServiceCall(repo *repos.ApiContact) *ServiceCall {
+	return &ServiceCall{repo: repo}
+}
+
+// CreateCallLog crea un registro de llamada cuando se inicia una llamada
+func (s *ServiceCall) CreateCallLog(callerTelephon, receiverTelephon, roomID, callType string, ctx context.Context) error {
+	callerID, err := s.repo.GetIdByTelephon(callerTelephon, ctx)
+	if err != nil {
+		log.Printf("[CALL-SERVICE] Error obteniendo ID del caller %s: %v", callerTelephon, err)
+		return err
+	}
+
+	receiverID, err := s.repo.GetIdByTelephon(receiverTelephon, ctx)
+	if err != nil {
+		log.Printf("[CALL-SERVICE] Error obteniendo ID del receiver %s: %v", receiverTelephon, err)
+		return err
+	}
+
+	callLog := &models.CallLog{
+		CallerID:   uint(callerID),
+		ReceiverID: uint(receiverID),
+		RoomID:     roomID,
+		CallType:   callType,
+		Status:     "missed", // Por defecto es perdida hasta que se conteste
+		StartedAt:  time.Now(),
+	}
+
+	if err := s.repo.CreateCallLog(callLog, ctx); err != nil {
+		log.Printf("[CALL-SERVICE] Error creando call log: %v", err)
+		return err
+	}
+
+	log.Printf("[CALL-SERVICE] Llamada registrada: %s -> %s (sala: %s)", callerTelephon, receiverTelephon, roomID)
+	return nil
+}
+
+// MarkCallAnswered marca una llamada como contestada
+func (s *ServiceCall) MarkCallAnswered(roomID string, ctx context.Context) error {
+	now := time.Now()
+	return s.repo.UpdateCallLogByRoomID(roomID, map[string]interface{}{
+		"status":      "answered",
+		"answered_at": now,
+	}, ctx)
+}
+
+// MarkCallRejected marca una llamada como rechazada
+func (s *ServiceCall) MarkCallRejected(roomID string, ctx context.Context) error {
+	now := time.Now()
+	return s.repo.UpdateCallLogByRoomID(roomID, map[string]interface{}{
+		"status":   "rejected",
+		"ended_at": now,
+	}, ctx)
+}
+
+// MarkCallUnavailable marca una llamada como no disponible
+func (s *ServiceCall) MarkCallUnavailable(roomID string, ctx context.Context) error {
+	now := time.Now()
+	return s.repo.UpdateCallLogByRoomID(roomID, map[string]interface{}{
+		"status":   "unavailable",
+		"ended_at": now,
+	}, ctx)
+}
+
+// MarkCallEnded marca una llamada como finalizada y calcula la duración
+func (s *ServiceCall) MarkCallEnded(roomID string, ctx context.Context) error {
+	now := time.Now()
+	return s.repo.UpdateCallLogByRoomID(roomID, map[string]interface{}{
+		"ended_at": now,
+	}, ctx)
+}
+
+// GetCallHistory obtiene el historial de llamadas de un usuario
+func (s *ServiceCall) GetCallHistory(telephon string, ctx context.Context) ([]schemas.CallLogResponse, error) {
+	userID, err := s.repo.GetIdByTelephon(telephon, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	calls, err := s.repo.GetCallLogsByUser(uint(userID), ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []schemas.CallLogResponse
+	for _, call := range calls {
+		// Obtener datos de caller y receiver
+		callerData, _ := s.repo.GetUserByID(call.CallerID, ctx)
+		receiverData, _ := s.repo.GetUserByID(call.ReceiverID, ctx)
+
+		callerTel := ""
+		callerUser := ""
+		receiverTel := ""
+		receiverUser := ""
+
+		if callerData != nil {
+			callerTel = callerData.Telephon
+			callerUser = callerData.Username
+		}
+		if receiverData != nil {
+			receiverTel = receiverData.Telephon
+			receiverUser = receiverData.Username
+		}
+
+		// Calcular duración si la llamada fue contestada y terminó
+		duration := call.Duration
+		if call.AnsweredAt != nil && call.EndedAt != nil {
+			duration = int(math.Round(call.EndedAt.Sub(*call.AnsweredAt).Seconds()))
+		}
+
+		result = append(result, schemas.CallLogResponse{
+			ID:               call.ID,
+			CallerTelephon:   callerTel,
+			CallerUsername:   callerUser,
+			ReceiverTelephon: receiverTel,
+			ReceiverUsername: receiverUser,
+			CallType:         call.CallType,
+			Status:           call.Status,
+			StartedAt:        call.StartedAt,
+			AnsweredAt:       call.AnsweredAt,
+			EndedAt:          call.EndedAt,
+			Duration:         duration,
+			IsOutgoing:       call.CallerID == uint(userID),
+		})
+	}
+
+	return result, nil
+}
+
+// DeleteCallForUser elimina un registro de llamada para un usuario
+func (s *ServiceCall) DeleteCallForUser(callID uint, telephon string, ctx context.Context) error {
+	userID, err := s.repo.GetIdByTelephon(telephon, ctx)
+	if err != nil {
+		return err
+	}
+	return s.repo.DeleteCallLogForUser(callID, uint(userID), ctx)
+}

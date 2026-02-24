@@ -26,7 +26,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact) gin.HandlerFunc {
+func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, callService *services.ServiceCall) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, exist := c.Get("username")
 		telephon, exist2 := c.Get("telephon")
@@ -48,6 +48,7 @@ func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService
 			Send:           make(chan []byte, 256),
 			ServiceChat:    chatService,
 			ServiceContact: contactService,
+			ServiceCall:    callService,
 		}
 		hub.Register <- client
 

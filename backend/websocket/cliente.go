@@ -31,6 +31,23 @@ type Client struct {
 	Send           chan []byte
 	ServiceChat    *services.ServiceChat
 	ServiceContact *services.ServiceApiContact
+	ServiceCall    *services.ServiceCall
+}
+
+// messageRouter es un mapa de tipo de mensaje → función handler.
+// Se inicializa una vez por cliente al crear el readPump.
+func (c *Client) buildRouter() map[string]func(*MessageHandler) {
+	return map[string]func(*MessageHandler){
+		"chat":           (*MessageHandler).HandleChatMessage,
+		"read":           (*MessageHandler).HandleReadMessage,
+		"typing":         (*MessageHandler).HandleTypingIndicator,
+		"edit_message":   (*MessageHandler).HandleEditMessage,
+		"delete_message": (*MessageHandler).HandleDeleteMessage,
+		"call_offer":     (*MessageHandler).HandleCallOffer,
+		"call_accept":    (*MessageHandler).HandleCallAccept,
+		"call_reject":    (*MessageHandler).HandleCallReject,
+		"call_end":       (*MessageHandler).HandleCallEnd,
+	}
 }
 
 func (c *Client) readPump(hub *Hub) {
@@ -46,6 +63,8 @@ func (c *Client) readPump(hub *Hub) {
 		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
+
+	router := c.buildRouter()
 
 	for {
 		// 1. Leer mensaje crudo
@@ -64,30 +83,17 @@ func (c *Client) readPump(hub *Hub) {
 			continue
 		}
 
-		// 3. Crear el manejador de mensajes
-		handler := NewMessageHandler(c, hub, baseMsg.Payload)
-
-		// 4. Router: Decidir qué servicio ejecuta la acción
-		switch baseMsg.Type {
-		case "ping":
+		// 3. Ping tiene respuesta directa, no necesita handler
+		if baseMsg.Type == "ping" {
 			c.Send <- []byte(`{"type":"pong"}`)
+			continue
+		}
 
-		case "chat":
-			handler.HandleChatMessage()
-
-		case "read":
-			handler.HandleReadMessage()
-
-		case "typing":
-			handler.HandleTypingIndicator()
-
-		case "edit_message":
-			handler.HandleEditMessage()
-
-		case "delete_message":
-			handler.HandleDeleteMessage()
-
-		default:
+		// 4. Buscar handler en el mapa y ejecutar
+		if handlerFunc, exists := router[baseMsg.Type]; exists {
+			handler := NewMessageHandler(c, hub, baseMsg.Payload)
+			handlerFunc(handler)
+		} else {
 			log.Printf("Tipo de mensaje desconocido: %s", baseMsg.Type)
 		}
 	}

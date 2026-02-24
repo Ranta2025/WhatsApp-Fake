@@ -16,7 +16,8 @@ const getBaseURL = () => {
     // Fallback: desarrollo local - usar el hostname actual del navegador
     const apiPort = '8080';
     const protocol = window.location.protocol;
-    return `${protocol}//${window.location.hostname}:${apiPort}`;
+    const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
+    return `${protocol}//${host}:${apiPort}`;
 };
 
 const baseURL = getBaseURL();

@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -17,15 +18,36 @@ var localOrigins = []string{
 	"http://127.0.0.1:5173",
 	"http://10.33.225.131:5173",
 	"http://10.33.225.131:8080",
-	"http://10.50.148.131:8080",
-	"http://10.50.148.131:5173",
+	"http://10.33.225.131",
+	"http://10.64.222.131:8080",
+	"http://10.64.222.131:5173",
+	"http://10.64.222.131",
 	"http://10.50.249.108:8080",
 	"http://10.50.249.108:5173",
+	"http://10.50.249.108",
 	"https://cereous-dewayne-sunshiny.ngrok-free.dev",
 }
 
 // IsAllowedOrigin verifica si un origin está en la lista de orígenes permitidos
 func IsAllowedOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+
+	parsed, err := url.Parse(origin)
+	if err == nil {
+		host := parsed.Hostname()
+		port := parsed.Port()
+
+		if host == "10.64.222.131" && (port == "5173" || port == "8080") {
+			return true
+		}
+
+		if (host == "localhost" || host == "127.0.0.1") && (port == "5173" || port == "8080" || port == "") {
+			return true
+		}
+	}
+
 	for _, allowed := range localOrigins {
 		if origin == allowed {
 			return true
@@ -34,7 +56,7 @@ func IsAllowedOrigin(origin string) bool {
 	if strings.Contains(origin, ".ngrok-free.app") ||
 		strings.Contains(origin, ".ngrok.io") ||
 		strings.Contains(origin, ".ngrok.app") ||
-		strings.Contains(origin, "ngrok-free.dev"){
+		strings.Contains(origin, "ngrok-free.dev") {
 		return true
 	}
 	log.Printf("[CORS] Origin RECHAZADO: %s", origin)
@@ -46,7 +68,7 @@ func Cors() gin.HandlerFunc {
 		AllowOriginFunc: func(origin string) bool {
 			return IsAllowedOrigin(origin)
 		},
-		AllowMethods: []string{"GET", "POST", "PUT", "OPTIONS"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{
 			"origin",
 			"Content-Type",

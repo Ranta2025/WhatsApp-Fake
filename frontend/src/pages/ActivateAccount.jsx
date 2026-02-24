@@ -119,23 +119,30 @@ export default function ActivateAccount() {
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-indigo-200 mb-1">Código de Activación</label>
-                        <input
-                            type="text"
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                            className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-center tracking-widest text-lg"
-                            placeholder="000000"
-                            maxLength="20"
-                        />
-                        <p className="text-indigo-300 text-xs mt-2">
+                        <label className="block text-sm font-medium text-indigo-100 mb-1.5">Código de Activación</label>
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <svg className="w-5 h-5 text-indigo-300/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                </svg>
+                            </div>
+                            <input
+                                type="text"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200 text-center tracking-widest text-lg"
+                                placeholder="000000"
+                                maxLength="20"
+                            />
+                        </div>
+                        <p className="text-indigo-300/80 text-xs mt-2 ml-1">
                             Revisa tu email para encontrar el código
                         </p>
                     </div>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
+                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                     >
                         {loading ? 'Verificando...' : 'Activar cuenta'}
                     </button>
@@ -143,7 +150,7 @@ export default function ActivateAccount() {
                         type="button"
                         onClick={handleResendCode}
                         disabled={resendLoading}
-                        className="w-full bg-white/5 hover:bg-white/10 disabled:opacity-50 text-indigo-300 font-bold py-3 rounded-xl transition"
+                        className="w-full bg-white/5 hover:bg-white/10 disabled:opacity-50 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
                     >
                         {resendLoading ? 'Reenviando...' : 'No recibí el código'}
                     </button>
