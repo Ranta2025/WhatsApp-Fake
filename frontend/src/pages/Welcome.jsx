@@ -63,8 +63,8 @@ export default function Welcome() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
-                            <span className="text-3xl">💬</span>
-                            <span className="text-white font-bold text-xl">ChatApp</span>
+                            <img src="/todos.svg" alt="todos" className="w-9 h-9" />
+                            <span className="text-white font-bold text-xl">todos</span>
                         </div>
                         <div className="flex items-center space-x-3">
                             <button
@@ -235,8 +235,8 @@ export default function Welcome() {
                     <div className="grid md:grid-cols-4 gap-8 mb-8">
                         <div>
                             <div className="flex items-center space-x-2 mb-4">
-                                <span className="text-3xl">💬</span>
-                                <span className="text-white font-bold text-xl">ChatApp</span>
+                                <img src="/todos.svg" alt="todos" className="w-9 h-9" />
+                                <span className="text-white font-bold text-xl">todos</span>
                             </div>
                             <p className="text-indigo-300 text-sm">
                                 La plataforma de mensajería instantánea del futuro.

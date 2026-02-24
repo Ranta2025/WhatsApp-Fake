@@ -7,6 +7,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/repos"
 	"sync"
+	"time"
 )
 
 type Hub struct {
@@ -36,16 +37,16 @@ func (h *Hub) Run() {
 			h.Clients[c.Telephon] = c
 			h.mu.Unlock()
 			fmt.Printf("[HUB] Usuario registrado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
-			// Notificar a los contactos que este usuario está online
-			h.NotifyContactsOnline(c.Telephon)
+			// Notificar a los contactos que este usuario está online (en goroutine para no bloquear el hub)
+			go h.NotifyContactsOnline(c.Telephon)
 
 		case c := <-h.Remove:
 			h.mu.Lock()
 			delete(h.Clients, c.Telephon)
 			h.mu.Unlock()
 			fmt.Printf("[HUB] Usuario desconectado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
-			// Notificar a los contactos que este usuario está offline
-			h.NotifyContactsOffline(c.Telephon)
+			// Notificar a los contactos que este usuario está offline (en goroutine para no bloquear el hub)
+			go h.NotifyContactsOffline(c.Telephon)
 
 		case msg := <-h.Broadcast:
 			h.mu.RLock()
@@ -130,6 +131,12 @@ func (h *Hub) NotifyContactsOnline(telephon string) {
 
 // NotifyContactsOffline notifica a los contactos que un usuario está offline (usa telephon)
 func (h *Hub) NotifyContactsOffline(telephon string) {
+	// Actualizar last_seen en la base de datos
+	if err := h.repo.UpdateLastSeen(telephon, context.Background()); err != nil {
+		fmt.Printf("[HUB] Error actualizando last_seen para tel %s: %v\n", telephon, err)
+	}
+
+	now := time.Now().UTC()
 	contacts := h.getUserContactsTelephons(telephon)
 
 	// Obtener el username para enviarlo en la notificación
@@ -142,8 +149,9 @@ func (h *Hub) NotifyContactsOffline(telephon string) {
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type": "offline",
 		"payload": map[string]interface{}{
-			"username": username,
-			"telephon": telephon,
+			"username":  username,
+			"telephon":  telephon,
+			"last_seen": now.Format(time.RFC3339),
 		},
 	})
 
@@ -296,6 +304,46 @@ func (h *Hub) NotifyContactResponse(recipientUsername string, responderUsername 
 		fmt.Printf("[HUB] Respuesta de contacto enviada exitosamente\n")
 	default:
 		fmt.Printf("[HUB] No se pudo enviar respuesta de contacto, canal lleno\n")
+	}
+
+	// Si fue aceptada, notificar a ambos usuarios el estado online del otro
+	if accepted {
+		go h.notifyOnlineAfterAccept(recipientTelephon, recipientUsername, responderNumber, responderUsername)
+	}
+}
+
+// notifyOnlineAfterAccept notifica a ambos usuarios su estado online mutuo después de aceptar contacto
+func (h *Hub) notifyOnlineAfterAccept(userATelephon, userAUsername, userBTelephon, userBUsername string) {
+	fmt.Printf("[HUB] Notificando estado online mutuo entre %s (tel: %s) y %s (tel: %s)\n", userAUsername, userATelephon, userBUsername, userBTelephon)
+
+	// Verificar si usuario B (quien respondió) está online
+	_, bOnline := h.GetClient(userBTelephon)
+	if bOnline {
+		// Notificar a usuario A que B está online
+		msgBOnline, _ := json.Marshal(map[string]interface{}{
+			"type": "online",
+			"payload": map[string]interface{}{
+				"username": userBUsername,
+				"telephon": userBTelephon,
+			},
+		})
+		h.SendTo(userATelephon, msgBOnline)
+		fmt.Printf("[HUB] Notificado a %s que %s está online\n", userAUsername, userBUsername)
+	}
+
+	// Verificar si usuario A (quien envió la solicitud) está online
+	_, aOnline := h.GetClient(userATelephon)
+	if aOnline {
+		// Notificar a usuario B que A está online
+		msgAOnline, _ := json.Marshal(map[string]interface{}{
+			"type": "online",
+			"payload": map[string]interface{}{
+				"username": userAUsername,
+				"telephon": userATelephon,
+			},
+		})
+		h.SendTo(userBTelephon, msgAOnline)
+		fmt.Printf("[HUB] Notificado a %s que %s está online\n", userBUsername, userAUsername)
 	}
 }
 

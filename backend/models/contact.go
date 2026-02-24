@@ -1,6 +1,9 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 type ContactDataBase struct {
 	gorm.Model
@@ -18,4 +21,10 @@ type ContactChat struct {
 	Number      string
 	Status      string
 	ContactName string // Nombre personalizado del contacto
+	LastSeen    *time.Time `json:"last_seen"` // Última vez que el contacto estuvo en línea
+}
+
+type ContactPut struct {
+	Number string
+	GetContactPut
 }

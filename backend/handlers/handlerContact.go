@@ -26,7 +26,7 @@ func InitHandlerApiMessage(services *services.ServiceApiContact, hub *websocket.
 
 func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		telephon, exist := ctx.Get("telephon")
 		if !exist {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "error al obtener datos",
@@ -34,7 +34,7 @@ func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		user, err := hd.service.ServicesGetUser(username.(string), ctx)
+		user, err := hd.service.ServicesGetUserByTelephon(telephon.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusNotFound, gin.H{
 				"error": err.Error(),
@@ -48,7 +48,7 @@ func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 
 func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		telephon, exist := ctx.Get("telephon")
 		usernameUpedate, exist2 := ctx.Get("usernameUpdate")
 		if !exist || !exist2 {
 			ctx.JSON(http.StatusBadRequest, gin.H{
@@ -58,10 +58,10 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 			return
 		}
 
-		oldUsername := username.(string)
+		userTelephon := telephon.(string)
 		newUsername := usernameUpedate.(string)
 
-		user, err := hd.service.ServicePutUser(oldUsername, newUsername, ctx)
+		user, oldUsername, err := hd.service.ServicePutUserByTelephon(userTelephon, newUsername, ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -96,7 +96,7 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 
 func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		telephon, exist := ctx.Get("telephon")
 		contactAdd, exist2 := ctx.Get("contactAdd")
 		if !exist || !exist2 {
 			ctx.JSON(http.StatusBadRequest, gin.H{
@@ -106,7 +106,7 @@ func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 			return
 		}
 
-		contact, err := hd.service.AddContact(username.(string), contactAdd.(models.ContactAdd), ctx)
+		contact, err := hd.service.AddContactByTelephon(telephon.(string), contactAdd.(models.ContactAdd), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -126,7 +126,7 @@ func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 
 func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		username, exist := ctx.Get("username")
+		telephon, exist := ctx.Get("telephon")
 		if !exist {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "error al obtener datos",
@@ -135,7 +135,7 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 			return
 		}
 
-		contacts, err := hd.service.ServiceGetContacts(username.(string), ctx)
+		contacts, err := hd.service.ServiceGetContactsByTelephon(telephon.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -145,5 +145,34 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 		}
 
 		ctx.IndentedJSON(200, contacts)
+	}
+}
+
+func (hd *HandlerContact) HandlerPutContact() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		contact, exist := ctx.Get("contactPut")
+		number, exist2 := ctx.Get("telephon")
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener datos",
+			})
+			ctx.Abort()
+			return
+		}
+		putContact := models.ContactPut{
+			Number:        number.(string),
+			GetContactPut: contact.(models.GetContactPut)}
+		
+		contact, err := hd.service.ServicePutContactByTelephon(putContact, ctx)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			ctx.Abort()
+			return
+		}
+		ctx.JSON(200, gin.H{
+			"contact": contact,
+		})
 	}
 }

@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"gorm/backend/models"
 	"gorm/backend/services"
+	"gorm/backend/websocket"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,12 +12,11 @@ import (
 
 type HandlerChat struct {
 	service *services.ServiceChat
+	hub     *websocket.Hub
 }
 
-func InitHandlerChat(service *services.ServiceChat) *HandlerChat {
-	return &HandlerChat{
-		service: service,
-	}
+func InitHandlerChat(service *services.ServiceChat, hub *websocket.Hub) *HandlerChat {
+	return &HandlerChat{service: service, hub: hub}
 }
 
 func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
@@ -132,15 +133,56 @@ func (hd *HandlerChat) HandlerPutAllChat() gin.HandlerFunc {
 			return
 		}
 
-		err := hd.service.ServicePutAllMessageStatusDelivered(telephon.(string), ctx)
+		// Obtener remitentes con mensajes pendientes ANTES de actualizar
+		senders, err := hd.service.ServiceGetSendersAndMarkDelivered(telephon.(string), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
+
+		// Notificar por WS a cada remitente que sus mensajes fueron entregados
+		if hd.hub != nil && len(senders) > 0 {
+			msg, _ := json.Marshal(map[string]interface{}{
+				"type": "message_delivered",
+				"payload": map[string]interface{}{
+					"receiver": telephon.(string),
+				},
+			})
+			for _, senderTel := range senders {
+				hd.hub.SendTo(senderTel, msg)
+			}
+		}
+
 		ctx.JSON(http.StatusOK, gin.H{
 			"message": "Mensajes actualizados a entregado",
 		})
+	}
+}
+
+func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		msgEditInterface, exist2 := ctx.Get("messageEdit")
+
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": "error al obtener los datos",
+			})
+			return
+		}
+
+		msgEdit := msgEditInterface.(models.MessageEdit)
+
+		updatedMsg, err := hd.service.ServiceEditMessage(telephon.(string), msgEdit.MessageID, msgEdit.Message, ctx)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, updatedMsg)
 	}
 }

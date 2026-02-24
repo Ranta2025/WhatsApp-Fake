@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import wsManager from '../api/websocket';
 
 export function useWebSocket() {
+        const sendDeleteMessage = useCallback((messageID, receptor) => {
+            return wsManager.sendDeleteMessage(messageID, receptor);
+        }, []);
     const [isConnected, setIsConnected] = useState(false);
     const [connectionState, setConnectionState] = useState('disconnected');
     const handlersRef = useRef(new Map());
@@ -50,6 +53,10 @@ export function useWebSocket() {
         return wsManager.sendTypingIndicator(to);
     }, []);
 
+    const sendEditMessage = useCallback((messageID, receptor, newContent) => {
+        return wsManager.sendEditMessage(messageID, receptor, newContent);
+    }, []);
+
     // Cleanup de handlers al desmontar
     useEffect(() => {
         return () => {
@@ -68,6 +75,8 @@ export function useWebSocket() {
         off,
         sendMessage,
         sendReadConfirmation,
-        sendTypingIndicator
+        sendTypingIndicator,
+        sendEditMessage,
+        sendDeleteMessage
     };
 }

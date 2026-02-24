@@ -1,5 +1,20 @@
 // WebSocket Manager para el chat
 class WebSocketManager {
+        sendDeleteMessage(messageID, receptor) {
+            if (!this.isConnected()) {
+                console.error('WebSocket no conectado');
+                return false;
+            }
+            const msg = {
+                type: 'delete_message',
+                payload: {
+                    messageID,
+                    receptor
+                }
+            };
+            this.ws.send(JSON.stringify(msg));
+            return true;
+        }
     constructor() {
         this.ws = null;
         this.reconnectAttempts = 0;
@@ -139,9 +154,21 @@ class WebSocketManager {
                 // El backend envía el mensaje completo en payload
                 this.notifyHandlers('message', payload);
                 break;
+            case 'edit_message':
+                // Notificar edición de mensaje
+                this.notifyHandlers('edit_message', payload);
+                break;
+            case 'delete_message':
+                // Notificar eliminación de mensaje
+                this.notifyHandlers('delete_message', payload);
+                break;
             case 'read':
                 // Confirmación de que alguien leyó mis mensajes
                 this.notifyHandlers('read', payload);
+                break;
+            case 'message_delivered':
+                // Un contacto se conectó y recibió mis mensajes (enviado → entregado)
+                this.notifyHandlers('message_delivered', payload);
                 break;
             case 'typing':
                 // Notificación de que alguien está escribiendo
@@ -163,6 +190,16 @@ class WebSocketManager {
                 // Un contacto se desconectó - notificar con payload completo {username, telephon}
                 console.log('[WS] Contacto desconectado:', payload.telephon, payload.username);
                 this.notifyHandlers('offline', payload);
+                break;
+            case 'contact_request':
+                // Alguien me envió una solicitud de contacto
+                console.log('[WS] Solicitud de contacto recibida:', payload);
+                this.notifyHandlers('contact_request', payload);
+                break;
+            case 'contact_response':
+                // Respuesta a mi solicitud de contacto (aceptada/rechazada)
+                console.log('[WS] Respuesta de contacto recibida:', payload);
+                this.notifyHandlers('contact_response', payload);
                 break;
             case 'username_changed':
                 // Un contacto cambió su nombre de usuario
@@ -288,6 +325,23 @@ class WebSocketManager {
             }
         };
 
+        this.ws.send(JSON.stringify(msg));
+        return true;
+    }
+
+    sendEditMessage(messageID, receptor, newContent) {
+        if (!this.isConnected()) {
+            console.error('WebSocket no conectado');
+            return false;
+        }
+        const msg = {
+            type: 'edit_message',
+            payload: {
+                messageID,
+                receptor,
+                message: newContent
+            }
+        };
         this.ws.send(JSON.stringify(msg));
         return true;
     }

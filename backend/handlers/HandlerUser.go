@@ -152,13 +152,10 @@ func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Obtener el telephon antes de eliminar el token
 		username, exist := c.Get("username")
-		if exist && username != nil && s.hub != nil {
-			telephon, existTel := c.Get("telephon")
-			if existTel && telephon != nil {
-				s.hub.NotifyContactsOffline(telephon.(string))
-			} else {
-				s.hub.NotifyContactsOffline(username.(string))
-			}
+		telephon, existTel := c.Get("telephon")
+
+		if existTel && telephon != nil && s.hub != nil {
+			s.hub.NotifyContactsOffline(telephon.(string))
 		}
 
 		// Eliminar refresh token de Redis

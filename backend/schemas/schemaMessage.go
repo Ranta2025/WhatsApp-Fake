@@ -10,6 +10,8 @@ type Message struct {
 	Status         string    `json:"Status"`
 	Time           time.Time `json:"Time"`
 
+	Edited bool `json:"Edited"` // true si el mensaje fue editado
+
 	// Campos para responder mensajes
 	ReplyToMessageID *uint   `json:"ReplyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"ReplyToTelephon,omitempty"` // Número de teléfono del autor del mensaje original

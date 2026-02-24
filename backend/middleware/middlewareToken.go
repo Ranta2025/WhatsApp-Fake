@@ -31,7 +31,14 @@ func MiddlewareTokenValidation() gin.HandlerFunc {
 				log.Printf("[MIDDLEWARE] Authorization header no válido, verificando query param. Token query presente: %v", tokenQuery != "")
 				if tokenQuery != "" {
 					tokenCookie = tokenQuery
-					log.Printf("[MIDDLEWARE] Token extraido de query parameter: %s...", tokenQuery[:min(10, len(tokenQuery))])
+					// Loggear primeros y últimos caracteres del token para debug
+					if len(tokenQuery) > 10 {
+						log.Printf("[MIDDLEWARE] Token extraido de query parameter: %s...%s", tokenQuery[:5], tokenQuery[len(tokenQuery)-5:])
+					} else {
+						log.Printf("[MIDDLEWARE] Token extraido de query parameter: %s", tokenQuery)
+					}
+				} else {
+					log.Printf("[MIDDLEWARE] Token query param VACÍO en request: %s", ctx.Request.URL.String())
 				}
 			}
 		} else {

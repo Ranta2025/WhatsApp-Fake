@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import api from '../api/axios';
@@ -12,7 +12,19 @@ import {
 
 export default function Dashboard() {
     const { user, logout, updateUsername } = useAuth();
-    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, on, off } = useWebSocket();
+    const { isConnected, sendMessage, sendReadConfirmation, sendTypingIndicator, sendEditMessage, sendDeleteMessage, on, off } = useWebSocket();
+        const [messageMenuOpen, setMessageMenuOpen] = useState(null); // MessageID del menú abierto
+
+        // Manejar borrado de mensaje propio
+        const handleDeleteMessage = (message) => {
+            if (!window.confirm('¿Seguro que quieres eliminar este mensaje?')) return;
+            if (isConnected && sendDeleteMessage) {
+                sendDeleteMessage(message.MessageID, selected?.Number);
+            } else {
+                alert('No conectado. Intenta de nuevo.');
+            }
+            setMessageMenuOpen(null);
+        };
     const [profile, setProfile] = useState(null);
     const [error, setError] = useState('');
     const [showProfile, setShowProfile] = useState(false);
@@ -30,11 +42,53 @@ export default function Dashboard() {
     const [messagesByChat, setMessagesByChat] = useState({});
     const [onlineUsers, setOnlineUsers] = useState(new Set());
     const [typingUsers, setTypingUsers] = useState(new Set()); // Usuarios que están escribiendo
+    const [lastSeenMap, setLastSeenMap] = useState({}); // {telephon: dateString} última conexión
     const [sidebarOpen, setSidebarOpen] = useState(false); // Estado para sidebar en móvil
     const [replyingTo, setReplyingTo] = useState(null); // Mensaje al que se está respondiendo
     const [allChatGroups, setAllChatGroups] = useState({}); // metadata de todos los chats {telephon -> ChatGroup}
     const [toasts, setToasts] = useState([]); // notificaciones toast {id, senderName, message, telephon}
     const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
+    // Estado de edición de contacto
+    const [editingContact, setEditingContact] = useState(null); // Number del contacto que se está editando
+    const [editContactName, setEditContactName] = useState('');
+    const [editContactError, setEditContactError] = useState('');
+    const [editContactLoading, setEditContactLoading] = useState(false);
+    // Estado de edición de mensaje
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editingMessageText, setEditingMessageText] = useState('');
+        // Iniciar edición de mensaje
+        const handleEditMessage = (message) => {
+            setEditingMessageId(message.MessageID);
+            setEditingMessageText(message.Message);
+        };
+
+        // Cancelar edición de mensaje
+        const handleEditMessageCancel = () => {
+            setEditingMessageId(null);
+            setEditingMessageText('');
+        };
+
+        // Cambiar texto mientras se edita
+        const handleEditMessageChange = (e) => {
+            setEditingMessageText(e.target.value);
+        };
+
+        // Guardar mensaje editado
+        const handleEditMessageSave = (message) => {
+            const newText = editingMessageText.trim();
+            if (!newText || newText === message.Message) {
+                handleEditMessageCancel();
+                return;
+            }
+            // Enviar edición por WebSocket
+            if (isConnected && sendEditMessage) {
+                sendEditMessage(message.MessageID, selected?.Number, newText);
+            } else {
+                alert('No conectado. Intenta de nuevo.');
+            }
+            // La actualización local se hará cuando llegue el evento edit_message por WebSocket
+            handleEditMessageCancel();
+        };
     // Estado de carga inicial (pantalla splash)
     const [loadingProfile, setLoadingProfile] = useState(true);
     const [loadingContacts, setLoadingContacts] = useState(true);
@@ -103,6 +157,25 @@ export default function Dashboard() {
     // typingUsers ahora contiene números de teléfono (telephon), no usernames
     const isContactTyping = (telephon) => typingUsers.has(telephon);
 
+    // Formatear última vez visto
+    const formatLastSeen = (dateStr) => {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return null;
+        const now = new Date();
+        const isToday = date.toDateString() === now.toDateString();
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        if (isToday) return `últ. vez hoy a las ${timeStr}`;
+        if (isYesterday) return `últ. vez ayer a las ${timeStr}`;
+        const dateFormatted = date.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: '2-digit' });
+        return `últ. vez el ${dateFormatted} a las ${timeStr}`;
+    };
+    const getLastSeenText = (telephon) => formatLastSeen(lastSeenMap[telephon]);
+
     // Mantener refs siempre sincronizados con sus estados
     useEffect(() => {
         contactsRef.current = contacts;
@@ -134,6 +207,49 @@ export default function Dashboard() {
     // IMPORTANTE: usar profileRef / selectedRef / contactsRef (no los estados directos)
     // para evitar stale closures — los refs siempre tienen el valor actual.
     useEffect(() => {
+
+        // Handler para eliminar mensaje por WebSocket
+        // Efecto de desvanecido al eliminar mensaje
+        const handleDeleteMessageWs = (deletedMsg) => {
+            const { MessageID } = deletedMsg;
+            // 1. Marcar el mensaje como isDeleting
+            setMessagesByChat((prev) => {
+                const updated = { ...prev };
+                Object.keys(updated).forEach((key) => {
+                    updated[key] = (updated[key] || []).map(m =>
+                        m.MessageID === MessageID ? { ...m, isDeleting: true } : m
+                    );
+                });
+                return updated;
+            });
+            // 2. Quitar el mensaje tras el fade (400ms)
+            setTimeout(() => {
+                setMessagesByChat((prev) => {
+                    const updated = { ...prev };
+                    Object.keys(updated).forEach((key) => {
+                        updated[key] = (updated[key] || []).filter(m => m.MessageID !== MessageID);
+                    });
+                    return updated;
+                });
+            }, 400);
+        };
+
+        // Handler para editar mensaje por WebSocket
+        const handleEditMessageWs = (editedMsg) => {
+            // Si el mensaje viene como {type, payload}, usar editedMsg.payload
+            const msg = editedMsg.payload ? editedMsg.payload : editedMsg;
+            const { MessageID } = msg;
+            setMessagesByChat((prev) => {
+                const updated = { ...prev };
+                Object.keys(updated).forEach((key) => {
+                    updated[key] = (updated[key] || []).map(m =>
+                        m.MessageID === MessageID ? { ...m, ...msg } : m
+                    );
+                });
+                return updated;
+            });
+        };
+
         const handleIncomingMessage = (messageData) => {
             console.log('Mensaje recibido por WebSocket:', messageData);
             
@@ -275,12 +391,36 @@ export default function Dashboard() {
             });
         };
 
+        const handleDelivered = (data) => {
+            const myTelephon = profileRef.current?.Telephon;
+            if (!data?.receiver || !myTelephon) return;
+            const key = data.receiver; // telephon del receptor que se conectó
+            setMessagesByChat((prev) => {
+                const existing = prev[key] || [];
+                return {
+                    ...prev,
+                    [key]: existing.map(m => {
+                        if (!m) return m;
+                        return m.SenderTelephon === myTelephon && m.Status === 'enviado'
+                            ? { ...m, Status: 'entregado' }
+                            : m;
+                    })
+                };
+            });
+        };
+
         on('message', handleIncomingMessage);
         on('read', handleReadConfirmation);
+        on('message_delivered', handleDelivered);
+        on('delete_message', handleDeleteMessageWs);
+        on('edit_message', handleEditMessageWs);
 
         return () => {
             off('message', handleIncomingMessage);
             off('read', handleReadConfirmation);
+            off('message_delivered', handleDelivered);
+            off('delete_message', handleDeleteMessageWs);
+            off('edit_message', handleEditMessageWs);
         };
     }, [on, off, isConnected, sendReadConfirmation]); // profile/selected/contacts leídos desde refs → no en deps
 
@@ -321,6 +461,10 @@ export default function Dashboard() {
                     console.log('[DASHBOARD] Estado online actualizado:', Array.from(newSet));
                     return newSet;
                 });
+                // Guardar last_seen del payload
+                if (payload.last_seen) {
+                    setLastSeenMap(prev => ({ ...prev, [payload.telephon]: payload.last_seen }));
+                }
             }
         };
 
@@ -451,6 +595,48 @@ export default function Dashboard() {
         };
     }, [on, off]);
 
+    // Escuchar solicitudes y respuestas de contacto en tiempo real
+    useEffect(() => {
+        const handleContactRequest = (payload) => {
+            console.log('[DASHBOARD] Solicitud de contacto recibida:', payload);
+            // Refrescar la lista de contactos para mostrar la solicitud pendiente
+            api.get('/api/v1/contact').then(({ data }) => {
+                const list = Array.isArray(data) ? data : [];
+                setContacts(list);
+                contactsRef.current = list;
+            }).catch(() => {});
+        };
+
+        const handleContactResponse = (payload) => {
+            console.log('[DASHBOARD] Respuesta de contacto recibida:', payload);
+            // Refrescar la lista de contactos
+            api.get('/api/v1/contact').then(({ data }) => {
+                const list = Array.isArray(data) ? data : [];
+                setContacts(list);
+                contactsRef.current = list;
+            }).catch(() => {});
+
+            // Si fue aceptada, el contacto podría estar online ahora
+            if (payload && payload.accepted && payload.number) {
+                setOnlineUsers(prev => {
+                    const newSet = new Set(prev);
+                    // El backend envía una notificación online después de aceptar,
+                    // pero añadimos el número directamente por si hay delay
+                    newSet.add(payload.number);
+                    return newSet;
+                });
+            }
+        };
+
+        on('contact_request', handleContactRequest);
+        on('contact_response', handleContactResponse);
+
+        return () => {
+            off('contact_request', handleContactRequest);
+            off('contact_response', handleContactResponse);
+        };
+    }, [on, off]);
+
     useEffect(() => {
         const fetchContacts = async () => {
             try {
@@ -458,6 +644,12 @@ export default function Dashboard() {
                 const list = Array.isArray(data) ? data : [];
                 setContacts(list);
                 contactsRef.current = list; // mantener ref sincronizada
+                // Extraer last_seen de cada contacto
+                const seenMap = {};
+                list.forEach(c => {
+                    if (c.last_seen) seenMap[c.Number] = c.last_seen;
+                });
+                setLastSeenMap(prev => ({ ...prev, ...seenMap }));
             } catch (e) {
                 setAddMsg('No se pudo cargar contactos');
             } finally {
@@ -700,13 +892,55 @@ export default function Dashboard() {
             setStatus(msg);
         }
     };
+    const submitEditContact = async (contactNumber) => {
+        const newName = editContactName.trim();
+        setEditContactError('');
+        if (!newName) {
+            setEditContactError('El nombre no puede estar vacío');
+            return;
+        }
+        // Si el nombre es el mismo, no hacer nada
+        const current = contacts.find(c => c.Number === contactNumber);
+        if (current && (current.ContactName || '') === newName) {
+            setEditingContact(null);
+            setEditContactName('');
+            setEditContactError('');
+            return;
+        }
+        setEditContactLoading(true);
+        try {
+            await api.put('/api/v1/contact', { number: contactNumber, contact_name: newName });
+            // Actualizar el contacto localmente
+            setContacts((prev) => prev.map(c => 
+                c.Number === contactNumber ? { ...c, ContactName: newName } : c
+            ));
+            contactsRef.current = contactsRef.current.map(c => 
+                c.Number === contactNumber ? { ...c, ContactName: newName } : c
+            );
+            // Si el contacto seleccionado es el editado, actualizar también
+            if (selected?.Number === contactNumber) {
+                setSelected(prev => ({ ...prev, ContactName: newName }));
+            }
+            setEditingContact(null);
+            setEditContactName('');
+            setEditContactError('');
+        } catch (err) {
+            const d = err?.response?.data;
+            const msg = typeof d === 'string' ? d : d?.error || 'Error al editar contacto';
+            console.error('Error editando contacto:', msg);
+            setEditContactError(msg);
+        } finally {
+            setEditContactLoading(false);
+        }
+    };
+
     const submitAddContact = async (e) => {
         e.preventDefault();
         setAddMsg('');
         const n = numberInput.trim();
         const cn = contactNameInput.trim();
-        if (n.length !== 8) {
-            setAddMsg('El número debe tener 8 dígitos');
+        if (!n.match(/^\+[1-9]\d{6,14}$/)) {
+            setAddMsg('El número debe estar en formato internacional (ej: +50212345678)');
             return;
         }
         if (!cn) {
@@ -898,9 +1132,7 @@ export default function Dashboard() {
                     <div className="flex flex-col items-center gap-6 animate-fade-in">
                         {/* Logo / Icono */}
                         <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-2xl shadow-purple-500/30">
-                            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
+                            <img src="/todos.svg" alt="todos" className="w-14 h-14" />
                         </div>
 
                         {/* Nombre app */}
@@ -943,7 +1175,10 @@ export default function Dashboard() {
                 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             `}>
                 <div className="p-5 border-b border-white/10 flex justify-between items-center">
-                    <h1 className="text-xl font-bold">todos</h1>
+                    <div className="flex items-center gap-2">
+                        <img src="/todos.svg" alt="todos" className="w-7 h-7" />
+                        <h1 className="text-xl font-bold">todos</h1>
+                    </div>
                     <div 
                         className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}`}
                         title={isConnected ? "Conectado" : "Desconectado"}
@@ -988,54 +1223,68 @@ export default function Dashboard() {
                             <div className="text-indigo-200 text-sm mb-2 uppercase">Chats Activos</div>
                             <div className="space-y-2">
                                 {Object.keys(messagesByChat).length > 0 ? (
-                                    Object.keys(messagesByChat).map((contactNumber) => {
-                                        const messages = messagesByChat[contactNumber] || [];
-                                        const lastMessage = messages[messages.length - 1];
-                                        // contactNumber es el telephon, buscar contacto por Number
-                                        const contact = contacts.find(c => c.Number === contactNumber);
-                                        const group = allChatGroups[contactNumber];
-                                        // Nombre a mostrar: nombre personalizado > username del grupo > número
-                                        const displayName = contact?.ContactName || group?.ContactName || group?.ContactUsername || contactNumber;
-                                        const isUnknown = group && !group.IsContact;
-                                        
-                                        return (
-                                            <button
-                                                key={contactNumber}
-                                                onClick={() => {
-                                                    const contactToSelect = contact || {
-                                                        Number: contactNumber,
-                                                        Username: group?.ContactUsername || contactNumber,
-                                                        ContactName: group?.ContactName || null,
-                                                        Status: 'unknown'
-                                                    };
-                                                    setSelected(contactToSelect);
-                                                    setSidebarOpen(false);
-                                                }}
-                                                className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Number === contactNumber ? 'ring-1 ring-indigo-400' : ''}`}
-                                            >
-                                                <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
-                                                    {displayName?.charAt(0)?.toUpperCase()}
-                                                    {isContactOnline(contactNumber) && (
-                                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                    // Filtrar para mostrar solo un chat por contacto real o número único
+                                    (() => {
+                                        // Crear un Set para evitar duplicados
+                                        const shownNumbers = new Set();
+                                        // Priorizar contactos aceptados
+                                        const acceptedContacts = contacts.filter(c => c.Status === 'accepted').map(c => c.Number);
+                                        // Unir contactos aceptados y números de mensajes
+                                        const allNumbers = Array.from(new Set([
+                                            ...acceptedContacts,
+                                            ...Object.keys(messagesByChat)
+                                        ]));
+                                        return allNumbers.map((contactNumber) => {
+                                            if (shownNumbers.has(contactNumber)) return null;
+                                            shownNumbers.add(contactNumber);
+                                            const messages = messagesByChat[contactNumber] || [];
+                                            if (messages.length === 0) return null;
+                                            const lastMessage = messages[messages.length - 1];
+                                            // contactNumber es el telephon, buscar contacto por Number
+                                            const contact = contacts.find(c => c.Number === contactNumber);
+                                            const group = allChatGroups[contactNumber];
+                                            // Nombre a mostrar: nombre personalizado > username del grupo > número
+                                            const displayName = contact?.ContactName || group?.ContactName || group?.ContactUsername || contactNumber;
+                                            const isUnknown = group && !group.IsContact;
+                                            return (
+                                                <button
+                                                    key={contactNumber}
+                                                    onClick={() => {
+                                                        const contactToSelect = contact || {
+                                                            Number: contactNumber,
+                                                            Username: group?.ContactUsername || contactNumber,
+                                                            ContactName: group?.ContactName || null,
+                                                            Status: 'unknown'
+                                                        };
+                                                        setSelected(contactToSelect);
+                                                        setSidebarOpen(false);
+                                                    }}
+                                                    className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Number === contactNumber ? 'ring-1 ring-indigo-400' : ''}`}
+                                                >
+                                                    <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
+                                                        {displayName?.charAt(0)?.toUpperCase()}
+                                                        {isContactOnline(contactNumber) && (
+                                                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 overflow-hidden">
+                                                        <div className="font-medium flex items-center gap-1">
+                                                            {displayName}
+                                                            {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
+                                                        </div>
+                                                        <div className="text-xs text-indigo-200 truncate">
+                                                            {lastMessage?.Message || 'Sin mensajes'}
+                                                        </div>
+                                                    </div>
+                                                    {getUnreadCount(contact || {Number: contactNumber}) > 0 && (
+                                                        <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                                            {getUnreadCount(contact || {Number: contactNumber})}
+                                                        </span>
                                                     )}
-                                                </div>
-                                                <div className="flex-1 overflow-hidden">
-                                                    <div className="font-medium flex items-center gap-1">
-                                                        {displayName}
-                                                        {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
-                                                    </div>
-                                                    <div className="text-xs text-indigo-200 truncate">
-                                                        {lastMessage?.Message || 'Sin mensajes'}
-                                                    </div>
-                                                </div>
-                                                {getUnreadCount(contact || {Number: contactNumber}) > 0 && (
-                                                    <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                                                        {getUnreadCount(contact || {Number: contactNumber})}
-                                                    </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })
+                                                </button>
+                                            );
+                                        });
+                                    })()
                                 ) : (
                                     <div className="text-center text-indigo-200 py-8">
                                         No tienes conversaciones activas
@@ -1065,32 +1314,87 @@ export default function Dashboard() {
                             <div>
                         {contacts.filter(c => c.Status === 'accepted').length > 0 ? (
                             contacts.filter(c => c.Status === 'accepted').map((c, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => {
-                                        setSelected(c);
-                                        setSidebarOpen(false);
-                                    }}
-                                    className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Number === c.Number ? 'ring-1 ring-indigo-400' : ''}`}
-                                >
-                                    <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
-                                        {(c.ContactName || c.Username)?.charAt(0)?.toUpperCase()}
-                                        {isContactOnline(c.Number) && (
-                                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
-                                        )}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="font-medium">{c.ContactName || c.Username}</div>
-                                        <div className="text-xs text-indigo-200">
-                                            {isContactOnline(c.Number) ? 'En línea' : c.Number}
+                                <div key={idx} className="mb-2">
+                                    {editingContact === c.Number ? (
+                                        /* Modo edición inline */
+                                        <div className="p-3 bg-white/10 rounded space-y-2">
+                                            <div className="text-xs text-indigo-200">Editar nombre de {c.Username} ({c.Number})</div>
+                                            {editContactError && <div className="text-xs text-red-400">{editContactError}</div>}
+                                            <input
+                                                type="text"
+                                                value={editContactName}
+                                                onChange={(e) => { setEditContactName(e.target.value); setEditContactError(''); }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') { e.preventDefault(); submitEditContact(c.Number); }
+                                                    if (e.key === 'Escape') { setEditingContact(null); setEditContactName(''); setEditContactError(''); }
+                                                }}
+                                                autoFocus
+                                                disabled={editContactLoading}
+                                                className="w-full p-2 rounded bg-white/5 border border-white/10 focus:outline-none focus:border-indigo-400 text-white placeholder-indigo-300 text-sm disabled:opacity-50"
+                                                placeholder="Nuevo nombre"
+                                            />
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => { setEditingContact(null); setEditContactName(''); setEditContactError(''); }}
+                                                    disabled={editContactLoading}
+                                                    className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-1.5 rounded text-xs disabled:opacity-50"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                                <button
+                                                    onClick={() => submitEditContact(c.Number)}
+                                                    disabled={editContactLoading}
+                                                    className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-1.5 rounded text-xs disabled:opacity-50"
+                                                >
+                                                    {editContactLoading ? 'Guardando...' : 'Guardar'}
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                    {getUnreadCount(c) > 0 && (
-                                        <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                                            {getUnreadCount(c)}
-                                        </span>
+                                    ) : (
+                                        /* Modo normal */
+                                        <button
+                                            onClick={() => {
+                                                setSelected(c);
+                                                setSidebarOpen(false);
+                                            }}
+                                            className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded flex items-center gap-3 ${selected?.Number === c.Number ? 'ring-1 ring-indigo-400' : ''}`}
+                                        >
+                                            <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
+                                                {(c.ContactName || c.Username)?.charAt(0)?.toUpperCase()}
+                                                {isContactOnline(c.Number) && (
+                                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 overflow-hidden">
+                                                <div className="font-medium truncate">{c.ContactName || c.Username}</div>
+                                                <div className="text-xs text-indigo-200">
+                                                    {isContactOnline(c.Number) ? 'En línea' : (getLastSeenText(c.Number) || c.Number)}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {getUnreadCount(c) > 0 && (
+                                                    <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                                        {getUnreadCount(c)}
+                                                    </span>
+                                                )}
+                                                <span
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingContact(c.Number);
+                                                        setEditContactName(c.ContactName || '');
+                                                        setEditContactError('');
+                                                    }}
+                                                    className="p-1 rounded hover:bg-white/20 text-indigo-300 hover:text-white transition"
+                                                    title="Editar nombre"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                    </svg>
+                                                </span>
+                                            </div>
+                                        </button>
                                     )}
-                                </button>
+                                </div>
                             ))
                         ) : (
                             <div className="text-center text-indigo-200 py-8">
@@ -1118,7 +1422,7 @@ export default function Dashboard() {
                                     value={numberInput}
                                     onChange={(e) => setNumberInput(e.target.value)}
                                     className="w-full p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300"
-                                    placeholder="Número (8 dígitos)"
+                                    placeholder="Ej: +50212345678"
                                 />
                                 {addMsg && <div className="text-xs text-indigo-200">{addMsg}</div>}
                                 <div className="flex gap-2">
@@ -1203,18 +1507,16 @@ export default function Dashboard() {
                         
                         <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center overflow-y-auto">
                             <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mb-6">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                </svg>
+                                <img src="/todos.svg" alt="todos" className="w-16 h-16" />
                             </div>
                             <h2 className="text-3xl font-bold mb-2">Bienvenido a todos</h2>
                             <p className="max-w-md text-indigo-300">
                                 Selecciona un contacto para comenzar a chatear.
                             </p>
                             <div className="mt-4 flex items-center gap-2">
-                                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`}></span>
-                                <span className="text-sm text-indigo-300">
-                                    {isConnected ? 'WebSocket conectado' : 'WebSocket desconectado'}
+                                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></span>
+                                <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
+                                    {isConnected ? 'En línea' : 'Desconectado'}
                                 </span>
                             </div>
                         </div>
@@ -1266,7 +1568,7 @@ export default function Dashboard() {
                                     ) : isContactOnline(selected.Number) ? (
                                         <span className="text-green-400">● En línea</span>
                                     ) : (
-                                        selected.Number
+                                        <span className="text-indigo-400">{getLastSeenText(selected.Number) || selected.Number}</span>
                                     )}
                                 </div>
                             </div>
@@ -1318,48 +1620,133 @@ export default function Dashboard() {
                                     </div>
                                 </div>
                             ) : (
-                                (messagesByChat[getChatKey(selected)] || []).map((m, idx) => {
+                                (messagesByChat[getChatKey(selected)] || []).map((m, idx, arr) => {
                                     // Validar que el mensaje tenga los campos requeridos
                                     if (!m || !m.Message) {
                                         console.warn('Mensaje inválido detectado:', m);
                                         return null;
                                     }
-                                    
+
+                                    // Separador de fecha tipo WhatsApp
+                                    let dateSeparator = null;
+                                    if (m.Time) {
+                                        const msgDate = new Date(m.Time);
+                                        const prevMsg = idx > 0 ? arr[idx - 1] : null;
+                                        const prevDate = prevMsg?.Time ? new Date(prevMsg.Time) : null;
+                                        const showSeparator = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+                                        if (showSeparator) {
+                                            const now = new Date();
+                                            const yesterday = new Date(now);
+                                            yesterday.setDate(yesterday.getDate() - 1);
+                                            let label;
+                                            if (msgDate.toDateString() === now.toDateString()) {
+                                                label = 'Hoy';
+                                            } else if (msgDate.toDateString() === yesterday.toDateString()) {
+                                                label = 'Ayer';
+                                            } else {
+                                                label = msgDate.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                            }
+                                            dateSeparator = (
+                                                <div className="flex items-center justify-center my-2">
+                                                    <span className="bg-white/10 text-indigo-300 text-[11px] px-3 py-1 rounded-full">
+                                                        {label}
+                                                    </span>
+                                                </div>
+                                            );
+                                        }
+                                    }
+
                                     // m.SenderTelephon ahora contiene el número de teléfono del remitente
                                     const isMine = m.SenderTelephon === profile?.Telephon;
                                     const text = m.Message || '';
                                     const statusMsg = isMine ? (m.Status || 'enviado') : '';
                                     const timeStr = m.Time ? new Date(m.Time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                                     const hasReply = m.ReplyToMessageID && m.ReplyToMessage;
-                                    
+
+                                    const isEditing = editingMessageId === m.MessageID;
+                                    const isMenuOpen = messageMenuOpen === m.MessageID;
+
                                     return (
-                                        <div
-                                            key={m.MessageID || `msg-${idx}`}
-                                            className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
-                                        >
-                                            <div
-                                                className={`max-w-xs px-3 py-2 rounded-2xl text-sm cursor-pointer transition-opacity hover:opacity-90 ${
-                                                    isMine
-                                                        ? 'bg-indigo-600 text-white rounded-br-none'
-                                                        : 'bg-white/10 text-indigo-100 rounded-bl-none'
-                                                }`}
-                                                onClick={() => handleReplyToMessage(m)}
-                                                title="Click para responder"
-                                            >
-                                                {/* Mostrar cita si es una respuesta */}
-                                                {hasReply && (
-                                                    <div className={`mb-2 pl-2 border-l-2 ${isMine ? 'border-white/40' : 'border-indigo-400'} text-xs opacity-70 italic`}>
-                                                        <div className="font-semibold">{m.ReplyToUsername}</div>
-                                                        <div className="truncate">{m.ReplyToMessage}</div>
-                                                    </div>
-                                                )}
-                                                <div>{text}</div>
-                                                <div className="text-[10px] opacity-80 mt-1 flex items-center gap-1 justify-end">
-                                                    <span>{timeStr}</span>
-                                                    {isMine && <span>{getStatusIcon(statusMsg)}</span>}
+                                        <React.Fragment key={m.MessageID || `msg-${idx}`}>
+                                            {dateSeparator}
+                                            <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                                                <div
+                                                    className={`max-w-xs px-3 py-2 rounded-2xl text-sm transition-opacity hover:opacity-90 relative ${
+                                                        isMine
+                                                            ? 'bg-indigo-600 text-white rounded-br-none'
+                                                            : 'bg-white/10 text-indigo-100 rounded-bl-none'
+                                                    } ${m.isDeleting ? 'opacity-0 duration-400' : 'opacity-100'} animate-fade`}
+                                                    style={{ transition: 'opacity 0.4s' }}
+                                                >
+                                                    {/* Mostrar cita si es una respuesta */}
+                                                    {hasReply && (
+                                                        <div className={`mb-2 pl-2 border-l-2 ${isMine ? 'border-white/40' : 'border-indigo-400'} text-xs opacity-70 italic`}>
+                                                            <div className="font-semibold">{m.ReplyToUsername}</div>
+                                                            <div className="truncate">{m.ReplyToMessage}</div>
+                                                        </div>
+                                                    )}
+                                                    {isEditing ? (
+                                                        <div className="flex flex-col gap-1">
+                                                            <input
+                                                                className="w-full p-1 rounded bg-white/20 text-black text-xs"
+                                                                value={editingMessageText}
+                                                                onChange={handleEditMessageChange}
+                                                                autoFocus
+                                                                maxLength={500}
+                                                            />
+                                                            <div className="flex gap-2 mt-1 justify-end">
+                                                                <button
+                                                                    className="px-2 py-0.5 bg-green-600/80 hover:bg-green-700 text-white rounded text-xs"
+                                                                    onClick={() => handleEditMessageSave(m)}
+                                                                >Guardar</button>
+                                                                <button
+                                                                    className="px-2 py-0.5 bg-gray-500/80 hover:bg-gray-700 text-white rounded text-xs"
+                                                                    onClick={handleEditMessageCancel}
+                                                                >Cancelar</button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div onClick={() => handleReplyToMessage(m)} title="Click para responder">{text}</div>
+                                                            <div className="text-[10px] opacity-80 mt-1 flex flex-col items-end gap-0.5">
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>{timeStr}</span>
+                                                                    {isMine && <span>{getStatusIcon(statusMsg)}</span>}
+                                                                </div>
+                                                                {m.Edited && (
+                                                                    <span className="italic opacity-60">editado</span>
+                                                                )}
+                                                            </div>
+                                                            {/* Botón editar solo para mensajes propios */}
+                                                            {isMine && (
+                                                                <div className="absolute top-1 right-1">
+                                                                    <button
+                                                                        className="text-xs text-white/60 hover:text-white/90 bg-indigo-700/40 px-1 py-0.5 rounded"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setMessageMenuOpen(messageMenuOpen === m.MessageID ? null : m.MessageID);
+                                                                        }}
+                                                                        title="Opciones"
+                                                                    >⋮</button>
+                                                                    {isMenuOpen && (
+                                                                        <div className="absolute right-0 mt-1 w-32 bg-gray-900 text-white rounded shadow-2xl z-[9999] text-xs border border-gray-800">
+                                                                            <button
+                                                                                className="w-full text-left px-4 py-2 hover:bg-indigo-700 hover:text-white transition"
+                                                                                onClick={(e) => { e.stopPropagation(); handleEditMessage(m); setMessageMenuOpen(null); }}
+                                                                            >Editar</button>
+                                                                            <button
+                                                                                className="w-full text-left px-4 py-2 hover:bg-red-600 text-red-300 hover:text-white transition font-semibold"
+                                                                                onClick={(e) => { e.stopPropagation(); handleDeleteMessage(m); setMessageMenuOpen(null); }}
+                                                                            >Eliminar</button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </React.Fragment>
                                     );
                                 })
                             )}

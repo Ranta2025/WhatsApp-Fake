@@ -50,6 +50,33 @@ func (ap *ApiContact) RepoPutUser(username string, usernameUpdate string, ctx co
 	return nil
 }
 
+// GetUserDataBaseByTelephon obtiene los datos de un usuario buscando por número de teléfono
+func (ap *ApiContact) GetUserDataBaseByTelephon(telephon string, ctx context.Context) (*schemas.UserGet, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var user schemas.UserGet
+	result := ap.data.WithContext(c).
+		Table("user_data_bases").
+		Where("telephon = ?", strings.TrimSpace(telephon)).
+		Select("username", "telephon", "gmail").
+		Scan(&user)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
+}
+
+// RepoPutUserByTelephon actualiza el username de un usuario buscándolo por su telephon
+func (ap *ApiContact) RepoPutUserByTelephon(telephon string, usernameUpdate string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	result := ap.data.Model(&models.UserDataBase{}).WithContext(c).Where("telephon = ?", telephon).Update("username", usernameUpdate)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return errors.New("Error al modificar username")
+	}
+	return nil
+}
+
 func (ap *ApiContact) AddContact(contact models.ContactDataBase, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -113,7 +140,8 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 			user_data_bases.username AS username,
 			user_data_bases.telephon AS number,
 			contact_data_bases.status AS status,
-			contact_data_bases.contact_name AS contact_name
+			contact_data_bases.contact_name AS contact_name,
+			user_data_bases.last_seen AS last_seen
 		`).
 		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_contact").
 		Where("contact_data_bases.id_user = ?", id).
@@ -150,6 +178,24 @@ func (app *ApiContact) PutStatusMessageDelivered(id_message uint, ctx context.Co
 		Where("id_receptor = ?", id_message).
 		Where("status = ?", "enviado").
 		Update("status", "entregado").Error
+}
+
+// GetSenderTelephonsWithPendingMessages retorna los telephons de usuarios que enviaron
+// mensajes en estado "enviado" al receptor indicado (para notificarles al conectarse).
+func (app *ApiContact) GetSenderTelephonsWithPendingMessages(id_receiver uint, ctx context.Context) ([]string, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var telephons []string
+	result := app.data.WithContext(c).
+		Table("messages").
+		Select("DISTINCT user_data_bases.telephon").
+		Joins("INNER JOIN user_data_bases ON messages.id_user = user_data_bases.id").
+		Where("messages.id_receptor = ? AND messages.status = ? AND messages.deleted_at IS NULL", id_receiver, "enviado").
+		Scan(&telephons)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return telephons, nil
 }
 
 func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor uint, ctx context.Context) error {
@@ -268,7 +314,7 @@ func (app *ApiContact) GetContactsTelephons(id uint, ctx context.Context) (*[]mo
 	return &contacts, result.Error
 }
 
-// GetUsersWhoHaveMeAsContactTelephons obtiene los números de teléfono de usuarios que ME tienen agregado a mí
+// GetUsersWhoHaveMeAsContactTelephons obtiene los números de teléfono de usuarios que ME tienen agregado a mí (solo aceptados)
 func (app *ApiContact) GetUsersWhoHaveMeAsContactTelephons(myID uint, ctx context.Context) ([]string, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -276,7 +322,80 @@ func (app *ApiContact) GetUsersWhoHaveMeAsContactTelephons(myID uint, ctx contex
 	result := app.data.WithContext(c).Table("user_data_bases").
 		Select("user_data_bases.telephon").
 		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_user").
-		Where("contact_data_bases.id_contact = ? AND contact_data_bases.status != ?", myID, "rechazed").
+		Where("contact_data_bases.id_contact = ? AND contact_data_bases.status = ?", myID, "accepted").
 		Scan(&telephons)
 	return telephons, result.Error
+}
+
+func (app *ApiContact) PutContactByTelephon(id_user uint, id_contact uint, contactName string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	result := app.data.WithContext(c).Table("contact_data_bases").
+		Where("id_user = ? AND id_contact = ?", id_user, id_contact).
+		Update("contact_name", contactName)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+// UpdateLastSeen actualiza la última hora de conexión de un usuario
+func (app *ApiContact) UpdateLastSeen(telephon string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return app.data.Model(&models.UserDataBase{}).WithContext(c).
+		Where("telephon = ?", telephon).
+		Update("last_seen", time.Now()).Error
+}
+
+// UpdateMessageContent actualiza el contenido de un mensaje y lo marca como editado.
+// Solo el remitente (id_sender) puede editar su propio mensaje.
+func (app *ApiContact) UpdateMessageContent(messageID uint, idSender uint, newContent string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	result := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id = ? AND id_user = ?", messageID, idSender).
+		Updates(map[string]interface{}{
+			"message": newContent,
+			"edited":  true,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("mensaje no encontrado o no tienes permiso para editarlo")
+	}
+	return nil
+}
+
+// GetMessageByID obtiene un mensaje por su ID
+func (app *ApiContact) GetMessageByID(messageID uint, ctx context.Context) (*models.Message, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var msg models.Message
+	result := app.data.Model(&models.Message{}).WithContext(c).Where("id = ?", messageID).First(&msg)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &msg, nil
+}
+
+func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx context.Context) (*models.Message, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var msg models.Message
+	find := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id = ? AND id_user = ?", messageID, idSender).
+		First(&msg)
+	if find.Error != nil {
+		return nil, find.Error
+	}
+	del := app.data.WithContext(c).Delete(&msg)
+	if del.Error != nil {
+		return nil, del.Error
+	}
+	if del.RowsAffected == 0 {
+		return nil, errors.New("mensaje no encontrado o no tienes permiso para eliminarlo")
+	}
+	return &msg, nil
 }

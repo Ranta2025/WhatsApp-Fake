@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"gorm/backend/config"
 	"gorm/backend/services"
+	"log"
 	"net/http"
 	"time"
 
@@ -14,10 +15,14 @@ import (
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
+		log.Printf("[WS] CheckOrigin called. Origin: %s", origin)
 		if origin == "" {
+			log.Println("[WS] Origin empty, allowing direct connection")
 			return true // Conexiones directas sin Origin (ej: clientes nativos)
 		}
-		return config.IsAllowedOrigin(origin)
+		allowed := config.IsAllowedOrigin(origin)
+		log.Printf("[WS] Origin allowed: %v", allowed)
+		return allowed
 	},
 }
 
@@ -32,6 +37,7 @@ func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService
 
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
+			log.Printf("[WS] Upgrade failed: %v", err)
 			return
 		}
 

@@ -55,6 +55,38 @@ func MiddlewateGetChat() gin.HandlerFunc {
 	}
 }
 
+func MiddlewareChatEdit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var messaje models.MessageEdit
+		if err := c.ShouldBindJSON(&messaje); err != nil {
+			c.JSON(400, gin.H{
+				"error": "Error al bindear el mensaje",
+			})
+			c.Abort()
+			return
+		}
+
+		if messaje.MessageID == 0 {
+			c.JSON(400, gin.H{
+				"error": "El ID del mensaje no puede estar vacio",
+			})
+			c.Abort()
+			return
+		}
+
+		if len(messaje.Message) == 0 {
+			c.JSON(400, gin.H{
+				"error": "El mensaje no puede estar vacio",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Set("messageEdit", messaje)
+		c.Next()
+	}
+}
+
 func MiddlewareChatPutStatus() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		contact := c.Param("contact")

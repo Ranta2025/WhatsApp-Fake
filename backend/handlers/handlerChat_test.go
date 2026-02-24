@@ -11,7 +11,7 @@ import (
 
 // TestInitHandlerChat test para inicializar handler de chat
 func TestInitHandlerChat(t *testing.T) {
-	handler := InitHandlerChat(nil)
+	handler := InitHandlerChat(nil, nil)
 	assert.NotNil(t, handler)
 }
 

@@ -12,7 +12,7 @@ export default function AuthLayout({ children, title, subtitle, footer }) {
           <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
             <div className="px-6 pt-4">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">T</div>
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center"><img src="/todos.svg" alt="todos" className="w-9 h-9" /></div>
                 <div>
                   <div className="text-white font-bold text-base">todos</div>
                   <div className="text-indigo-300 text-xs">Conecta y conversa</div>

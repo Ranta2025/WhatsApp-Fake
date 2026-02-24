@@ -81,7 +81,7 @@ func GetHandlerApi(data *gorm.DB, hub *websocket.Hub) (*handlers.HandlerContact,
 	serviceMessage := services.InitServiceMessage(repo)
 	serviceContact := services.InitServiceContact(repo)
 	handlerContact := handlers.InitHandlerApiMessage(serviceContact, hub)
-	handlerChat := handlers.InitHandlerChat(serviceMessage)
+	handlerChat := handlers.InitHandlerChat(serviceMessage, hub)
 	return handlerContact, handlerChat, serviceMessage, serviceContact
 }
 

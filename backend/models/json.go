@@ -10,7 +10,7 @@ type Username struct {
 }
 
 type ContactAdd struct {
-	Number      string `json:"number" binding:"required"`       // Número de teléfono del contacto
+	Number      string `json:"number" binding:"required,e164"`  // Número de teléfono del contacto (formato internacional: +502...)
 	ContactName string `json:"contact_name" binding:"required"` // Nombre que le quieres poner al contacto
 }
 
@@ -22,6 +22,17 @@ type MessageGet struct {
 	ReplyToMessageID *uint   `json:"replyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"replyToTelephon,omitempty"` // Número de teléfono del autor del mensaje original
 	ReplyToMessage   *string `json:"replyToMessage,omitempty"`
+}
+
+type MessageEdit struct {
+	MessageID uint   `json:"messageID" binding:"required"`
+	Receptor  string `json:"receptor" binding:"required"` // Número de teléfono del receptor (para notificarle)
+	Message   string `json:"message" binding:"required"`  // Nuevo contenido del mensaje
+}
+
+type MessageDelete struct {
+	MessageID uint   `json:"messageID" binding:"required"`
+	Receptor  string `json:"receptor" binding:"required"`
 }
 
 type MessageRead struct {
@@ -57,4 +68,9 @@ type UserForgotPassword struct {
 	Email    string `json:"email" binding:"required"`
 	Code     string `json:"code" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+type GetContactPut struct {
+	Number      string `json:"number" binding:"required,e164"`
+	ContactName string `json:"contact_name" binding:"required"`
 }

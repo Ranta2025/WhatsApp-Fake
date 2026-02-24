@@ -22,8 +22,19 @@ export default function Register() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const phoneE164Regex = /^\+[1-9]\d{6,14}$/;
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!formData.numero.trim()) {
+            setError('El número de teléfono es requerido');
+            return;
+        }
+        if (!phoneE164Regex.test(formData.numero.trim())) {
+            setError('El número debe incluir el código de país con "+" delante (ej: +50212345678). Sin espacios ni guiones.');
+            return;
+        }
         if (formData.password !== confirm) {
             setError('Las contraseñas no coinciden');
             return;
@@ -100,14 +111,17 @@ export default function Register() {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-indigo-200 mb-1">Número</label>
+                    <label className="block text-sm font-medium text-indigo-200 mb-1">Número de teléfono</label>
                     <input
-                        type="text"
+                        type="tel"
                         name="numero"
                         onChange={handleChange}
                         className="w-full p-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-indigo-300 focus:outline-none focus:border-indigo-400 text-sm"
-                        placeholder="8 dígitos"
+                        placeholder="Ej: +50212345678"
                     />
+                    <p className="text-xs text-indigo-300 mt-1">
+                        Debe incluir el código de país con <span className="font-bold text-indigo-200">+</span> delante (ej: <span className="font-mono">+502</span> para Guatemala, <span className="font-mono">+34</span> para España)
+                    </p>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-indigo-200 mb-1">Contraseña</label>

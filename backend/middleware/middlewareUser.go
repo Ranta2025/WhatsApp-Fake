@@ -27,9 +27,11 @@ func MiddlewareLogOut() gin.HandlerFunc {
 			return
 		}
 
-		if len(user.Telephon) != 8 {
+		// La validación de formato E.164 ya se hace en el binding del modelo
+		// Solo verificamos que no esté vacío (redundante con binding:"required" pero por seguridad)
+		if len(user.Telephon) < 2 || user.Telephon[0] != '+' {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "El numero de telefono tiene que contener 8 caracteres",
+				"error": "El número de teléfono debe estar en formato internacional (ej: +50212345678)",
 			})
 			c.Abort()
 			return

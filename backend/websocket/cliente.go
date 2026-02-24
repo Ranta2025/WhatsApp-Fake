@@ -81,6 +81,12 @@ func (c *Client) readPump(hub *Hub) {
 		case "typing":
 			handler.HandleTypingIndicator()
 
+		case "edit_message":
+			handler.HandleEditMessage()
+
+		case "delete_message":
+			handler.HandleDeleteMessage()
+
 		default:
 			log.Printf("Tipo de mensaje desconocido: %s", baseMsg.Type)
 		}

@@ -34,13 +34,6 @@ export default function Login() {
 
     return (
         <>
-            <Link 
-                to="/" 
-                className="fixed top-4 left-4 text-white hover:text-indigo-300 transition flex items-center gap-2 z-50"
-            >
-                <span className="text-xl">←</span>
-                <span className="text-sm font-medium">Volver a inicio</span>
-            </Link>
             <AuthLayout
                 title="Bienvenido de nuevo"
                 subtitle="Inicia sesión para continuar"

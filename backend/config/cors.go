@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ var localOrigins = []string{
 	"http://10.50.148.131:5173",
 	"http://10.50.249.108:8080",
 	"http://10.50.249.108:5173",
+	"https://cereous-dewayne-sunshiny.ngrok-free.dev",
 }
 
 // IsAllowedOrigin verifica si un origin está en la lista de orígenes permitidos
@@ -31,9 +33,11 @@ func IsAllowedOrigin(origin string) bool {
 	}
 	if strings.Contains(origin, ".ngrok-free.app") ||
 		strings.Contains(origin, ".ngrok.io") ||
-		strings.Contains(origin, ".ngrok.app") {
+		strings.Contains(origin, ".ngrok.app") ||
+		strings.Contains(origin, "ngrok-free.dev"){
 		return true
 	}
+	log.Printf("[CORS] Origin RECHAZADO: %s", origin)
 	return false
 }
 
