@@ -12,6 +12,7 @@ type ServiceApiContact struct {
 	client *repos.ApiContact
 }
 
+// InitServiceContact crea el servicio de contactos con su repositorio.
 func InitServiceContact(cliente *repos.ApiContact) *ServiceApiContact {
 	return &ServiceApiContact{
 		client: cliente,
@@ -19,15 +20,18 @@ func InitServiceContact(cliente *repos.ApiContact) *ServiceApiContact {
 }
 
 // GetTelephonByUsername helper para obtener el telephon de un username
+// GetTelephonByUsername obtiene el número de teléfono de un usuario por su username.
 func (sr *ServiceApiContact) GetTelephonByUsername(username string, ctx context.Context) (string, error) {
 	return sr.client.GetTelephonByUsername(username, ctx)
 }
 
+// ServicesGetUser obtiene los datos de perfil del usuario por username.
 func (sr *ServiceApiContact) ServicesGetUser(username string, ctx context.Context) (*schemas.UserGet, error) {
 	user, err := sr.client.GetUserDataBase(username, ctx)
 	return user, err
 }
 
+// ServicePutUser actualiza el username de un usuario (buscado por username actual).
 func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, error) {
 	if username == usernameUpdate {
 		return nil, errors.New("Proporciono el mismo usuario")
@@ -44,6 +48,7 @@ func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate stri
 	return user, nil
 }
 
+// AddContact agrega un contacto buscando al usuario por username.
 func (sr *ServiceApiContact) AddContact(username string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
 	// Obtener ID del usuario que agrega
 	id_user, err := sr.client.GetIdUsername(username, ctx)
@@ -97,6 +102,7 @@ func (sr *ServiceApiContact) AddContact(username string, contactAdd models.Conta
 	return contactChat, nil
 }
 
+// ServiceGetContacts obtiene los contactos del usuario buscando por username.
 func (sr *ServiceApiContact) ServiceGetContacts(username string, ctx context.Context) (*[]models.ContactChat, error) {
 	id, err := sr.client.GetIdUsername(username, ctx)
 	if err != nil {
@@ -116,6 +122,7 @@ func (sr *ServiceApiContact) ServiceGetContacts(username string, ctx context.Con
 // ==================== Métodos basados en Telephon ====================
 
 // ServicesGetUserByTelephon obtiene los datos de un usuario buscando por telephon
+// ServicesGetUserByTelephon obtiene los datos de perfil del usuario buscando por número de teléfono.
 func (sr *ServiceApiContact) ServicesGetUserByTelephon(telephon string, ctx context.Context) (*schemas.UserGet, error) {
 	user, err := sr.client.GetUserDataBaseByTelephon(telephon, ctx)
 	return user, err
@@ -123,6 +130,8 @@ func (sr *ServiceApiContact) ServicesGetUserByTelephon(telephon string, ctx cont
 
 // ServicePutUserByTelephon actualiza el username de un usuario buscándolo por telephon.
 // Retorna los datos del usuario actualizado y el username anterior.
+// ServicePutUserByTelephon actualiza el username de un usuario buscado por su telephon
+// y devuelve los datos actualizados junto con el username anterior.
 func (sr *ServiceApiContact) ServicePutUserByTelephon(telephon string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, string, error) {
 	// Obtener el username actual para validar y para notificar
 	oldUsername, err := sr.client.GetUsernameByTelephon(telephon, ctx)
@@ -146,6 +155,7 @@ func (sr *ServiceApiContact) ServicePutUserByTelephon(telephon string, usernameU
 }
 
 // AddContactByTelephon agrega un contacto usando el telephon del usuario autenticado
+// AddContactByTelephon agrega un contacto usando el telephon del usuario (flujo WebSocket).
 func (sr *ServiceApiContact) AddContactByTelephon(telephon string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
 	// Obtener ID del usuario que agrega por telephon
 	id_user, err := sr.client.GetIdByTelephon(telephon, ctx)
@@ -200,6 +210,7 @@ func (sr *ServiceApiContact) AddContactByTelephon(telephon string, contactAdd mo
 }
 
 // ServiceGetContactsByTelephon obtiene los contactos del usuario usando su telephon
+// ServiceGetContactsByTelephon obtiene la lista de contactos del usuario buscando por telephon.
 func (sr *ServiceApiContact) ServiceGetContactsByTelephon(telephon string, ctx context.Context) (*[]models.ContactChat, error) {
 	id, err := sr.client.GetIdByTelephon(telephon, ctx)
 	if err != nil {
@@ -216,6 +227,7 @@ func (sr *ServiceApiContact) ServiceGetContactsByTelephon(telephon string, ctx c
 	return contacts, nil
 }
 
+// ServicePutContactByTelephon actualiza el nombre personalizado de un contacto del usuario.
 func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactPut, ctx context.Context) (*models.ContactChat, error) {
 	id_user, err := sr.client.GetIdByTelephon(contact.Number, ctx)
 	if err != nil {
@@ -247,4 +259,9 @@ func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactP
 	contactChat.ContactName = contact.GetContactPut.ContactName
 	contactChat.Status = "accepted"
 	return contactChat, nil
+}
+
+// ServiceUpdateAvatar actualiza la URL del avatar del usuario identificado por su telephon
+func (sr *ServiceApiContact) ServiceUpdateAvatar(telephon string, avatarUrl string, ctx context.Context) error {
+	return sr.client.UpdateAvatarByTelephon(telephon, avatarUrl, ctx)
 }

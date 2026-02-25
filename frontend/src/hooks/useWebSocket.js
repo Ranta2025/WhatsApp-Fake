@@ -41,8 +41,8 @@ export function useWebSocket() {
         wsManager.off(event, handler);
     }, []);
 
-    const sendMessage = useCallback((to, message, replyTo = null) => {
-        return wsManager.sendMessage(to, message, replyTo);
+    const sendMessage = useCallback((to, message, replyTo = null, mediaType = null) => {
+        return wsManager.sendMessage(to, message, replyTo, mediaType);
     }, []);
 
     const sendReadConfirmation = useCallback((from) => {

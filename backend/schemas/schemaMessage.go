@@ -12,6 +12,10 @@ type Message struct {
 
 	Edited bool `json:"Edited"` // true si el mensaje fue editado
 
+	// Campos de media
+	MediaUrl  string `json:"MediaUrl,omitempty"`  // URL del archivo en MinIO
+	MediaType string `json:"MediaType,omitempty"` // "image", "audio", "video", "sticker"
+
 	// Campos para responder mensajes
 	ReplyToMessageID *uint   `json:"ReplyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"ReplyToTelephon,omitempty"` // Número de teléfono del autor del mensaje original

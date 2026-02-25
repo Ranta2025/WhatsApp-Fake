@@ -19,6 +19,7 @@ type Hub struct {
 	repo      *repos.ApiContact
 }
 
+// NewHub crea e inicializa un Hub de WebSocket con el repositorio de datos.
 func NewHub(repo *repos.ApiContact) *Hub {
 	return &Hub{
 		Clients:   make(map[string]*Client),
@@ -29,6 +30,8 @@ func NewHub(repo *repos.ApiContact) *Hub {
 	}
 }
 
+// Run arranca el bucle principal del Hub que gestiona registros, desconexiones
+// y broadcast de mensajes de forma concurrente.
 func (h *Hub) Run() {
 	for {
 		select {
@@ -409,4 +412,25 @@ func (h *Hub) NotifyUsernameChange(oldUsername string, newUsername string) {
 	}
 
 	fmt.Printf("[HUB] === FIN NotifyUsernameChange ===\n")
+}
+
+// NotifyAvatarChange notifica a los contactos que el usuario cambió su foto de perfil
+func (h *Hub) NotifyAvatarChange(telephon string, avatarUrl string) {
+	fmt.Printf("[HUB] NotifyAvatarChange: tel=%s\n", telephon)
+	contacts := h.getUserContactsTelephons(telephon)
+
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type": "avatar_changed",
+		"payload": map[string]interface{}{
+			"telephon":   telephon,
+			"avatar_url": avatarUrl,
+		},
+	})
+
+	// Notificar a todos los contactos
+	for _, contactTelephon := range contacts {
+		h.SendTo(contactTelephon, msg)
+	}
+	// Notificar al propio usuario (para sincronizar otras sesiones)
+	h.SendTo(telephon, msg)
 }

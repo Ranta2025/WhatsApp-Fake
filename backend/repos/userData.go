@@ -14,6 +14,7 @@ type RepositoriesUser struct {
 	db *gorm.DB
 }
 
+// GetRespositorieUser crea el repositorio de usuarios con la conexión GORM.
 func GetRespositorieUser(db *gorm.DB) *RepositoriesUser {
 	return &RepositoriesUser{db: db}
 }
@@ -23,6 +24,7 @@ func (db *RepositoriesUser) BeginTx() *gorm.DB {
 	return db.db.Begin()
 }
 
+// CreateUser persiste un nuevo UserDataBase en la BD.
 func (db *RepositoriesUser) CreateUser(user models.UserDataBase, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -36,6 +38,7 @@ func (db *RepositoriesUser) CreateUserTx(tx *gorm.DB, user models.UserDataBase, 
 	return tx.WithContext(ctx).Create(&user).Error
 }
 
+// UsernameExist comprueba si ya existe un usuario con ese username en la BD.
 func (db *RepositoriesUser) UsernameExist(username string, c context.Context) bool {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -60,6 +63,7 @@ func (db *RepositoriesUser) UsernameExist(username string, c context.Context) bo
 	return true
 }
 
+// GetGmail devuelve el email registrado para el username; segundo valor indica si fue encontrado.
 func (db *RepositoriesUser) GetGmail(username string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -74,6 +78,7 @@ func (db *RepositoriesUser) GetGmail(username string, c context.Context) (string
 	return gmail, true
 }
 
+// EmailExist verifica si ya existe el email en la BD y devuelve el email si existe.
 func (db *RepositoriesUser) EmailExist(email string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -91,6 +96,7 @@ func (db *RepositoriesUser) EmailExist(email string, c context.Context) (string,
 	return gmail, true
 }
 
+// GetPassword devuelve el hash de contraseña del usuario; segundo valor indica si fue encontrado.
 func (db *RepositoriesUser) GetPassword(username string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -105,6 +111,7 @@ func (db *RepositoriesUser) GetPassword(username string, c context.Context) (str
 	return password, true
 }
 
+// GetActivo devuelve el estado 'activo' del usuario; segundo valor indica si fue encontrado.
 func (db *RepositoriesUser) GetActivo(username string, c context.Context) (bool, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -119,18 +126,21 @@ func (db *RepositoriesUser) GetActivo(username string, c context.Context) (bool,
 	return activo, true
 }
 
+// ActivateAccount marca la cuenta del usuario como activa en la BD.
 func (db *RepositoriesUser) ActivateAccount(username string, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("activo", true).Error
 }
 
+// ChangePassword actualiza la contraseña del usuario.
 func (db *RepositoriesUser) ChangePassword(username string, newPassword string, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("password", newPassword).Error
 }
 
+// GetBlocked devuelve el estado 'bloqueado' del usuario; segundo valor indica si fue encontrado.
 func (db *RepositoriesUser) GetBlocked(username string, c context.Context) (bool, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -145,6 +155,7 @@ func (db *RepositoriesUser) GetBlocked(username string, c context.Context) (bool
 	return bloqueado, true
 }
 
+// GetTelephonByUsername obtiene el número de teléfono del usuario por su username.
 func (db *RepositoriesUser) GetTelephonByUsername(username string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -162,6 +173,7 @@ func (db *RepositoriesUser) GetTelephonByUsername(username string, c context.Con
 	return telephon, true
 }
 
+// GetUsernameByEmail busca el username asociado a un email.
 func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -176,6 +188,7 @@ func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) 
 	return username, true
 }
 
+// TelephonExist comprueba si ya existe un usuario con ese número de teléfono.
 func (db *RepositoriesUser) TelephonExist(telephon string, c context.Context) bool {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -200,12 +213,14 @@ func (db *RepositoriesUser) TelephonExist(telephon string, c context.Context) bo
 	return true
 }
 
+// BlockUser establece 'bloqueado=true' para el usuario indicado.
 func (db *RepositoriesUser) BlockUser(username string, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 	return db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where("username = ?", username).Update("bloqueado", true).Error
 }
 
+// UnblockUserByEmail desbloquea al usuario asociado al email.
 func (db *RepositoriesUser) UnblockUserByEmail(email string, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
@@ -219,6 +234,7 @@ func (db *RepositoriesUser) UnblockUserByEmailTx(tx *gorm.DB, email string, c co
 	return tx.Model(&models.UserDataBase{}).WithContext(ctx).Where("gmail = ?", email).Update("bloqueado", false).Error
 }
 
+// ChangePasswordByEmail actualiza la contraseña del usuario buscando por email.
 func (db *RepositoriesUser) ChangePasswordByEmail(email string, newPassword string, c context.Context) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()

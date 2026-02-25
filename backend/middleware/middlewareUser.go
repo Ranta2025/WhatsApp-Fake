@@ -8,6 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// MiddlewareLogOut valida el JSON de registro de usuario: longitud de username,
+// formato del teléfono y reglas de contraseña.
+// (Nombre histórico; en realidad es MiddlewareRegister.)
 func MiddlewareLogOut() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var user models.UserDataBase
@@ -81,6 +84,8 @@ func MiddlewareLogOut() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareLogIn extrae las credenciales (username y contraseña) del cuerpo
+// JSON de la petición de login.
 func MiddlewareLogIn() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var b models.UserLogin
@@ -104,6 +109,7 @@ func MiddlewareLogIn() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareUsername valida que el nuevo username tenga mínimo 5 caracteres.
 func MiddlewareUsername() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var b models.Username
@@ -128,6 +134,7 @@ func MiddlewareUsername() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareActivateAccount valida el JSON de activación de cuenta (username y código).
 func MiddlewareActivateAccount() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var b models.UserActivate
@@ -143,6 +150,8 @@ func MiddlewareActivateAccount() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareRecoverAccount extrae el username de la petición de solicitud
+// de recuperación de contraseña.
 func MiddlewareRecoverAccount() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
@@ -160,6 +169,8 @@ func MiddlewareRecoverAccount() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareResendCode extrae el email de la petición de reenvío de código
+// de activación.
 func MiddlewareResendCode() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
@@ -177,6 +188,8 @@ func MiddlewareResendCode() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareRecoverCuenta valida el JSON de recuperación de cuenta
+// (email + código de verificación).
 func MiddlewareRecoverCuenta() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserRecover
@@ -189,9 +202,11 @@ func MiddlewareRecoverCuenta() gin.HandlerFunc {
 		}
 		ctx.Set("recoverCuenta", request)
 		ctx.Next()
-	}	
+	}
 }
 
+// MiddlewareChangePassword valida el JSON de cambio de contraseña dentro
+// de una sesión activa (email + nueva contraseña con sus reglas).
 func MiddlewareChangePassword() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserChangePassword
@@ -235,6 +250,8 @@ func MiddlewareChangePassword() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareRecoverAndChangePassword valida el JSON de recuperación completa:
+// email, código y nueva contraseña con sus reglas.
 func MiddlewareRecoverAndChangePassword() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserRecoverAndChange
@@ -278,7 +295,8 @@ func MiddlewareRecoverAndChangePassword() gin.HandlerFunc {
 	}
 }
 
-
+// MiddlewareSendForgotPasswordCode extrae el email de la petición que solicita
+// un código para restablecer contraseña olvidada.
 func MiddlewareSendForgotPasswordCode() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
@@ -296,6 +314,8 @@ func MiddlewareSendForgotPasswordCode() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareForgotPasswordChange valida el JSON de restablecimiento de contraseña
+// olvidada: email, código y nueva contraseña con sus reglas.
 func MiddlewareForgotPasswordChange() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserForgotPassword

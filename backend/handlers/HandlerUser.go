@@ -62,10 +62,14 @@ type HandlerUser struct {
 	hub     *websocket.Hub
 }
 
+// GetHandlerUser crea el handler de autenticación con su servicio y Hub WebSocket.
 func GetHandlerUser(service *services.ServicesUser, hub *websocket.Hub) *HandlerUser {
 	return &HandlerUser{service: service, hub: hub}
 }
 
+// HandlerLogOut maneja el registro de nuevos usuarios. Crea el usuario en BD,
+// genera access + refresh token y los establece en cookies.
+// (El nombre es histórico; en realidad es HandlerRegister.)
 func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -99,6 +103,9 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 		})
 	}
 }
+
+// HandlerLogIn autentica al usuario por username+contraseña y establece las
+// cookies de access token (15 min) y refresh token (7 días).
 func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -148,6 +155,8 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 	}
 }
 
+// HandlerLogoutSession cierra la sesión del usuario: elimina el refresh token de
+// Redis, limpia las cookies y notifica a los contactos que el usuario se desconectó.
 func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Obtener el telephon antes de eliminar el token
@@ -171,6 +180,8 @@ func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 	}
 }
 
+// HandlerActivateAccount activa la cuenta del usuario verificando el código
+// recibido por email y devuelve un JWT.
 func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -213,6 +224,8 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 	}
 }
 
+// HandlerRecoverAccount solicita un código de recuperación que se envía al email
+// registrado para el username indicado.
 func (s *HandlerUser) HandlerRecoverAccount() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()

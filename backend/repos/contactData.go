@@ -16,12 +16,14 @@ type ApiContact struct {
 	data *gorm.DB
 }
 
+// InitRepoContact crea el repositorio de contactos y mensajes con la conexión GORM.
 func InitRepoContact(data *gorm.DB) *ApiContact {
 	return &ApiContact{
 		data: data,
 	}
 }
 
+// GetUserDataBase obtiene los datos de perfil de un usuario buscando por username.
 func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -30,7 +32,7 @@ func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*sc
 	result := ap.data.WithContext(c).
 		Table("user_data_bases").
 		Where("username = ?", strings.TrimSpace(username)).
-		Select("username", "telephon", "gmail").
+		Select("username", "telephon", "gmail", "avatar_url").
 		Scan(&user)
 	if result.Error != nil {
 		log.Println("Error en query:", result.Error)
@@ -40,6 +42,7 @@ func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*sc
 	return &user, nil
 }
 
+// RepoPutUser actualiza el username de un usuario buscándolo por su username actual.
 func (ap *ApiContact) RepoPutUser(username string, usernameUpdate string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -58,7 +61,7 @@ func (ap *ApiContact) GetUserDataBaseByTelephon(telephon string, ctx context.Con
 	result := ap.data.WithContext(c).
 		Table("user_data_bases").
 		Where("telephon = ?", strings.TrimSpace(telephon)).
-		Select("username", "telephon", "gmail").
+		Select("username", "telephon", "gmail", "avatar_url").
 		Scan(&user)
 	if result.Error != nil {
 		return nil, result.Error
@@ -77,12 +80,27 @@ func (ap *ApiContact) RepoPutUserByTelephon(telephon string, usernameUpdate stri
 	return nil
 }
 
+// UpdateAvatarByTelephon actualiza la URL del avatar de un usuario buscándolo por su telephon
+func (ap *ApiContact) UpdateAvatarByTelephon(telephon string, avatarUrl string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	result := ap.data.Model(&models.UserDataBase{}).WithContext(c).
+		Where("telephon = ?", telephon).
+		Update("avatar_url", avatarUrl)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return errors.New("error al actualizar avatar")
+	}
+	return nil
+}
+
+// AddContact persiste una nueva relación de contacto en la BD.
 func (ap *ApiContact) AddContact(contact models.ContactDataBase, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return ap.data.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
 }
 
+// ExistContactAdd verifica si ya existe la relación de contacto entre dos usuarios.
 func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -94,6 +112,7 @@ func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.C
 	return count > 0, nil
 }
 
+// GetIdUsername obtiene el ID interno del usuario por su username.
 func (app *ApiContact) GetIdUsername(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -105,6 +124,7 @@ func (app *ApiContact) GetIdUsername(username string, ctx context.Context) (int,
 	return id_user, nil
 }
 
+// GetNumberUsername obtiene el ID interno del usuario por su número de teléfono.
 func (app *ApiContact) GetNumberUsername(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -116,6 +136,7 @@ func (app *ApiContact) GetNumberUsername(username string, ctx context.Context) (
 	return id_user, nil
 }
 
+// GetContactNumber obtiene los datos básicos de un usuario (username, telephon) por su número.
 func (app *ApiContact) GetContactNumber(number string, ctx context.Context) (*models.ContactChat, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -131,6 +152,8 @@ func (app *ApiContact) GetContactNumber(number string, ctx context.Context) (*mo
 	return &contact, nil
 }
 
+// GetContactsNumber obtiene la lista completa de contactos del usuario incluyendo
+// username, número, estado, nombre de contacto, última conexión y avatar.
 func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]models.ContactChat, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -141,7 +164,8 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 			user_data_bases.telephon AS number,
 			contact_data_bases.status AS status,
 			contact_data_bases.contact_name AS contact_name,
-			user_data_bases.last_seen AS last_seen
+			user_data_bases.last_seen AS last_seen,
+			user_data_bases.avatar_url AS avatar_url
 		`).
 		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_contact").
 		Where("contact_data_bases.id_user = ?", id).
@@ -151,12 +175,14 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 	return &contacts, result.Error
 }
 
+// CreateMessage persiste un nuevo mensaje en la BD.
 func (app *ApiContact) CreateMessage(message *models.Message, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return app.data.Model(&models.Message{}).WithContext(c).Create(message).Error
 }
 
+// GetMessages obtiene los mensajes entre dos usuarios excluyendo los borrados por cada parte.
 func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Context) ([]models.Message, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -171,6 +197,8 @@ func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Co
 	return messages, nil
 }
 
+// PutStatusMessageDelivered marca como 'entregado' los mensajes con estado 'enviado'
+// cuyo receptor coincide con id_message (id del receptor).
 func (app *ApiContact) PutStatusMessageDelivered(id_message uint, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -198,6 +226,8 @@ func (app *ApiContact) GetSenderTelephonsWithPendingMessages(id_receiver uint, c
 	return telephons, nil
 }
 
+// PutStatusMessageSeenByContact marca como 'visto' los mensajes enviados por id_sender
+// al id_receptor que estaban en estado 'entregado'.
 func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor uint, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

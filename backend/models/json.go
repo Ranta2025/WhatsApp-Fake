@@ -16,7 +16,11 @@ type ContactAdd struct {
 
 type MessageGet struct {
 	Receptor string `json:"receptor" binding:"required"` // Número de teléfono del receptor
-	Message  string `json:"message" binding:"required"`
+	Message  string `json:"message"`
+
+	// Campos de media
+	MediaUrl  string `json:"mediaUrl,omitempty"`  // URL del archivo en MinIO
+	MediaType string `json:"mediaType,omitempty"` // "image", "audio", "video", "sticker"
 
 	// Campos para responder mensajes
 	ReplyToMessageID *uint   `json:"replyToMessageID,omitempty"`

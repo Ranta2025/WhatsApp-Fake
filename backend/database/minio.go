@@ -60,6 +60,22 @@ func GetMinio() (*minio.Client, error) {
 		fmt.Printf("MinIO: bucket '%s' creado\n", bucket)
 	}
 
+	// Establecer política de lectura pública para que las URLs sean accesibles directamente
+	policy := fmt.Sprintf(`{
+		"Version":"2012-10-17",
+		"Statement":[{
+			"Effect":"Allow",
+			"Principal":{"AWS":["*"]},
+			"Action":["s3:GetObject"],
+			"Resource":["arn:aws:s3:::%s/*"]
+		}]
+	}`, bucket)
+
+	err = client.SetBucketPolicy(context.Background(), bucket, policy)
+	if err != nil {
+		return nil, fmt.Errorf("error configurando política del bucket: %w", err)
+	}
+
 	fmt.Printf("MinIO conexion establecida (endpoint: %s, bucket: %s)\n", endpoint, bucket)
 	return client, nil
 }

@@ -12,6 +12,9 @@ import (
 
 var db *gorm.DB
 
+// Conection abre la conexión a PostgreSQL, ejecuta AutoMigrate para sincronizar el
+// esquema y aplica índices/constraints adicionales. Reintenta hasta 10 veces antes
+// de devolver error.
 func Conection() (*gorm.DB, error) {
 	host := os.Getenv("POSTGRES_HOST")
 	if host == "" {

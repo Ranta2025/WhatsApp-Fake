@@ -16,6 +16,8 @@ type ServiceBugReport struct {
 	repo        string
 }
 
+// InitServiceBugReport crea el servicio de reportes leyendo credenciales de GitHub
+// desde variables de entorno (GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO).
 func InitServiceBugReport() *ServiceBugReport {
 	return &ServiceBugReport{
 		githubToken: os.Getenv("GITHUB_TOKEN"),
@@ -24,6 +26,8 @@ func InitServiceBugReport() *ServiceBugReport {
 	}
 }
 
+// CreateGitHubIssue crea un issue en el repositorio de GitHub usando la API REST,
+// formateando el reporte del usuario como Markdown.
 func (s *ServiceBugReport) CreateGitHubIssue(report models.BugReport) error {
 	// Validar que tengamos las credenciales necesarias
 	if s.githubToken == "" || s.owner == "" || s.repo == "" {

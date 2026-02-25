@@ -26,6 +26,9 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// HandleWebSocket actualiza la conexión HTTP a WebSocket, crea el Client y lo
+// registra en el Hub. Envía la lista inicial de contactos online y lanza
+// las goroutines de lectura y escritura.
 func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, callService *services.ServiceCall) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, exist := c.Get("username")

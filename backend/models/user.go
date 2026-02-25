@@ -19,6 +19,7 @@ type UserDataBase struct {
 	Activo    bool       `gorm:"default:false"`
 	Bloqueado bool       `gorm:"default:false"`
 	LastSeen  *time.Time `gorm:"column:last_seen" json:"last_seen"`
+	AvatarUrl string     `gorm:"size:500" json:"avatar_url"`
 
 	ContactsAdded         []ContactDataBase `gorm:"foreignKey:IdUser"`
 	ContactsWhereIAmAdded []ContactDataBase `gorm:"foreignKey:IdContact"`

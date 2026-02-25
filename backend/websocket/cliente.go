@@ -50,6 +50,8 @@ func (c *Client) buildRouter() map[string]func(*MessageHandler) {
 	}
 }
 
+// readPump lee mensajes entrantes del WebSocket, los enruta al handler
+// correspondiente y cierra la conexión al terminar.
 func (c *Client) readPump(hub *Hub) {
 	defer func() {
 		hub.Remove <- c
@@ -99,6 +101,8 @@ func (c *Client) readPump(hub *Hub) {
 	}
 }
 
+// writePump envía mensajes al cliente WebSocket y mantiene viva la conexión
+// mediante pings periódicos.
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {

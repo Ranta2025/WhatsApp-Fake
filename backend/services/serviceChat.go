@@ -13,16 +13,20 @@ type ServiceChat struct {
 	repo *repos.ApiContact
 }
 
+// InitServiceMessage crea el servicio de chat con su repositorio.
 func InitServiceMessage(repo *repos.ApiContact) *ServiceChat {
 	return &ServiceChat{
 		repo: repo,
 	}
 }
 
+// ServiceCreatMessage persiste un nuevo mensaje con estado 'enviado'.
 func (rp *ServiceChat) ServiceCreatMessage(message models.MessageCreat, ctx context.Context) (schemas.Message, error) {
 	return rp.ServiceCreatMessageWithStatus(message, "enviado", ctx)
 }
 
+// ServiceCreatMessageWithStatus persiste un nuevo mensaje con el estado indicado
+// y resuelve los IDs internos a partir de los telephons.
 func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat, status string, ctx context.Context) (schemas.Message, error) {
 	// message.Telephon contiene el telephon del remitente
 	// message.MessageGet.Receptor contiene el telephon del receptor
@@ -40,6 +44,10 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 		Message:    message.Message,
 		Status:     status,
 		Time:       time.Now(),
+
+		// Campos de media
+		MediaUrl:  message.MessageGet.MediaUrl,
+		MediaType: message.MessageGet.MediaType,
 
 		// Campos de reply
 		ReplyToMessageID: message.MessageGet.ReplyToMessageID,
@@ -64,6 +72,10 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 		Status:         status,
 		Time:           messageDB.Time,
 
+		// Campos de media
+		MediaUrl:  messageDB.MediaUrl,
+		MediaType: messageDB.MediaType,
+
 		// Campos de reply
 		ReplyToMessageID: messageDB.ReplyToMessageID,
 		ReplyToTelephon:  messageDB.ReplyToTelephon,
@@ -71,6 +83,8 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	}, nil
 }
 
+// ServiceGetMessages devuelve los mensajes entre dos usuarios (por telephon)
+// excluyendo los eliminados por cada parte.
 func (rp *ServiceChat) ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error) {
 	id_user, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
 	if err != nil {
@@ -88,6 +102,8 @@ func (rp *ServiceChat) ServiceGetMessages(telephonUser string, telephonContact s
 	return messagesSchemas, nil
 }
 
+// convertMessagesToSchemas transforma una lista de modelos Message en schemas,
+// asignando los telephons correctos a remitente y receptor.
 func convertMessagesToSchemas(messagesDB []models.Message, telephonUser string, telephonContact string, id_user int) []schemas.Message {
 	var messages []schemas.Message
 	for _, msg := range messagesDB {
@@ -102,6 +118,8 @@ func convertMessagesToSchemas(messagesDB []models.Message, telephonUser string, 
 			ReplyToTelephon:  msg.ReplyToTelephon,
 			ReplyToMessage:   msg.ReplyToMessage,
 			Edited:           msg.Edited,
+			MediaUrl:         msg.MediaUrl,
+			MediaType:        msg.MediaType,
 		}
 		if msg.IdUser == uint(id_user) {
 			message.SenderTelephon = telephonUser
@@ -115,6 +133,8 @@ func convertMessagesToSchemas(messagesDB []models.Message, telephonUser string, 
 	return messages
 }
 
+// ServicePutMessageStatusDelivered marca como 'visto' todos los mensajes enviados
+// por telephonSender al telephonReceiver que estén en estado 'entregado'.
 func (rp *ServiceChat) ServicePutMessageStatusDelivered(telephonSender string, telephonReceiver string, ctx context.Context) error {
 	id_sender, err := rp.repo.GetIdByTelephon(telephonSender, ctx)
 	if err != nil {
@@ -128,6 +148,8 @@ func (rp *ServiceChat) ServicePutMessageStatusDelivered(telephonSender string, t
 	return rp.repo.PutStatusMessageSeenByContact(uint(id_sender), uint(id_receiver), ctx)
 }
 
+// ServicePutAllMessageStatusDelivered marca como 'entregado' todos los mensajes
+// pendientes del usuario (usado al reconectarse).
 func (rp *ServiceChat) ServicePutAllMessageStatusDelivered(telephon string, ctx context.Context) error {
 	id_user, err := rp.repo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
@@ -159,6 +181,8 @@ func (rp *ServiceChat) ServiceGetSendersAndMarkDelivered(telephon string, ctx co
 // ServiceGetAllChats devuelve todos los chats del usuario agrupados por contacto.
 // Cada grupo incluye IsContact=true si el otro participante está en la lista de
 // contactos del usuario, o false si le escribió sin estar agregado.
+// ServiceGetAllChats devuelve todos los chats del usuario agrupados por contacto,
+// con el último mensaje y contador de no leídos de cada conversación.
 func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Context) ([]schemas.ChatGroup, error) {
 	id_user, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
 	if err != nil {
@@ -214,6 +238,8 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 				ReplyToTelephon:  msg.ReplyToTelephon,
 				ReplyToMessage:   msg.ReplyToMessage,
 				Edited:           msg.Edited,
+				MediaUrl:         msg.MediaUrl,
+				MediaType:        msg.MediaType,
 			}
 			if msg.IdUser == uint(id_user) {
 				sm.SenderTelephon = telephonUser
@@ -285,6 +311,8 @@ func (rp *ServiceChat) ServiceEditMessage(telephonSender string, messageID uint,
 	}, nil
 }
 
+// ServiceDeleteMessage elimina un mensaje para todos (marca deleted_by_sender y deleted_by_receiver).
+// Solo el remitente puede eliminar el mensaje.
 func (rp *ServiceChat) ServiceDeleteMessage(telephonSender string, messageID uint, ctx context.Context) (schemas.Message, error) {
 	// Query 1: obtener ID del sender para verificar ownership
 	idSender, err := rp.repo.GetIdByTelephon(telephonSender, ctx)
@@ -316,6 +344,7 @@ func (rp *ServiceChat) ServiceDeleteMessage(telephonSender string, messageID uin
 }
 
 // ServiceClearChat vacía el chat para el usuario actual con el contacto especificado
+// ServiceClearChat elimina el historial de mensajes entre dos usuarios solo para el solicitante.
 func (rp *ServiceChat) ServiceClearChat(telephonUser string, telephonContact string, ctx context.Context) error {
 	id_user, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
 	if err != nil {
@@ -329,6 +358,7 @@ func (rp *ServiceChat) ServiceClearChat(telephonUser string, telephonContact str
 }
 
 // ServiceDeleteMessageForMe elimina un mensaje solo para el usuario actual
+// ServiceDeleteMessageForMe elimina un mensaje únicamente del lado del usuario que lo solicita.
 func (rp *ServiceChat) ServiceDeleteMessageForMe(telephonUser string, messageID uint, ctx context.Context) (schemas.Message, error) {
 	// Query 1: obtener ID del usuario actual
 	idUser, err := rp.repo.GetIdByTelephon(telephonUser, ctx)

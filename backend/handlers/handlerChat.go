@@ -6,7 +6,6 @@ import (
 	"gorm/backend/services"
 	"gorm/backend/websocket"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,10 +15,13 @@ type HandlerChat struct {
 	hub     *websocket.Hub
 }
 
+// InitHandlerChat crea el handler de chat con su servicio y referencia al Hub WebSocket.
 func InitHandlerChat(service *services.ServiceChat, hub *websocket.Hub) *HandlerChat {
 	return &HandlerChat{service: service, hub: hub}
 }
 
+// HandlerPostChat persiste un nuevo mensaje de chat en base de datos.
+// Los datos del mensaje ya vienen validados por MiddlewareChat.
 func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
@@ -50,6 +52,8 @@ func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 	}
 }
 
+// HandlerGetChats devuelve el historial de mensajes entre el usuario autenticado
+// y el contacto indicado en el parámetro :contact.
 func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Usar telephon del token (identificador inmutable)
@@ -74,6 +78,8 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 	}
 }
 
+// HandlerPutChat marca como 'visto' los mensajes enviados por el contacto
+// al usuario autenticado para la conversación especificada.
 func (hd *HandlerChat) HandlerPutChat() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Usar telephon del token (identificador inmutable)
@@ -188,71 +194,40 @@ func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
 	}
 }
 
+// HandlerClearChat borra el historial del chat para el usuario autenticado.
+// Los datos vienen extraídos por MiddlewareClearChat.
 func (hd *HandlerChat) HandlerClearChat() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephonUser, exist := ctx.Get("telephon")
-		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener el telefono del usuario",
-			})
+		telephonContact, exist2 := ctx.Get("contact")
+		if !exist || !exist2 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
 			return
 		}
 
-		telephonContact := ctx.Param("contact")
-		if telephonContact == "" {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "el contacto es requerido",
-			})
+		if err := hd.service.ServiceClearChat(telephonUser.(string), telephonContact.(string), ctx); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		err := hd.service.ServiceClearChat(telephonUser.(string), telephonContact, ctx)
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{
-			"message": "Chat vaciado correctamente",
-		})
+		ctx.JSON(http.StatusOK, gin.H{"message": "Chat vaciado correctamente"})
 	}
 }
 
+// HandlerDeleteMessageForMe elimina un mensaje solo para el usuario autenticado.
+// El ID del mensaje viene validado por MiddlewareDeleteMessage.
 func (hd *HandlerChat) HandlerDeleteMessageForMe() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephonUser, exist := ctx.Get("telephon")
-		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener el telefono del usuario",
-			})
+		messageID, exist2 := ctx.Get("messageID")
+		if !exist || !exist2 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
 			return
 		}
 
-		messageIDStr := ctx.Param("id")
-		if messageIDStr == "" {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "el id del mensaje es requerido",
-			})
-			return
-		}
-
-		var messageID uint
-		if id, err := strconv.ParseUint(messageIDStr, 10, 32); err == nil {
-			messageID = uint(id)
-		} else {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "id de mensaje inválido",
-			})
-			return
-		}
-
-		deletedMsg, err := hd.service.ServiceDeleteMessageForMe(telephonUser.(string), messageID, ctx)
+		deletedMsg, err := hd.service.ServiceDeleteMessageForMe(telephonUser.(string), messageID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 

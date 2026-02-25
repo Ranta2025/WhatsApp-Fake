@@ -2,6 +2,7 @@ package routers
 
 import (
 	"gorm/backend/handlers"
+	"gorm/backend/middleware"
 	"gorm/backend/routers/api"
 	"gorm/backend/routers/log"
 	"gorm/backend/services"
@@ -10,7 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, handlerBugReport *handlers.HandlerBugReport, callService *services.ServiceCall) {
+// Router registra todas las rutas de la aplicación: autenticación (log), bug-report
+// público y el subgrupo /api/v1/ con usuario, contactos, chat, media, llamadas y WebSocket.
+func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, handlerBugReport *handlers.HandlerBugReport, callService *services.ServiceCall, handlerMedia *handlers.HandlerMedia) {
 	// Middleware de recuperación de panics
 	app.Use(gin.Recovery())
 
@@ -19,13 +22,14 @@ func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handler
 	router.Logs()
 
 	// Ruta pública para reportes de bugs (no requiere autenticación)
-	app.POST("/api/v1/bug-report", handlerBugReport.HandleReportBug())
+	app.POST("/api/v1/bug-report", middleware.MiddlewareBugReport(), handlerBugReport.HandleReportBug())
 
 	subrouter := app.Group("/api/v1/")
-	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, handlerCall, hub, chatService, contactService, callService)
+	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, handlerCall, handlerMedia, hub, chatService, contactService, callService)
 	apiMessage.ApiUser()
 	apiMessage.ApiContact()
 	apiMessage.ApiChat()
+	apiMessage.ApiMedia()
 	apiMessage.ApiCall()
 	apiMessage.ApiWebSocket()
 }

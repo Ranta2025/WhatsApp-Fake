@@ -20,6 +20,8 @@ type Config struct {
 	IncluirCaracterEspecial bool
 }
 
+// GenerarCodigo genera un código aleatorio criptográficamente seguro usando
+// la configuración dada (longitud, tipos de caracteres incluidos).
 func GenerarCodigo(config Config) (string, error) {
 	var charset strings.Builder
 
@@ -56,6 +58,8 @@ func GenerarCodigo(config Config) (string, error) {
 	return codigo.String(), nil
 }
 
+// SendEmail envía un correo electrónico via SMTP.
+// Intenta primero con STARTTLS en el puerto 587 y hace fallback a SSL en el 465.
 func SendEmail(to string, subject string, body string) error {
 	from := os.Getenv("GMAIL_FROM")
 	if from == "" {

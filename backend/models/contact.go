@@ -1,8 +1,9 @@
 package models
 
 import (
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type ContactDataBase struct {
@@ -20,8 +21,9 @@ type ContactChat struct {
 	Username    string
 	Number      string
 	Status      string
-	ContactName string // Nombre personalizado del contacto
-	LastSeen    *time.Time `json:"last_seen"` // Última vez que el contacto estuvo en línea
+	ContactName string     // Nombre personalizado del contacto
+	LastSeen    *time.Time `json:"last_seen"`  // Última vez que el contacto estuvo en línea
+	AvatarUrl   string     `json:"avatar_url"` // URL de la foto de perfil
 }
 
 type ContactPut struct {

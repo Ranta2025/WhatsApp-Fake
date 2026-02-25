@@ -12,26 +12,24 @@ type HandlerBugReport struct {
 	service *services.ServiceBugReport
 }
 
+// InitHandlerBugReport crea el handler de reportes de bugs con su servicio.
 func InitHandlerBugReport(service *services.ServiceBugReport) *HandlerBugReport {
 	return &HandlerBugReport{
 		service: service,
 	}
 }
 
+// HandleReportBug recibe un reporte de bug desde el cliente y crea un Issue en GitHub.
+// Los datos vienen validados por MiddlewareBugReport.
 func (h *HandlerBugReport) HandleReportBug() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var report models.BugReport
-
-		// Validar el JSON recibido
-		if err := c.ShouldBindJSON(&report); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   "Datos inválidos",
-				"message": err.Error(),
-			})
+		reportInterface, exist := c.Get("bugReport")
+		if !exist {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos del reporte"})
 			return
 		}
 
-		// Enviar el reporte a GitHub
+		report := reportInterface.(models.BugReport)
 		if err := h.service.CreateGitHubIssue(report); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "Error al crear el issue en GitHub",
@@ -40,7 +38,6 @@ func (h *HandlerBugReport) HandleReportBug() gin.HandlerFunc {
 			return
 		}
 
-		// Respuesta exitosa
 		c.JSON(http.StatusCreated, gin.H{
 			"success": true,
 			"message": "Bug reportado exitosamente. ¡Gracias por tu ayuda!",

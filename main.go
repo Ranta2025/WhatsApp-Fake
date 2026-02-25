@@ -24,7 +24,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_ = mc // disponible para el handler de upload
+
+	// Servicio y handler de media (MinIO)
+	serviceMedia := services.InitServiceMedia(mc)
+	handlerMedia := handlers.InitHandlerMedia(serviceMedia)
 
 	app := GetApp()
 	app.app.Use(config.Cors())
@@ -46,7 +49,7 @@ func main() {
 	serviceCall := services.InitServiceCall(repo)
 	handlerCall := handlers.InitHandlerCall(serviceCall)
 
-	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall)
+	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall, handlerMedia)
 
 	app.Welcome()
 	app.Run()

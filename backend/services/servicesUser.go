@@ -15,6 +15,7 @@ type ServicesUser struct {
 	cache *cache.CacheUser
 }
 
+// InitServices crea el servicio de autenticación con repositorio y caché.
 func InitServices(repo *repos.RepositoriesUser, cache *cache.CacheUser) *ServicesUser {
 	return &ServicesUser{
 		repo:  repo,
@@ -22,6 +23,8 @@ func InitServices(repo *repos.RepositoriesUser, cache *cache.CacheUser) *Service
 	}
 }
 
+// CreateUser registra un nuevo usuario: valida unicidad, hashea la contraseña,
+// crea el registro en BD dentro de una transacción y envía el código de activación por email.
 func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context) error {
 	if exist := s.repo.UsernameExist(user.Username, ctx); exist {
 		return errors.New("Username ya existe")
@@ -86,6 +89,8 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 	return tx.Commit().Error
 }
 
+// LogIn autentica al usuario: verifica estado activo/bloqueado, compara la
+// contraseña con bcrypt y genera un JWT con username + telephon.
 func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string, error) {
 	log.Println("[SERVICE] Iniciando LogIn para usuario:", user.Username)
 	exist := s.repo.UsernameExist(user.Username, ctx)
@@ -133,6 +138,8 @@ func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string
 	return token, nil
 }
 
+// ActivateAccount activa la cuenta del usuario verificando que el código de
+// activación en Redis coincida con el suministrado.
 func (s *ServicesUser) ActivateAccount(user models.UserActivate, ctx context.Context) error {
 	exist := s.repo.UsernameExist(user.Username, ctx)
 	if !exist {
@@ -154,6 +161,8 @@ func (s *ServicesUser) ActivateAccount(user models.UserActivate, ctx context.Con
 	return nil
 }
 
+// RecoverAccount genera y envía un código de recuperación al email del usuario.
+// Verifica previamente que la cuenta no esté bloqueada.
 func (s *ServicesUser) RecoverAccount(username string, ctx context.Context) (string, error) {
 
 	bloqueado, exist := s.repo.GetBlocked(username, ctx)
@@ -186,6 +195,8 @@ func (s *ServicesUser) RecoverAccount(username string, ctx context.Context) (str
 	return username, nil
 }
 
+// chequearIntentosFallidos incrementa el contador de intentos fallidos del usuario
+// y lo bloquea automáticamente al alcanzar 5 intentos.
 func (s *ServicesUser) chequearIntentosFallidos(username string, ctx context.Context) error {
 	intentos, err := s.cache.GetIntentosFallidos(username, ctx)
 	if err != nil {
@@ -209,6 +220,7 @@ func (s *ServicesUser) chequearIntentosFallidos(username string, ctx context.Con
 	return nil
 }
 
+// ResendCode genera y envía un nuevo código de desbloqueo al email del usuario.
 func (s *ServicesUser) ResendCode(gmail string, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(gmail, ctx)
 	if !exist {
@@ -236,6 +248,7 @@ func (s *ServicesUser) ResendCode(gmail string, ctx context.Context) error {
 	return nil
 }
 
+// RecoverCuenta desbloquea la cuenta del usuario verificando el código enviado al email.
 func (s *ServicesUser) RecoverCuenta(user models.UserRecover, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(user.Email, ctx)
 	if !exist {
@@ -255,6 +268,7 @@ func (s *ServicesUser) RecoverCuenta(user models.UserRecover, ctx context.Contex
 	return nil
 }
 
+// ChangePassword actualiza la contraseña del usuario buscando por email.
 func (s *ServicesUser) ChangePassword(user models.UserChangePassword, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(user.Gmail, ctx)
 	if !exist {

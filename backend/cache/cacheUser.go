@@ -17,6 +17,7 @@ type CacheUser struct {
 	repo *repos.RepositoriesUser
 }
 
+// InitChacheUser crea el CacheUser con su cliente Redis y repositorio de usuarios.
 func InitChacheUser(rd *redis.Client, repo *repos.RepositoriesUser) *CacheUser {
 	return &CacheUser{rd, repo}
 }
@@ -44,6 +45,8 @@ func (ch *CacheUser) DeleteRefreshToken(username string, ctx context.Context) er
 	return ch.rd.Del(c, "refresh:"+username).Err()
 }
 
+// CachePassword obtiene el hash de contraseña del usuario directamente desde la BD.
+// No se guarda en Redis para no exponer hashes sensibles en caché.
 func (ch *CacheUser) CachePassword(username string, ctx context.Context) (string, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -55,6 +58,8 @@ func (ch *CacheUser) CachePassword(username string, ctx context.Context) (string
 	return passwordDB, nil
 }
 
+// CacheActivo revisa en Redis si el usuario está activo; si no está cacheado lo
+// consulta en la BD y lo guarda con TTL de 2 min.
 func (ch *CacheUser) CacheActivo(username string, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -79,12 +84,15 @@ func (ch *CacheUser) CacheActivo(username string, ctx context.Context) (bool, er
 	return activoReturn, nil
 }
 
+// SetCodigo guarda un código temporal en Redis con TTL de 10 min.
+// tipoCodigo diferencia el tipo de código ("activacion", "recuperacion", etc.).
 func (ch *CacheUser) SetCodigo(tipoCodigo string, username string, codigo string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return ch.rd.Set(c, "codigo"+tipoCodigo+":"+username, codigo, 10*time.Minute).Err()
 }
 
+// GetCodigo recupera el código temporal guardado en Redis para el usuario.
 func (ch *CacheUser) GetCodigo(tipoCodigo string, username string, ctx context.Context) (string, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -92,6 +100,8 @@ func (ch *CacheUser) GetCodigo(tipoCodigo string, username string, ctx context.C
 	return codigo, err
 }
 
+// CacheBloqueado revisa en Redis si el usuario está bloqueado; si no está cacheado lo
+// consulta en la BD y lo almacena con TTL de 2 min.
 func (ch *CacheUser) CacheBloqueado(username string, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -112,6 +122,8 @@ func (ch *CacheUser) CacheBloqueado(username string, ctx context.Context) (bool,
 	return bloqueadoReturn, nil
 }
 
+// GetIntentosFallidos devuelve el contador de intentos fallidos de login
+// almacenado en Redis; retorna 0 si no existe clave.
 func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -126,6 +138,7 @@ func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (
 	return intentosInt, nil
 }
 
+// SetIntentosFallidos actualiza el contador de intentos fallidos en Redis con TTL de 30 min.
 func (ch *CacheUser) SetIntentosFallidos(username string, intentos int, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

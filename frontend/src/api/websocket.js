@@ -221,12 +221,16 @@ class WebSocketManager {
         };
     }
 
-    sendMessage(to, message, replyTo = null) {
+    sendMessage(to, message, replyTo = null, mediaType = null) {
         const payload = { receptor: to, message };
         if (replyTo) {
             payload.replyToMessageID = replyTo.MessageID;
             payload.replyToTelephon = replyTo.SenderTelephon;
             payload.replyToMessage = replyTo.Message;
+        }
+        if (mediaType) {
+            payload.mediaType = mediaType;
+            payload.mediaUrl = message; // El mensaje es la URL
         }
         return this._send('chat', payload);
     }

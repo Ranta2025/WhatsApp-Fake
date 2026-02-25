@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// TimeMiddleware registra el método HTTP, ruta, código de estado y duración de
+// cada request en los logs del servidor.
 func TimeMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		start := time.Now()

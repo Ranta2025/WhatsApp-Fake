@@ -55,6 +55,8 @@ func IsAllowedOrigin(origin string) bool {
 	return false
 }
 
+// Cors devuelve el middleware de CORS configurado con los orígenes, métodos y
+// cabeceras permitidos para la aplicación.
 func Cors() gin.HandlerFunc {
 	return cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {

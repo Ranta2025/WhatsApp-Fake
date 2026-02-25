@@ -12,6 +12,8 @@ type Log struct {
 	Handler handlers.HandlerUser
 }
 
+// Logs registra todas las rutas de autenticación: registro, login, logout,
+// activación de cuenta, recuperación y cambio de contraseña.
 func (rout *Log) Logs() {
 	rout.Router.POST("/LogIn", middleware.MiddlewareLogIn(), rout.Handler.HandlerLogIn())
 	rout.Router.POST("/register", middleware.MiddlewareLogOut(), rout.Handler.HandlerLogOut())
