@@ -211,3 +211,61 @@ func (hd *HandlerContact) HandlerUpdateAvatar() gin.HandlerFunc {
 		ctx.JSON(http.StatusOK, gin.H{"message": "avatar actualizado", "avatar_url": url})
 	}
 }
+// HandlerUpdateWallpaper actualiza el fondo de pantalla global del usuario autenticado.
+func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		if !exist {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
+			ctx.Abort()
+			return
+		}
+
+		var body struct {
+			WallpaperUrl string `json:"wallpaper_url"`
+		}
+		if err := ctx.ShouldBindJSON(&body); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "datos inválidos"})
+			ctx.Abort()
+			return
+		}
+
+		if err := hd.service.ServiceUpdateWallpaper(telephon.(string), body.WallpaperUrl, ctx); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.Abort()
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{"message": "fondo actualizado", "wallpaper_url": body.WallpaperUrl})
+	}
+}
+
+// HandlerUpdateContactWallpaper actualiza el fondo de pantalla de un chat específico (por contacto).
+func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		if !exist {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
+			ctx.Abort()
+			return
+		}
+
+		var body struct {
+			ContactTelephon string `json:"contact_telephon" binding:"required"`
+			WallpaperUrl    string `json:"wallpaper_url"`
+		}
+		if err := ctx.ShouldBindJSON(&body); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "contact_telephon requerido"})
+			ctx.Abort()
+			return
+		}
+
+		if err := hd.service.ServiceUpdateContactWallpaper(telephon.(string), body.ContactTelephon, body.WallpaperUrl, ctx); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.Abort()
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{"message": "fondo del chat actualizado", "wallpaper_url": body.WallpaperUrl})
+	}
+}

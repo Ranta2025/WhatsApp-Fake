@@ -7,6 +7,7 @@ import IncomingCall from '../components/IncomingCall';
 import CallHistory from '../components/CallHistory';
 import MediaUploadMenu from '../components/MediaUploadMenu';
 import AudioPlayer from '../components/AudioPlayer';
+import PermissionsDialog from '../components/PermissionsDialog';
 import {
     requestNotificationPermission,
     showNativeNotification,
@@ -14,6 +15,7 @@ import {
     onNotificationClick,
     offNotificationClick
 } from '../utils/notifications.js';
+import { needsPermissionsPrompt } from '../utils/permissions.js';
 
 export default function Dashboard() {
     const { user, logout, updateUsername } = useAuth();
@@ -67,6 +69,12 @@ export default function Dashboard() {
     const [newAvatarPreview, setNewAvatarPreview] = useState(null);
     const [removeAvatar, setRemoveAvatar] = useState(false);
     const [status, setStatus] = useState('');
+    // Wallpaper global (perfil) y por chat (contacto)
+    const [globalWallpaper, setGlobalWallpaper] = useState(''); // URL del fondo global del usuario
+    const [chatWallpapers, setChatWallpapers] = useState({}); // { telephon: url }
+    const [showWallpaperPicker, setShowWallpaperPicker] = useState(null); // null | 'global' | 'contact'
+    const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
+    const [wallpaperChanged, setWallpaperChanged] = useState(false);
     const [contacts, setContacts] = useState([]);
     const [avatarMap, setAvatarMap] = useState({}); // {telephon: avatar_url}
     const [myAvatar, setMyAvatar] = useState(''); // avatar del propio usuario
@@ -87,6 +95,7 @@ export default function Dashboard() {
     const [allChatGroups, setAllChatGroups] = useState({}); // metadata de todos los chats {telephon -> ChatGroup}
     const [toasts, setToasts] = useState([]); // notificaciones toast {id, senderName, message, telephon}
     const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
+    const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
     // Estado de edición de contacto
     const [editingContact, setEditingContact] = useState(null); // Number del contacto que se está editando
     const [editContactName, setEditContactName] = useState('');
@@ -150,10 +159,19 @@ export default function Dashboard() {
 
     // Mostrar notificación (nativa del SO, toast in-app solo como fallback)
     const showToast = (telephon, senderName, message) => {
+        // Obtener el avatar del contacto si existe
+        const contactAvatar = avatarMap[telephon] || '/vite.svg';
+        
+        // Las notificaciones nativas (Service Worker/OS) requieren URLs absolutas
+        const absoluteIcon = contactAvatar.startsWith('http') 
+            ? contactAvatar 
+            : `${window.location.origin}${contactAvatar.startsWith('/') ? '' : '/'}${contactAvatar}`;
+
         // 1. Intentar notificación nativa del sistema operativo
         const nativeShown = showNativeNotification({
             title: senderName,
             body: message.length > 100 ? message.substring(0, 100) + '...' : message,
+            icon: absoluteIcon,
             tag: `chat-${telephon}`, // Agrupa por contacto
             data: { telephon }
         });
@@ -161,7 +179,7 @@ export default function Dashboard() {
         // 2. Toast in-app SOLO si la notificación nativa no se pudo mostrar
         if (!nativeShown) {
             const id = Date.now();
-            setToasts(prev => [...prev, { id, telephon, senderName, message }]);
+            setToasts(prev => [...prev, { id, telephon, senderName, message, icon: contactAvatar }]);
             setTimeout(() => {
                 setToasts(prev => prev.filter(t => t.id !== id));
             }, 4000);
@@ -169,12 +187,13 @@ export default function Dashboard() {
     };
     const dismissToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
-    // Solicitar permiso de notificaciones al montar
+    // Verificar permisos al montar: mostrar diálogo si hay alguno sin decidir
     useEffect(() => {
-        // Solicitar automáticamente si aún no se ha decidido
-        if (getNotificationPermission() === 'default') {
-            requestNotificationPermission().then(perm => setNotifPermission(perm));
-        }
+        needsPermissionsPrompt().then(needed => {
+            if (needed) setShowPermissionsDialog(true);
+            // Si notificaciones ya está concedida, actualizar estado
+            setNotifPermission(getNotificationPermission());
+        });
     }, []);
 
     // Escuchar clicks en notificaciones nativas para abrir el chat correspondiente
@@ -242,6 +261,7 @@ export default function Dashboard() {
                 const { data } = await api.get('/api/v1/user');
                 setProfile(data);
                 if (data?.avatar_url) setMyAvatar(data.avatar_url);
+                if (data?.wallpaper_url) setGlobalWallpaper(data.wallpaper_url);
             } catch {
                 setError('No se pudo cargar el perfil');
             } finally {
@@ -801,12 +821,15 @@ export default function Dashboard() {
                 // Extraer last_seen de cada contacto
                 const seenMap = {};
                 const avMap = {};
+                const wpMap = {};
                 list.forEach(c => {
                     if (c.last_seen) seenMap[c.Number] = c.last_seen;
                     if (c.avatar_url) avMap[c.Number] = c.avatar_url;
+                    if (c.wallpaper_url) wpMap[c.Number] = c.wallpaper_url;
                 });
                 setLastSeenMap(prev => ({ ...prev, ...seenMap }));
                 setAvatarMap(prev => ({ ...prev, ...avMap }));
+                setChatWallpapers(prev => ({ ...prev, ...wpMap }));
             } catch (e) {
                 setAddMsg('No se pudo cargar contactos');
             } finally {
@@ -832,11 +855,78 @@ export default function Dashboard() {
         setRemoveAvatar(true);
     };
 
+    const handleGlobalWallpaperUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingWallpaper(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const { data: uploadData } = await api.post('/api/v1/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            const wallpaperUrl = uploadData.url;
+            await api.put('/api/v1/profile/wallpaper', { wallpaper_url: wallpaperUrl });
+            setGlobalWallpaper(wallpaperUrl);
+            setWallpaperChanged(true);
+        } catch (err) {
+            console.error('Error subiendo fondo global:', err);
+        } finally {
+            setUploadingWallpaper(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleRemoveGlobalWallpaper = async () => {
+        try {
+            await api.put('/api/v1/profile/wallpaper', { wallpaper_url: '' });
+            setGlobalWallpaper('');
+            setWallpaperChanged(true);
+        } catch (err) {
+            console.error('Error quitando fondo global:', err);
+        }
+    };
+
+    const handleContactWallpaperUpload = async (e, contactNumber) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingWallpaper(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const { data: uploadData } = await api.post('/api/v1/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            const wallpaperUrl = uploadData.url;
+            await api.put('/api/v1/contact/wallpaper', { contact_telephon: contactNumber, wallpaper_url: wallpaperUrl });
+            setChatWallpapers(prev => ({ ...prev, [contactNumber]: wallpaperUrl }));
+        } catch (err) {
+            console.error('Error subiendo fondo de chat:', err);
+        } finally {
+            setUploadingWallpaper(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleRemoveContactWallpaper = async (contactNumber) => {
+        try {
+            await api.put('/api/v1/contact/wallpaper', { contact_telephon: contactNumber, wallpaper_url: '' });
+            setChatWallpapers(prev => {
+                const next = { ...prev };
+                delete next[contactNumber];
+                return next;
+            });
+        } catch (err) {
+            console.error('Error quitando fondo de chat:', err);
+        }
+    };
+
     const openEdit = () => {
         setNewUsername(user?.username || '');
         setNewAvatarFile(null);
         setNewAvatarPreview(null);
         setRemoveAvatar(false);
+        setWallpaperChanged(false);
         setShowEdit(true);
         setStatus('');
     };
@@ -1132,6 +1222,11 @@ export default function Dashboard() {
         const photoRemoved = removeAvatar && myAvatar;
 
         if (!nameChanged && !photoChanged && !photoRemoved) {
+            if (wallpaperChanged) {
+                setShowEdit(false);
+                setWallpaperChanged(false);
+                return;
+            }
             setStatus('No ha hecho cambios');
             return;
         }
@@ -2039,10 +2134,18 @@ export default function Dashboard() {
                             })()}
                         </div>
                         {/* Área de mensajes - altura flexible */}
+                        {(() => {
+                            const chatWp = selected ? chatWallpapers[selected.Number] : null;
+                            const activeWp = chatWp || globalWallpaper;
+                            return (
                         <div 
                             ref={messagesContainerRef}
                             className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col text-indigo-200 p-4 space-y-3 relative bg-[#0B0F19]"
-                            style={{
+                            style={activeWp ? {
+                                backgroundImage: `url("${activeWp}")`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                            } : {
                                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234f46e5' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
                             }}
                         >
@@ -2160,14 +2263,16 @@ export default function Dashboard() {
                                                 <div
                                                     className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-[15px] shadow-sm transition-all hover:shadow-md relative group ${
                                                         isMine
-                                                            ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-br-sm'
-                                                            : 'bg-white/10 backdrop-blur-md border border-white/5 text-indigo-50 rounded-bl-sm'
+                                                            ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-br-sm shadow-indigo-900/40'
+                                                            : (chatWallpapers[selected?.Number] || globalWallpaper)
+                                                                ? 'bg-gray-900/80 backdrop-blur-sm border border-white/10 text-white rounded-bl-sm shadow-black/30'
+                                                                : 'bg-white/10 backdrop-blur-md border border-white/5 text-indigo-50 rounded-bl-sm'
                                                     } ${m.isDeleting ? 'opacity-0 duration-400' : 'opacity-100'} animate-fade`}
                                                     style={{ transition: 'all 0.3s ease' }}
                                                 >
                                                     {/* Mostrar cita si es una respuesta */}
                                                     {hasReply && (
-                                                        <div className={`mb-2 pl-3 py-1 border-l-4 ${isMine ? 'border-white/40 bg-white/10' : 'border-indigo-400 bg-indigo-900/20'} rounded-r-md text-xs opacity-90 italic cursor-pointer hover:opacity-100 transition-opacity`}>
+                                                        <div className={`mb-2 pl-3 py-1 border-l-4 ${isMine ? 'border-white/40 bg-white/10' : (chatWallpapers[selected?.Number] || globalWallpaper) ? 'border-indigo-400 bg-indigo-950/60' : 'border-indigo-400 bg-indigo-900/20'} rounded-r-md text-xs opacity-90 italic cursor-pointer hover:opacity-100 transition-opacity`}>
                                                             <div className="font-bold text-[11px] mb-0.5">{m.ReplyToUsername}</div>
                                                             <div className="truncate">{m.ReplyToMessage}</div>
                                                         </div>
@@ -2256,6 +2361,8 @@ export default function Dashboard() {
                                 })
                             )}
                         </div>
+                            );
+                        })()}
                         {/* Input fijo - siempre visible */}
                         <div className="flex-shrink-0 bg-white/10 border-t border-white/10">
                             {/* Barra de "Respondiendo a..." */}
@@ -2400,17 +2507,17 @@ export default function Dashboard() {
 
             {/* Contact Details Panel */}
             {showContactDetails && selected && (
-                <div className="w-80 bg-gray-900/95 border-l border-white/10 flex flex-col h-full z-40 shadow-2xl transition-all duration-300">
-                    <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
-                        <h3 className="font-bold text-lg">Info. del contacto</h3>
+                <div className="fixed inset-0 lg:static lg:w-80 bg-gray-900/95 lg:border-l border-white/10 flex flex-col h-full z-50 lg:z-40 shadow-2xl transition-all duration-300">
+                    <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-white/5">
                         <button 
                             onClick={() => setShowContactDetails(false)}
                             className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
                         >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
                         </button>
+                        <h3 className="font-bold text-lg">Info. del contacto</h3>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
@@ -2481,6 +2588,67 @@ export default function Dashboard() {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Fondo de este chat */}
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                <div className="text-xs text-indigo-300/70 mb-3 uppercase tracking-wider font-semibold">Fondo de este chat</div>
+                                {chatWallpapers[selected.Number] ? (
+                                    <div className="relative rounded-xl overflow-hidden h-28 mb-2">
+                                        <img
+                                            src={chatWallpapers[selected.Number].startsWith('/') ? window.location.origin + chatWallpapers[selected.Number] : chatWallpapers[selected.Number]}
+                                            alt="Fondo del chat"
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 gap-2">
+                                            <label className="cursor-pointer flex items-center gap-1 text-xs text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                                {uploadingWallpaper ? 'Subiendo...' : 'Cambiar'}
+                                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleContactWallpaperUpload(e, selected.Number)} disabled={uploadingWallpaper} />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveContactWallpaper(selected.Number)}
+                                                className="flex items-center gap-1 text-xs text-red-300 bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                                Quitar
+                                            </button>
+                                        </div>
+                                        {uploadingWallpaper && (
+                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed border-white/20 hover:border-indigo-400/60 bg-white/5 hover:bg-white/10 transition-all cursor-pointer gap-2 ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
+                                        {uploadingWallpaper ? (
+                                            <svg className="animate-spin h-5 w-5 text-indigo-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                            </svg>
+                                        ) : (
+                                            <>
+                                                <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                                <span className="text-xs text-indigo-300">Poner fondo a este chat</span>
+                                            </>
+                                        )}
+                                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleContactWallpaperUpload(e, selected.Number)} disabled={uploadingWallpaper} />
+                                    </label>
+                                )}
+                                {!chatWallpapers[selected.Number] && globalWallpaper && (
+                                    <p className="text-xs text-indigo-300/50 mt-2 text-center">Usando fondo global</p>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2548,6 +2716,67 @@ export default function Dashboard() {
                                     {status}
                                 </div>
                             )}
+
+                            {/* Fondo de pantalla global */}
+                            <div>
+                                <label className="block text-sm font-medium text-indigo-200 mb-2">
+                                    Fondo de pantalla (todos los chats)
+                                </label>
+                                {globalWallpaper ? (
+                                    <div className="relative rounded-xl overflow-hidden mb-2 h-28 bg-white/5 border border-white/10">
+                                        <img
+                                            src={globalWallpaper.startsWith('/') ? window.location.origin + globalWallpaper : globalWallpaper}
+                                            alt="Fondo actual"
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 gap-2">
+                                            <label className="cursor-pointer flex items-center gap-1 text-xs text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                                Cambiar
+                                                <input type="file" accept="image/*" className="hidden" onChange={handleGlobalWallpaperUpload} disabled={uploadingWallpaper} />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={handleRemoveGlobalWallpaper}
+                                                className="flex items-center gap-1 text-xs text-red-300 bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                                Quitar
+                                            </button>
+                                        </div>
+                                        {uploadingWallpaper && (
+                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <label className={`flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-white/20 hover:border-indigo-400/60 bg-white/5 hover:bg-white/10 transition-all cursor-pointer gap-2 ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
+                                        {uploadingWallpaper ? (
+                                            <svg className="animate-spin h-6 w-6 text-indigo-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                            </svg>
+                                        ) : (
+                                            <>
+                                                <svg className="w-7 h-7 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                                <span className="text-xs text-indigo-300">Seleccionar imagen de fondo</span>
+                                            </>
+                                        )}
+                                        <input type="file" accept="image/*" className="hidden" onChange={handleGlobalWallpaperUpload} disabled={uploadingWallpaper} />
+                                    </label>
+                                )}
+                                <p className="text-xs text-indigo-300/60 mt-1">Se aplica a todos los chats que no tengan fondo propio</p>
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-indigo-200 mb-1.5">Nombre de usuario</label>
                                 <input
@@ -2637,29 +2866,45 @@ export default function Dashboard() {
                 {toasts.map(toast => (
                     <div
                         key={toast.id}
-                        className="pointer-events-auto flex items-start gap-3 bg-gray-900/95 border border-white/10 backdrop-blur-xl text-white px-4 py-3 rounded-xl shadow-2xl w-72 animate-slide-in"
+                        className="pointer-events-auto flex items-center gap-3 bg-gray-900/95 border border-white/10 backdrop-blur-xl text-white px-4 py-3 rounded-2xl shadow-2xl w-80 cursor-pointer hover:bg-gray-800/95 transition-colors"
                         style={{ animation: 'slideIn 0.25s ease-out' }}
+                        onClick={() => {
+                            const contact = contacts.find(c => c.Number === toast.telephon) || { Number: toast.telephon, ContactName: toast.senderName };
+                            setSelected(contact);
+                            dismissToast(toast.id);
+                        }}
                     >
-                        <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center font-bold text-sm overflow-hidden">
-                            {avatarMap[toast.telephon] ? (
-                                <img src={avatarMap[toast.telephon]} alt="" className="w-full h-full object-cover" />
+                        <div className="w-12 h-12 flex-shrink-0 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center font-bold text-lg overflow-hidden shadow-inner">
+                            {toast.icon && toast.icon !== '/vite.svg' ? (
+                                <img src={toast.icon} alt="" className="w-full h-full object-cover" />
                             ) : (
                                 toast.senderName?.charAt(0)?.toUpperCase()
                             )}
                         </div>
                         <div className="flex-1 overflow-hidden">
-                            <div className="font-semibold text-sm truncate">{toast.senderName}</div>
-                            <div className="text-xs text-indigo-200 truncate mt-0.5">{toast.message}</div>
+                            <div className="font-semibold text-sm truncate text-white">{toast.senderName}</div>
+                            <div className="text-xs text-gray-300 truncate mt-0.5">{toast.message}</div>
                         </div>
                         <button
-                            onClick={() => dismissToast(toast.id)}
-                            className="text-white/40 hover:text-white/80 text-lg leading-none flex-shrink-0 mt-0.5"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                dismissToast(toast.id);
+                            }}
+                            className="text-white/40 hover:text-white/80 text-xl leading-none flex-shrink-0 p-1"
                         >
                             ×
                         </button>
                     </div>
                 ))}
             </div>
+
+            {/* ========== Diálogo de Permisos ========== */}
+            {showPermissionsDialog && (
+                <PermissionsDialog onDone={() => {
+                    setShowPermissionsDialog(false);
+                    setNotifPermission(getNotificationPermission());
+                }} />
+            )}
 
             {/* ========== UI de Llamadas ========== */}
             {/* Llamada entrante */}

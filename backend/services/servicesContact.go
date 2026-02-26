@@ -265,3 +265,21 @@ func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactP
 func (sr *ServiceApiContact) ServiceUpdateAvatar(telephon string, avatarUrl string, ctx context.Context) error {
 	return sr.client.UpdateAvatarByTelephon(telephon, avatarUrl, ctx)
 }
+
+// ServiceUpdateWallpaper actualiza el fondo de pantalla global del usuario
+func (sr *ServiceApiContact) ServiceUpdateWallpaper(telephon string, wallpaperUrl string, ctx context.Context) error {
+	return sr.client.UpdateWallpaperByTelephon(telephon, wallpaperUrl, ctx)
+}
+
+// ServiceUpdateContactWallpaper actualiza el fondo de pantalla de un chat específico
+func (sr *ServiceApiContact) ServiceUpdateContactWallpaper(myTelephon string, contactTelephon string, wallpaperUrl string, ctx context.Context) error {
+	myID, err := sr.client.GetIdByTelephon(myTelephon, ctx)
+	if err != nil {
+		return err
+	}
+	contactID, err := sr.client.GetIdByTelephon(contactTelephon, ctx)
+	if err != nil {
+		return err
+	}
+	return sr.client.UpdateContactWallpaper(uint(myID), uint(contactID), wallpaperUrl, ctx)
+}

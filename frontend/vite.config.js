@@ -8,6 +8,17 @@ export default defineConfig({
     host: '0.0.0.0', // Escuchar en todas las interfaces
     port: 5173,
     allowedHosts: true,
+    proxy: {
+      '/storage': {
+        target: 'http://minio:9000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/storage/, ''),
+      },
+      '/api': {
+        target: 'http://app:8080',
+        changeOrigin: true,
+      },
+    },
     hmr: {
       // clientPort permite al browser conectar HMR a través de un proxy inverso.
       // Cuando está detrás de Cloudflare/nginx usamos el puerto externo (443);

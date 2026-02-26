@@ -77,7 +77,9 @@ func InitServiceMedia(client *minio.Client) *ServiceMedia {
 }
 
 // UploadMedia valida el tipo MIME, sube el archivo a MinIO con un nombre único
-// y devuelve la URL pública junto con metadatos del archivo.
+// y devuelve la URL relativa pública junto con metadatos del archivo.
+// La URL es relativa al dominio (ej: /storage/media/images/...) de forma que
+// funciona tanto desde localhost como desde cualquier dominio (Cloudflare, etc.).
 func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHeader, ctx context.Context) (MediaUploadResult, error) {
 	// 1. Detectar MIME type
 	mimeType := header.Header.Get("Content-Type")
@@ -117,8 +119,8 @@ func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHe
 		return MediaUploadResult{}, fmt.Errorf("error subiendo archivo: %w", err)
 	}
 
-	// 6. Construir URL pública
-	url := fmt.Sprintf("%s/%s/%s", s.baseURL, s.bucket, objectName)
+	// 6. Construir URL relativa: funciona desde cualquier dominio (localhost, Cloudflare, etc.)
+	url := fmt.Sprintf("/storage/%s/%s", s.bucket, objectName)
 
 	// 7. Determinar mediaType genérico
 	mediaType := cfg.folder // "images" → usar la carpeta como tipo base

@@ -32,7 +32,7 @@ func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*sc
 	result := ap.data.WithContext(c).
 		Table("user_data_bases").
 		Where("username = ?", strings.TrimSpace(username)).
-		Select("username", "telephon", "gmail", "avatar_url").
+		Select("username", "telephon", "gmail", "avatar_url", "wallpaper_url").
 		Scan(&user)
 	if result.Error != nil {
 		log.Println("Error en query:", result.Error)
@@ -61,7 +61,7 @@ func (ap *ApiContact) GetUserDataBaseByTelephon(telephon string, ctx context.Con
 	result := ap.data.WithContext(c).
 		Table("user_data_bases").
 		Where("telephon = ?", strings.TrimSpace(telephon)).
-		Select("username", "telephon", "gmail", "avatar_url").
+		Select("username", "telephon", "gmail", "avatar_url", "wallpaper_url").
 		Scan(&user)
 	if result.Error != nil {
 		return nil, result.Error
@@ -165,7 +165,8 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 			contact_data_bases.status AS status,
 			contact_data_bases.contact_name AS contact_name,
 			user_data_bases.last_seen AS last_seen,
-			user_data_bases.avatar_url AS avatar_url
+			user_data_bases.avatar_url AS avatar_url,
+			contact_data_bases.wallpaper_url AS wallpaper_url
 		`).
 		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_contact").
 		Where("contact_data_bases.id_user = ?", id).
@@ -492,4 +493,30 @@ func (app *ApiContact) DeleteMessageForMe(messageID uint, userID uint, ctx conte
 	}
 
 	return &msg, nil
+}
+
+// UpdateWallpaperByTelephon actualiza el fondo de pantalla global del usuario
+func (ap *ApiContact) UpdateWallpaperByTelephon(telephon string, wallpaperUrl string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	result := ap.data.Model(&models.UserDataBase{}).WithContext(c).
+		Where("telephon = ?", telephon).
+		Update("wallpaper_url", wallpaperUrl)
+	if result.Error != nil {
+		return errors.New("error al actualizar fondo de pantalla")
+	}
+	return nil
+}
+
+// UpdateContactWallpaper actualiza el fondo de pantalla específico de un chat (contacto)
+func (app *ApiContact) UpdateContactWallpaper(id_user uint, id_contact uint, wallpaperUrl string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	result := app.data.WithContext(c).Table("contact_data_bases").
+		Where("id_user = ? AND id_contact = ?", id_user, id_contact).
+		Update("wallpaper_url", wallpaperUrl)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
 }

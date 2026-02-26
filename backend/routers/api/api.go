@@ -44,6 +44,8 @@ func (rt *RouterApiMessage) ApiUser() {
 	rt.app.GET("user", rt.handlerContact.HandlerGetUser())
 	rt.app.PUT("user", middleware.MiddlewareUsername(), rt.handlerContact.HandlerPutUser())
 	rt.app.PUT("profile/avatar", middleware.MiddlewareUpdateAvatar(), rt.handlerContact.HandlerUpdateAvatar())
+	rt.app.PUT("profile/wallpaper", rt.handlerContact.HandlerUpdateWallpaper())
+	rt.app.PUT("contact/wallpaper", rt.handlerContact.HandlerUpdateContactWallpaper())
 }
 
 // ApiContact registra las rutas de gestión de contactos.

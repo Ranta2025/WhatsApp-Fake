@@ -12,6 +12,7 @@ type ContactDataBase struct {
 	IdContact   uint   `gorm:"not null" json:"id_contact" binding:"required"`
 	Status      string `gorm:"size:25;not null"`
 	ContactName string `gorm:"size:100"` // Nombre personalizado que el usuario le pone al contacto
+	WallpaperUrl string `gorm:"size:500"` // Fondo de pantalla específico para este chat
 
 	User        UserDataBase `gorm:"foreignKey:IdUser;references:ID"`
 	UserContact UserDataBase `gorm:"foreignKey:IdContact;references:ID"`
@@ -24,6 +25,7 @@ type ContactChat struct {
 	ContactName string     // Nombre personalizado del contacto
 	LastSeen    *time.Time `json:"last_seen"`  // Última vez que el contacto estuvo en línea
 	AvatarUrl   string     `json:"avatar_url"` // URL de la foto de perfil
+	WallpaperUrl string    `json:"wallpaper_url"` // URL del fondo de pantalla específico
 }
 
 type ContactPut struct {
