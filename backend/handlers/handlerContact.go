@@ -211,6 +211,7 @@ func (hd *HandlerContact) HandlerUpdateAvatar() gin.HandlerFunc {
 		ctx.JSON(http.StatusOK, gin.H{"message": "avatar actualizado", "avatar_url": url})
 	}
 }
+
 // HandlerUpdateWallpaper actualiza el fondo de pantalla global del usuario autenticado.
 func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 	return func(ctx *gin.Context) {

@@ -15,12 +15,12 @@ type User struct {
 
 type UserDataBase struct {
 	User
-	Password  string     `gorm:"size:70" json:"password" binding:"required"`
-	Activo    bool       `gorm:"default:false"`
-	Bloqueado bool       `gorm:"default:false"`
-	LastSeen  *time.Time `gorm:"column:last_seen" json:"last_seen"`
-	AvatarUrl string     `gorm:"size:500" json:"avatar_url"`
-	WallpaperUrl string  `gorm:"size:500" json:"wallpaper_url"`
+	Password     string     `gorm:"size:70" json:"password" binding:"required"`
+	Activo       bool       `gorm:"default:false"`
+	Bloqueado    bool       `gorm:"default:false"`
+	LastSeen     *time.Time `gorm:"column:last_seen" json:"last_seen"`
+	AvatarUrl    string     `gorm:"size:500" json:"avatar_url"`
+	WallpaperUrl string     `gorm:"size:500" json:"wallpaper_url"`
 
 	ContactsAdded         []ContactDataBase `gorm:"foreignKey:IdUser"`
 	ContactsWhereIAmAdded []ContactDataBase `gorm:"foreignKey:IdContact"`

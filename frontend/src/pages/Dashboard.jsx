@@ -1956,7 +1956,7 @@ export default function Dashboard() {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 min-w-0">
                 {!selected ? (
                     <div className="flex flex-col h-full relative">
                         {/* Botón hamburguesa para móvil - flotante cuando no hay chat seleccionado */}
@@ -2009,14 +2009,14 @@ export default function Dashboard() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
                         {/* Header fijo */}
-                        <div className="flex-shrink-0 p-3 border-b border-white/10 bg-gray-900/80 backdrop-blur-md flex flex-col gap-2 z-10 shadow-sm">
-                            <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 p-2 sm:p-3 border-b border-white/10 bg-gray-900/80 backdrop-blur-md flex flex-col gap-2 z-10 shadow-sm">
+                            <div className="flex items-center gap-1.5 sm:gap-3">
                             {/* Botón hamburguesa para móvil */}
                             <button
                                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                                className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                className="lg:hidden p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
                                 aria-label="Toggle sidebar"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2024,24 +2024,24 @@ export default function Dashboard() {
                                 </svg>
                             </button>
                             <div 
-                                className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 rounded-xl transition-colors flex-1 min-w-0"
+                                className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:bg-white/5 p-1.5 sm:p-2 rounded-xl transition-colors flex-1 min-w-0"
                                 onClick={() => setShowContactDetails(true)}
                             >
-                                <div className="relative w-11 h-11 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-md overflow-hidden flex-shrink-0">
+                                <div className="relative w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-md overflow-hidden flex-shrink-0">
                                     {avatarMap[selected.Number] ? (
                                         <img src={avatarMap[selected.Number]} alt="" className="w-full h-full object-cover" />
                                     ) : (
-                                        <span className="text-lg font-bold text-white">
+                                        <span className="text-base sm:text-lg font-bold text-white">
                                             {(selected.ContactName || selected.Username)?.charAt(0)?.toUpperCase()}
                                         </span>
                                     )}
                                     {isContactOnline(selected.Number) && (
-                                        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-gray-900 shadow-sm"></div>
+                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 bg-green-500 rounded-full border-2 border-gray-900 shadow-sm"></div>
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-[16px] truncate text-white">{selected.ContactName || selected.Username}</div>
-                                    <div className="text-[13px] text-indigo-200/80 truncate">
+                                    <div className="font-bold text-[14px] sm:text-[16px] truncate text-white">{selected.ContactName || selected.Username}</div>
+                                    <div className="text-[11px] sm:text-[13px] text-indigo-200/80 truncate">
                                         {isContactTyping(selected.Number) ? (
                                             <span className="text-indigo-400 italic font-medium animate-pulse">escribiendo...</span>
                                         ) : isContactOnline(selected.Number) ? (
@@ -2053,28 +2053,28 @@ export default function Dashboard() {
                                 </div>
                             </div>
                             {/* Botones de llamada */}
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
                                 <button
                                     onClick={() => handleStartCall('audio')}
-                                    className="p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
+                                    className="p-1.5 sm:p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
                                     title="Llamada de voz"
                                     disabled={!isConnected}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                     </svg>
                                 </button>
                                 <button
                                     onClick={() => handleStartCall('video')}
-                                    className="p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
+                                    className="p-1.5 sm:p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
                                     title="Videollamada"
                                     disabled={!isConnected}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                     </svg>
                                 </button>
-                                <div className="w-px h-6 bg-white/10 mx-1"></div>
+                                <div className="w-px h-4 sm:h-6 bg-white/10 mx-0.5 sm:mx-1"></div>
                                 <button
                                     onClick={async () => {
                                     if (!window.confirm(`¿Seguro que quieres vaciar el chat con ${selected.ContactName || selected.Username}?`)) return;
@@ -2089,10 +2089,10 @@ export default function Dashboard() {
                                         alert('Error al vaciar el chat');
                                     }
                                 }}
-                                className="p-2.5 hover:bg-red-500/20 rounded-full transition-all text-red-400 hover:text-red-300 hover:scale-105 active:scale-95"
+                                className="p-1.5 sm:p-2.5 hover:bg-red-500/20 rounded-full transition-all text-red-400 hover:text-red-300 hover:scale-105 active:scale-95"
                                 title="Vaciar Chat"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                             </button>

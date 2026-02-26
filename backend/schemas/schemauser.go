@@ -1,9 +1,9 @@
 package schemas
 
 type UserGet struct {
-	Username  string `gorm:"column:username"`
-	Telephon  string `gorm:"column:telephon"`
-	Gmail     string `gorm:"column:gmail"`
-	AvatarUrl string `gorm:"column:avatar_url" json:"avatar_url"`
+	Username     string `gorm:"column:username"`
+	Telephon     string `gorm:"column:telephon"`
+	Gmail        string `gorm:"column:gmail"`
+	AvatarUrl    string `gorm:"column:avatar_url" json:"avatar_url"`
 	WallpaperUrl string `gorm:"column:wallpaper_url" json:"wallpaper_url"`
 }

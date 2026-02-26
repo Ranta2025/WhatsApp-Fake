@@ -3,8 +3,23 @@
 # Obtiene la URL del tunel de Cloudflare y la envia por Telegram
 # =============================================================
 
-$BOT_TOKEN = "7858041417:AAEOyjLKbPjc7T-pE6DyvBumCgyPTNj0MqE"
-$CHAT_ID   = "6022824638"
+# Cargar variables desde .env
+$envPath = Join-Path (Split-Path $PSScriptRoot -Parent) ".env"
+if (Test-Path $envPath) {
+    Get-Content $envPath | ForEach-Object {
+        if ($_ -match '^\s*([^#][^=]+?)\s*=\s*(.*)\s*$') {
+            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+        }
+    }
+}
+
+$BOT_TOKEN = $env:TELEGRAM_BOT_TOKEN
+$CHAT_ID   = $env:TELEGRAM_CHAT_ID
+
+if (-not $BOT_TOKEN -or -not $CHAT_ID) {
+    Write-Host "Faltan TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID en .env" -ForegroundColor Red
+    exit 1
+}
 
 # 1. Verificar que cloudflared esta corriendo
 $cfRunning = docker ps --filter "name=cloudflared" --format "{{.Names}}"
