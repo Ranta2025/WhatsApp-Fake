@@ -1535,14 +1535,14 @@ export default function Dashboard() {
     }, [messagesByChat, selected]);
 
     return (
-        <div className="flex h-screen bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950 text-white overflow-hidden relative" style={{height: '100dvh'}}>
+        <div className="flex h-screen bg-slate-950 text-white overflow-hidden relative" style={{height: '100dvh'}}>
 
             {/* Pantalla de carga estilo WhatsApp Web */}
             {isInitialLoading && (
-                <div className="absolute inset-0 z-[99999] flex flex-col items-center justify-center bg-gradient-to-br from-purple-950 via-indigo-950 to-gray-950">
+                <div className="absolute inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950">
                     <div className="flex flex-col items-center gap-6 animate-fade-in">
                         {/* Logo / Icono */}
-                        <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-2xl shadow-purple-500/30">
+                        <div className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center shadow-2xl shadow-indigo-500/30">
                             <img src="/todos.svg" alt="todos" className="w-14 h-14" />
                         </div>
 
@@ -1550,17 +1550,17 @@ export default function Dashboard() {
                         <h1 className="text-3xl font-bold text-white tracking-wide">todos</h1>
 
                         {/* Barra de progreso animada */}
-                        <div className="w-56 h-1 bg-white/10 rounded-full overflow-hidden mt-2">
-                            <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-400 rounded-full animate-loading-bar"></div>
+                        <div className="w-56 h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
+                            <div className="h-full bg-indigo-500 rounded-full animate-loading-bar"></div>
                         </div>
 
                         {/* Texto de estado */}
-                        <p className="text-white/50 text-sm mt-1">
+                        <p className="text-slate-400 text-sm mt-1">
                             {loadingProfile ? 'Cargando perfil...' : loadingContacts ? 'Cargando contactos...' : 'Conectando...'}
                         </p>
 
                         {/* Encriptación */}
-                        <div className="flex items-center gap-2 mt-4 text-white/30 text-xs">
+                        <div className="flex items-center gap-2 mt-4 text-slate-500 text-xs">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
@@ -1580,72 +1580,81 @@ export default function Dashboard() {
             
             {/* Sidebar */}
             <div className={`
-                w-72 bg-white/10 backdrop-blur-xl border-r border-white/10 flex flex-col
+                w-80 bg-slate-900 border-r border-white/5 flex flex-col
                 fixed lg:static inset-y-0 left-0 z-50
                 transform transition-transform duration-300 ease-in-out
                 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             `}>
-                <div className="p-5 border-b border-white/10 flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                        <img src="/todos.svg" alt="todos" className="w-7 h-7" />
-                        <h1 className="text-xl font-bold">todos</h1>
+                {/* Header del Sidebar (Perfil y Ajustes) */}
+                <div className="p-4 bg-slate-900 flex items-center justify-between border-b border-white/5">
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="relative w-10 h-10 rounded-full cursor-pointer group flex-shrink-0" 
+                            title="Ver foto de perfil"
+                            onClick={() => myAvatar && setViewImage(myAvatar)}
+                        >
+                            {myAvatar ? (
+                                <img src={myAvatar} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
+                            ) : (
+                                <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-white">
+                                    {user?.username?.charAt(0).toUpperCase()}
+                                </div>
+                            )}
+                            <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        </div>
+                        <div className="overflow-hidden">
+                            <div className="font-semibold text-white truncate">{user?.username}</div>
+                            <div className="text-xs text-slate-400 truncate">{profile?.Telephon || 'Cargando...'}</div>
+                        </div>
                     </div>
-                    <div 
-                        className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-500'}`}
-                        title={isConnected ? "Conectado" : "Desconectado"}
-                    ></div>
+                    <div className="flex gap-1">
+                        <button onClick={openEdit} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-colors" title="Ajustes">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        </button>
+                        <button onClick={logout} className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/5 rounded-full transition-colors" title="Cerrar Sesión">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Barra de Búsqueda */}
+                <div className="p-3 bg-slate-900">
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </div>
+                        <input type="text" className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-full leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:bg-slate-800 focus:border-slate-700 focus:ring-0 sm:text-sm transition-colors" placeholder="Buscar o empezar un chat" />
+                    </div>
                 </div>
                 
-                <div className="p-4 border-b border-white/10">
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => {
-                                setSidebarView('chats');
-                                setShowAddContactForm(false);
-                            }}
-                            className={`flex-1 py-2 rounded text-sm transition ${
-                                sidebarView === 'chats' 
-                                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
-                                    : 'bg-white/10 hover:bg-white/20 text-indigo-200'
-                            }`}
-                        >
-                            Chats
-                        </button>
-                        <button
-                            onClick={() => {
-                                setSidebarView('calls');
-                                setShowAddContactForm(false);
-                            }}
-                            className={`flex-1 py-2 rounded text-sm transition ${
-                                sidebarView === 'calls' 
-                                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
-                                    : 'bg-white/10 hover:bg-white/20 text-indigo-200'
-                            }`}
-                        >
-                            Llamadas
-                        </button>
-                        <button
-                            onClick={() => {
-                                setSidebarView('contacts');
-                                setShowAddContactForm(false);
-                            }}
-                            className={`flex-1 py-2 rounded text-sm transition ${
-                                sidebarView === 'contacts' 
-                                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
-                                    : 'bg-white/10 hover:bg-white/20 text-indigo-200'
-                            }`}
-                        >
-                            Contactos
-                        </button>
-                    </div>
+                {/* Navegación (Tabs) */}
+                <div className="flex px-2 bg-slate-900 border-b border-white/5">
+                    <button
+                        onClick={() => { setSidebarView('chats'); setShowAddContactForm(false); }}
+                        className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'chats' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                    >
+                        Chats
+                    </button>
+                    <button
+                        onClick={() => { setSidebarView('calls'); setShowAddContactForm(false); }}
+                        className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'calls' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                    >
+                        Llamadas
+                    </button>
+                    <button
+                        onClick={() => { setSidebarView('contacts'); setShowAddContactForm(false); }}
+                        className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'contacts' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                    >
+                        Contactos
+                    </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
                     {/* Vista de Chats Activos */}
                     {sidebarView === 'chats' && (
                         <>
-                            <div className="text-indigo-200 text-sm mb-2 uppercase">Chats Activos</div>
-                            <div className="space-y-2">
+                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3 px-2">Chats Activos</div>
+                            <div className="space-y-1">
                                 {Object.keys(messagesByChat).length > 0 ? (
                                     // Filtrar para mostrar solo un chat por contacto real o número único
                                     (() => {
@@ -1704,29 +1713,36 @@ export default function Dashboard() {
                                                         setSelected(contactToSelect);
                                                         setSidebarOpen(false);
                                                     }}
-                                                    className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded mb-2 flex items-center gap-3 ${selected?.Number === contactNumber ? 'ring-1 ring-indigo-400' : ''}`}
+                                                    className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === contactNumber ? 'bg-slate-800' : ''}`}
                                                 >
-                                                    <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm overflow-hidden flex-shrink-0">
+                                                    <div className="relative w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0">
                                                         {avatarMap[contactNumber] ? (
                                                             <img src={avatarMap[contactNumber]} alt="" className="w-full h-full object-cover" />
                                                         ) : (
                                                             displayName?.charAt(0)?.toUpperCase()
                                                         )}
                                                         {isContactOnline(contactNumber) && (
-                                                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                                         )}
                                                     </div>
-                                                    <div className="flex-1 overflow-hidden">
-                                                        <div className="font-medium flex items-center gap-1">
-                                                            {displayName}
-                                                            {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
+                                                    <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
+                                                        <div className="flex justify-between items-baseline mb-0.5">
+                                                            <div className="font-semibold text-slate-100 truncate flex items-center gap-1">
+                                                                {displayName}
+                                                                {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
+                                                            </div>
+                                                            {lastMessage?.Time && (
+                                                                <div className="text-xs text-slate-500 flex-shrink-0 ml-2">
+                                                                    {new Date(lastMessage.Time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div className="text-xs text-indigo-200 truncate">
+                                                        <div className="text-sm text-slate-400 truncate">
                                                             {formatLastMessage(lastMessage)}
                                                         </div>
                                                     </div>
                                                     {getUnreadCount(contact || {Number: contactNumber}) > 0 && (
-                                                        <span className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                                        <span className="absolute top-1/2 -translate-y-1/2 right-4 bg-indigo-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                                                             {getUnreadCount(contact || {Number: contactNumber})}
                                                         </span>
                                                     )}
@@ -1735,8 +1751,11 @@ export default function Dashboard() {
                                         });
                                     })()
                                 ) : (
-                                    <div className="text-center text-indigo-200 py-8">
-                                        No tienes conversaciones activas
+                                    <div className="text-center text-slate-500 py-10 flex flex-col items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                        <p>No tienes conversaciones activas</p>
                                     </div>
                                 )}
                             </div>
@@ -1766,8 +1785,8 @@ export default function Dashboard() {
                     {/* Vista de Contactos */}
                     {sidebarView === 'contacts' && !showAddContactForm && (
                         <>
-                            <div className="flex justify-between items-center mb-2">
-                                <div className="text-indigo-200 text-sm uppercase">Mis Contactos</div>
+                            <div className="flex justify-between items-center mb-3 px-2">
+                                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Mis Contactos</div>
                                 <button
                                     onClick={() => {
                                         setShowAddContactForm(true);
@@ -1775,7 +1794,7 @@ export default function Dashboard() {
                                         setNumberInput('');
                                         setContactNameInput('');
                                     }}
-                                    className="text-xs bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-3 py-1 rounded"
+                                    className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
                                 >
                                     + Agregar
                                 </button>
@@ -1826,27 +1845,27 @@ export default function Dashboard() {
                                                 setSelected(c);
                                                 setSidebarOpen(false);
                                             }}
-                                            className={`relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded flex items-center gap-3 ${selected?.Number === c.Number ? 'ring-1 ring-indigo-400' : ''}`}
+                                            className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === c.Number ? 'bg-slate-800' : ''}`}
                                         >
-                                            <div className="relative w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm overflow-hidden flex-shrink-0">
+                                            <div className="relative w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0">
                                                 {avatarMap[c.Number] ? (
                                                     <img src={avatarMap[c.Number]} alt="" className="w-full h-full object-cover" />
                                                 ) : (
                                                     (c.ContactName || c.Username)?.charAt(0)?.toUpperCase()
                                                 )}
                                                 {isContactOnline(c.Number) && (
-                                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white/10"></div>
+                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                                 )}
                                             </div>
-                                            <div className="flex-1 overflow-hidden">
-                                                <div className="font-medium truncate">{c.ContactName || c.Username}</div>
-                                                <div className="text-xs text-indigo-200">
+                                            <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
+                                                <div className="font-semibold text-slate-100 truncate">{c.ContactName || c.Username}</div>
+                                                <div className="text-sm text-slate-400 truncate">
                                                     {isContactOnline(c.Number) ? 'En línea' : (getLastSeenText(c.Number) || c.Number)}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex items-center gap-2 absolute right-4 top-1/2 -translate-y-1/2">
                                                 {getUnreadCount(c) > 0 && (
-                                                    <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                                    <span className="bg-indigo-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                                                         {getUnreadCount(c)}
                                                     </span>
                                                 )}
@@ -1857,10 +1876,10 @@ export default function Dashboard() {
                                                         setEditContactName(c.ContactName || '');
                                                         setEditContactError('');
                                                     }}
-                                                    className="p-1 rounded hover:bg-white/20 text-indigo-300 hover:text-white transition"
+                                                    className="p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition"
                                                     title="Editar nombre"
                                                 >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                                     </svg>
                                                 </span>
@@ -1870,8 +1889,11 @@ export default function Dashboard() {
                                 </div>
                             ))
                         ) : (
-                            <div className="text-center text-indigo-200 py-8">
-                                No tienes contactos aún
+                            <div className="text-center text-slate-500 py-10 flex flex-col items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                                <p>No tienes contactos aún</p>
                             </div>
                         )}
                     </div>
@@ -1880,114 +1902,59 @@ export default function Dashboard() {
 
                     {/* Formulario Agregar Contacto */}
                     {sidebarView === 'contacts' && showAddContactForm && (
-                        <>
-                            <div className="text-indigo-200 text-sm mb-3 uppercase">Añadir Contacto</div>
-                            <form onSubmit={submitAddContact} className="space-y-3">
-                                <input
-                                    type="text"
-                                    value={contactNameInput}
-                                    onChange={(e) => setContactNameInput(e.target.value)}
-                                    className="w-full p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300"
-                                    placeholder="Nombre del contacto"
-                                />
-                                <input
-                                    type="text"
-                                    value={numberInput}
-                                    onChange={(e) => setNumberInput(e.target.value)}
-                                    className="w-full p-3 rounded bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300"
-                                    placeholder="Ej: +50212345678"
-                                />
-                                {addMsg && <div className="text-xs text-indigo-200">{addMsg}</div>}
-                                <div className="flex gap-2">
+                        <div className="px-2">
+                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">Añadir Contacto</div>
+                            <form onSubmit={submitAddContact} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1 ml-1">Nombre</label>
+                                    <input
+                                        type="text"
+                                        value={contactNameInput}
+                                        onChange={(e) => setContactNameInput(e.target.value)}
+                                        className="w-full p-3 rounded-xl bg-slate-800 border border-transparent focus:border-indigo-500 focus:outline-none text-white placeholder-slate-500 transition-colors"
+                                        placeholder="Ej: Juan Pérez"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1 ml-1">Número de teléfono</label>
+                                    <input
+                                        type="text"
+                                        value={numberInput}
+                                        onChange={(e) => setNumberInput(e.target.value)}
+                                        className="w-full p-3 rounded-xl bg-slate-800 border border-transparent focus:border-indigo-500 focus:outline-none text-white placeholder-slate-500 transition-colors"
+                                        placeholder="Ej: +50212345678"
+                                    />
+                                </div>
+                                {addMsg && <div className="text-xs text-indigo-400 bg-indigo-500/10 p-2 rounded-lg">{addMsg}</div>}
+                                <div className="flex gap-3 pt-2">
                                     <button
                                         type="button"
                                         onClick={() => setShowAddContactForm(false)}
-                                        className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded"
+                                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl font-medium transition-colors"
                                     >
                                         Cancelar
                                     </button>
                                     <button
                                         type="submit"
-                                        className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-2 rounded"
+                                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-indigo-500/20"
                                     >
                                         Añadir
                                     </button>
                                 </div>
                             </form>
-                        </>
+                        </div>
                     )}
-                </div>
-
-                <div className="p-4 bg-white/10 border-t border-white/10">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div 
-                            className="relative w-10 h-10 rounded-full cursor-pointer group flex-shrink-0" 
-                            title="Ver foto de perfil"
-                            onClick={() => myAvatar && setViewImage(myAvatar)}
-                        >
-                            {myAvatar ? (
-                                <img src={myAvatar} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
-                            ) : (
-                                <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold">
-                                    {user?.username?.charAt(0).toUpperCase()}
-                                </div>
-                            )}
-                            {myAvatar && (
-                                <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                    </svg>
-                                </div>
-                            )}
-                        </div>
-                        <div className="overflow-hidden">
-                            <div className="font-bold truncate">{user?.username}</div>
-                            <div className="text-xs flex items-center gap-1">
-                                <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`}></span>
-                                <span className={isConnected ? 'text-green-400' : 'text-red-400'}>
-                                    {isConnected ? 'En línea' : 'Desconectado'}
-                                </span>
-                            </div>
-                            {error && <div className="text-xs text-red-400">{error}</div>}
-                            {showProfile && profile && (
-                                <div className="mt-2 text-xs text-indigo-100">
-                                    <div className="truncate">Email: {profile.Gmail}</div>
-                                    <div className="truncate">Número: {profile.Telephon}</div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex gap-2 mb-3">
-                        <button
-                            onClick={toggleProfile}
-                            className="flex-1 bg-white/10 hover:bg-white/20 text-indigo-200 py-2 rounded text-sm transition"
-                        >
-                            {showProfile ? 'Ocultar Perfil' : 'Ver Perfil'}
-                        </button>
-                        <button
-                            onClick={openEdit}
-                            className="flex-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-white py-2 rounded text-sm transition"
-                        >
-                            Editar Perfil
-                        </button>
-                    </div>
-                    <button 
-                        onClick={logout}
-                        className="w-full bg-red-600/20 text-red-300 hover:bg-red-600/40 py-2 rounded text-sm transition"
-                    >
-                        Cerrar Sesión
-                    </button>
                 </div>
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col min-h-0 min-w-0">
+            <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-slate-950">
                 {!selected ? (
                     <div className="flex flex-col h-full relative">
                         {/* Botón hamburguesa para móvil - flotante cuando no hay chat seleccionado */}
                         <button
                             onClick={() => setSidebarOpen(!sidebarOpen)}
-                            className="lg:hidden absolute top-4 left-4 p-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-lg z-20 hover:shadow-xl transition-all"
+                            className="lg:hidden absolute top-4 left-4 p-3 bg-slate-800 rounded-full shadow-lg z-20 hover:bg-slate-700 transition-all text-slate-300"
                             aria-label="Toggle sidebar"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1995,111 +1962,93 @@ export default function Dashboard() {
                             </svg>
                         </button>
                         
-                        <div className="flex-1 flex flex-col items-center justify-center text-indigo-200 p-8 text-center overflow-y-auto bg-[#0B0F19]"
+                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center overflow-y-auto bg-slate-950"
                             style={{
-                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234f46e5' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23334155' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
                             }}
                         >
-                            <div className="w-32 h-32 bg-gradient-to-br from-indigo-500/20 to-purple-600/20 rounded-full flex items-center justify-center mb-8 shadow-lg shadow-indigo-500/10 border border-white/5 backdrop-blur-sm">
-                                <img src="/todos.svg" alt="todos" className="w-20 h-20 opacity-80" />
+                            <div className="w-32 h-32 bg-slate-900 rounded-full flex items-center justify-center mb-8 shadow-lg border border-white/5">
+                                <img src="/todos.svg" alt="todos" className="w-16 h-16 opacity-50 grayscale" />
                             </div>
-                            <h2 className="text-4xl font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">Bienvenido a todos</h2>
-                            <p className="max-w-md text-indigo-200/70 text-lg">
-                                Selecciona un contacto para comenzar a chatear.
+                            <h2 className="text-3xl font-semibold mb-3 text-slate-200">Bienvenido a todos</h2>
+                            <p className="max-w-md text-slate-500 text-lg">
+                                Selecciona un chat para comenzar a enviar mensajes.
                             </p>
-                            <div className="mt-6 flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5 backdrop-blur-sm">
-                                <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.6)]' : 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]'}`}></span>
-                                <span className={`text-sm font-medium ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                                    {isConnected ? 'Conectado al servidor' : 'Desconectado'}
+                            <div className="mt-8 flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-full border border-white/5">
+                                <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                <span className={`text-sm font-medium ${isConnected ? 'text-slate-300' : 'text-red-400'}`}>
+                                    {isConnected ? 'Conectado' : 'Desconectado'}
                                 </span>
-                            </div>
-                        </div>
-                        <div className="flex-shrink-0 p-4 bg-gray-900/80 border-t border-white/10 backdrop-blur-md">
-                            <div className="flex gap-3">
-                                <input 
-                                    type="text" 
-                                    value={currentDraft}
-                                    onChange={handleInputChange}
-                                    placeholder="Selecciona un contacto para escribir"
-                                    className="flex-1 p-3.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none text-white placeholder-indigo-300/50 cursor-not-allowed opacity-50"
-                                    disabled={true}
-                                />
-                                <button
-                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 px-8 rounded-xl text-white font-medium opacity-50 cursor-not-allowed"
-                                    disabled={true}
-                                >
-                                    Enviar
-                                </button>
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
+                    <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden bg-slate-950">
                         {/* Header fijo */}
-                        <div className="flex-shrink-0 p-2 sm:p-3 border-b border-white/10 bg-gray-900/80 backdrop-blur-md flex flex-col gap-2 z-10 shadow-sm">
-                            <div className="flex items-center gap-1.5 sm:gap-3">
+                        <div className="flex-shrink-0 px-4 py-3 border-b border-white/5 bg-slate-900/95 backdrop-blur-md flex flex-col gap-2 z-10 shadow-sm">
+                            <div className="flex items-center gap-3">
                             {/* Botón hamburguesa para móvil */}
                             <button
                                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                                className="lg:hidden p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
+                                className="lg:hidden p-2 hover:bg-white/10 rounded-full transition-colors flex-shrink-0 text-slate-400"
                                 aria-label="Toggle sidebar"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                                 </svg>
                             </button>
                             <div 
-                                className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:bg-white/5 p-1.5 sm:p-2 rounded-xl transition-colors flex-1 min-w-0"
+                                className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-1.5 rounded-xl transition-colors flex-1 min-w-0"
                                 onClick={() => setShowContactDetails(true)}
                             >
-                                <div className="relative w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-md overflow-hidden flex-shrink-0">
+                                <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-slate-700 rounded-full flex items-center justify-center shadow-sm overflow-hidden flex-shrink-0">
                                     {avatarMap[selected.Number] ? (
                                         <img src={avatarMap[selected.Number]} alt="" className="w-full h-full object-cover" />
                                     ) : (
-                                        <span className="text-base sm:text-lg font-bold text-white">
+                                        <span className="text-lg font-medium text-white">
                                             {(selected.ContactName || selected.Username)?.charAt(0)?.toUpperCase()}
                                         </span>
                                     )}
                                     {isContactOnline(selected.Number) && (
-                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 bg-green-500 rounded-full border-2 border-gray-900 shadow-sm"></div>
+                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-[14px] sm:text-[16px] truncate text-white">{selected.ContactName || selected.Username}</div>
-                                    <div className="text-[11px] sm:text-[13px] text-indigo-200/80 truncate">
+                                    <div className="font-semibold text-base truncate text-slate-100">{selected.ContactName || selected.Username}</div>
+                                    <div className="text-sm text-slate-400 truncate">
                                         {isContactTyping(selected.Number) ? (
                                             <span className="text-indigo-400 italic font-medium animate-pulse">escribiendo...</span>
                                         ) : isContactOnline(selected.Number) ? (
                                             <span className="text-green-400 font-medium">en línea</span>
                                         ) : (
-                                            <span className="text-indigo-300/60">{getLastSeenText(selected.Number) || selected.Number}</span>
+                                            <span>{getLastSeenText(selected.Number) || selected.Number}</span>
                                         )}
                                     </div>
                                 </div>
                             </div>
                             {/* Botones de llamada */}
-                            <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                                 <button
                                     onClick={() => handleStartCall('audio')}
-                                    className="p-1.5 sm:p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
+                                    className="p-2.5 hover:bg-white/10 rounded-full transition-all text-slate-400 hover:text-slate-200"
                                     title="Llamada de voz"
                                     disabled={!isConnected}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                     </svg>
                                 </button>
                                 <button
                                     onClick={() => handleStartCall('video')}
-                                    className="p-1.5 sm:p-2.5 hover:bg-white/10 rounded-full transition-all text-indigo-300 hover:text-indigo-100 hover:scale-105 active:scale-95"
+                                    className="p-2.5 hover:bg-white/10 rounded-full transition-all text-slate-400 hover:text-slate-200"
                                     title="Videollamada"
                                     disabled={!isConnected}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                     </svg>
                                 </button>
-                                <div className="w-px h-4 sm:h-6 bg-white/10 mx-0.5 sm:mx-1"></div>
+                                <div className="w-px h-6 bg-white/10 mx-1"></div>
                                 <button
                                     onClick={async () => {
                                     if (!window.confirm(`¿Seguro que quieres vaciar el chat con ${selected.ContactName || selected.Username}?`)) return;
@@ -2114,10 +2063,10 @@ export default function Dashboard() {
                                         alert('Error al vaciar el chat');
                                     }
                                 }}
-                                className="p-1.5 sm:p-2.5 hover:bg-red-500/20 rounded-full transition-all text-red-400 hover:text-red-300 hover:scale-105 active:scale-95"
+                                className="p-2.5 hover:bg-red-500/20 rounded-full transition-all text-slate-400 hover:text-red-400"
                                 title="Vaciar Chat"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                             </button>
@@ -2165,13 +2114,13 @@ export default function Dashboard() {
                             return (
                         <div 
                             ref={messagesContainerRef}
-                            className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col text-indigo-200 p-4 space-y-3 relative bg-[#0B0F19]"
+                            className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col text-slate-200 p-4 space-y-3 relative bg-slate-950"
                             style={activeWp ? {
                                 backgroundImage: `url("${activeWp}")`,
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
                             } : {
-                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234f46e5' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23334155' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
                             }}
                         >
                             {(messagesByChat[getChatKey(selected)] || []).length === 0 ? (
@@ -2286,18 +2235,18 @@ export default function Dashboard() {
                                             {dateSeparator}
                                             <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${isMenuOpen ? 'z-50 relative' : ''}`}>
                                                 <div
-                                                    className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-[15px] shadow-sm transition-all hover:shadow-md relative group ${
+                                                    className={`max-w-[75%] px-3 py-2 rounded-2xl text-[15px] shadow-sm relative group ${
                                                         isMine
-                                                            ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-br-sm shadow-indigo-900/40'
+                                                            ? 'bg-indigo-600 text-white rounded-br-sm'
                                                             : (chatWallpapers[selected?.Number] || globalWallpaper)
-                                                                ? 'bg-gray-900/80 backdrop-blur-sm border border-white/10 text-white rounded-bl-sm shadow-black/30'
-                                                                : 'bg-white/10 backdrop-blur-md border border-white/5 text-indigo-50 rounded-bl-sm'
+                                                                ? 'bg-slate-800/95 backdrop-blur-sm text-slate-100 rounded-bl-sm'
+                                                                : 'bg-slate-800 text-slate-100 rounded-bl-sm'
                                                     } ${m.isDeleting ? 'opacity-0 duration-400' : 'opacity-100'} animate-fade`}
                                                     style={{ transition: 'all 0.3s ease' }}
                                                 >
                                                     {/* Mostrar cita si es una respuesta */}
                                                     {hasReply && (
-                                                        <div className={`mb-2 pl-3 py-1 border-l-4 ${isMine ? 'border-white/40 bg-white/10' : (chatWallpapers[selected?.Number] || globalWallpaper) ? 'border-indigo-400 bg-indigo-950/60' : 'border-indigo-400 bg-indigo-900/20'} rounded-r-md text-xs opacity-90 italic cursor-pointer hover:opacity-100 transition-opacity`}>
+                                                        <div className={`mb-2 pl-3 py-1 border-l-4 ${isMine ? 'border-white/40 bg-white/10' : 'border-indigo-500 bg-slate-700/50'} rounded-r-md text-xs opacity-90 italic cursor-pointer hover:opacity-100 transition-opacity`}>
                                                             <div className="font-bold text-[11px] mb-0.5">{m.ReplyToUsername}</div>
                                                             <div className="truncate">{m.ReplyToMessage}</div>
                                                         </div>
@@ -2306,7 +2255,7 @@ export default function Dashboard() {
                                                     {isEditing ? (
                                                         <div className="flex flex-col gap-1">
                                                             <input
-                                                                className="w-full p-1 rounded bg-white/20 text-black text-xs"
+                                                                className="w-full p-1 rounded bg-white/20 text-white text-xs focus:outline-none"
                                                                 value={editingMessageText}
                                                                 onChange={handleEditMessageChange}
                                                                 autoFocus
@@ -2318,7 +2267,7 @@ export default function Dashboard() {
                                                                     onClick={() => handleEditMessageSave(m)}
                                                                 >Guardar</button>
                                                                 <button
-                                                                    className="px-2 py-0.5 bg-gray-500/80 hover:bg-gray-700 text-white rounded text-xs"
+                                                                    className="px-2 py-0.5 bg-slate-600/80 hover:bg-slate-700 text-white rounded text-xs"
                                                                     onClick={handleEditMessageCancel}
                                                                 >Cancelar</button>
                                                             </div>
@@ -2326,7 +2275,7 @@ export default function Dashboard() {
                                                     ) : (
                                                         <>
                                                             {text && text !== m.MediaUrl && !text.includes('/media/') && <div onClick={() => handleReplyToMessage(m)} title="Doble click para responder" onDoubleClick={() => handleReplyToMessage(m)} className="cursor-text leading-relaxed break-words">{text}</div>}
-                                                            <div className="text-[10px] opacity-70 mt-1.5 flex items-center justify-end gap-1.5 font-medium">
+                                                            <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 font-medium ${isMine ? 'text-indigo-200' : 'text-slate-400'}`}>
                                                                 {m.Edited && (
                                                                     <span className="italic opacity-60 mr-1">editado</span>
                                                                 )}
@@ -2336,7 +2285,7 @@ export default function Dashboard() {
                                                             {/* Menú de opciones del mensaje */}
                                                             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                                                 <button
-                                                                    className="text-xs text-white/80 hover:text-white bg-black/20 hover:bg-black/40 backdrop-blur-sm w-6 h-6 flex items-center justify-center rounded-full transition-all"
+                                                                    className="text-xs text-white/80 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm w-6 h-6 flex items-center justify-center rounded-full transition-all"
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         setMessageMenuOpen(messageMenuOpen === m.MessageID ? null : m.MessageID);
@@ -2348,11 +2297,11 @@ export default function Dashboard() {
                                                                     </svg>
                                                                 </button>
                                                                 {isMenuOpen && (
-                                                                    <div className={`absolute ${isMine ? 'right-0' : 'left-0'} mt-1 w-40 bg-gray-900/95 backdrop-blur-xl text-white rounded-xl shadow-2xl z-[9999] text-sm border border-white/10 overflow-hidden transform origin-top-right transition-all`}>
+                                                                    <div className={`absolute ${isMine ? 'right-0' : 'left-0'} mt-1 w-40 bg-slate-800 text-slate-200 rounded-xl shadow-xl z-[9999] text-sm border border-white/10 overflow-hidden transform origin-top-right transition-all`}>
                                                                         {isMine && (
                                                                             <>
                                                                                 <button
-                                                                                    className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors flex items-center gap-2"
+                                                                                    className="w-full text-left px-4 py-2.5 hover:bg-slate-700 transition-colors flex items-center gap-2"
                                                                                     onClick={(e) => { e.stopPropagation(); handleEditMessage(m); setMessageMenuOpen(null); }}
                                                                                 >
                                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -2389,24 +2338,25 @@ export default function Dashboard() {
                             );
                         })()}
                         {/* Input fijo - siempre visible */}
-                        <div className="flex-shrink-0 bg-white/10 border-t border-white/10">
+                        <div className="flex-shrink-0 bg-slate-900 border-t border-white/5">
                             {/* Barra de "Respondiendo a..." */}
                             {replyingTo && (
-                                <div className="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center gap-2">
+                                <div className="px-4 py-2 bg-slate-800/50 border-b border-white/5 flex items-center gap-3">
+                                    <div className="w-1 h-8 bg-indigo-500 rounded-full"></div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-semibold text-indigo-300">
-                                            Respondiendo a mensaje
+                                        <div className="text-xs font-semibold text-indigo-400">
+                                            Respondiendo a {replyingTo.SenderTelephon === profile?.Telephon ? 'ti mismo' : replyingTo.SenderUsername || 'mensaje'}
                                         </div>
-                                        <div className="text-xs text-indigo-200 truncate opacity-70">
+                                        <div className="text-xs text-slate-400 truncate">
                                             {replyingTo.Message}
                                         </div>
                                     </div>
                                     <button
                                         onClick={cancelReply}
-                                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                                        className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-slate-200"
                                         aria-label="Cancelar respuesta"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                                         </svg>
                                     </button>
@@ -2414,12 +2364,12 @@ export default function Dashboard() {
                             )}
                             
                             {/* Área del input */}
-                            <div className="p-3 sm:p-4 flex gap-3 items-end bg-gray-900/50 backdrop-blur-md relative">
+                            <div className="p-3 sm:p-4 flex gap-2 sm:gap-3 items-end bg-slate-900 relative">
                                 {/* Botón de adjuntar */}
                                 <div className="relative">
                                     <button
                                         onClick={() => setShowAttachMenu(!showAttachMenu)}
-                                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all"
+                                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
                                         title="Adjuntar"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 transform -rotate-45">
@@ -2438,9 +2388,9 @@ export default function Dashboard() {
                                     )}
                                 </div>
 
-                                <div className="flex-1 relative">
+                                <div className="flex-1 relative bg-slate-800 rounded-3xl flex items-end border border-transparent focus-within:border-slate-700 transition-colors">
                                     {isRecording ? (
-                                        <div className="w-full h-[44px] flex items-center justify-between px-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400">
+                                        <div className="w-full h-[44px] flex items-center justify-between px-4 text-red-400">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
                                                 <span className="font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
@@ -2457,7 +2407,7 @@ export default function Dashboard() {
                                             value={currentDraft}
                                             onChange={handleInputChange}
                                             placeholder="Escribe un mensaje..."
-                                            className="w-full p-3 pr-10 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:border-indigo-500/50 focus:bg-white/10 text-white placeholder-indigo-300/50 text-[15px] resize-none min-h-[44px] max-h-[120px] transition-all"
+                                            className="w-full p-3 px-4 bg-transparent focus:outline-none text-slate-100 placeholder-slate-500 text-[15px] resize-none min-h-[44px] max-h-[120px] transition-all"
                                             rows={1}
                                             onInput={(e) => {
                                                 e.target.style.height = 'auto';
@@ -2488,8 +2438,8 @@ export default function Dashboard() {
                                     <button
                                         className={`h-[44px] w-[44px] flex items-center justify-center rounded-full text-white transition-all transform ${
                                             selected && profile?.Telephon 
-                                                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:scale-105 hover:shadow-lg hover:shadow-indigo-500/25 active:scale-95' 
-                                                : 'bg-white/5 text-white/30 cursor-not-allowed'
+                                                ? 'bg-indigo-600 hover:bg-indigo-500 hover:scale-105 active:scale-95 shadow-md' 
+                                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                                         }`}
                                         disabled={!selected || !profile?.Telephon}
                                         onClick={() => {
@@ -2680,83 +2630,76 @@ export default function Dashboard() {
             )}
 
             {showEdit && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-                    <div className="w-full max-w-md bg-gray-900 border border-white/20 rounded-2xl p-6 shadow-2xl">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white">Editar Perfil</h3>
-                            <button onClick={() => setShowEdit(false)} className="text-gray-400 hover:text-white transition-colors">
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-700/50">
+                        <div className="p-6 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/50">
+                            <h2 className="text-xl font-semibold text-slate-100">Editar Perfil</h2>
+                            <button
+                                onClick={() => setShowEdit(false)}
+                                className="text-slate-400 hover:text-slate-200 transition-colors p-2 hover:bg-slate-700/50 rounded-lg"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
-                        
-                        <div className="flex flex-col items-center mb-6">
-                            <label className="relative w-24 h-24 rounded-full cursor-pointer group mb-2 shadow-lg" title="Cambiar foto de perfil">
-                                {newAvatarPreview || (myAvatar && !removeAvatar) ? (
-                                    <img src={newAvatarPreview || myAvatar} alt="avatar" className="w-24 h-24 rounded-full object-cover border-2 border-indigo-500/50" />
-                                ) : (
-                                    <div className="w-24 h-24 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-3xl border-2 border-indigo-500/50">
-                                        {user?.username?.charAt(0).toUpperCase()}
-                                    </div>
-                                )}
-                                <div className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
-                                    {uploadingAvatar ? (
-                                        <svg className="w-6 h-6 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                                        </svg>
+                        <form onSubmit={submitEdit} className="p-6 space-y-6">
+                            {/* avatar */}
+                            <div className="flex flex-col items-center mb-6">
+                                <label className="relative w-24 h-24 rounded-full cursor-pointer group mb-2 shadow-lg" title="Cambiar foto de perfil">
+                                    {newAvatarPreview || (myAvatar && !removeAvatar) ? (
+                                        <img src={newAvatarPreview || myAvatar} alt="avatar" className="w-24 h-24 rounded-full object-cover border-2 border-indigo-500/50" />
                                     ) : (
-                                        <>
-                                            <svg className="w-6 h-6 text-white mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-slate-600 rounded-full flex items-center justify-center font-bold text-3xl border-2 border-indigo-500/50">
+                                            {user?.username?.charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-slate-900/60 rounded-full opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
+                                        {uploadingAvatar ? (
+                                            <svg className="w-6 h-6 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                                             </svg>
-                                            <span className="text-[10px] text-white font-medium">Cambiar</span>
-                                        </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-6 h-6 text-white mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                                <span className="text-[10px] text-white font-medium">Cambiar</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={uploadingAvatar} />
+                                </label>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <p className="text-xs text-slate-200/70">Haz clic para actualizar tu foto</p>
+                                    {(myAvatar || newAvatarPreview) && !removeAvatar && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleRemoveAvatar}
+                                            className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-md"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                            Quitar
+                                        </button>
                                     )}
                                 </div>
-                                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={uploadingAvatar} />
-                            </label>
-                            <div className="flex items-center gap-3 mt-1">
-                                <p className="text-xs text-indigo-300/70">Haz clic para actualizar tu foto</p>
-                                {(myAvatar || newAvatarPreview) && !removeAvatar && (
-                                    <button 
-                                        type="button"
-                                        onClick={handleRemoveAvatar}
-                                        className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-md"
-                                    >
-                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                        Quitar
-                                    </button>
-                                )}
                             </div>
-                        </div>
-
-                        <form onSubmit={submitEdit} className="space-y-5">
-                            {status && (
-                                <div className={`p-3 rounded-lg text-sm ${status.includes('Error') ? 'bg-red-500/20 text-red-200 border border-red-500/30' : 'bg-green-500/20 text-green-200 border border-green-500/30'}`}>
-                                    {status}
-                                </div>
-                            )}
-
-                            {/* Fondo de pantalla global */}
                             <div>
-                                <label className="block text-sm font-medium text-indigo-200 mb-2">
-                                    Fondo de pantalla (todos los chats)
-                                </label>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Fondo Global de Chats</label>
                                 {globalWallpaper ? (
-                                    <div className="relative rounded-xl overflow-hidden mb-2 h-28 bg-white/5 border border-white/10">
+                                    <div className="relative rounded-xl overflow-hidden mb-2 h-32 bg-slate-900/50 border border-slate-700/50 group">
                                         <img
                                             src={globalWallpaper.startsWith('/') ? window.location.origin + globalWallpaper : globalWallpaper}
                                             alt="Fondo actual"
-                                            className="w-full h-full object-cover"
+                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                         />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 gap-2">
-                                            <label className="cursor-pointer flex items-center gap-1 text-xs text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
-                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-3 gap-3">
+                                            <label className="cursor-pointer flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-500/80 hover:bg-indigo-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                 </svg>
                                                 Cambiar
@@ -2765,17 +2708,17 @@ export default function Dashboard() {
                                             <button
                                                 type="button"
                                                 onClick={handleRemoveGlobalWallpaper}
-                                                className="flex items-center gap-1 text-xs text-red-300 bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors"
+                                                className="flex items-center gap-1.5 text-sm font-medium text-white bg-rose-500/80 hover:bg-rose-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg"
                                             >
-                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                 </svg>
                                                 Quitar
                                             </button>
                                         </div>
                                         {uploadingWallpaper && (
-                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                                <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center">
+                                                <svg className="animate-spin h-8 w-8 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                                 </svg>
@@ -2783,46 +2726,53 @@ export default function Dashboard() {
                                         )}
                                     </div>
                                 ) : (
-                                    <label className={`flex flex-col items-center justify-center h-24 rounded-xl border-2 border-dashed border-white/20 hover:border-indigo-400/60 bg-white/5 hover:bg-white/10 transition-all cursor-pointer gap-2 ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <label className={`flex flex-col items-center justify-center h-32 rounded-xl border-2 border-dashed border-slate-600 hover:border-indigo-500/50 bg-slate-800/50 hover:bg-slate-700/30 transition-all cursor-pointer gap-3 group ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
                                         {uploadingWallpaper ? (
-                                            <svg className="animate-spin h-6 w-6 text-indigo-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <svg className="animate-spin h-8 w-8 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                             </svg>
                                         ) : (
                                             <>
-                                                <svg className="w-7 h-7 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                                <span className="text-xs text-indigo-300">Seleccionar imagen de fondo</span>
+                                                <div className="p-3 rounded-full bg-slate-700/50 group-hover:bg-indigo-500/20 transition-colors">
+                                                    <svg className="w-6 h-6 text-slate-400 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                </div>
+                                                <span className="text-sm font-medium text-slate-400 group-hover:text-indigo-300 transition-colors">Seleccionar imagen de fondo</span>
                                             </>
                                         )}
                                         <input type="file" accept="image/*" className="hidden" onChange={handleGlobalWallpaperUpload} disabled={uploadingWallpaper} />
                                     </label>
                                 )}
-                                <p className="text-xs text-indigo-300/60 mt-1">Se aplica a todos los chats que no tengan fondo propio</p>
+                                <p className="text-xs text-slate-500 mt-2 flex items-center gap-1.5">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Se aplica a todos los chats que no tengan fondo propio
+                                </p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-indigo-200 mb-1.5">Nombre de usuario</label>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Nombre de usuario</label>
                                 <input
                                     type="text"
                                     value={newUsername}
                                     onChange={(e) => setNewUsername(e.target.value)}
-                                    className="w-full p-3.5 rounded-xl bg-white/5 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none text-white transition-all"
+                                    className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none text-slate-100 placeholder-slate-500 transition-all"
                                     placeholder="Tu nombre visible"
                                 />
                             </div>
-                            <div className="flex gap-3 pt-2">
+                            <div className="flex gap-3 pt-4 border-t border-slate-700/50">
                                 <button
                                     type="button"
                                     onClick={() => setShowEdit(false)}
-                                    className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-medium transition-colors"
+                                    className="flex-1 px-4 py-2.5 rounded-xl font-medium text-slate-300 bg-slate-700/50 hover:bg-slate-700 hover:text-white transition-colors"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-3 rounded-xl font-medium shadow-lg shadow-indigo-500/25 transition-all"
+                                    className="flex-1 px-4 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
                                 >
                                     Guardar Cambios
                                 </button>
