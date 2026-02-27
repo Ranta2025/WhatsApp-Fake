@@ -4,7 +4,7 @@ class WebSocketManager {
         this.ws = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = Infinity; // Siempre reconectar en móvil
-        this.reconnectDelay = 3000;
+        this.reconnectDelay = 1500;
         this.isIntentionallyClosed = false;
         this.messageHandlers = new Map();
         this.connectionStateHandlers = [];
@@ -179,8 +179,8 @@ class WebSocketManager {
 
     handleReconnect() {
         this.reconnectAttempts++;
-        // Backoff exponencial: 3s, 6s, 12s... hasta 60s máximo
-        const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 60000);
+        // Backoff suave: 1.5s, 2.2s, 3.4s... hasta 20s máximo
+        const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), 20000);
         console.log(`Reintentando conexión (intento ${this.reconnectAttempts}) en ${delay / 1000}s...`);
         setTimeout(() => this.connect(), delay);
     }
@@ -283,6 +283,7 @@ class WebSocketManager {
     }
 
     disconnect() {
+        this.isIntentionallyClosed = true; // Evitar reconexión automática
         this.stopHeartbeat();
         if (this.ws) {
             this.ws.close(1000, 'Cliente desconectado intencionalmente');

@@ -595,7 +595,9 @@ export default function Dashboard() {
         const handleCallRejected = (payload) => {
             console.log('[CALL] Llamada rechazada:', payload);
             setCallState(null);
-            alert('La llamada fue rechazada');
+            const id = Date.now();
+            setToasts(prev => [...prev, { id, senderName: '📵 Llamada rechazada', message: 'El contacto rechazó la llamada', icon: null }]);
+            setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
         };
 
         const handleCallEnded = (payload) => {
@@ -606,7 +608,9 @@ export default function Dashboard() {
         const handleCallUnavailable = (payload) => {
             console.log('[CALL] Usuario no disponible:', payload);
             setCallState(null);
-            alert(payload?.reason || 'Usuario no disponible');
+            const id = Date.now();
+            setToasts(prev => [...prev, { id, senderName: '📵 Sin respuesta', message: payload?.reason || 'El contacto no está disponible', icon: null }]);
+            setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
         };
 
         on('incoming_call', handleIncomingCall);
@@ -1654,6 +1658,27 @@ export default function Dashboard() {
                                             ...acceptedContacts,
                                             ...Object.keys(messagesByChat)
                                         ]));
+
+                                        const formatLastMessage = (msg) => {
+                                            if (!msg) return 'Sin mensajes';
+                                            let mediaType = msg.MediaType;
+                                            const text = msg.Message || '';
+                                            
+                                            if (!mediaType && text.includes('/media/')) {
+                                                if (text.includes('/audio/')) mediaType = 'audio';
+                                                else if (text.includes('/images/')) mediaType = 'image';
+                                                else if (text.includes('/videos/')) mediaType = 'video';
+                                                else if (text.includes('/docs/')) mediaType = 'document';
+                                            }
+                                            
+                                            if (mediaType === 'audio') return '🎵 Audio';
+                                            if (mediaType === 'image') return '📷 Foto';
+                                            if (mediaType === 'video') return '🎥 Video';
+                                            if (mediaType === 'document') return '📄 Documento';
+                                            
+                                            return text;
+                                        };
+
                                         return allNumbers.map((contactNumber) => {
                                             if (shownNumbers.has(contactNumber)) return null;
                                             shownNumbers.add(contactNumber);
@@ -1697,7 +1722,7 @@ export default function Dashboard() {
                                                             {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
                                                         </div>
                                                         <div className="text-xs text-indigo-200 truncate">
-                                                            {lastMessage?.Message || 'Sin mensajes'}
+                                                            {formatLastMessage(lastMessage)}
                                                         </div>
                                                     </div>
                                                     {getUnreadCount(contact || {Number: contactNumber}) > 0 && (

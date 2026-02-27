@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"gorm/backend/models"
 	"log"
+	"time"
 )
 
 // MessageHandler maneja los diferentes tipos de mensajes WebSocket
@@ -221,19 +222,40 @@ func (mh *MessageHandler) HandleCallOffer() {
 		notificationBytes, _ := json.Marshal(notification)
 		mh.Hub.SendTo(callOffer.To, notificationBytes)
 	} else {
-		// Receptor no conectado - marcar como no disponible
-		if mh.Client.ServiceCall != nil {
-			ctx := context.Background()
-			mh.Client.ServiceCall.MarkCallUnavailable(callOffer.RoomID, ctx)
-		}
-		errorMsg, _ := json.Marshal(map[string]interface{}{
-			"type": "call_unavailable",
-			"payload": map[string]interface{}{
-				"to":     callOffer.To,
-				"reason": "Usuario no disponible",
-			},
-		})
-		mh.Client.Send <- errorMsg
+		// Receptor no conectado: esperar 2s y reintentar por si está reconectando
+		go func(hub *Hub, caller *Client, offer models.CallOffer) {
+			time.Sleep(2 * time.Second)
+			_, backOnline := hub.GetClient(offer.To)
+			if backOnline {
+				// Reconectó en esos 2s, mandar la llamada
+				notification := map[string]interface{}{
+					"type": "incoming_call",
+					"payload": map[string]interface{}{
+						"from":     caller.Telephon,
+						"username": caller.Username,
+						"roomID":   offer.RoomID,
+						"callType": offer.CallType,
+					},
+				}
+				notificationBytes, _ := json.Marshal(notification)
+				hub.SendTo(offer.To, notificationBytes)
+			} else {
+				// Realmente no disponible
+				if caller.ServiceCall != nil {
+					ctx := context.Background()
+					caller.ServiceCall.MarkCallUnavailable(offer.RoomID, ctx)
+				}
+				errorMsg, _ := json.Marshal(map[string]interface{}{
+					"type": "call_unavailable",
+					"payload": map[string]interface{}{
+						"to":     offer.To,
+						"reason": "Usuario no disponible",
+					},
+				})
+				// SendTo es seguro: usa select+default internamente
+				hub.SendTo(caller.Telephon, errorMsg)
+			}
+		}(mh.Hub, mh.Client, callOffer)
 	}
 	log.Printf("[WS] Llamada de %s a %s (sala: %s, tipo: %s)", mh.Client.Telephon, callOffer.To, callOffer.RoomID, callOffer.CallType)
 }
