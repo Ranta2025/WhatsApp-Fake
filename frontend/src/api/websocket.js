@@ -5,7 +5,7 @@ class WebSocketManager {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = Infinity; // Siempre reconectar en móvil
         this.reconnectDelay = 1500;
-        this.isIntentionallyClosed = false;
+        this.isIntentionallyClosed = true; // Iniciar como cerrado intencionalmente para evitar autoconexión al cargar
         this.messageHandlers = new Map();
         this.connectionStateHandlers = [];
         this.heartbeatInterval = null;

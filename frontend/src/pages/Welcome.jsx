@@ -1,17 +1,27 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import BugReportModal from '../components/BugReportModal';
 
 export default function Welcome() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isBugReportOpen, setIsBugReportOpen] = useState(false);
+    const containerRef = useRef(null);
 
     useEffect(() => {
         const handleScroll = () => {
-            setIsScrolled(window.scrollY > 50);
+            if (containerRef.current) {
+                setIsScrolled(containerRef.current.scrollTop > 50);
+            }
         };
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
+        const container = containerRef.current;
+        if (container) {
+            container.addEventListener('scroll', handleScroll);
+        }
+        return () => {
+            if (container) {
+                container.removeEventListener('scroll', handleScroll);
+            }
+        };
     }, []);
 
     const features = [
@@ -55,21 +65,23 @@ export default function Welcome() {
     ];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 overflow-y-auto">
+        <div ref={containerRef} className="h-full bg-slate-950 overflow-y-auto">
             {/* Navbar */}
             <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-                isScrolled ? 'bg-gray-900/95 backdrop-blur-sm shadow-lg' : 'bg-transparent'
+                isScrolled ? 'bg-slate-900/95 backdrop-blur-sm shadow-lg border-b border-white/5' : 'bg-transparent'
             }`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
-                            <img src="/todos.svg" alt="todos" className="w-9 h-9" />
+                            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                                <img src="/todos.svg" alt="todos" className="w-5 h-5" />
+                            </div>
                             <span className="text-white font-bold text-xl">todos</span>
                         </div>
                         <div className="flex items-center space-x-3">
                             <button
                                 onClick={() => setIsBugReportOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2 text-white hover:text-red-300 transition group"
+                                className="flex items-center gap-2 px-4 py-2 text-slate-400 hover:text-red-400 transition group"
                                 title="Reportar un bug"
                             >
                                 <span className="text-lg group-hover:scale-110 transition-transform">🐛</span>
@@ -77,13 +89,13 @@ export default function Welcome() {
                             </button>
                             <Link 
                                 to="/login" 
-                                className="px-4 py-2 text-white hover:text-indigo-300 transition-colors font-medium"
+                                className="px-4 py-2 text-slate-300 hover:text-white transition-colors font-medium"
                             >
                                 Iniciar Sesión
                             </Link>
                             <Link 
                                 to="/register" 
-                                className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Registrarse
                             </Link>
@@ -98,22 +110,22 @@ export default function Welcome() {
                     <div className="animate-fade-in">
                         <h1 className="text-5xl md:text-7xl font-bold text-white mb-6">
                             Conecta con el
-                            <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent"> Mundo</span>
+                            <span className="text-indigo-500"> Mundo</span>
                         </h1>
-                        <p className="text-xl md:text-2xl text-indigo-200 mb-8 max-w-3xl mx-auto">
+                        <p className="text-xl md:text-2xl text-slate-400 mb-8 max-w-3xl mx-auto">
                             La plataforma de mensajería instantánea más rápida y segura. 
                             Chatea en tiempo real con tus contactos desde cualquier lugar.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                             <Link 
                                 to="/register" 
-                                className="px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Comenzar Gratis
                             </Link>
                             <Link 
                                 to="/login" 
-                                className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all duration-200 border border-white/20 hover:border-white/40 backdrop-blur-sm"
+                                className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-all duration-200 border border-white/5"
                             >
                                 Ya tengo cuenta
                             </Link>
@@ -123,9 +135,9 @@ export default function Welcome() {
                     {/* Stats */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-20">
                         {stats.map((stat, index) => (
-                            <div key={index} className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+                            <div key={index} className="bg-slate-900 rounded-xl p-6 border border-white/5 shadow-xl">
                                 <div className="text-3xl md:text-4xl font-bold text-white mb-2">{stat.number}</div>
-                                <div className="text-indigo-300 text-sm">{stat.label}</div>
+                                <div className="text-slate-400 text-sm">{stat.label}</div>
                             </div>
                         ))}
                     </div>
@@ -133,13 +145,13 @@ export default function Welcome() {
             </section>
 
             {/* Features Section */}
-            <section className="py-20 px-4 bg-black/20">
+            <section className="py-20 px-4 bg-slate-900/50">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">
                         <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
                             Características Increíbles
                         </h2>
-                        <p className="text-xl text-indigo-300 max-w-2xl mx-auto">
+                        <p className="text-xl text-slate-400 max-w-2xl mx-auto">
                             Todo lo que necesitas para una experiencia de chat excepcional
                         </p>
                     </div>
@@ -148,11 +160,11 @@ export default function Welcome() {
                         {features.map((feature, index) => (
                             <div 
                                 key={index}
-                                className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 hover:border-purple-500/50 transition-all hover:transform hover:scale-105"
+                                className="bg-slate-900 rounded-2xl p-8 border border-white/5 hover:border-indigo-500/30 transition-all hover:transform hover:scale-105 shadow-xl"
                             >
                                 <div className="text-5xl mb-4">{feature.icon}</div>
                                 <h3 className="text-xl font-bold text-white mb-3">{feature.title}</h3>
-                                <p className="text-indigo-200">{feature.description}</p>
+                                <p className="text-slate-400">{feature.description}</p>
                             </div>
                         ))}
                     </div>
@@ -166,43 +178,43 @@ export default function Welcome() {
                         <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
                             Cómo Funciona
                         </h2>
-                        <p className="text-xl text-indigo-300">
+                        <p className="text-xl text-slate-400">
                             En solo 3 simples pasos
                         </p>
                     </div>
                     
                     <div className="space-y-12">
                         <div className="flex flex-col md:flex-row items-center gap-8">
-                            <div className="w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/30">
+                            <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/20">
                                 1
                             </div>
                             <div className="flex-1 text-center md:text-left">
                                 <h3 className="text-2xl font-bold text-white mb-2">Regístrate</h3>
-                                <p className="text-indigo-200">
+                                <p className="text-slate-400">
                                     Crea tu cuenta en segundos. Solo necesitas un nombre de usuario, email y contraseña.
                                 </p>
                             </div>
                         </div>
                         
                         <div className="flex flex-col md:flex-row items-center gap-8">
-                            <div className="w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/30">
+                            <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/20">
                                 2
                             </div>
                             <div className="flex-1 text-center md:text-left">
                                 <h3 className="text-2xl font-bold text-white mb-2">Añade Contactos</h3>
-                                <p className="text-indigo-200">
+                                <p className="text-slate-400">
                                     Busca y añade a tus amigos usando su código único de 8 dígitos.
                                 </p>
                             </div>
                         </div>
                         
                         <div className="flex flex-col md:flex-row items-center gap-8">
-                            <div className="w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/30">
+                            <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg shadow-indigo-500/20">
                                 3
                             </div>
                             <div className="flex-1 text-center md:text-left">
                                 <h3 className="text-2xl font-bold text-white mb-2">¡Chatea!</h3>
-                                <p className="text-indigo-200">
+                                <p className="text-slate-400">
                                     Comienza a chatear en tiempo real. Tus mensajes se entregan instantáneamente.
                                 </p>
                             </div>
@@ -212,17 +224,17 @@ export default function Welcome() {
             </section>
 
             {/* CTA Section */}
-            <section className="py-20 px-4 bg-gradient-to-r from-purple-900/50 to-indigo-900/50">
+            <section className="py-20 px-4 bg-slate-900 border-y border-white/5">
                 <div className="max-w-4xl mx-auto text-center">
                     <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
                         ¿Listo para comenzar?
                     </h2>
-                    <p className="text-xl text-indigo-200 mb-8">
+                    <p className="text-xl text-slate-400 mb-8">
                         Únete a miles de usuarios que ya disfrutan de la mejor experiencia de chat
                     </p>
                     <Link 
                         to="/register" 
-                        className="inline-block px-10 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold text-lg rounded-xl shadow-xl shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="inline-block px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg rounded-xl shadow-xl shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                     >
                         Crear Cuenta Ahora
                     </Link>
@@ -230,22 +242,24 @@ export default function Welcome() {
             </section>
 
             {/* Footer */}
-            <footer className="py-12 px-4 bg-black/40">
+            <footer className="py-12 px-4 bg-slate-950">
                 <div className="max-w-7xl mx-auto">
                     <div className="grid md:grid-cols-4 gap-8 mb-8">
                         <div>
                             <div className="flex items-center space-x-2 mb-4">
-                                <img src="/todos.svg" alt="todos" className="w-9 h-9" />
+                                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                                    <img src="/todos.svg" alt="todos" className="w-5 h-5" />
+                                </div>
                                 <span className="text-white font-bold text-xl">todos</span>
                             </div>
-                            <p className="text-indigo-300 text-sm">
+                            <p className="text-slate-400 text-sm">
                                 La plataforma de mensajería instantánea del futuro.
                             </p>
                         </div>
                         
                         <div>
                             <h4 className="text-white font-semibold mb-4">Producto</h4>
-                            <ul className="space-y-2 text-indigo-300 text-sm">
+                            <ul className="space-y-2 text-slate-400 text-sm">
                                 <li><a href="#" className="hover:text-white transition">Características</a></li>
                                 <li><a href="#" className="hover:text-white transition">Seguridad</a></li>
                                 <li><a href="#" className="hover:text-white transition">Precios</a></li>
@@ -254,7 +268,7 @@ export default function Welcome() {
                         
                         <div>
                             <h4 className="text-white font-semibold mb-4">Soporte</h4>
-                            <ul className="space-y-2 text-indigo-300 text-sm">
+                            <ul className="space-y-2 text-slate-400 text-sm">
                                 <li><a href="#" className="hover:text-white transition">Ayuda</a></li>
                                 <li><a href="#" className="hover:text-white transition">Documentación</a></li>
                                 <li><a href="#" className="hover:text-white transition">Contacto</a></li>
@@ -263,7 +277,7 @@ export default function Welcome() {
                         
                         <div>
                             <h4 className="text-white font-semibold mb-4">Legal</h4>
-                            <ul className="space-y-2 text-indigo-300 text-sm">
+                            <ul className="space-y-2 text-slate-400 text-sm">
                                 <li><a href="#" className="hover:text-white transition">Privacidad</a></li>
                                 <li><a href="#" className="hover:text-white transition">Términos</a></li>
                                 <li><a href="#" className="hover:text-white transition">Cookies</a></li>
@@ -277,8 +291,8 @@ export default function Welcome() {
                 onClose={() => setIsBugReportOpen(false)} 
             />
                     
-                    <div className="border-t border-white/10 pt-8">
-                        <p className="text-center text-indigo-300 text-sm">
+                    <div className="border-t border-white/5 pt-8">
+                        <p className="text-center text-slate-500 text-sm">
                             © 2026 ChatApp. Todos los derechos reservados.
                         </p>
                     </div>

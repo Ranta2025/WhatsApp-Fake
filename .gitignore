@@ -96,3 +96,6 @@ desktop.ini
 .vscode/settings.json
 .vscode/launch.json
 .idea/*
+
+*.trae
+*.github

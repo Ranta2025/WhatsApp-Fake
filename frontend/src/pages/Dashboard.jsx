@@ -104,6 +104,9 @@ export default function Dashboard() {
     // Estado de edición de mensaje
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editingMessageText, setEditingMessageText] = useState('');
+    // Estado de búsqueda
+    const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
     // Estado de Media y Grabación
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
@@ -111,6 +114,14 @@ export default function Dashboard() {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
+
+    // Debounce para la búsqueda
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [searchQuery]);
 
         // Iniciar edición de mensaje
         const handleEditMessage = (message) => {
@@ -1623,7 +1634,27 @@ export default function Dashboard() {
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                         </div>
-                        <input type="text" className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-full leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:bg-slate-800 focus:border-slate-700 focus:ring-0 sm:text-sm transition-colors" placeholder="Buscar o empezar un chat" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-full leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:bg-slate-800 focus:border-slate-700 focus:ring-0 sm:text-sm transition-colors"
+                            placeholder={
+                                sidebarView === 'chats' ? "Buscar chats..." :
+                                sidebarView === 'calls' ? "Buscar llamadas..." :
+                                "Buscar contactos..."
+                            }
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300"
+                            >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        )}
                     </div>
                 </div>
                 
@@ -1653,9 +1684,11 @@ export default function Dashboard() {
                     {/* Vista de Chats Activos */}
                     {sidebarView === 'chats' && (
                         <>
-                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3 px-2">Chats Activos</div>
+                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3 px-2">
+                                {debouncedSearchQuery ? 'Resultados de búsqueda' : 'Chats Activos'}
+                            </div>
                             <div className="space-y-1">
-                                {Object.keys(messagesByChat).length > 0 ? (
+                                {Object.keys(messagesByChat).length > 0 || contacts.some(c => c.Status === 'accepted') ? (
                                     // Filtrar para mostrar solo un chat por contacto real o número único
                                     (() => {
                                         // Crear un Set para evitar duplicados
@@ -1667,6 +1700,29 @@ export default function Dashboard() {
                                             ...acceptedContacts,
                                             ...Object.keys(messagesByChat)
                                         ]));
+
+                                        // Filtrar según búsqueda
+                                        const filteredNumbers = allNumbers.filter(contactNumber => {
+                                            if (!debouncedSearchQuery) return true;
+                                            
+                                            const contact = contacts.find(c => c.Number === contactNumber);
+                                            const group = allChatGroups[contactNumber];
+                                            const displayName = contact?.ContactName || group?.ContactName || group?.ContactUsername || '';
+                                            const query = debouncedSearchQuery.toLowerCase();
+                                            
+                                            return (
+                                                displayName.toLowerCase().includes(query) ||
+                                                contactNumber.includes(query)
+                                            );
+                                        });
+
+                                        if (filteredNumbers.length === 0 && debouncedSearchQuery) {
+                                            return (
+                                                <div className="text-center text-slate-500 py-10 flex flex-col items-center">
+                                                    <p>No se encontraron chats</p>
+                                                </div>
+                                            );
+                                        }
 
                                         const formatLastMessage = (msg) => {
                                             if (!msg) return 'Sin mensajes';
@@ -1688,12 +1744,19 @@ export default function Dashboard() {
                                             return text;
                                         };
 
-                                        return allNumbers.map((contactNumber) => {
+                                        return filteredNumbers.map((contactNumber) => {
                                             if (shownNumbers.has(contactNumber)) return null;
                                             shownNumbers.add(contactNumber);
                                             const messages = messagesByChat[contactNumber] || [];
-                                            if (messages.length === 0) return null;
-                                            const lastMessage = messages[messages.length - 1];
+                                            // Si no hay mensajes y estamos filtrando, mostrar igual si coincide el nombre (es un contacto sin chat)
+                                            // Si NO estamos filtrando, mostrar solo si tiene mensajes o es contacto aceptado (lógica original)
+                                            
+                                            // Lógica original preservada:
+                                            // "Priorizar contactos aceptados" -> ya están en allNumbers
+                                            // "Unir contactos aceptados y números de mensajes" -> ya están en allNumbers
+                                            
+                                            const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+                                            
                                             // contactNumber es el telephon, buscar contacto por Number
                                             const contact = contacts.find(c => c.Number === contactNumber);
                                             const group = allChatGroups[contactNumber];
@@ -1712,6 +1775,7 @@ export default function Dashboard() {
                                                         };
                                                         setSelected(contactToSelect);
                                                         setSidebarOpen(false);
+                                                        setSearchQuery(''); // Limpiar búsqueda al seleccionar
                                                     }}
                                                     className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === contactNumber ? 'bg-slate-800' : ''}`}
                                                 >
@@ -1766,9 +1830,11 @@ export default function Dashboard() {
                     {sidebarView === 'calls' && (
                         <CallHistory
                             contacts={contacts}
+                            searchQuery={debouncedSearchQuery}
                             onSelectContact={(contact) => {
                                 setSelected(contact);
                                 setSidebarOpen(false);
+                                setSearchQuery('');
                             }}
                             onStartCall={(telephon, name, callType) => {
                                 // Seleccionar el contacto y lanzar llamada
@@ -1776,6 +1842,7 @@ export default function Dashboard() {
                                 const sel = contact || { Number: telephon, Username: name, ContactName: null, Status: 'unknown' };
                                 setSelected(sel);
                                 setSidebarOpen(false);
+                                setSearchQuery('');
                                 // Pequeño delay para que el state se actualice
                                 setTimeout(() => handleStartCall(callType || 'video'), 100);
                             }}
@@ -1786,22 +1853,48 @@ export default function Dashboard() {
                     {sidebarView === 'contacts' && !showAddContactForm && (
                         <>
                             <div className="flex justify-between items-center mb-3 px-2">
-                                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Mis Contactos</div>
-                                <button
-                                    onClick={() => {
-                                        setShowAddContactForm(true);
-                                        setAddMsg('');
-                                        setNumberInput('');
-                                        setContactNameInput('');
-                                    }}
-                                    className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
-                                >
-                                    + Agregar
-                                </button>
+                                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                                    {debouncedSearchQuery ? 'Resultados de búsqueda' : 'Mis Contactos'}
+                                </div>
+                                {!debouncedSearchQuery && (
+                                    <button
+                                        onClick={() => {
+                                            setShowAddContactForm(true);
+                                            setAddMsg('');
+                                            setNumberInput('');
+                                            setContactNameInput('');
+                                        }}
+                                        className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
+                                    >
+                                        + Agregar
+                                    </button>
+                                )}
                             </div>
                             <div>
-                        {contacts.filter(c => c.Status === 'accepted').length > 0 ? (
-                            contacts.filter(c => c.Status === 'accepted').map((c, idx) => (
+                        {(() => {
+                            const filteredContacts = contacts.filter(c => {
+                                if (c.Status !== 'accepted') return false;
+                                if (!debouncedSearchQuery) return true;
+                                const query = debouncedSearchQuery.toLowerCase();
+                                return (
+                                    (c.ContactName || '').toLowerCase().includes(query) ||
+                                    (c.Username || '').toLowerCase().includes(query) ||
+                                    c.Number.includes(query)
+                                );
+                            });
+
+                            if (filteredContacts.length === 0) {
+                                return (
+                                    <div className="text-center text-slate-500 py-10 flex flex-col items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                        <p>{debouncedSearchQuery ? 'No se encontraron contactos' : 'No tienes contactos aún'}</p>
+                                    </div>
+                                );
+                            }
+
+                            return filteredContacts.map((c, idx) => (
                                 <div key={idx} className="mb-2">
                                     {editingContact === c.Number ? (
                                         /* Modo edición inline */
@@ -1844,6 +1937,7 @@ export default function Dashboard() {
                                             onClick={() => {
                                                 setSelected(c);
                                                 setSidebarOpen(false);
+                                                setSearchQuery('');
                                             }}
                                             className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === c.Number ? 'bg-slate-800' : ''}`}
                                         >
@@ -1887,15 +1981,8 @@ export default function Dashboard() {
                                         </button>
                                     )}
                                 </div>
-                            ))
-                        ) : (
-                            <div className="text-center text-slate-500 py-10 flex flex-col items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>
-                                <p>No tienes contactos aún</p>
-                            </div>
-                        )}
+                            ));
+                        })()}
                     </div>
                         </>
                     )}

@@ -81,7 +81,7 @@ function getStatusInfo(status, isOutgoing) {
     }
 }
 
-export default function CallHistory({ contacts, onSelectContact, onStartCall }) {
+export default function CallHistory({ contacts, onSelectContact, onStartCall, searchQuery }) {
     const [calls, setCalls] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -117,6 +117,21 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
         return contact?.ContactName || username || telephon;
     };
 
+    // Filter calls based on searchQuery
+    const filteredCalls = calls.filter(call => {
+        if (!searchQuery) return true;
+        const query = searchQuery.toLowerCase();
+        const caller = call.callerTelephon || call.CallerTelephon || call.callerUsername || call.CallerUsername || '';
+        const receiver = call.receiverTelephon || call.ReceiverTelephon || call.receiverUsername || call.ReceiverUsername || '';
+        const contactCaller = contacts?.find(c => c.Number === (call.callerTelephon || call.CallerTelephon))?.ContactName || '';
+        const contactReceiver = contacts?.find(c => c.Number === (call.receiverTelephon || call.ReceiverTelephon))?.ContactName || '';
+        
+        return caller.toLowerCase().includes(query) || 
+               receiver.toLowerCase().includes(query) || 
+               contactCaller.toLowerCase().includes(query) || 
+               contactReceiver.toLowerCase().includes(query);
+    });
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-12">
@@ -134,10 +149,19 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
         );
     }
 
+    if (filteredCalls.length === 0) {
+        return (
+            <div className="text-center text-indigo-200 py-8">
+                <PhoneIcon className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                <p className="text-sm">No se encontraron resultados</p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-1">
             <div className="text-indigo-200 text-sm mb-2 uppercase">Llamadas Recientes</div>
-            {calls.map((call) => {
+            {filteredCalls.map((call) => {
                 const callID = call.id ?? call.ID;
                 const isOutgoing = call.isOutgoing ?? call.IsOutgoing;
                 const callerTelephon = call.callerTelephon ?? call.CallerTelephon;
