@@ -77,18 +77,12 @@ class WebSocketManager {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             wsUrl = `${protocol}//${window.location.host}/api/v1/ws`;
         } else {
-            // Fallback: desarrollo local - usar el hostname actual
+            // Fallback: desarrollo local - usar el mismo hostname para mantener same-site cookies
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-            wsUrl = `${protocol}//${host}:8080/api/v1/ws`;
+            wsUrl = `${protocol}//${window.location.hostname}:8080/api/v1/ws`;
         }
         
-        // WebSocket no puede enviar headers personalizados, usamos query param como fallback
-        const storedToken = localStorage.getItem('token');
-        console.log('[WS] Token en localStorage:', storedToken ? 'SI (presente)' : 'NO (ausente)');
-        console.log('[WS] Token value:', storedToken);
-        const tokenQuery = storedToken ? `?token=${encodeURIComponent(storedToken)}` : '';
-        wsUrl = `${wsUrl}${tokenQuery}`;
+        // Las cookies HttpOnly se envían automáticamente en el handshake del WebSocket (same-origin)
         console.log('[WS] Conectando a:', wsUrl);
 
         try {

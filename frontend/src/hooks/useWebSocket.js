@@ -1,17 +1,28 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import wsManager from '../api/websocket';
 
+// Contador de referencia global para el singleton WebSocket.
+// Solo se conecta al primer consumidor y desconecta al último.
+let wsRefCount = 0;
+
 export function useWebSocket() {
-        const sendDeleteMessage = useCallback((messageID, receptor) => {
-            return wsManager.sendDeleteMessage(messageID, receptor);
-        }, []);
-    const [isConnected, setIsConnected] = useState(false);
-    const [connectionState, setConnectionState] = useState('disconnected');
+    const [isConnected, setIsConnected] = useState(() => wsManager.isConnected());
+    const [connectionState, setConnectionState] = useState(
+        wsManager.isConnected() ? 'connected' : 'disconnected'
+    );
     const handlersRef = useRef(new Map());
 
     useEffect(() => {
-        // Conectar WebSocket al montar
-        wsManager.connect();
+        wsRefCount++;
+
+        // Solo conectar si es el primer consumidor
+        if (wsRefCount === 1) {
+            wsManager.connect();
+        } else if (wsManager.isConnected()) {
+            // Si ya estaba conectado, sincronizar estado local
+            setIsConnected(true);
+            setConnectionState('connected');
+        }
 
         // Manejar estado de conexión
         const connectionHandler = (state) => {
@@ -23,7 +34,12 @@ export function useWebSocket() {
         // Cleanup al desmontar
         return () => {
             unsubscribe();
-            wsManager.disconnect();
+            wsRefCount--;
+            // Solo desconectar si es el último consumidor
+            if (wsRefCount <= 0) {
+                wsRefCount = 0;
+                wsManager.disconnect();
+            }
         };
     }, []);
 
@@ -55,6 +71,10 @@ export function useWebSocket() {
 
     const sendEditMessage = useCallback((messageID, receptor, newContent) => {
         return wsManager.sendEditMessage(messageID, receptor, newContent);
+    }, []);
+
+    const sendDeleteMessage = useCallback((messageID, receptor) => {
+        return wsManager.sendDeleteMessage(messageID, receptor);
     }, []);
 
     const sendCallOffer = useCallback((to, roomID, callType) => {

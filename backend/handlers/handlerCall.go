@@ -11,11 +11,11 @@ import (
 )
 
 type HandlerCall struct {
-	service *services.ServiceCall
+	service services.CallServicer
 }
 
 // InitHandlerCall crea el handler de llamadas con su servicio.
-func InitHandlerCall(service *services.ServiceCall) *HandlerCall {
+func InitHandlerCall(service services.CallServicer) *HandlerCall {
 	return &HandlerCall{service: service}
 }
 

@@ -3,18 +3,37 @@ package services
 import (
 	"context"
 	"gorm/backend/models"
-	"gorm/backend/repos"
 	"gorm/backend/schemas"
 	"log"
 	"math"
 	"time"
 )
 
-type ServiceCall struct {
-	repo *repos.ApiContact
+type CallServicer interface {
+	CreateCallLog(callerTelephon, receiverTelephon, roomID, callType string, ctx context.Context) error
+	MarkCallAnswered(roomID string, ctx context.Context) error
+	MarkCallRejected(roomID string, ctx context.Context) error
+	MarkCallUnavailable(roomID string, ctx context.Context) error
+	MarkCallEnded(roomID string, ctx context.Context) error
+	GetCallHistory(telephon string, ctx context.Context) ([]schemas.CallLogResponse, error)
+	DeleteCallForUser(callID uint, telephon string, ctx context.Context) error
 }
 
-func InitServiceCall(repo *repos.ApiContact) *ServiceCall {
+type CallRepoInterface interface {
+	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
+	CreateCallLog(call *models.CallLog, ctx context.Context) error
+	GetTelephonByID(id uint, ctx context.Context) (string, error)
+	UpdateCallLogByRoomID(roomID string, data map[string]interface{}, ctx context.Context) error
+	GetCallLogsByUser(userID uint, ctx context.Context) ([]models.CallLog, error)
+	GetUserByID(userID uint, ctx context.Context) (*models.UserDataBase, error)
+	DeleteCallLogForUser(callID uint, userID uint, ctx context.Context) error
+}
+
+type ServiceCall struct {
+	repo CallRepoInterface
+}
+
+func InitServiceCall(repo CallRepoInterface) CallServicer {
 	return &ServiceCall{repo: repo}
 }
 

@@ -19,6 +19,7 @@ import (
 
 func main() {
 	utils.LoadEnv()
+	utils.InitLogger()
 	utils.ValidateJWTSecret()
 	db, rd, mc, err := database.GetConection()
 	if err != nil {
@@ -34,14 +35,14 @@ func main() {
 	app.app.Use(middleware.TimeMiddleware())
 
 	// Obtener repositorio primero
-	repo := repos.InitRepoContact(db)
+	repo := repos.InitRepoContact(db, rd)
 
 	// Inicializar Hub de WebSocket con repositorio para obtener contactos
 	hub := websocket.NewHub(repo)
 	go hub.Run()
 
 	// Ahora inicializar handlers con el hub
-	handlerContact, handlerChat, serviceChat, serviceContact := GetHandlerApi(db, hub)
+	handlerContact, handlerChat, serviceChat, serviceContact := GetHandlerApi(db, rd, hub)
 	handlerLog := GetHandlerLog(db, rd, hub)
 	handlerBugReport := GetHandlerBugReport()
 
@@ -84,8 +85,8 @@ func GetHandlerLog(data *gorm.DB, rd *redis.Client, hub *websocket.Hub) *handler
 	return handler
 }
 
-func GetHandlerApi(data *gorm.DB, hub *websocket.Hub) (*handlers.HandlerContact, *handlers.HandlerChat, *services.ServiceChat, *services.ServiceApiContact) {
-	repo := repos.InitRepoContact(data)
+func GetHandlerApi(data *gorm.DB, rd *redis.Client, hub *websocket.Hub) (*handlers.HandlerContact, *handlers.HandlerChat, services.ChatServicer, services.ContactServicer) {
+	repo := repos.InitRepoContact(data, rd)
 	serviceMessage := services.InitServiceMessage(repo)
 	serviceContact := services.InitServiceContact(repo)
 	handlerContact := handlers.InitHandlerApiMessage(serviceContact, hub)

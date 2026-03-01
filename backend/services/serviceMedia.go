@@ -14,6 +14,7 @@ import (
 )
 
 // Tipos MIME permitidos y sus carpetas + límites de tamaño
+// Se han ajustado los límites de documentos a 10MB según requerimiento.
 var allowedTypes = map[string]mediaConfig{
 	"image/jpeg":      {folder: "images", ext: ".jpg", maxBytes: 10 * 1024 * 1024},   // 10 MB
 	"image/png":       {folder: "images", ext: ".png", maxBytes: 10 * 1024 * 1024},   // 10 MB
@@ -26,14 +27,14 @@ var allowedTypes = map[string]mediaConfig{
 	"video/mp4":       {folder: "videos", ext: ".mp4", maxBytes: 100 * 1024 * 1024},  // 100 MB
 	"video/webm":      {folder: "videos", ext: ".webm", maxBytes: 100 * 1024 * 1024}, // 100 MB
 	"video/quicktime": {folder: "videos", ext: ".mov", maxBytes: 100 * 1024 * 1024},  // 100 MB
-	// Documentos
-	"application/pdf":    {folder: "docs", ext: ".pdf", maxBytes: 50 * 1024 * 1024}, // 50 MB
-	"application/msword": {folder: "docs", ext: ".doc", maxBytes: 50 * 1024 * 1024}, // 50 MB
-	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": {folder: "docs", ext: ".docx", maxBytes: 50 * 1024 * 1024}, // 50 MB
-	"application/vnd.ms-excel": {folder: "docs", ext: ".xls", maxBytes: 50 * 1024 * 1024}, // 50 MB
-	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         {folder: "docs", ext: ".xlsx", maxBytes: 50 * 1024 * 1024}, // 50 MB
-	"application/vnd.ms-powerpoint":                                             {folder: "docs", ext: ".ppt", maxBytes: 50 * 1024 * 1024},  // 50 MB
-	"application/vnd.openxmlformats-officedocument.presentationml.presentation": {folder: "docs", ext: ".pptx", maxBytes: 50 * 1024 * 1024}, // 50 MB
+	// Documentos (Limitados a 10MB)
+	"application/pdf":    {folder: "docs", ext: ".pdf", maxBytes: 10 * 1024 * 1024}, // 10 MB
+	"application/msword": {folder: "docs", ext: ".doc", maxBytes: 10 * 1024 * 1024}, // 10 MB
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": {folder: "docs", ext: ".docx", maxBytes: 10 * 1024 * 1024}, // 10 MB
+	"application/vnd.ms-excel": {folder: "docs", ext: ".xls", maxBytes: 10 * 1024 * 1024}, // 10 MB
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         {folder: "docs", ext: ".xlsx", maxBytes: 10 * 1024 * 1024}, // 10 MB
+	"application/vnd.ms-powerpoint":                                             {folder: "docs", ext: ".ppt", maxBytes: 10 * 1024 * 1024},  // 10 MB
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": {folder: "docs", ext: ".pptx", maxBytes: 10 * 1024 * 1024}, // 10 MB
 	"text/plain": {folder: "docs", ext: ".txt", maxBytes: 10 * 1024 * 1024}, // 10 MB
 }
 
@@ -46,10 +47,14 @@ type mediaConfig struct {
 // MediaUploadResult es el resultado de subir un archivo
 type MediaUploadResult struct {
 	URL       string `json:"url"`
-	MediaType string `json:"mediaType"` // "image", "audio", "video"
+	MediaType string `json:"mediaType"` // "image", "audio", "video", "document"
 	MimeType  string `json:"mimeType"`
 	Size      int64  `json:"size"`
 	Filename  string `json:"filename"`
+}
+
+type MediaServicer interface {
+	UploadMedia(file multipart.File, header *multipart.FileHeader, ctx context.Context) (MediaUploadResult, error)
 }
 
 type ServiceMedia struct {
@@ -58,9 +63,8 @@ type ServiceMedia struct {
 	baseURL string
 }
 
-// InitServiceMedia crea el servicio de medios con el cliente MinIO, leyendo
-// MINIO_BUCKET y MINIO_PUBLIC_URL desde variables de entorno.
-func InitServiceMedia(client *minio.Client) *ServiceMedia {
+// InitServiceMedia crea el servicio de medios con el cliente MinIO, devolviendo la interfaz MediaServicer.
+func InitServiceMedia(client *minio.Client) MediaServicer {
 	bucket := os.Getenv("MINIO_BUCKET")
 	if bucket == "" {
 		bucket = "media"
@@ -78,27 +82,24 @@ func InitServiceMedia(client *minio.Client) *ServiceMedia {
 
 // UploadMedia valida el tipo MIME, sube el archivo a MinIO con un nombre único
 // y devuelve la URL relativa pública junto con metadatos del archivo.
-// La URL es relativa al dominio (ej: /storage/media/images/...) de forma que
-// funciona tanto desde localhost como desde cualquier dominio (Cloudflare, etc.).
 func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHeader, ctx context.Context) (MediaUploadResult, error) {
 	// 1. Detectar MIME type
 	mimeType := header.Header.Get("Content-Type")
 	if mimeType == "" || mimeType == "application/octet-stream" {
-		// Intentar inferir por extensión si no viene Content-Type
 		mimeType = mimeByExtension(filepath.Ext(header.Filename))
 	}
 
 	// 2. Validar tipo permitido
 	cfg, allowed := allowedTypes[mimeType]
 	if !allowed {
-		return MediaUploadResult{}, fmt.Errorf("tipo de archivo no permitido: %s", mimeType)
+		return MediaUploadResult{}, fmt.Errorf("formato de archivo no permitido: %s. Solo se permiten imágenes, videos y documentos estándar (Word, PDF, Excel, PPT, TXT)", mimeType)
 	}
 
 	// 3. Validar tamaño
 	if header.Size > cfg.maxBytes {
 		return MediaUploadResult{}, fmt.Errorf(
-			"archivo demasiado grande: %d MB (máximo %d MB)",
-			header.Size/1024/1024,
+			"archivo demasiado grande: %.2f MB (máximo %d MB)",
+			float64(header.Size)/1024/1024,
 			cfg.maxBytes/1024/1024,
 		)
 	}
@@ -116,14 +117,14 @@ func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHe
 		ContentType: mimeType,
 	})
 	if err != nil {
-		return MediaUploadResult{}, fmt.Errorf("error subiendo archivo: %w", err)
+		return MediaUploadResult{}, fmt.Errorf("error subiendo archivo a almacenamiento: %w", err)
 	}
 
-	// 6. Construir URL relativa: funciona desde cualquier dominio (localhost, Cloudflare, etc.)
+	// 6. Construir URL relativa
 	url := fmt.Sprintf("/storage/%s/%s", s.bucket, objectName)
 
 	// 7. Determinar mediaType genérico
-	mediaType := cfg.folder // "images" → usar la carpeta como tipo base
+	mediaType := "document"
 	switch cfg.folder {
 	case "images":
 		mediaType = "image"

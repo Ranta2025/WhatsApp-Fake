@@ -1,7 +1,157 @@
 // Utilidad para manejar notificaciones nativas del sistema operativo
-// Funciona fuera del navegador: esquina de Windows, centro de notificaciones en Android/iOS
+// Genera iconos circulares dinámicos estilo Telegram/WhatsApp
 
 let swRegistration = null;
+
+// Cache de iconos generados para no regenerar cada vez
+const iconCache = new Map();
+
+// Paleta de colores estilo Telegram para avatars sin foto
+const AVATAR_COLORS = [
+    ['#FF6B6B', '#EE5A24'], // Rojo
+    ['#7C5CFC', '#6C5CE7'], // Púrpura
+    ['#00B894', '#00A381'], // Verde
+    ['#FDCB6E', '#F39C12'], // Amarillo
+    ['#74B9FF', '#0984E3'], // Azul
+    ['#FD79A8', '#E84393'], // Rosa
+    ['#00CEC9', '#01A3A4'], // Teal
+    ['#E17055', '#D63031'], // Naranja
+];
+
+/**
+ * Genera un icono circular con avatar o inicial del contacto
+ * Usa OffscreenCanvas/Canvas para crear un PNG blob URL
+ */
+async function generateNotificationIcon(avatarUrl, name) {
+    // Si tenemos avatar URL, intentar convertirlo a circular
+    if (avatarUrl) {
+        const cacheKey = `avatar_${avatarUrl}`;
+        if (iconCache.has(cacheKey)) return iconCache.get(cacheKey);
+
+        try {
+            const icon = await createCircularAvatar(avatarUrl);
+            if (icon) {
+                iconCache.set(cacheKey, icon);
+                return icon;
+            }
+        } catch {
+            // Si falla, generar con inicial
+        }
+    }
+
+    // Generar icono con inicial y color basado en el nombre
+    const initial = (name || '?').charAt(0).toUpperCase();
+    const cacheKey = `init_${initial}_${name}`;
+    if (iconCache.has(cacheKey)) return iconCache.get(cacheKey);
+
+    const icon = createInitialAvatar(initial, name || '');
+    iconCache.set(cacheKey, icon);
+    return icon;
+}
+
+/**
+ * Crea un avatar circular a partir de una URL de imagen
+ */
+function createCircularAvatar(imageUrl) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const size = 192;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+
+                // Fondo
+                ctx.fillStyle = '#0F172A';
+                ctx.fillRect(0, 0, size, size);
+
+                // Recorte circular
+                ctx.beginPath();
+                ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.clip();
+
+                // Dibujar imagen centrada y recortada
+                const aspect = img.width / img.height;
+                let sx = 0, sy = 0, sw = img.width, sh = img.height;
+                if (aspect > 1) {
+                    sx = (img.width - img.height) / 2;
+                    sw = img.height;
+                } else {
+                    sy = (img.height - img.width) / 2;
+                    sh = img.width;
+                }
+                ctx.drawImage(img, sx, sy, sw, sh, 4, 4, size - 8, size - 8);
+
+                // Borde sutil
+                ctx.strokeStyle = 'rgba(99, 102, 241, 0.4)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+                ctx.stroke();
+
+                resolve(canvas.toDataURL('image/png'));
+            } catch {
+                resolve(null);
+            }
+        };
+        img.onerror = () => resolve(null);
+        // Timeout para no bloquear
+        setTimeout(() => resolve(null), 3000);
+        img.src = imageUrl;
+    });
+}
+
+/**
+ * Crea un avatar con inicial estilo Telegram (gradiente + letra grande)
+ */
+function createInitialAvatar(initial, name) {
+    const size = 192;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Color basado en hash del nombre
+    const colorIdx = Math.abs(hashCode(name)) % AVATAR_COLORS.length;
+    const [color1, color2] = AVATAR_COLORS[colorIdx];
+
+    // Fondo
+    ctx.fillStyle = '#0F172A';
+    ctx.fillRect(0, 0, size, size);
+
+    // Círculo con gradiente
+    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    gradient.addColorStop(0, color1);
+    gradient.addColorStop(1, color2);
+
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Inicial centrada
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 80px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initial, size / 2, size / 2 + 2);
+
+    return canvas.toDataURL('image/png');
+}
+
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
+}
 
 /**
  * Registra el Service Worker y guarda la referencia
@@ -64,41 +214,46 @@ export function getNotificationPermission() {
 }
 
 /**
- * Muestra una notificación nativa del sistema
- * @param {Object} options
- * @param {string} options.title - Título (nombre del contacto)
- * @param {string} options.body - Contenido del mensaje
- * @param {string} [options.icon] - URL del icono
- * @param {string} [options.tag] - Tag para agrupar (ej: telephon del contacto)
- * @param {Object} [options.data] - Datos extra (ej: { telephon })
+ * Muestra una notificación nativa con avatar circular generado dinámicamente.
+ * Genera PNG en canvas para que se vea bonita en Windows/macOS/Android.
  */
-export function showNativeNotification({ title, body, icon, tag, data }) {
+export async function showNativeNotification({ title, body, icon, image, tag, data, contactName }) {
     if (!('Notification' in window)) return false;
     if (Notification.permission !== 'granted') return false;
 
-    // Intentar vía Service Worker (funciona en background y en móvil)
+    // Generar icono circular bonito (PNG)
+    const generatedIcon = await generateNotificationIcon(icon, contactName || title);
+
+    // Intentar vía Service Worker
     if (swRegistration?.active) {
         swRegistration.active.postMessage({
             type: 'SHOW_NOTIFICATION',
-            payload: { title, body, icon, tag, data }
+            payload: {
+                title,
+                body,
+                icon: generatedIcon,
+                image,
+                tag,
+                data,
+            }
         });
         return true;
     }
 
-    // Fallback: Notification API directa (funciona en desktop, NO en móvil background)
+    // Fallback: Notification API directa
     try {
         const notif = new Notification(title, {
             body,
-            icon: icon || '/vite.svg',
+            icon: generatedIcon,
+            image: image || undefined,
             tag: tag || 'chat-message',
             renotify: true,
-            silent: false
+            silent: false,
         });
 
         notif.onclick = () => {
             window.focus();
             notif.close();
-            // Disparar evento para que la app abra el chat
             if (data?.telephon) {
                 window.dispatchEvent(new CustomEvent('notification-click', {
                     detail: { telephon: data.telephon }

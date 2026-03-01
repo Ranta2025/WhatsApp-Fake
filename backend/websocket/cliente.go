@@ -29,9 +29,9 @@ type Client struct {
 	Telephon       string // Identificador único (inmutable)
 	Conn           *websocket.Conn
 	Send           chan []byte
-	ServiceChat    *services.ServiceChat
-	ServiceContact *services.ServiceApiContact
-	ServiceCall    *services.ServiceCall
+	ServiceChat    services.ChatServicer
+	ServiceContact services.ContactServicer
+	ServiceCall    services.CallServicer
 }
 
 // messageRouter es un mapa de tipo de mensaje → función handler.

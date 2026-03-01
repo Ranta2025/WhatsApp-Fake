@@ -1,4 +1,4 @@
-import { createContext, useState, useContext } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
 import api from '../api/axios';
 
 const AuthContext = createContext();
@@ -8,20 +8,39 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [loading] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    // Intentar restaurar sesión desde cookie HttpOnly al cargar
+    useEffect(() => {
+        const init = async () => {
+            setLoading(true);
+            try {
+                const { data } = await api.get('/api/v1/user');
+                setUser({ 
+                    username: data.username || data.Telephon || '',
+                    telephon: data.Telephon,
+                    avatar: data.avatar_url
+                });
+            } catch {
+                // No hay sesión válida — usuario no autenticado
+                setUser(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+        init();
+    }, []); // Run once on mount
 
     const login = async (username, password) => {
         try {
-            const { data } = await api.post('/LogIn', { username, password });
-            console.log('[AUTH] Respuesta de login:', data);
-            if (data?.token) {
-                console.log('[AUTH] Guardando token en localStorage:', data.token);
-                localStorage.setItem('token', data.token);
-                console.log('[AUTH] Token guardado, verificando:', localStorage.getItem('token'));
-            } else {
-                console.warn('[AUTH] No se recibió token en la respuesta');
-            }
-            setUser({ username }); // Guardamos datos básicos del usuario
+            await api.post('/LogIn', { username, password });
+            // La cookie HttpOnly se setió automáticamente por el servidor
+            const { data } = await api.get('/api/v1/user');
+            setUser({ 
+                username: data.username || username,
+                telephon: data.Telephon,
+                avatar: data.avatar_url
+            });
             return true;
         } catch (error) {
             console.error("Login error:", error);
@@ -32,10 +51,11 @@ export const AuthProvider = ({ children }) => {
     const logout = async () => {
         try {
             await api.post('/logout');
-            localStorage.removeItem('token');
-            setUser(null);
         } catch (error) {
             console.error("Logout error:", error);
+        } finally {
+            // El servidor ya limpió las cookies HttpOnly
+            setUser(null);
         }
     };
 
@@ -43,9 +63,12 @@ export const AuthProvider = ({ children }) => {
         setUser((prev) => (prev ? { ...prev, username } : { username }));
     };
 
+
+    // updateUsername moved above
+
     return (
         <AuthContext.Provider value={{ user, login, logout, loading, updateUsername, setUser }}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
 };

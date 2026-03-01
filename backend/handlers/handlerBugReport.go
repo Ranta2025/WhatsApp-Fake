@@ -9,11 +9,11 @@ import (
 )
 
 type HandlerBugReport struct {
-	service *services.ServiceBugReport
+	service services.BugReportServicer
 }
 
 // InitHandlerBugReport crea el handler de reportes de bugs con su servicio.
-func InitHandlerBugReport(service *services.ServiceBugReport) *HandlerBugReport {
+func InitHandlerBugReport(service services.BugReportServicer) *HandlerBugReport {
 	return &HandlerBugReport{
 		service: service,
 	}

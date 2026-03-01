@@ -26,9 +26,10 @@ type Message struct {
 // IsContact indica si el otro participante está en la lista de contactos del usuario.
 // Si IsContact=false el front debe mostrar las opciones "Agregar" / "Bloquear".
 type ChatGroup struct {
-	ContactTelephon string    `json:"ContactTelephon"` // Número del otro participante
-	ContactUsername string    `json:"ContactUsername"` // Username del otro participante
-	ContactName     string    `json:"ContactName"`     // Nombre personalizado (vacío si no está agregado)
-	IsContact       bool      `json:"IsContact"`       // true = está en la lista de contactos
-	Messages        []Message `json:"Messages"`
+	ContactTelephon  string    `json:"ContactTelephon"`  // Número del otro participante
+	ContactUsername  string    `json:"ContactUsername"`  // Username del otro participante
+	ContactName      string    `json:"ContactName"`      // Nombre personalizado (vacío si no está agregado)
+	ContactAvatarUrl string    `json:"ContactAvatarUrl"` // URL del avatar del otro participante
+	IsContact        bool      `json:"IsContact"`        // true = está en la lista de contactos
+	Messages         []Message `json:"Messages"`
 }

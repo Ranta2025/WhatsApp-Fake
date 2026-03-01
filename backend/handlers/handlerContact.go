@@ -13,12 +13,12 @@ import (
 )
 
 type HandlerContact struct {
-	service *services.ServiceApiContact
+	service services.ContactServicer
 	hub     *websocket.Hub
 }
 
 // InitHandlerApiMessage crea el handler de contactos/perfil con su servicio y Hub WebSocket.
-func InitHandlerApiMessage(services *services.ServiceApiContact, hub *websocket.Hub) *HandlerContact {
+func InitHandlerApiMessage(services services.ContactServicer, hub *websocket.Hub) *HandlerContact {
 	return &HandlerContact{
 		service: services,
 		hub:     hub,
@@ -80,6 +80,7 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 			hd.hub.NotifyUsernameChange(oldUsername, newUsername)
 		}
 
+		// Regenerar cookie con nuevo username en el JWT
 		token, err := utils.GenerateToken(user.Username, user.Telephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando token: %v", err)
@@ -94,7 +95,6 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 		ctx.SetCookie("token", token, int(utils.AccessTokenDuration.Seconds()), "/", "", secure, true)
 		ctx.JSON(200, gin.H{
 			"message": user,
-			"token":   token,
 		})
 	}
 }

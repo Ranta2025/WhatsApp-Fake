@@ -14,11 +14,10 @@ const getBaseURL = () => {
         return window.location.origin;
     }
     
-    // Fallback: desarrollo local - usar el hostname actual del navegador
+    // Fallback: desarrollo local - usar el mismo hostname del navegador para mantener same-site cookies
     const apiPort = '8080';
     const protocol = window.location.protocol;
-    const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-    return `${protocol}//${host}:${apiPort}`;
+    return `${protocol}//${window.location.hostname}:${apiPort}`;
 };
 
 const baseURL = getBaseURL();
@@ -32,25 +31,16 @@ const api = axios.create({
     },
 });
 
-// --- Request interceptor: agrega el access token ---
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-});
-
-// --- Response interceptor: auto-refresh en 401 ---
+// --- Response interceptor: auto-refresh en 401 (cookie-only) ---
 let isRefreshing = false;
 let failedQueue = [];
 
-const processQueue = (error, token = null) => {
+const processQueue = (error) => {
     failedQueue.forEach(({ resolve, reject }) => {
         if (error) {
             reject(error);
         } else {
-            resolve(token);
+            resolve();
         }
     });
     failedQueue = [];
@@ -72,34 +62,24 @@ api.interceptors.response.use(
                 // Si ya se está refrescando, encolar la petición
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
-                }).then((token) => {
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
-                    return api(originalRequest);
-                });
+                }).then(() => api(originalRequest));
             }
 
             originalRequest._retry = true;
             isRefreshing = true;
 
             try {
-                const { data } = await axios.post(`${baseURL}/refresh`, {}, {
+                // El refresh_token se envía automáticamente via cookie HttpOnly
+                await axios.post(`${baseURL}/refresh`, {}, {
                     withCredentials: true,
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
                 });
 
-                const newToken = data.token;
-                localStorage.setItem('token', newToken);
-                originalRequest.headers.Authorization = `Bearer ${newToken}`;
-
-                processQueue(null, newToken);
+                // El servidor ya setió la nueva cookie HttpOnly con el access token
+                processQueue(null);
                 return api(originalRequest);
             } catch (refreshError) {
-                processQueue(refreshError, null);
-                // Refresh falló: limpiar y redirigir a login
-                localStorage.removeItem('token');
-                window.location.href = '/';
+                processQueue(refreshError);
+                // Refresh falló: dejar que el código llamante maneje el error
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

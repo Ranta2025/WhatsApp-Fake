@@ -3,23 +3,28 @@ package repos
 import (
 	"context"
 	"errors"
+	"fmt"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 type ApiContact struct {
 	data *gorm.DB
+	rd   *redis.Client
 }
 
-// InitRepoContact crea el repositorio de contactos y mensajes con la conexión GORM.
-func InitRepoContact(data *gorm.DB) *ApiContact {
+// InitRepoContact crea el repositorio de contactos y mensajes con la conexión GORM y Redis.
+func InitRepoContact(data *gorm.DB, rd *redis.Client) *ApiContact {
 	return &ApiContact{
 		data: data,
+		rd:   rd,
 	}
 }
 
@@ -228,13 +233,13 @@ func (app *ApiContact) GetSenderTelephonsWithPendingMessages(id_receiver uint, c
 }
 
 // PutStatusMessageSeenByContact marca como 'visto' los mensajes enviados por id_sender
-// al id_receptor que estaban en estado 'entregado'.
+// al id_receptor que estaban en estado 'enviado' o 'entregado'.
 func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor uint, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return app.data.Model(&models.Message{}).WithContext(c).
 		Where("id_user = ? AND id_receptor = ?", id_sender, id_receptor).
-		Where("status = ?", "entregado").
+		Where("status IN ?", []string{"enviado", "entregado"}).
 		Update("status", "visto").Error
 }
 
@@ -336,8 +341,22 @@ func (app *ApiContact) GetTelephonByUsername(username string, ctx context.Contex
 	return telephon, nil
 }
 
-// GetIdByTelephon obtiene el ID de usuario por número de teléfono
+// GetIdByTelephon obtiene el ID de usuario por número de teléfono, usando Redis como caché (Cache-Aside)
 func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	cacheKey := fmt.Sprintf("user:id:%s", telephon)
+
+	// 1. Intentar obtener de Redis
+	if app.rd != nil {
+		idStr, err := app.rd.Get(ctx, cacheKey).Result()
+		if err == nil {
+			id, err := strconv.Atoi(idStr)
+			if err == nil {
+				return id, nil
+			}
+		}
+	}
+
+	// 2. Si no está en caché o hay error, consultar BD
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var id int
@@ -345,7 +364,71 @@ func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (in
 	if result.Error != nil || id == 0 {
 		return -1, errors.New("id usuario no encontrado")
 	}
+
+	// 3. Guardar en Redis para futuras consultas (TTL 24h)
+	if app.rd != nil {
+		app.rd.Set(ctx, cacheKey, id, 24*time.Hour)
+	}
+
 	return id, nil
+}
+
+// GetCachedContactsTelephons obtiene la lista bidireccional de contactos con caché en Redis
+func (app *ApiContact) GetCachedContactsTelephons(telephon string, ctx context.Context) []string {
+	cacheKey := fmt.Sprintf("user:contacts:%s", telephon)
+
+	// 1. Intentar obtener de Redis
+	if app.rd != nil {
+		contacts, err := app.rd.SMembers(ctx, cacheKey).Result()
+		if err == nil && len(contacts) > 0 {
+			return contacts
+		}
+	}
+
+	// 2. Si no está en caché o está vacío, consultar BD
+	id, err := app.GetIdByTelephon(telephon, ctx)
+	if err != nil {
+		return []string{}
+	}
+
+	// Dirección 1: personas que YO tengo agregadas
+	contacts, err := app.GetContactsTelephons(uint(id), ctx)
+	if err != nil {
+		contacts = &[]models.ContactChat{}
+	}
+
+	// Dirección 2: personas que ME tienen agregado a mí
+	reverse, err := app.GetUsersWhoHaveMeAsContactTelephons(uint(id), ctx)
+	if err != nil {
+		reverse = []string{}
+	}
+
+	// Unión sin duplicados
+	seen := make(map[string]struct{})
+	var result []string
+	for _, t := range *contacts {
+		if t.Status == "accepted" {
+			if _, ok := seen[t.Number]; !ok {
+				seen[t.Number] = struct{}{}
+				result = append(result, t.Number)
+			}
+		}
+	}
+	for _, t := range reverse {
+		if _, ok := seen[t]; !ok {
+			seen[t] = struct{}{}
+			result = append(result, t)
+		}
+	}
+
+	// 3. Guardar en Redis (TTL 1h)
+	if app.rd != nil && len(result) > 0 {
+		// Usamos un set para evitar duplicados en Redis y facilitar búsquedas futuras
+		app.rd.SAdd(ctx, cacheKey, result)
+		app.rd.Expire(ctx, cacheKey, 1*time.Hour)
+	}
+
+	return result
 }
 
 // GetTelephonByID obtiene solo el número de teléfono de un usuario por su ID (más eficiente que GetUserByID)

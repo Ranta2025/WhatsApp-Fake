@@ -11,12 +11,12 @@ import (
 )
 
 type HandlerChat struct {
-	service *services.ServiceChat
+	service services.ChatServicer
 	hub     *websocket.Hub
 }
 
 // InitHandlerChat crea el handler de chat con su servicio y referencia al Hub WebSocket.
-func InitHandlerChat(service *services.ServiceChat, hub *websocket.Hub) *HandlerChat {
+func InitHandlerChat(service services.ChatServicer, hub *websocket.Hub) *HandlerChat {
 	return &HandlerChat{service: service, hub: hub}
 }
 

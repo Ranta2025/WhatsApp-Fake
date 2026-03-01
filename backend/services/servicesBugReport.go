@@ -10,15 +10,18 @@ import (
 	"time"
 )
 
+type BugReportServicer interface {
+	CreateGitHubIssue(report models.BugReport) error
+}
+
 type ServiceBugReport struct {
 	githubToken string
 	owner       string
 	repo        string
 }
 
-// InitServiceBugReport crea el servicio de reportes leyendo credenciales de GitHub
-// desde variables de entorno (GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO).
-func InitServiceBugReport() *ServiceBugReport {
+// InitServiceBugReport crea el servicio de reportes leyendo credenciales de GitHub, devolviendo la interfaz BugReportServicer.
+func InitServiceBugReport() BugReportServicer {
 	return &ServiceBugReport{
 		githubToken: os.Getenv("GITHUB_TOKEN"),
 		owner:       os.Getenv("GITHUB_OWNER"),

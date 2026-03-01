@@ -44,11 +44,19 @@ func IsAllowedOrigin(origin string) bool {
 			return true
 		}
 	}
-	if strings.Contains(origin, ".ngrok-free.app") ||
-		strings.Contains(origin, ".ngrok.io") ||
-		strings.Contains(origin, ".ngrok.app") ||
-		strings.Contains(origin, "ngrok-free.dev") ||
-		strings.Contains(origin, ".trycloudflare.com") {
+
+	parsed, err = url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+
+	if strings.HasSuffix(host, ".ngrok-free.app") ||
+		strings.HasSuffix(host, ".ngrok.io") ||
+		strings.HasSuffix(host, ".ngrok.app") ||
+		host == "ngrok-free.dev" ||
+		strings.HasSuffix(host, "ngrok-free.dev") ||
+		strings.HasSuffix(host, ".trycloudflare.com") {
 		return true
 	}
 	log.Printf("[CORS] Origin RECHAZADO: %s", origin)

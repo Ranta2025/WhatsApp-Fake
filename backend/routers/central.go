@@ -13,7 +13,7 @@ import (
 
 // Router registra todas las rutas de la aplicación: autenticación (log), bug-report
 // público y el subgrupo /api/v1/ con usuario, contactos, chat, media, llamadas y WebSocket.
-func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, handlerBugReport *handlers.HandlerBugReport, callService *services.ServiceCall, handlerMedia *handlers.HandlerMedia) {
+func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, handlerBugReport *handlers.HandlerBugReport, callService services.CallServicer, handlerMedia *handlers.HandlerMedia) {
 	// Middleware de recuperación de panics
 	app.Use(gin.Recovery())
 

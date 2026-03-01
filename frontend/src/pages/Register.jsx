@@ -40,11 +40,8 @@ export default function Register() {
             return;
         }
         try {
-            const { data } = await api.post('/register', formData);
-            // Guardar token si viene en la respuesta
-            if (data?.token) {
-                localStorage.setItem('token', data.token);
-            }
+            await api.post('/register', formData);
+            // La cookie HttpOnly se setió automáticamente por el servidor
             navigate('/activate', { state: { username: formData.username, gmail: formData.email } });
         } catch (err) {
             const data = err?.response?.data;

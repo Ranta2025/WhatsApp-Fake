@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gorm/backend/models"
 	"gorm/backend/repos"
 	"sync"
 	"time"
@@ -181,47 +180,20 @@ func (h *Hub) GetOnlineContacts(telephon string) []string {
 }
 
 // getUserContactsTelephons obtiene la lista BIDIRECCIONAL de telephons relacionados:
-// personas que YO tengo agregadas + personas que ME tienen agregado a mí
+// personas que YO tengo agregadas + personas que ME tienen agregado a mí, con caché en Redis
 func (h *Hub) getUserContactsTelephons(telephon string) []string {
 	if h.repo == nil {
 		return []string{}
 	}
 
-	id, err := h.repo.GetIdByTelephon(telephon, context.Background())
-	if err != nil {
-		return []string{}
-	}
+	// 1. Intentar obtener de Redis (si está disponible)
+	// Usamos el cliente Redis del repo
+	// Importante: No bloqueamos el Hub si Redis falla
+	// cacheKey := fmt.Sprintf("user:contacts:%s", telephon)
 
-	// Dirección 1: personas que YO tengo agregadas
-	contacts, err := h.repo.GetContactsTelephons(uint(id), context.Background())
-	if err != nil {
-		contacts = &[]models.ContactChat{}
-	}
-
-	// Dirección 2: personas que ME tienen agregado a mí
-	reverse, err := h.repo.GetUsersWhoHaveMeAsContactTelephons(uint(id), context.Background())
-	if err != nil {
-		reverse = []string{}
-	}
-
-	// Unión sin duplicados
-	seen := make(map[string]struct{})
-	var result []string
-	for _, c := range *contacts {
-		if c.Status == "accepted" {
-			if _, ok := seen[c.Number]; !ok {
-				seen[c.Number] = struct{}{}
-				result = append(result, c.Number)
-			}
-		}
-	}
-	for _, t := range reverse {
-		if _, ok := seen[t]; !ok {
-			seen[t] = struct{}{}
-			result = append(result, t)
-		}
-	}
-	return result
+	// Nota: No podemos acceder a h.repo.rd directamente si no es exportado o si no lo hicimos público
+	// Pero mejor aún, implementamos la lógica de caché dentro del Repositorio para seguir SOLID
+	return h.repo.GetCachedContactsTelephons(telephon, context.Background())
 }
 
 // NotifyContactRequest notifica a un usuario que recibió una solicitud de contacto

@@ -3,18 +3,50 @@ package services
 import (
 	"context"
 	"gorm/backend/models"
-	"gorm/backend/repos"
 	"gorm/backend/schemas"
 	"log"
 	"time"
 )
 
-type ServiceChat struct {
-	repo *repos.ApiContact
+type ChatServicer interface {
+	ServiceCreatMessage(message models.MessageCreat, ctx context.Context) (schemas.Message, error)
+	ServiceCreatMessageWithStatus(message models.MessageCreat, status string, ctx context.Context) (schemas.Message, error)
+	ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error)
+	ServicePutMessageStatusDelivered(telephonSender string, telephonReceiver string, ctx context.Context) error
+	ServicePutAllMessageStatusDelivered(telephon string, ctx context.Context) error
+	ServiceGetSendersAndMarkDelivered(telephon string, ctx context.Context) ([]string, error)
+	ServiceGetAllChats(telephonUser string, ctx context.Context) ([]schemas.ChatGroup, error)
+	ServiceEditMessage(telephonSender string, messageID uint, newContent string, ctx context.Context) (schemas.Message, error)
+	ServiceDeleteMessage(telephonSender string, messageID uint, ctx context.Context) (schemas.Message, error)
+	ServiceClearChat(telephonUser string, telephonContact string, ctx context.Context) error
+	ServiceDeleteMessageForMe(telephonUser string, messageID uint, ctx context.Context) (schemas.Message, error)
 }
 
-// InitServiceMessage crea el servicio de chat con su repositorio.
-func InitServiceMessage(repo *repos.ApiContact) *ServiceChat {
+type ChatRepoInterface interface {
+	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
+	CreateMessage(msg *models.Message, ctx context.Context) error
+	GetMessages(id1, id2 uint, ctx context.Context) ([]models.Message, error)
+	GetTelephonByID(id uint, ctx context.Context) (string, error)
+	PutStatusMessageSeenByContact(senderID, receiverID uint, ctx context.Context) error
+	PutStatusMessageDelivered(userID uint, ctx context.Context) error
+	GetSenderTelephonsWithPendingMessages(receiverID uint, ctx context.Context) ([]string, error)
+	GetAllMessagesForUser(userID uint, ctx context.Context) ([]models.Message, error)
+	GetAddedContactIDs(userID uint, ctx context.Context) (map[uint]string, error)
+	GetUserDataBaseByTelephon(telephon string, ctx context.Context) (*schemas.UserGet, error)
+	GetMessageByID(messageID uint, ctx context.Context) (*models.Message, error)
+	DeleteMessageForMe(messageID uint, userID uint, ctx context.Context) (*models.Message, error)
+	GetUserByID(userID uint, ctx context.Context) (*models.UserDataBase, error)
+	UpdateMessageContent(messageID uint, senderID uint, newContent string, ctx context.Context) error
+	DeleteMessageForSender(messageID uint, senderID uint, ctx context.Context) (*models.Message, error)
+	ClearChatForUser(userID uint, contactID uint, ctx context.Context) error
+}
+
+type ServiceChat struct {
+	repo ChatRepoInterface
+}
+
+// InitServiceMessage crea el servicio de chat con su repositorio, devolviendo la interfaz ChatServicer.
+func InitServiceMessage(repo ChatRepoInterface) ChatServicer {
 	return &ServiceChat{
 		repo: repo,
 	}
@@ -252,11 +284,12 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 		}
 
 		result = append(result, schemas.ChatGroup{
-			ContactTelephon: otherUser.Telephon,
-			ContactUsername: otherUser.Username,
-			ContactName:     contactName,
-			IsContact:       isContact,
-			Messages:        schemaMsgs,
+			ContactTelephon:  otherUser.Telephon,
+			ContactUsername:  otherUser.Username,
+			ContactName:      contactName,
+			ContactAvatarUrl: otherUser.AvatarUrl,
+			IsContact:        isContact,
+			Messages:         schemaMsgs,
 		})
 	}
 

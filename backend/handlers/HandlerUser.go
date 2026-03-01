@@ -58,12 +58,12 @@ func clearTokenCookies(c *gin.Context) {
 }
 
 type HandlerUser struct {
-	service *services.ServicesUser
+	service services.UserServicer
 	hub     *websocket.Hub
 }
 
 // GetHandlerUser crea el handler de autenticación con su servicio y Hub WebSocket.
-func GetHandlerUser(service *services.ServicesUser, hub *websocket.Hub) *HandlerUser {
+func GetHandlerUser(service services.UserServicer, hub *websocket.Hub) *HandlerUser {
 	return &HandlerUser{service: service, hub: hub}
 }
 
@@ -89,7 +89,7 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 		}
 
 		// Generar access + refresh token para el usuario registrado
-		token, err := s.setTokenCookies(c, user.(models.UserDataBase).Username, user.(models.UserDataBase).Telephon)
+		_, err = s.setTokenCookies(c, user.(models.UserDataBase).Username, user.(models.UserDataBase).Telephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando tokens en registro: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -99,7 +99,6 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 		}
 		c.JSON(201, gin.H{
 			"message": "user create",
-			"token":   token,
 		})
 	}
 }
@@ -140,7 +139,7 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			return
 		}
 
-		accessToken, err := s.setTokenCookies(c, decodedUsername, decodedTelephon)
+		_, err = s.setTokenCookies(c, decodedUsername, decodedTelephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando tokens: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -150,7 +149,6 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 		}
 		c.JSON(200, gin.H{
 			"message": "LogIn exitoso",
-			"token":   accessToken,
 		})
 	}
 }
@@ -209,7 +207,7 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 			return
 		}
 
-		token, err := s.setTokenCookies(c, userActivate.(models.UserActivate).Username, telephon)
+		_, err = s.setTokenCookies(c, userActivate.(models.UserActivate).Username, telephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando tokens en activación: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -219,7 +217,6 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 		}
 		c.JSON(200, gin.H{
 			"message": "cuenta activada",
-			"token":   token,
 		})
 	}
 }
@@ -403,18 +400,8 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 			return
 		}
 
-		// Obtener el access token expirado para extraer el username
-		// Intentar desde cookie, header o query
+		// Obtener el access token expirado de la cookie para extraer username/telephon
 		accessToken, _ := c.Cookie("token")
-		if accessToken == "" {
-			authHeader := c.GetHeader("Authorization")
-			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-				accessToken = authHeader[7:]
-			}
-		}
-		if accessToken == "" {
-			accessToken = c.Query("token")
-		}
 
 		// Parsear el token expirado SIN validar expiración para obtener username
 		username, telephon, err := decodeTokenIgnoreExpiry(accessToken)
@@ -434,7 +421,7 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 		}
 
 		// Generar nuevos tokens
-		newAccessToken, err := s.setTokenCookies(c, username, telephon)
+		_, err = s.setTokenCookies(c, username, telephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error renovando tokens: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -445,7 +432,6 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 
 		c.JSON(200, gin.H{
 			"message": "token renovado",
-			"token":   newAccessToken,
 		})
 	}
 }

@@ -16,14 +16,14 @@ type RouterApiMessage struct {
 	handlerCall    *handlers.HandlerCall
 	handlerMedia   *handlers.HandlerMedia
 	hub            *websocket.Hub
-	chatService    *services.ServiceChat
-	contactService *services.ServiceApiContact
-	callService    *services.ServiceCall
+	chatService    services.ChatServicer
+	contactService services.ContactServicer
+	callService    services.CallServicer
 }
 
 // InitRouterApiMessage inicializa el subrouter /api/v1/ con todos los handlers
 // y aplica el middleware de validación de token JWT.
-func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, hub *websocket.Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, callService *services.ServiceCall) *RouterApiMessage {
+func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer) *RouterApiMessage {
 	rout := &RouterApiMessage{
 		app:            app,
 		handlerContact: handler,

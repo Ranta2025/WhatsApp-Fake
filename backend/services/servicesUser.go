@@ -3,20 +3,68 @@ package services
 import (
 	"context"
 	"errors"
-	"gorm/backend/cache"
 	"gorm/backend/models"
-	"gorm/backend/repos"
 	"gorm/backend/utils"
 	"log"
+
+	"gorm.io/gorm"
 )
 
-type ServicesUser struct {
-	repo  *repos.RepositoriesUser
-	cache *cache.CacheUser
+type UserServicer interface {
+	CreateUser(user models.UserDataBase, ctx context.Context) error
+	LogIn(user models.UserLogin, ctx context.Context) (string, error)
+	ActivateAccount(user models.UserActivate, ctx context.Context) error
+	RecoverAccount(username string, ctx context.Context) (string, error)
+	ResendCode(gmail string, ctx context.Context) error
+	RecoverCuenta(user models.UserRecover, ctx context.Context) error
+	ChangePassword(user models.UserChangePassword, ctx context.Context) error
+	SendForgotPasswordCode(email string, ctx context.Context) error
+	ForgotPasswordChange(email, code, newPassword string, ctx context.Context) error
+	RecoverAndChangePassword(email, code, newPassword string, ctx context.Context) error
+	GetTelephonByUsername(username string, ctx context.Context) (string, bool)
+	SaveRefreshToken(username string, refreshToken string, ctx context.Context) error
+	ValidateRefreshToken(username string, refreshToken string, ctx context.Context) error
+	DeleteRefreshToken(username string, ctx context.Context) error
 }
 
-// InitServices crea el servicio de autenticación con repositorio y caché.
-func InitServices(repo *repos.RepositoriesUser, cache *cache.CacheUser) *ServicesUser {
+type UserRepoInterface interface {
+	UsernameExist(username string, ctx context.Context) bool
+	EmailExist(email string, ctx context.Context) (string, bool)
+	TelephonExist(telephon string, ctx context.Context) bool
+	BeginTx() *gorm.DB
+	CreateUserTx(tx *gorm.DB, user models.UserDataBase, ctx context.Context) error
+	GetActivo(username string, ctx context.Context) (bool, bool)
+	GetBlocked(username string, ctx context.Context) (bool, bool)
+	GetPassword(username string, ctx context.Context) (string, bool)
+	GetTelephonByUsername(username string, ctx context.Context) (string, bool)
+	ActivateAccount(username string, ctx context.Context) error
+	GetGmail(username string, ctx context.Context) (string, bool)
+	BlockUser(username string, ctx context.Context) error
+	UnblockUserByEmail(email string, ctx context.Context) error
+	ChangePasswordByEmail(email, password string, ctx context.Context) error
+	ChangePasswordByEmailTx(tx *gorm.DB, email, password string, ctx context.Context) error
+	UnblockUserByEmailTx(tx *gorm.DB, email string, ctx context.Context) error
+}
+
+type UserCacheInterface interface {
+	SaveRefreshToken(username string, refreshToken string, ctx context.Context) error
+	GetRefreshToken(username string, ctx context.Context) (string, error)
+	DeleteRefreshToken(username string, ctx context.Context) error
+	CachePassword(username string, ctx context.Context) (string, error)
+	CacheActivo(username string, ctx context.Context) (bool, error)
+	SetCodigo(tipoCodigo string, username string, codigo string, ctx context.Context) error
+	GetCodigo(tipoCodigo string, username string, ctx context.Context) (string, error)
+	GetIntentosFallidos(username string, ctx context.Context) (int, error)
+	SetIntentosFallidos(username string, intentos int, ctx context.Context) error
+}
+
+type ServicesUser struct {
+	repo  UserRepoInterface
+	cache UserCacheInterface
+}
+
+// InitServices crea el servicio de autenticación con repositorio y caché, devolviendo la interfaz UserServicer.
+func InitServices(repo UserRepoInterface, cache UserCacheInterface) UserServicer {
 	return &ServicesUser{
 		repo:  repo,
 		cache: cache,

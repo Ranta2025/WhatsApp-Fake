@@ -8,11 +8,11 @@ import (
 )
 
 type HandlerMedia struct {
-	service *services.ServiceMedia
+	service services.MediaServicer
 }
 
 // InitHandlerMedia crea el handler de subida de archivos multimedia.
-func InitHandlerMedia(service *services.ServiceMedia) *HandlerMedia {
+func InitHandlerMedia(service services.MediaServicer) *HandlerMedia {
 	return &HandlerMedia{service: service}
 }
 

@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"gorm/backend/config"
 	"gorm/backend/services"
@@ -29,7 +30,7 @@ var upgrader = websocket.Upgrader{
 // HandleWebSocket actualiza la conexión HTTP a WebSocket, crea el Client y lo
 // registra en el Hub. Envía la lista inicial de contactos online y lanza
 // las goroutines de lectura y escritura.
-func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService *services.ServiceApiContact, callService *services.ServiceCall) gin.HandlerFunc {
+func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, exist := c.Get("username")
 		telephon, exist2 := c.Get("telephon")
@@ -67,6 +68,24 @@ func HandleWebSocket(hub *Hub, chatService *services.ServiceChat, contactService
 				},
 			})
 			client.Send <- initialMsg
+
+			// Marcar mensajes pendientes ("enviado") como "entregado" al conectarse
+			// y notificar a los remitentes para que actualicen su UI
+			senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon.(string), context.Background())
+			if err != nil {
+				log.Printf("[WS] Error marcando mensajes como entregados al conectar: %v", err)
+			} else if len(senders) > 0 {
+				deliveredMsg, _ := json.Marshal(map[string]interface{}{
+					"type": "message_delivered",
+					"payload": map[string]interface{}{
+						"receiver": telephon.(string),
+					},
+				})
+				for _, senderTel := range senders {
+					hub.SendTo(senderTel, deliveredMsg)
+				}
+				log.Printf("[WS] Notificados %d remitentes de entrega para %s", len(senders), telephon.(string))
+			}
 		}()
 
 		go client.writePump()

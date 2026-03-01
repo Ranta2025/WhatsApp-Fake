@@ -53,7 +53,7 @@ export default function Login() {
             {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 text-red-400 text-sm text-center">{error}</div>}
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1.5">Usuario</label>
+                    <label htmlFor="username" className="block text-sm font-medium text-slate-400 mb-1.5">Usuario</label>
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -61,16 +61,18 @@ export default function Login() {
                             </svg>
                         </div>
                         <input
+                            id="username"
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             className="w-full pl-10 p-3 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
                             placeholder="Tu usuario"
+                            autoComplete="username"
                         />
                     </div>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1.5">Contraseña</label>
+                    <label htmlFor="password" className="block text-sm font-medium text-slate-400 mb-1.5">Contraseña</label>
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,11 +80,13 @@ export default function Login() {
                             </svg>
                         </div>
                         <input
+                            id="password"
                             type={showPassword ? 'text' : 'password'}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors tracking-wide"
                             placeholder="••••••••"
+                            autoComplete="current-password"
                         />
                         <button
                             type="button"

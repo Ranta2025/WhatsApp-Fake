@@ -4,16 +4,51 @@ import (
 	"context"
 	"errors"
 	"gorm/backend/models"
-	"gorm/backend/repos"
 	"gorm/backend/schemas"
 )
 
-type ServiceApiContact struct {
-	client *repos.ApiContact
+type ContactServicer interface {
+	GetTelephonByUsername(username string, ctx context.Context) (string, error)
+	ServicesGetUser(username string, ctx context.Context) (*schemas.UserGet, error)
+	ServicePutUser(username string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, error)
+	AddContact(username string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error)
+	ServiceGetContacts(username string, ctx context.Context) (*[]models.ContactChat, error)
+	ServicesGetUserByTelephon(telephon string, ctx context.Context) (*schemas.UserGet, error)
+	ServicePutUserByTelephon(telephon string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, string, error)
+	AddContactByTelephon(telephon string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error)
+	ServiceGetContactsByTelephon(telephon string, ctx context.Context) (*[]models.ContactChat, error)
+	ServicePutContactByTelephon(contact models.ContactPut, ctx context.Context) (*models.ContactChat, error)
+	ServiceUpdateAvatar(telephon string, avatarUrl string, ctx context.Context) error
+	ServiceUpdateWallpaper(telephon string, wallpaperUrl string, ctx context.Context) error
+	ServiceUpdateContactWallpaper(myTelephon string, contactTelephon string, wallpaperUrl string, ctx context.Context) error
 }
 
-// InitServiceContact crea el servicio de contactos con su repositorio.
-func InitServiceContact(cliente *repos.ApiContact) *ServiceApiContact {
+type ContactRepoInterface interface {
+	GetTelephonByUsername(username string, ctx context.Context) (string, error)
+	GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error)
+	RepoPutUser(username string, usernameUpdate string, ctx context.Context) error
+	GetUserDataBaseByTelephon(telephon string, ctx context.Context) (*schemas.UserGet, error)
+	RepoPutUserByTelephon(telephon string, usernameUpdate string, ctx context.Context) error
+	UpdateAvatarByTelephon(telephon string, avatarUrl string, ctx context.Context) error
+	UpdateWallpaperByTelephon(telephon string, wallpaperUrl string, ctx context.Context) error
+	UpdateContactWallpaper(myID uint, contactID uint, wallpaperUrl string, ctx context.Context) error
+	GetIdUsername(username string, ctx context.Context) (int, error)
+	GetNumberUsername(number string, ctx context.Context) (int, error)
+	ExistContactAdd(userID uint, contactID uint, ctx context.Context) (bool, error)
+	AddContact(contact models.ContactDataBase, ctx context.Context) error
+	GetContactNumber(number string, ctx context.Context) (*models.ContactChat, error)
+	GetContactsNumber(userID uint, ctx context.Context) (*[]models.ContactChat, error)
+	GetUsernameByTelephon(telephon string, ctx context.Context) (string, error)
+	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
+	PutContactByTelephon(userID uint, contactID uint, contactName string, ctx context.Context) error
+}
+
+type ServiceApiContact struct {
+	client ContactRepoInterface
+}
+
+// InitServiceContact crea el servicio de contactos con su repositorio, devolviendo la interfaz ContactServicer.
+func InitServiceContact(cliente ContactRepoInterface) ContactServicer {
 	return &ServiceApiContact{
 		client: cliente,
 	}

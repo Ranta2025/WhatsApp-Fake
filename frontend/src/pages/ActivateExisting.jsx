@@ -45,33 +45,31 @@ export default function ActivateExisting() {
                 </span>
             )}
         >
+            {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
             <form onSubmit={handleSubmit} className="space-y-4">
-                {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 text-red-400 text-sm text-center">{error}</div>}
-                
                 <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1.5">Nombre de Usuario</label>
+                    <label className="block text-sm font-medium text-indigo-100 mb-1.5">Username</label>
                     <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <svg className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <svg className="w-5 h-5 text-indigo-300/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
                         </div>
                         <input
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full pl-10 p-3.5 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                            placeholder="Ingresa tu usuario"
+                            className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200"
+                            placeholder="Tu username"
                         />
                     </div>
                 </div>
-
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                    className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                    {loading ? 'Enviando...' : 'Enviar Código de Activación'}
+                    {loading ? 'Enviando...' : 'Enviar código'}
                 </button>
             </form>
         </AuthLayout>
