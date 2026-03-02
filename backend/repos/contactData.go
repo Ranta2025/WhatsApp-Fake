@@ -175,7 +175,7 @@ func (app *ApiContact) GetContactsNumber(id uint, ctx context.Context) (*[]model
 		`).
 		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_contact").
 		Where("contact_data_bases.id_user = ?", id).
-		Where("NOT contact_data_bases.status = ?", "rechazed").
+		Where("contact_data_bases.status != ?", "rejected").
 		Order("contact_data_bases.created_at DESC").
 		Scan(&contacts)
 	return &contacts, result.Error
@@ -189,16 +189,24 @@ func (app *ApiContact) CreateMessage(message *models.Message, ctx context.Contex
 }
 
 // GetMessages obtiene los mensajes entre dos usuarios excluyendo los borrados por cada parte.
+// Limitado a los últimos 200 mensajes por conversación (paginación por cursor pendiente).
 func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Context) ([]models.Message, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var messages []models.Message
+	// Consultar en DESC LIMIT 200 para obtener los más recientes, luego invertir
+	// para devolver en orden cronológico (más antiguo primero) sin cambiar la interfaz.
 	result := app.data.Model(&models.Message{}).WithContext(c).
 		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false).
-		Order("time ASC").
+		Order("time DESC").
+		Limit(200).
 		Scan(&messages)
 	if result.Error != nil {
 		return nil, result.Error
+	}
+	// Invertir para devolver en orden cronológico (más antiguo primero)
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
 	return messages, nil
 }
@@ -291,7 +299,7 @@ func (app *ApiContact) GetAddedContactIDs(id_user uint, ctx context.Context) (ma
 	var rows []row
 	result := app.data.Model(&models.ContactDataBase{}).WithContext(c).
 		Select("id_contact, contact_name").
-		Where("id_user = ? AND status != ?", id_user, "rechazed").
+		Where("id_user = ? AND status != ?", id_user, "rejected").
 		Scan(&rows)
 	if result.Error != nil {
 		return nil, result.Error
@@ -457,7 +465,7 @@ func (app *ApiContact) GetContactsTelephons(id uint, ctx context.Context) (*[]mo
 		`).
 		Joins("INNER JOIN contact_data_bases ON user_data_bases.id = contact_data_bases.id_contact").
 		Where("contact_data_bases.id_user = ?", id).
-		Where("NOT contact_data_bases.status = ?", "rechazed").
+		Where("contact_data_bases.status != ?", "rejected").
 		Order("contact_data_bases.created_at DESC").
 		Scan(&contacts)
 	return &contacts, result.Error

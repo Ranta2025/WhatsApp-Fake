@@ -16,6 +16,8 @@ services:
       MINIO_BUCKET: media
       MINIO_USE_SSL: "false"
       MINIO_PUBLIC_URL: http://localhost:9000
+      # Activa el flag Secure en las cookies (requerido al servir HTTPS via Cloudflare/ngrok)
+      ENV: production
     depends_on:
       - postgres
       - redis

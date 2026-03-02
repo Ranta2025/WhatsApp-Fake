@@ -15,7 +15,7 @@ type User struct {
 
 type UserDataBase struct {
 	User
-	Password     string     `gorm:"size:70" json:"password" binding:"required"`
+	Password     string     `gorm:"size:100" json:"password" binding:"required"`
 	Activo       bool       `gorm:"default:false"`
 	Bloqueado    bool       `gorm:"default:false"`
 	LastSeen     *time.Time `gorm:"column:last_seen" json:"last_seen"`
