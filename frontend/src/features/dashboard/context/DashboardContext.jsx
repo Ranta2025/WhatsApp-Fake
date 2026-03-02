@@ -50,11 +50,8 @@ export const DashboardProvider = ({ children }) => {
 
     // Toast functions
     const addToast = useCallback((toast) => {
-        const id = Date.now();
-        setToasts(prev => [...prev, { ...toast, id }]);
-        setTimeout(() => {
-            setToasts(prev => prev.filter(t => t.id !== id));
-        }, 5500); // 5s visible + 0.5s para animación de salida
+        const id = Date.now() + Math.random();
+        setToasts(prev => [...prev, { ...toast, id, createdAt: Date.now() }]);
     }, []);
 
     const dismissToast = useCallback((id) => {
@@ -221,7 +218,9 @@ export const DashboardProvider = ({ children }) => {
                 const icon = avatarMapRef.current[contactNumber] || undefined;
                 // Si es imagen, incluirla como preview en la notificación nativa
                 const image = MediaType === 'image' ? (messageData.MediaUrl || undefined) : undefined;
-                // mostrar notificación nativa (OS) con avatar circular generado
+
+                // El usuario pidió explícitamente QUITAR la notificación interna (Toast)
+                // y enviar siempre la notificación nativa externa del sistema
                 showNativeNotification({
                     title,
                     body,

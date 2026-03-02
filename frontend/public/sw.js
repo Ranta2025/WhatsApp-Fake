@@ -1,18 +1,62 @@
-// Service Worker para notificaciones nativas
+// Service Worker para PWA + Notificaciones nativas
 // Este archivo DEBE estar en /public para que tenga scope sobre toda la app
 
-const CACHE_NAME = 'chat-app-v1';
+const CACHE_NAME = 'todos-chat-v2';
+const STATIC_ASSETS = [
+    '/',
+    '/todos.svg',
+    '/icons/icon-192x192.svg',
+    '/icons/icon-512x512.svg',
+    '/manifest.json',
+];
 
-// Instalación del Service Worker
+// Instalación: pre-cachear assets esenciales
 self.addEventListener('install', (event) => {
-    console.log('[SW] Service Worker instalado');
+    console.log('[SW] Instalando...');
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            return cache.addAll(STATIC_ASSETS).catch(() => {
+                // Si algún asset falla, no bloquear la instalación
+                console.warn('[SW] Algunos assets no pudieron cachearse');
+            });
+        })
+    );
     self.skipWaiting();
 });
 
-// Activación del Service Worker
+// Activación: limpiar caches antiguos
 self.addEventListener('activate', (event) => {
-    console.log('[SW] Service Worker activado');
-    event.waitUntil(self.clients.claim());
+    console.log('[SW] Activado');
+    event.waitUntil(
+        caches.keys().then((keys) =>
+            Promise.all(
+                keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+            )
+        ).then(() => self.clients.claim())
+    );
+});
+
+// Fetch: network-first para API, cache-first para assets estáticos
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+
+    // No interceptar WebSocket ni API calls
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws')) return;
+
+    // Para navegación (HTML), siempre ir a red primero
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            fetch(event.request).catch(() => caches.match('/'))
+        );
+        return;
+    }
+
+    // Para assets estáticos: cache-first
+    if (STATIC_ASSETS.includes(url.pathname) || url.pathname.startsWith('/icons/')) {
+        event.respondWith(
+            caches.match(event.request).then((cached) => cached || fetch(event.request))
+        );
+    }
 });
 
 // Escuchar mensajes desde la app principal

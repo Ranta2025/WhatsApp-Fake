@@ -36,6 +36,12 @@ func (h *Hub) Run() {
 		select {
 		case c := <-h.Register:
 			h.mu.Lock()
+			// Si ya existe una conexión anterior para este telephon, cerrar su canal Send
+			// para que su writePump termine limpiamente y no interfiera con la nueva conexión
+			if oldClient, exists := h.Clients[c.Telephon]; exists && oldClient != c {
+				fmt.Printf("[HUB] Reemplazando conexión antigua de %s (tel: %s)\n", oldClient.Username, c.Telephon)
+				close(oldClient.Send)
+			}
 			h.Clients[c.Telephon] = c
 			h.mu.Unlock()
 			fmt.Printf("[HUB] Usuario registrado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
@@ -44,11 +50,18 @@ func (h *Hub) Run() {
 
 		case c := <-h.Remove:
 			h.mu.Lock()
-			delete(h.Clients, c.Telephon)
-			h.mu.Unlock()
-			fmt.Printf("[HUB] Usuario desconectado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
-			// Notificar a los contactos que este usuario está offline (en goroutine para no bloquear el hub)
-			go h.NotifyContactsOffline(c.Telephon)
+			// Solo eliminar si el cliente en el mapa es el mismo que se está removiendo.
+			// Si ya fue reemplazado por una reconexión más reciente, NO borrar ni notificar offline.
+			if existing, ok := h.Clients[c.Telephon]; ok && existing == c {
+				delete(h.Clients, c.Telephon)
+				h.mu.Unlock()
+				fmt.Printf("[HUB] Usuario desconectado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
+				// Notificar a los contactos que este usuario está offline (en goroutine para no bloquear el hub)
+				go h.NotifyContactsOffline(c.Telephon)
+			} else {
+				h.mu.Unlock()
+				fmt.Printf("[HUB] Ignorando Remove de conexión antigua para %s (tel: %s) - ya reemplazada por nueva conexión\n", c.Username, c.Telephon)
+			}
 
 		case msg := <-h.Broadcast:
 			h.mu.RLock()

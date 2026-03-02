@@ -56,9 +56,18 @@ class WebSocketManager {
     }
 
     connect() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            console.log('WebSocket ya está conectado');
-            return;
+        if (this.ws) {
+            if (this.ws.readyState === WebSocket.OPEN) {
+                console.log('WebSocket ya está conectado');
+                return;
+            }
+            if (this.ws.readyState === WebSocket.CONNECTING) {
+                console.log('WebSocket ya está conectándose, esperando...');
+                return;
+            }
+            // Si está en CLOSING o CLOSED, limpiar antes de reconectar
+            try { this.ws.close(); } catch(e) { /* ignorar */ }
+            this.ws = null;
         }
 
         this.isIntentionallyClosed = false;
@@ -148,6 +157,18 @@ class WebSocketManager {
             this.lastContactsOnline = payload.contacts || [];
             this.notifyHandlers('contacts_online', this.lastContactsOnline);
             return;
+        }
+
+        // Mantener actualizado el caché de contactos online para late-listeners
+        if (type === 'online' && this.lastContactsOnline !== null) {
+            if (payload.telephon && !this.lastContactsOnline.includes(payload.telephon)) {
+                this.lastContactsOnline.push(payload.telephon);
+            }
+        }
+        if (type === 'offline' && this.lastContactsOnline !== null) {
+            if (payload.telephon) {
+                this.lastContactsOnline = this.lastContactsOnline.filter(t => t !== payload.telephon);
+            }
         }
 
         // Ruteo genérico: el type del mensaje se mapea directo al event handler

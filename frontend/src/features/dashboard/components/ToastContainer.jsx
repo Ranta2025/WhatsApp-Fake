@@ -1,165 +1,244 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 
-const TOAST_DURATION = 5000;
+const NOTIF_DURATION = 4000;
+// Máximo tiempo que una notificación se mantiene en cola esperando que el usuario vuelva (30s)
+const MAX_QUEUE_AGE = 30000;
 
-// Componente individual de notificación estilo Telegram/WhatsApp
-const NotificationToast = ({ toast, onDismiss, onOpen }) => {
-    const [visible, setVisible] = useState(false);
-    const [exiting, setExiting] = useState(false);
+// Paleta Telegram-style para avatares sin foto
+const AVATAR_GRADIENTS = [
+    'from-rose-500 to-pink-600',
+    'from-violet-500 to-purple-600',
+    'from-emerald-500 to-teal-600',
+    'from-amber-500 to-orange-600',
+    'from-blue-500 to-indigo-600',
+    'from-fuchsia-500 to-pink-600',
+    'from-cyan-500 to-teal-600',
+    'from-red-500 to-rose-600',
+];
+
+function hashStr(str) {
+    let h = 0;
+    for (let i = 0; i < (str || '').length; i++) {
+        h = ((h << 5) - h) + str.charCodeAt(i);
+        h |= 0;
+    }
+    return Math.abs(h);
+}
+
+// ─── Notificación individual ───────────────────────────────────
+const InAppNotification = ({ notif, onDismiss, onOpen }) => {
+    const [phase, setPhase] = useState('enter'); // enter | visible | exit
     const timerRef = useRef(null);
-    const startRef = useRef(Date.now());
+    const progressRef = useRef(null);
+    // Track elapsed time to pause/resume when visibility changes
+    const elapsedRef = useRef(0);
+    const lastTickRef = useRef(Date.now());
     const [progress, setProgress] = useState(100);
+    const dismissed = useRef(false);
+
+    const dismiss = useCallback(() => {
+        if (dismissed.current) return;
+        dismissed.current = true;
+        if (progressRef.current) cancelAnimationFrame(progressRef.current);
+        clearTimeout(timerRef.current);
+        setPhase('exit');
+        setTimeout(() => onDismiss(notif.id), 350);
+    }, [notif.id, onDismiss]);
 
     useEffect(() => {
-        // Trigger entrada con pequeño delay para la animación
-        requestAnimationFrame(() => setVisible(true));
+        // Entrada
+        requestAnimationFrame(() => requestAnimationFrame(() => setPhase('visible')));
 
-        // Barra de progreso animada
-        const tick = () => {
-            const elapsed = Date.now() - startRef.current;
-            const remaining = Math.max(0, 100 - (elapsed / TOAST_DURATION) * 100);
-            setProgress(remaining);
-            if (remaining > 0) {
-                timerRef.current = requestAnimationFrame(tick);
-            }
+        const startTimer = () => {
+            lastTickRef.current = Date.now();
+            // Progress bar — solo corre cuando la pestaña es visible
+            const tick = () => {
+                if (document.hidden) {
+                    // Pausar: seguir el loop pero no avanzar el tiempo
+                    progressRef.current = requestAnimationFrame(tick);
+                    return;
+                }
+                const now = Date.now();
+                elapsedRef.current += now - lastTickRef.current;
+                lastTickRef.current = now;
+                const pct = Math.max(0, 100 - (elapsedRef.current / NOTIF_DURATION) * 100);
+                setProgress(pct);
+                if (pct > 0) {
+                    progressRef.current = requestAnimationFrame(tick);
+                } else {
+                    dismiss();
+                }
+            };
+            progressRef.current = requestAnimationFrame(tick);
         };
-        timerRef.current = requestAnimationFrame(tick);
 
-        // Auto-dismiss
-        const timeout = setTimeout(() => handleDismiss(), TOAST_DURATION);
+        startTimer();
 
         return () => {
-            clearTimeout(timeout);
-            if (timerRef.current) cancelAnimationFrame(timerRef.current);
+            clearTimeout(timerRef.current);
+            if (progressRef.current) cancelAnimationFrame(progressRef.current);
         };
-    }, []);
-
-    const handleDismiss = () => {
-        setExiting(true);
-        if (timerRef.current) cancelAnimationFrame(timerRef.current);
-        setTimeout(() => onDismiss(toast.id), 300);
-    };
+    }, [dismiss]);
 
     const handleClick = () => {
-        if (timerRef.current) cancelAnimationFrame(timerRef.current);
-        onOpen(toast);
+        if (dismissed.current) return;
+        dismissed.current = true;
+        if (progressRef.current) cancelAnimationFrame(progressRef.current);
+        clearTimeout(timerRef.current);
+        onOpen(notif);
     };
 
-    const hasAvatar = toast.icon && toast.icon !== '/vite.svg';
-    const initial = toast.senderName?.charAt(0)?.toUpperCase() || '?';
-    const isMedia = toast.mediaType && toast.mediaType !== '';
+    const hasAvatar = notif.icon && notif.icon !== '/vite.svg' && notif.icon !== '/todos.svg';
+    const initial = (notif.senderName || '?').charAt(0).toUpperCase();
+    const gradientClass = AVATAR_GRADIENTS[hashStr(notif.senderName) % AVATAR_GRADIENTS.length];
 
-    // Icono según tipo de media
-    const getMediaLabel = () => {
-        switch (toast.mediaType) {
-            case 'audio': return '🎵 Audio';
-            case 'image': return '📷 Foto';
-            case 'video': return '🎥 Video';
-            case 'document': return '📄 Documento';
-            default: return toast.message;
+    // Media label
+    const bodyText = (() => {
+        if (notif.mediaType) {
+            switch (notif.mediaType) {
+                case 'audio': return '🎵 Mensaje de voz';
+                case 'image': return '📷 Foto';
+                case 'video': return '🎥 Video';
+                case 'document': return '📄 Documento';
+                default: break;
+            }
         }
-    };
+        return notif.message || 'Nuevo mensaje';
+    })();
+
+    const isVisible = phase === 'visible';
+    const isExit = phase === 'exit';
 
     return (
         <div
-            className={`
-                pointer-events-auto w-[380px] max-w-[calc(100vw-2rem)]
-                rounded-2xl overflow-hidden cursor-pointer
-                shadow-[0_8px_32px_rgba(0,0,0,0.45),0_2px_8px_rgba(99,102,241,0.15)]
-                border border-white/[0.08]
-                transition-all duration-300 ease-out
-                ${visible && !exiting
-                    ? 'opacity-100 translate-y-0 scale-100'
-                    : 'opacity-0 -translate-y-4 scale-95'
-                }
-            `}
-            style={{
-                background: 'linear-gradient(135deg, rgba(15,23,42,0.97) 0%, rgba(30,27,75,0.97) 100%)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-            }}
             onClick={handleClick}
+            className="pointer-events-auto cursor-pointer group"
+            style={{
+                transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                transform: isVisible
+                    ? 'translateY(0) scale(1)'
+                    : isExit
+                        ? 'translateY(-20px) scale(0.95)'
+                        : 'translateY(-30px) scale(0.9)',
+                opacity: isVisible ? 1 : 0,
+            }}
         >
-            {/* Contenido principal */}
-            <div className="flex items-center gap-3 px-4 py-3">
-                {/* Avatar */}
-                <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-indigo-500/30 shadow-lg">
-                        {hasAvatar ? (
-                            <img src={toast.icon} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+            {/* Card principal */}
+            <div
+                className="relative overflow-hidden rounded-2xl border border-white/[0.06]"
+                style={{
+                    background: 'linear-gradient(145deg, #1e1b4b 0%, #0f172a 50%, #1e1b4b 100%)',
+                    boxShadow: '0 20px 60px -12px rgba(0,0,0,0.6), 0 4px 20px -4px rgba(79,70,229,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+                }}
+            >
+                {/* Glow sutil en hover */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{ background: 'radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(99,102,241,0.06), transparent 40%)' }}
+                />
+
+                <div className="relative flex items-center gap-3.5 p-3.5 pr-3">
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0">
+                        <div className="w-[52px] h-[52px] rounded-[16px] overflow-hidden shadow-lg ring-1 ring-white/10">
+                            {hasAvatar ? (
+                                <img
+                                    src={notif.icon}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                                />
+                            ) : null}
+                            <div
+                                className={`w-full h-full bg-gradient-to-br ${gradientClass} items-center justify-center text-white font-bold text-xl`}
+                                style={{ display: hasAvatar ? 'none' : 'flex' }}
+                            >
                                 {initial}
                             </div>
-                        )}
+                        </div>
+
+                        {/* Badge app */}
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center shadow-lg ring-2 ring-slate-900">
+                            <span className="text-[9px] font-black text-white leading-none">T</span>
+                        </div>
                     </div>
-                    {/* Punto verde online */}
-                    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 shadow-sm" />
+
+                    {/* Contenido */}
+                    <div className="flex-1 min-w-0 py-0.5">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="font-semibold text-[14px] text-white truncate leading-tight">
+                                {notif.senderName}
+                            </span>
+                            <span className="text-[10px] text-indigo-400/60 flex-shrink-0 font-medium uppercase tracking-wider">
+                                Ahora
+                            </span>
+                        </div>
+                        <p className="text-[13px] text-slate-400 truncate leading-snug">
+                            {bodyText}
+                        </p>
+                    </div>
+
+                    {/* Cerrar */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); dismiss(); }}
+                        className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl
+                                   text-white/0 group-hover:text-white/40 hover:!text-white/80 hover:bg-white/[0.06]
+                                   transition-all duration-200"
+                    >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                    </button>
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-[14px] text-white truncate">
-                            {toast.senderName}
-                        </span>
-                        <span className="text-[11px] text-indigo-300/70 flex-shrink-0 tabular-nums">
-                            ahora
-                        </span>
-                    </div>
-                    <p className="text-[13px] text-slate-300/90 truncate mt-0.5 leading-snug">
-                        {isMedia ? getMediaLabel() : (toast.message || 'Nuevo mensaje')}
-                    </p>
+                {/* Barra de progreso */}
+                <div className="h-[2px] w-full bg-white/[0.03]">
+                    <div
+                        className="h-full rounded-full"
+                        style={{
+                            width: `${progress}%`,
+                            background: 'linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7)',
+                            transition: 'none',
+                        }}
+                    />
                 </div>
-
-                {/* Botón cerrar */}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handleDismiss();
-                    }}
-                    className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full
-                               text-white/30 hover:text-white/80 hover:bg-white/10
-                               transition-all duration-150 -mr-1"
-                >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
-                </button>
-            </div>
-
-            {/* Barra de progreso */}
-            <div className="h-[2px] w-full bg-white/[0.04]">
-                <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-none"
-                    style={{ width: `${progress}%` }}
-                />
             </div>
         </div>
     );
 };
 
+// ─── Container ─────────────────────────────────────────────────
 const ToastContainer = () => {
     const { toasts, dismissToast, setSelected, setSidebarOpen, contacts, allChatGroups } = useDashboard();
 
-    if (toasts.length === 0) return null;
+    // Limpiar toasts viejos que acumularon mientras la app estaba en background (>30s)
+    useEffect(() => {
+        if (toasts.length === 0) return;
+        const now = Date.now();
+        const stale = toasts.filter(t => t.createdAt && (now - t.createdAt) > MAX_QUEUE_AGE);
+        stale.forEach(t => dismissToast(t.id));
+    }, [toasts, dismissToast]);
 
-    const handleOpen = (toast) => {
-        const contact = contacts.find(c => c.Number === toast.telephon)
-            || allChatGroups[toast.telephon]
-            || { Number: toast.telephon, ContactName: toast.senderName };
+    // Solo mostrar máximo 3 notificaciones a la vez
+    const visibleToasts = toasts.slice(-3);
+
+    if (visibleToasts.length === 0) return null;
+
+    const handleOpen = (notif) => {
+        const contact = contacts.find(c => c.Number === notif.telephon)
+            || allChatGroups[notif.telephon]
+            || { Number: notif.telephon, ContactName: notif.senderName };
         setSelected(contact);
         setSidebarOpen(false);
-        dismissToast(toast.id);
+        dismissToast(notif.id);
     };
 
     return (
-        <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 pointer-events-none">
-            {toasts.map(toast => (
-                <NotificationToast
-                    key={toast.id}
-                    toast={toast}
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2.5 pointer-events-none w-[400px] max-w-[calc(100vw-2rem)]">
+            {visibleToasts.map(notif => (
+                <InAppNotification
+                    key={notif.id}
+                    notif={notif}
                     onDismiss={dismissToast}
                     onOpen={handleOpen}
                 />
