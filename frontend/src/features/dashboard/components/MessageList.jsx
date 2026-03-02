@@ -50,6 +50,7 @@ const MessageList = () => {
         editingMessageId, editingMessageText, handleEditMessageChange, 
         handleEditMessageSave, handleEditMessageCancel, handleEditMessage,
         handleDeleteMessage, handleDeleteMessageForMe, handleReplyToMessage,
+        handleForwardMessage,
         messageMenuOpen, setMessageMenuOpen
     } = useMessaging();
 
@@ -280,6 +281,10 @@ const MessageList = () => {
                                                     <button onClick={() => handleReplyToMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                         Responder
+                                                    </button>
+                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                                                        Reenviar
                                                     </button>
                                                     {isMine && (
                                                         <>

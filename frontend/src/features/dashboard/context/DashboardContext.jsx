@@ -38,7 +38,9 @@ export const DashboardProvider = ({ children }) => {
     
     // Notifications & Toasts
     const [toasts, setToasts] = useState([]);
-    const [notifPermission, setNotifPermission] = useState(Notification.permission);
+    const [notifPermission, setNotifPermission] = useState(
+        typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+    );
     
     // Calls
     const [callState, setCallState] = useState(null);

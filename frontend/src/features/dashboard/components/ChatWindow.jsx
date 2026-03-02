@@ -1,10 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { MessagingProvider } from '../hooks/useMessaging';
+import { MessagingProvider, useMessaging } from '../hooks/useMessaging';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import AddContactModal from './AddContactModal';
+import ForwardMessageModal from './ForwardMessageModal';
 import api from '../../../api/axios';
+
+// Inner component: must live inside MessagingProvider to access useMessaging()
+const ForwardMessageModalWrapper = () => {
+    const { forwardingMessage, setForwardingMessage, executeForward } = useMessaging();
+    return (
+        <ForwardMessageModal
+            isOpen={!!forwardingMessage}
+            onClose={() => setForwardingMessage(null)}
+            message={forwardingMessage}
+            onForward={(targetNumbers) => executeForward(targetNumbers)}
+        />
+    );
+};
 
 const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
     const { 
@@ -225,6 +239,9 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
                 initialNumber={selected?.Number || ''}
                 initialName={allChatGroups[selected?.Number]?.ContactUsername || ''}
             />
+
+            {/* Modal para reenviar mensaje */}
+            <ForwardMessageModalWrapper />
         </div>
         </MessagingProvider>
     );

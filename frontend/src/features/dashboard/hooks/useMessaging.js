@@ -32,6 +32,9 @@ const useMessagingInternal = () => {
     const [replyingTo, setReplyingTo] = useState(null);
     const [messageMenuOpen, setMessageMenuOpen] = useState(null);
 
+    // Forward state
+    const [forwardingMessage, setForwardingMessage] = useState(null);
+
     // --- Message Actions ---
 
     const handleSend = useCallback((text, mediaType = null) => {
@@ -123,6 +126,31 @@ const useMessagingInternal = () => {
         setReplyingTo(null);
     }, []);
 
+    const handleForwardMessage = useCallback((message) => {
+        setForwardingMessage(message);
+        setMessageMenuOpen(null);
+    }, []);
+
+    const executeForward = useCallback((targetNumbers) => {
+        if (!forwardingMessage || !targetNumbers?.length) return;
+        if (!isConnected) {
+            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            return;
+        }
+        const mediaType = forwardingMessage.MediaType || null;
+        const content = mediaType
+            ? (forwardingMessage.MediaUrl || forwardingMessage.Message)
+            : forwardingMessage.Message;
+        targetNumbers.forEach(number => {
+            sendMessage(number, content, null, mediaType);
+        });
+        const label = targetNumbers.length === 1
+            ? 'Mensaje reenviado'
+            : `Mensaje reenviado a ${targetNumbers.length} contactos`;
+        addToast({ type: 'success', message: label });
+        setForwardingMessage(null);
+    }, [forwardingMessage, isConnected, sendMessage, addToast]);
+
     const handleMediaUploadSuccess = useCallback((url, type) => {
         handleSend(url, type);
     }, [handleSend]);
@@ -174,6 +202,8 @@ const useMessagingInternal = () => {
         markAsRead,
         handleTyping,
         handleFileUpload,
+        handleForwardMessage,
+        executeForward,
         
         // UI States
         editingMessageId,
@@ -181,6 +211,8 @@ const useMessagingInternal = () => {
         replyingTo,
         messageMenuOpen,
         setMessageMenuOpen,
-        setReplyingTo
+        setReplyingTo,
+        forwardingMessage,
+        setForwardingMessage
     };
 };

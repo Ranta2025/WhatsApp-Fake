@@ -8,12 +8,12 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     // Intentar restaurar sesión desde cookie HttpOnly al cargar
     useEffect(() => {
         const init = async () => {
-            setLoading(true);
+
             try {
                 const { data } = await api.get('/api/v1/user');
                 setUser({ 
