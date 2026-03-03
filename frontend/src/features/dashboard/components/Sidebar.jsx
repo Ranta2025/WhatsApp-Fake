@@ -3,12 +3,13 @@ import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import CallHistory from '../../../components/CallHistory';
 
-const Sidebar = ({ onOpenProfile, onAddContact }) => {
+const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
     const { 
         contacts, onlineUsers, selected, setSelected, 
         sidebarView, setSidebarView, sidebarOpen, setSidebarOpen,
         lastSeenMap, avatarMap, isConnected, myAvatar, profile,
-        messagesByChat, allChatGroups, logout
+        messagesByChat, allChatGroups, logout,
+        groups, selectedGroup, setSelectedGroup,
     } = useDashboard();
     const { user } = useAuth();
     // logout is proxied through DashboardContext from AuthContext
@@ -63,7 +64,7 @@ const Sidebar = ({ onOpenProfile, onAddContact }) => {
     return (
         <aside className={`
             bg-slate-900 border-r border-white/5 flex flex-col
-            ${selected ? 'hidden lg:flex lg:w-80' : 'w-full lg:w-80'}
+            ${(selected || selectedGroup) ? 'hidden lg:flex lg:w-80' : 'w-full lg:w-80'}
         `}>
             {/* Header del Sidebar (Perfil y Ajustes) */}
             <div className="p-4 bg-slate-900 flex items-center justify-between border-b border-white/5">
@@ -121,11 +122,13 @@ const Sidebar = ({ onOpenProfile, onAddContact }) => {
                         placeholder={
                             sidebarView === 'chats' ? "Buscar chats..." :
                             sidebarView === 'calls' ? "Buscar llamadas..." :
+                            sidebarView === 'groups' ? "Buscar grupos..." :
                             "Buscar contactos..."
                         }
                         aria-label={
                             sidebarView === 'chats' ? "Buscar en tus chats activos" :
                             sidebarView === 'calls' ? "Buscar en tu historial de llamadas" :
+                            sidebarView === 'groups' ? "Buscar en tus grupos" :
                             "Buscar en tu lista de contactos"
                         }
                     />
@@ -168,6 +171,14 @@ const Sidebar = ({ onOpenProfile, onAddContact }) => {
                     className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'contacts' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
                 >
                     Contactos
+                </button>
+                <button
+                    role="tab"
+                    aria-selected={sidebarView === 'groups'}
+                    onClick={() => { setSidebarView('groups'); }}
+                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'groups' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                >
+                    Grupos
                 </button>
             </nav>
 
@@ -323,6 +334,81 @@ const Sidebar = ({ onOpenProfile, onAddContact }) => {
                                             <div className="font-semibold text-slate-100 truncate">{c.ContactName || c.Username}</div>
                                             <div className="text-sm text-slate-400 truncate">
                                                 {isContactOnline(c.Number) ? 'En línea' : (lastSeenMap[c.Number] ? `Últ. vez: ${new Date(lastSeenMap[c.Number]).toLocaleTimeString()}` : c.Number)}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ));
+                            })()}
+                        </div>
+                    </>
+                )}
+                {/* Vista de Grupos */}
+                {sidebarView === 'groups' && (
+                    <>
+                        <div className="flex justify-between items-center mb-3 px-2">
+                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                                {debouncedSearchQuery ? 'Resultados de búsqueda' : 'Mis Grupos'}
+                            </div>
+                            <button
+                                onClick={onCreateGroup}
+                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
+                            >
+                                + Nuevo
+                            </button>
+                        </div>
+                        <div className="space-y-1">
+                            {(() => {
+                                const filtered = (groups || []).filter(g => {
+                                    if (!debouncedSearchQuery) return true;
+                                    return (g.Name || '').toLowerCase().includes(debouncedSearchQuery.toLowerCase());
+                                });
+
+                                if (filtered.length === 0) {
+                                    return (
+                                        <div className="text-center text-slate-500 py-10 text-sm">
+                                            {debouncedSearchQuery ? 'No se encontraron grupos' : 'No perteneces a ningún grupo'}
+                                            {!debouncedSearchQuery && (
+                                                <div className="mt-3">
+                                                    <button
+                                                        onClick={onCreateGroup}
+                                                        className="text-indigo-400 hover:text-indigo-300 text-xs underline"
+                                                    >
+                                                        Crear tu primer grupo
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
+                                return filtered.map(g => (
+                                    <button
+                                        key={g.ID}
+                                        onClick={() => {
+                                            setSelectedGroup(g);
+                                            setSidebarOpen(false);
+                                        }}
+                                        className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${
+                                            selectedGroup?.ID === g.ID ? 'bg-slate-800' : ''
+                                        }`}
+                                    >
+                                        {/* Group avatar */}
+                                        <div className="w-12 h-12 bg-gradient-to-tr from-purple-700 to-indigo-600 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 overflow-hidden">
+                                            {g.AvatarUrl
+                                                ? <img src={g.AvatarUrl} alt={g.Name} className="w-full h-full object-cover" />
+                                                : g.Name?.charAt(0)?.toUpperCase()
+                                            }
+                                        </div>
+
+                                        <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
+                                            <div className="flex justify-between items-baseline mb-0.5">
+                                                <div className="font-semibold text-slate-100 truncate">{g.Name}</div>
+                                                {g.UserRole === 'admin' && (
+                                                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">admin</span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-slate-400 truncate">
+                                                {g.MemberCount} miembros{g.Description ? ` · ${g.Description}` : ''}
                                             </div>
                                         </div>
                                     </button>

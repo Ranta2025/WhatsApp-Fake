@@ -17,22 +17,10 @@ var db *gorm.DB
 // de devolver error.
 func Conection() (*gorm.DB, error) {
 	host := os.Getenv("POSTGRES_HOST")
-	if host == "" {
-		host = "localhost"
-	}
 	port := os.Getenv("POSTGRES_PORT")
-	if port == "" {
-		port = "5432"
-	}
 	user := os.Getenv("POSTGRES_USER")
-	if user == "" {
-		user = "gorm"
-	}
 	password := os.Getenv("POSTGRES_PASSWORD")
 	dbname := os.Getenv("POSTGRES_DB")
-	if dbname == "" {
-		dbname = "gorm"
-	}
 
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
 		host,
@@ -75,7 +63,16 @@ func Conection() (*gorm.DB, error) {
 	// ─────────────────────────────────────────────────────────────────────────
 	// AUTO-MIGRATE: sincroniza el esquema con los modelos actuales
 	// ─────────────────────────────────────────────────────────────────────────
-	if err := data.AutoMigrate(&models.UserDataBase{}, &models.ContactDataBase{}, &models.Message{}, &models.CallLog{}); err != nil {
+	if err := data.AutoMigrate(
+		&models.UserDataBase{},
+		&models.ContactDataBase{},
+		&models.Message{},
+		&models.CallLog{},
+		// ── Grupos ──────────────────────────────────────────────────────────
+		&models.Group{},
+		&models.GroupMember{},
+		&models.GroupMessage{},
+	); err != nil {
 		fmt.Println("Error al migrar base de datos")
 		return nil, err
 	}
@@ -189,6 +186,48 @@ func Conection() (*gorm.DB, error) {
 		) THEN
 			ALTER TABLE contact_data_bases ADD CONSTRAINT chk_contacts_status
 				CHECK (status IN ('pending', 'accepted', 'rejected'));
+		END IF;
+	END $$;`)
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// GRUPOS: índices y constraints
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// Índice único parcial: evita que un mismo usuario sea miembro duplicado
+	// de un grupo al mismo tiempo (pero permite soft-delete + re-unirse).
+	data.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_group_member_active
+		ON group_members (group_id, user_id)
+		WHERE deleted_at IS NULL`)
+
+	// Índice compuesto para cargar el historial de mensajes de un grupo ordenado.
+	data.Exec(`CREATE INDEX IF NOT EXISTS idx_group_messages_history
+		ON group_messages (group_id, created_at)
+		WHERE deleted_at IS NULL`)
+
+	// Índice para lookup de miembros por grupo
+	data.Exec(`CREATE INDEX IF NOT EXISTS idx_group_members_group
+		ON group_members (group_id)
+		WHERE deleted_at IS NULL`)
+
+	// CHECK constraints para garantizar integridad en las tablas nuevas
+	data.Exec(`DO $$ BEGIN
+		-- group_members.role
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'group_members' AND constraint_name = 'chk_group_members_role'
+		) THEN
+			ALTER TABLE group_members ADD CONSTRAINT chk_group_members_role
+				CHECK (role IN ('admin', 'member'));
+		END IF;
+
+		-- group_messages.media_type (mismos valores que messages)
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'group_messages' AND constraint_name = 'chk_group_messages_media_type'
+		) THEN
+			ALTER TABLE group_messages ADD CONSTRAINT chk_group_messages_media_type
+				CHECK (media_type IS NULL OR media_type = ''
+					OR media_type IN ('image', 'audio', 'video', 'sticker', 'document'));
 		END IF;
 	END $$;`)
 

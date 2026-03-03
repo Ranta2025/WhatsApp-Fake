@@ -283,6 +283,49 @@ class WebSocketManager {
         return this._send('call_end', { to, roomID });
     }
 
+    // --- Group chat methods ---
+
+    /**
+     * Send a message to a group room.
+     * @param {number} groupID
+     * @param {string} message  - text content (or media URL if mediaType is set)
+     * @param {object|null} replyTo - message being replied to
+     * @param {string|null} mediaType - 'image'|'video'|'audio'|'document'|null
+     */
+    sendGroupMessage(groupID, message, replyTo = null, mediaType = null) {
+        const payload = { groupID, message };
+        if (replyTo) {
+            payload.replyToMessageID = replyTo.MessageID;
+            payload.replyToTelephon = replyTo.SenderTelephon;
+            payload.replyToMessage  = replyTo.Message;
+        }
+        if (mediaType) {
+            payload.mediaType = mediaType;
+            payload.mediaUrl  = message; // message field holds the URL
+        }
+        return this._send('group_chat', payload);
+    }
+
+    /** Notify group members that the current user is typing. */
+    sendGroupTyping(groupID) {
+        return this._send('group_typing', { groupID });
+    }
+
+    /** Edit a message inside a group. */
+    sendGroupEditMessage(groupID, messageID, newContent) {
+        return this._send('group_edit_message', { groupID, messageID, message: newContent });
+    }
+
+    /** Delete a message inside a group for everyone. */
+    sendGroupDeleteMessage(groupID, messageID) {
+        return this._send('group_delete_message', { groupID, messageID });
+    }
+
+    /** Join a group's WS room — called every time the user opens a group chat. */
+    sendGroupJoin(groupID) {
+        return this._send('group_join', { groupID });
+    }
+
     isConnected() {
         return this.ws && this.ws.readyState === WebSocket.OPEN;
     }

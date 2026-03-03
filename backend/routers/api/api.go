@@ -15,25 +15,29 @@ type RouterApiMessage struct {
 	handlerChat    *handlers.HandlerChat
 	handlerCall    *handlers.HandlerCall
 	handlerMedia   *handlers.HandlerMedia
+	handlerGroup   *handlers.HandlerGroup
 	hub            *websocket.Hub
 	chatService    services.ChatServicer
 	contactService services.ContactServicer
 	callService    services.CallServicer
+	groupService   services.GroupServicer
 }
 
 // InitRouterApiMessage inicializa el subrouter /api/v1/ con todos los handlers
 // y aplica el middleware de validación de token JWT.
-func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer) *RouterApiMessage {
+func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) *RouterApiMessage {
 	rout := &RouterApiMessage{
 		app:            app,
 		handlerContact: handler,
 		handlerChat:    handlerChat,
 		handlerCall:    handlerCall,
 		handlerMedia:   handlerMedia,
+		handlerGroup:   handlerGroup,
 		hub:            hub,
 		chatService:    chatService,
 		contactService: contactService,
 		callService:    callService,
+		groupService:   groupService,
 	}
 	rout.app.Use(middleware.MiddlewareTokenWithTelephon())
 	return rout
@@ -81,5 +85,36 @@ func (rt *RouterApiMessage) ApiCall() {
 
 // ApiWebSocket registra la ruta del WebSocket para comunicación en tiempo real.
 func (rt *RouterApiMessage) ApiWebSocket() {
-	rt.app.GET("ws", websocket.HandleWebSocket(rt.hub, rt.chatService, rt.contactService, rt.callService))
+	rt.app.GET("ws", websocket.HandleWebSocket(rt.hub, rt.chatService, rt.contactService, rt.callService, rt.groupService))
+}
+
+// ApiGroup registra todas las rutas del dominio de grupos de chat.
+//
+//	POST   /api/v1/group                           → crear grupo
+//	GET    /api/v1/group                           → mis grupos
+//	GET    /api/v1/group/:groupID                  → detalle del grupo
+//	POST   /api/v1/group/:groupID/members          → añadir miembros
+//	POST   /api/v1/group/:groupID/message          → enviar mensaje
+//	GET    /api/v1/group/:groupID/message          → historial (paginado)
+//	PUT    /api/v1/group/:groupID/message          → editar mensaje
+//	DELETE /api/v1/group/:groupID/message          → eliminar mensaje
+func (rt *RouterApiMessage) ApiGroup() {
+	g := rt.app.Group("group")
+	{
+		// Recursos de grupo
+		g.POST("", middleware.MiddlewareGroupCreate(), rt.handlerGroup.HandleCreateGroup())
+		g.GET("", rt.handlerGroup.HandleGetUserGroups())
+		g.GET("/:groupID", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleGetGroupDetail())
+
+		// Miembros
+		g.POST("/:groupID/members", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupAddMembers(), rt.handlerGroup.HandleAddMembers())
+		g.DELETE("/:groupID/member", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleLeaveGroup())
+		g.PATCH("/:groupID/avatar", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleUpdateGroupAvatar())
+
+		// Mensajes de grupo
+		g.POST("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessage(), rt.handlerGroup.HandleSendGroupMessage())
+		g.GET("/:groupID/message", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleGetGroupMessages())
+		g.PUT("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageEdit(), rt.handlerGroup.HandleEditGroupMessage())
+		g.DELETE("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageDelete(), rt.handlerGroup.HandleDeleteGroupMessage())
+	}
 }

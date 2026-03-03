@@ -30,7 +30,7 @@ var upgrader = websocket.Upgrader{
 // HandleWebSocket actualiza la conexión HTTP a WebSocket, crea el Client y lo
 // registra en el Hub. Envía la lista inicial de contactos online y lanza
 // las goroutines de lectura y escritura.
-func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer) gin.HandlerFunc {
+func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, exist := c.Get("username")
 		telephon, exist2 := c.Get("telephon")
@@ -53,13 +53,17 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 			ServiceChat:    chatService,
 			ServiceContact: contactService,
 			ServiceCall:    callService,
+			ServiceGroup:   groupService,
 		}
 		hub.Register <- client
 
-		// Enviar lista inicial de contactos online después de un pequeño delay
-		// para asegurar que los listeners del cliente estén registrados
+		// Goroutine de inicialización: enviar estado inicial y unirse a rooms de grupos
 		go func() {
 			time.Sleep(100 * time.Millisecond)
+
+			ctx := context.Background()
+
+			// 1. Enviar lista de contactos online
 			onlineContacts := hub.GetOnlineContacts(telephon.(string))
 			initialMsg, _ := json.Marshal(map[string]interface{}{
 				"type": "contacts_online",
@@ -69,9 +73,8 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 			})
 			client.Send <- initialMsg
 
-			// Marcar mensajes pendientes ("enviado") como "entregado" al conectarse
-			// y notificar a los remitentes para que actualicen su UI
-			senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon.(string), context.Background())
+			// 2. Marcar mensajes 1:1 pendientes como "entregado" y notificar remitentes
+			senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon.(string), ctx)
 			if err != nil {
 				log.Printf("[WS] Error marcando mensajes como entregados al conectar: %v", err)
 			} else if len(senders) > 0 {
@@ -85,6 +88,17 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 					hub.SendTo(senderTel, deliveredMsg)
 				}
 				log.Printf("[WS] Notificados %d remitentes de entrega para %s", len(senders), telephon.(string))
+			}
+
+			// 3. Unirse a las rooms de todos los grupos del usuario
+			if groupService != nil {
+				groups, err := groupService.GetUserGroups(telephon.(string), ctx)
+				if err == nil {
+					for _, g := range groups {
+						hub.JoinRoom(g.ID, client)
+					}
+					log.Printf("[WS] %s unido a %d rooms de grupos", telephon.(string), len(groups))
+				}
 			}
 		}()
 

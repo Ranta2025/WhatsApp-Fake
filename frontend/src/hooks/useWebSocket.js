@@ -93,6 +93,27 @@ export function useWebSocket() {
         return wsManager.sendCallEnd(to, roomID);
     }, []);
 
+    // --- Group send wrappers ---
+    const sendGroupMessage = useCallback((groupID, message, replyTo = null, mediaType = null) => {
+        return wsManager.sendGroupMessage(groupID, message, replyTo, mediaType);
+    }, []);
+
+    const sendGroupTyping = useCallback((groupID) => {
+        return wsManager.sendGroupTyping(groupID);
+    }, []);
+
+    const sendGroupEditMessage = useCallback((groupID, messageID, newContent) => {
+        return wsManager.sendGroupEditMessage(groupID, messageID, newContent);
+    }, []);
+
+    const sendGroupDeleteMessage = useCallback((groupID, messageID) => {
+        return wsManager.sendGroupDeleteMessage(groupID, messageID);
+    }, []);
+
+    const sendGroupJoin = useCallback((groupID) => {
+        return wsManager.sendGroupJoin(groupID);
+    }, []);
+
     // Cleanup de handlers al desmontar
     useEffect(() => {
         return () => {
@@ -117,6 +138,12 @@ export function useWebSocket() {
         sendCallOffer,
         sendCallAccept,
         sendCallReject,
-        sendCallEnd
+        sendCallEnd,
+        // Group
+        sendGroupMessage,
+        sendGroupTyping,
+        sendGroupEditMessage,
+        sendGroupDeleteMessage,
+        sendGroupJoin,
     };
 }

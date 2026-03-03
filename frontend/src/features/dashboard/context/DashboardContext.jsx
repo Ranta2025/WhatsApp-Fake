@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../../api/axios';
+import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/groupApi';
 import { useAuth } from '../../../context/AuthContext';
 import { useWebSocket } from '../../../hooks/useWebSocket';
 import { onNotificationClick, offNotificationClick, showNativeNotification } from '../../../utils/notifications';
@@ -16,7 +17,13 @@ export const useDashboard = () => {
 
 export const DashboardProvider = ({ children }) => {
     const { user, logout } = useAuth();
-    const { isConnected, on, off, sendMessage, sendReadConfirmation, sendTypingIndicator, sendEditMessage, sendDeleteMessage, sendCallOffer, sendCallAccept, sendCallReject, sendCallEnd } = useWebSocket();
+    const {
+        isConnected, on, off,
+        sendMessage, sendReadConfirmation, sendTypingIndicator, sendEditMessage, sendDeleteMessage,
+        sendCallOffer, sendCallAccept, sendCallReject, sendCallEnd,
+        sendGroupMessage, sendGroupTyping, sendGroupEditMessage, sendGroupDeleteMessage,
+        sendGroupJoin,
+    } = useWebSocket();
 
     // Profile & User State
     const [profile, setProfile] = useState(null);
@@ -30,11 +37,28 @@ export const DashboardProvider = ({ children }) => {
     const [lastSeenMap, setLastSeenMap] = useState({});
     const [avatarMap, setAvatarMap] = useState({});
     
-    // Messaging
+    // Messaging — 1-to-1
     const [selected, setSelected] = useState(null);
     const [messagesByChat, setMessagesByChat] = useState({});
     const [allChatGroups, setAllChatGroups] = useState({});
     const [drafts, setDrafts] = useState({});
+
+    // Groups
+    const [groups, setGroups] = useState([]);
+    const [groupMessages, setGroupMessages] = useState({}); // { [groupID]: GroupMessageResponse[] }
+    const [selectedGroup, setSelectedGroupState] = useState(null);
+
+    /** Set selected group and clear 1-to-1 selection (mutual exclusivity). */
+    const setSelectedGroup = useCallback((group) => {
+        setSelectedGroupState(group);
+        if (group) setSelected(null);
+    }, []);
+
+    /** Override setSelected to also clear selectedGroup. */
+    const setSelectedContact = useCallback((contact) => {
+        setSelected(contact);
+        if (contact) setSelectedGroupState(null);
+    }, []);
     
     // Notifications & Toasts
     const [toasts, setToasts] = useState([]);
@@ -175,13 +199,59 @@ export const DashboardProvider = ({ children }) => {
         }
     }, []);
 
+    // Fetch groups belonging to the current user
+    const fetchUserGroups = useCallback(async () => {
+        try {
+            const { data } = await getUserGroups();
+            setGroups(Array.isArray(data?.groups) ? data.groups : []);
+        } catch (err) {
+            console.error('Error fetching groups:', err);
+        }
+    }, []);
+
+    // Fetch message history for a specific group (on demand)
+    const fetchGroupMessages = useCallback(async (groupID) => {
+        try {
+            const { data } = await getGroupMessages(groupID);
+            const messages = Array.isArray(data?.messages) ? data.messages : [];
+            const sorted = [...messages].sort((a, b) => new Date(a.Time) - new Date(b.Time));
+            setGroupMessages(prev => ({ ...prev, [groupID]: sorted }));
+        } catch (err) {
+            console.error(`Error fetching messages for group ${groupID}:`, err);
+        }
+    }, []);
+
+    // Fetch full detail (with members) for a specific group and update selectedGroup
+    const fetchGroupDetail = useCallback(async (groupID) => {
+        try {
+            const { data } = await getGroupDetail(groupID);
+            // data is GroupDetail: GroupResponse + Members + Messages
+            setSelectedGroupState(prev => {
+                // Only update if it's still the same group selected
+                if (prev?.ID !== groupID) return prev;
+                return { ...prev, ...data };
+            });
+            // Pre-populate message cache if backend returned messages
+            if (Array.isArray(data?.Messages) && data.Messages.length > 0) {
+                const sorted = [...data.Messages].sort((a, b) => new Date(a.Time) - new Date(b.Time));
+                setGroupMessages(prev => ({
+                    ...prev,
+                    [groupID]: sorted,
+                }));
+            }
+        } catch (err) {
+            console.error(`Error fetching detail for group ${groupID}:`, err);
+        }
+    }, []);
+
     useEffect(() => {
         if (user) {
             fetchProfile();
             fetchContacts();
             fetchAllChats();
+            fetchUserGroups();
         }
-    }, [user, fetchProfile, fetchContacts, fetchAllChats]);
+    }, [user, fetchProfile, fetchContacts, fetchAllChats, fetchUserGroups]);
 
     // WebSocket Handlers (Extracted from Dashboard.jsx)
     useEffect(() => {
@@ -332,6 +402,157 @@ export const DashboardProvider = ({ children }) => {
             });
         };
 
+        // ── Group event handlers ───────────────────────────────────────────────────
+
+        /** Incoming group message (from sender confirm or group broadcast). */
+        const handleGroupChatMessage = (msg) => {
+            if (!msg?.GroupID) return;
+            setGroupMessages(prev => {
+                const existing = prev[msg.GroupID] || [];
+                if (existing.some(m => m.MessageID === msg.MessageID)) return prev;
+                return { ...prev, [msg.GroupID]: [...existing, msg] };
+            });
+        };
+
+        /** Someone in a group is typing. */
+        const handleGroupTyping = (payload) => {
+            if (!payload?.groupID || !payload?.from) return;
+            // Reuse typingUsers with a composite key so it does not conflict with 1:1.
+            const key = `group:${payload.groupID}:${payload.from}`;
+            setTypingUsers(prev => {
+                const next = new Set(prev);
+                next.add(key);
+                return next;
+            });
+            setTimeout(() => {
+                setTypingUsers(prev => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                });
+            }, 3000);
+        };
+
+        /** A group message was edited. */
+        const handleGroupEditMessage = (updatedMsg) => {
+            if (!updatedMsg?.MessageID || !updatedMsg?.GroupID) return;
+            setGroupMessages(prev => {
+                const msgs = prev[updatedMsg.GroupID];
+                if (!msgs) return prev;
+                return {
+                    ...prev,
+                    [updatedMsg.GroupID]: msgs.map(m =>
+                        m.MessageID === updatedMsg.MessageID
+                            ? { ...m, Message: updatedMsg.Message, Edited: true }
+                            : m
+                    ),
+                };
+            });
+        };
+
+        /** A group message was deleted for everyone. */
+        const handleGroupDeleteMessage = (deletedMsg) => {
+            if (!deletedMsg?.MessageID || !deletedMsg?.GroupID) return;
+            setGroupMessages(prev => {
+                const msgs = prev[deletedMsg.GroupID];
+                if (!msgs) return prev;
+                return {
+                    ...prev,
+                    [deletedMsg.GroupID]: msgs.filter(m => m.MessageID !== deletedMsg.MessageID),
+                };
+            });
+        };
+
+        /**
+         * Another user added us to a group (or member was added).
+         * We just refresh the full groups list so our role/count are always accurate.
+         */
+        const handleGroupAdded = (_payload) => {
+            fetchUserGroups();
+        };
+
+        /** A group avatar was updated — update it in the groups list and selectedGroup. */
+        const handleGroupAvatarUpdate = (payload) => {
+            if (!payload?.groupID || !payload?.avatarUrl) return;
+            setGroups(prev => prev.map(g =>
+                g.ID === payload.groupID ? { ...g, AvatarUrl: payload.avatarUrl } : g
+            ));
+            setSelectedGroup(prev =>
+                prev?.ID === payload.groupID ? { ...prev, AvatarUrl: payload.avatarUrl } : prev
+            );
+        };
+
+        /** Members were added to a group — inject system messages and update member list. */
+        const handleGroupMemberAdded = (payload) => {
+            if (!payload?.groupID || !payload?.addedMembers?.length) return;
+            const adder = payload.addedByUsername || 'Alguien';
+            const now = Date.now();
+            const systemMsgs = payload.addedMembers.map((m, i) => ({
+                MessageID: `system_add_${now}_${i}_${m.telephon}`,
+                GroupID: payload.groupID,
+                IsSystem: true,
+                Message: `${adder} añadió a ${m.username || m.telephon}`,
+                Time: new Date().toISOString(),
+            }));
+            setGroupMessages(prev => {
+                const msgs = prev[payload.groupID] || [];
+                return { ...prev, [payload.groupID]: [...msgs, ...systemMsgs] };
+            });
+            setGroups(prev => prev.map(g =>
+                g.ID === payload.groupID
+                    ? { ...g, MemberCount: payload.newMemberCount ?? g.MemberCount }
+                    : g
+            ));
+            setSelectedGroup(prev => {
+                if (!prev || prev.ID !== payload.groupID) return prev;
+                const newMembers = (payload.addedMembers || []).map(m => ({
+                    Telephon: m.telephon,
+                    Username: m.username,
+                    Role: 'member',
+                }));
+                const existing = new Set((prev.Members || []).map(m => m.Telephon));
+                const toAdd = newMembers.filter(m => !existing.has(m.Telephon));
+                return {
+                    ...prev,
+                    MemberCount: payload.newMemberCount ?? prev.MemberCount,
+                    Members: [...(prev.Members || []), ...toAdd],
+                };
+            });
+        };
+
+        /** A group member left — inject a system message and update member count/list. */
+        const handleGroupMemberLeft = (payload) => {
+            if (!payload?.groupID) return;
+            const displayName = payload.username || payload.telephon;
+            const systemMsg = {
+                MessageID: `system_${Date.now()}_${Math.random()}`,
+                GroupID: payload.groupID,
+                IsSystem: true,
+                Message: `${displayName} salió del grupo`,
+                Time: new Date().toISOString(),
+            };
+            setGroupMessages(prev => {
+                const msgs = prev[payload.groupID] || [];
+                return { ...prev, [payload.groupID]: [...msgs, systemMsg] };
+            });
+            // Update member count and remove from members list
+            setGroups(prev => prev.map(g =>
+                g.ID === payload.groupID
+                    ? { ...g, MemberCount: Math.max((g.MemberCount || 1) - 1, 0) }
+                    : g
+            ));
+            setSelectedGroup(prev => {
+                if (!prev || prev.ID !== payload.groupID) return prev;
+                return {
+                    ...prev,
+                    MemberCount: Math.max((prev.MemberCount || 1) - 1, 0),
+                    Members: prev.Members
+                        ? prev.Members.filter(m => m.Telephon !== payload.telephon)
+                        : prev.Members,
+                };
+            });
+        };
+
         on('message', handleIncomingMessage);
         on('read', handleReadConfirmation);
         on('message_delivered', handleMessageDelivered);
@@ -339,6 +560,15 @@ export const DashboardProvider = ({ children }) => {
         on('username_changed', handleUsernameChanged);
         on('edit_message', handleEditMessage);
         on('delete_message', handleDeleteMessage);
+        // Group events
+        on('group_chat', handleGroupChatMessage);
+        on('group_typing', handleGroupTyping);
+        on('group_edit_message', handleGroupEditMessage);
+        on('group_delete_message', handleGroupDeleteMessage);
+        on('group_added', handleGroupAdded);
+        on('group_avatar_update', handleGroupAvatarUpdate);
+        on('group_member_added', handleGroupMemberAdded);
+        on('group_member_left', handleGroupMemberLeft);
 
         return () => {
             off('message', handleIncomingMessage);
@@ -348,8 +578,23 @@ export const DashboardProvider = ({ children }) => {
             off('username_changed', handleUsernameChanged);
             off('edit_message', handleEditMessage);
             off('delete_message', handleDeleteMessage);
+            off('group_chat', handleGroupChatMessage);
+            off('group_typing', handleGroupTyping);
+            off('group_edit_message', handleGroupEditMessage);
+            off('group_delete_message', handleGroupDeleteMessage);
+            off('group_added', handleGroupAdded);
+            off('group_avatar_update', handleGroupAvatarUpdate);
+            off('group_member_added', handleGroupMemberAdded);
+            off('group_member_left', handleGroupMemberLeft);
         };
-    }, [isConnected, on, off, markAsRead]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups]);
+
+    // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
+    // This is the definitive fix for "admin sends a message and others don't see it in real time".
+    useEffect(() => {
+        if (!selectedGroup?.ID || !isConnected) return;
+        sendGroupJoin(selectedGroup.ID);
+    }, [selectedGroup?.ID, isConnected, sendGroupJoin]);
 
     // manejar clicks sobre notificaciones (fuerza apertura de chat)
     useEffect(() => {
@@ -359,7 +604,7 @@ export const DashboardProvider = ({ children }) => {
             const contact = contacts.find(c => c.Number === telephon);
             const group = allChatGroups[telephon];
             const sel = contact || group || { Number: telephon, Username: telephon, Status: 'unknown' };
-            setSelected(sel);
+            setSelectedContact(sel);
             setSidebarView('chats');
             setSidebarOpen(false);
         };
@@ -371,7 +616,7 @@ export const DashboardProvider = ({ children }) => {
             offNotificationClick(handler);
             window.removeEventListener('notification-click', handler);
         };
-    }, [contacts, allChatGroups, setSidebarView, setSidebarOpen]);
+    }, [contacts, allChatGroups, setSidebarView, setSidebarOpen, setSelectedContact]);
 
     const value = {
         profile, setProfile,
@@ -382,7 +627,7 @@ export const DashboardProvider = ({ children }) => {
         typingUsers, setTypingUsers,
         lastSeenMap, setLastSeenMap,
         avatarMap, setAvatarMap,
-        selected, setSelected,
+        selected, setSelected: setSelectedContact,
         messagesByChat, setMessagesByChat,
         allChatGroups, setAllChatGroups,
         drafts, setDrafts,
@@ -397,10 +642,22 @@ export const DashboardProvider = ({ children }) => {
         fetchAllChats,
         fetchChatMessages,
         markAsRead,
+        // Groups
+        groups, setGroups,
+        groupMessages, setGroupMessages,
+        selectedGroup, setSelectedGroup,
+        fetchUserGroups,
+        fetchGroupMessages,
+        fetchGroupDetail,
         // WebSocket state & actions
         isConnected,
         sendMessage,
         sendTypingIndicator,
+        sendGroupMessage,
+        sendGroupTyping,
+        sendGroupEditMessage,
+        sendGroupDeleteMessage,
+        sendGroupJoin,
         // Auth passthrough
         user,
         logout

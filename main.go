@@ -50,7 +50,12 @@ func main() {
 	serviceCall := services.InitServiceCall(repo)
 	handlerCall := handlers.InitHandlerCall(serviceCall)
 
-	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall, handlerMedia)
+	// Inicializar dominio de grupos
+	repoGroup := repos.InitRepoGroup(db, rd)
+	serviceGroup := services.InitServiceGroup(repoGroup, repo)
+	handlerGroup := handlers.InitHandlerGroup(serviceGroup, hub)
+
+	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall, handlerMedia, handlerGroup, serviceGroup)
 
 	app.Welcome()
 	app.Run()

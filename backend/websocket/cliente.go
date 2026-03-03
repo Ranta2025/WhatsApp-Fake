@@ -32,21 +32,30 @@ type Client struct {
 	ServiceChat    services.ChatServicer
 	ServiceContact services.ContactServicer
 	ServiceCall    services.CallServicer
+	ServiceGroup   services.GroupServicer
 }
 
 // messageRouter es un mapa de tipo de mensaje → función handler.
 // Se inicializa una vez por cliente al crear el readPump.
 func (c *Client) buildRouter() map[string]func(*MessageHandler) {
 	return map[string]func(*MessageHandler){
+		// Chat 1:1
 		"chat":           (*MessageHandler).HandleChatMessage,
 		"read":           (*MessageHandler).HandleReadMessage,
 		"typing":         (*MessageHandler).HandleTypingIndicator,
 		"edit_message":   (*MessageHandler).HandleEditMessage,
 		"delete_message": (*MessageHandler).HandleDeleteMessage,
-		"call_offer":     (*MessageHandler).HandleCallOffer,
-		"call_accept":    (*MessageHandler).HandleCallAccept,
-		"call_reject":    (*MessageHandler).HandleCallReject,
-		"call_end":       (*MessageHandler).HandleCallEnd,
+		// Llamadas
+		"call_offer":  (*MessageHandler).HandleCallOffer,
+		"call_accept": (*MessageHandler).HandleCallAccept,
+		"call_reject": (*MessageHandler).HandleCallReject,
+		"call_end":    (*MessageHandler).HandleCallEnd,
+		// Grupos
+		"group_chat":           (*MessageHandler).HandleGroupChatMessage,
+		"group_typing":         (*MessageHandler).HandleGroupTyping,
+		"group_edit_message":   (*MessageHandler).HandleGroupEditMessage,
+		"group_delete_message": (*MessageHandler).HandleGroupDeleteMessage,
+		"group_join":           (*MessageHandler).HandleGroupJoin,
 	}
 }
 

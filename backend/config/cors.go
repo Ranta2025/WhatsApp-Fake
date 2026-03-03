@@ -70,7 +70,7 @@ func Cors() gin.HandlerFunc {
 		AllowOriginFunc: func(origin string) bool {
 			return IsAllowedOrigin(origin)
 		},
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{
 			"origin",
 			"Content-Type",

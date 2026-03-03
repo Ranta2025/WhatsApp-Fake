@@ -10,8 +10,13 @@ import (
 )
 
 type Hub struct {
-	mu        sync.RWMutex
-	Clients   map[string]*Client // Key: telephon (número de teléfono)
+	mu      sync.RWMutex
+	Clients map[string]*Client // Key: telephon (número de teléfono)
+
+	// rooms: groupID → telephon → *Client
+	// Permite hacer broadcast eficiente a todos los miembros conectados de un grupo.
+	rooms map[uint]map[string]*Client
+
 	Register  chan *Client
 	Remove    chan *Client
 	Broadcast chan []byte
@@ -22,6 +27,7 @@ type Hub struct {
 func NewHub(repo *repos.ApiContact) *Hub {
 	return &Hub{
 		Clients:   make(map[string]*Client),
+		rooms:     make(map[uint]map[string]*Client),
 		Register:  make(chan *Client),
 		Remove:    make(chan *Client),
 		Broadcast: make(chan []byte),
@@ -41,6 +47,9 @@ func (h *Hub) Run() {
 			if oldClient, exists := h.Clients[c.Telephon]; exists && oldClient != c {
 				fmt.Printf("[HUB] Reemplazando conexión antigua de %s (tel: %s)\n", oldClient.Username, c.Telephon)
 				close(oldClient.Send)
+				// Limpiar las rooms del cliente viejo para evitar referencias colgantes.
+				// El cliente nuevo las reobtendrá desde la goroutine de inicialización.
+				h.leaveAllRoomsLocked(c.Telephon)
 			}
 			h.Clients[c.Telephon] = c
 			h.mu.Unlock()
@@ -54,6 +63,8 @@ func (h *Hub) Run() {
 			// Si ya fue reemplazado por una reconexión más reciente, NO borrar ni notificar offline.
 			if existing, ok := h.Clients[c.Telephon]; ok && existing == c {
 				delete(h.Clients, c.Telephon)
+				// Limpiar rooms del cliente mientras tenemos el lock
+				h.leaveAllRoomsLocked(c.Telephon)
 				h.mu.Unlock()
 				fmt.Printf("[HUB] Usuario desconectado: %s (tel: %s). Total clientes: %d\n", c.Username, c.Telephon, len(h.Clients))
 				// Notificar a los contactos que este usuario está offline (en goroutine para no bloquear el hub)
@@ -94,6 +105,79 @@ func (h *Hub) GetClient(telephon string) (*Client, bool) {
 	client, exists := h.Clients[telephon]
 	h.mu.RUnlock()
 	return client, exists
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rooms (grupos de chat)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// JoinRoom registra a un cliente en la room de un grupo.
+// Llamado desde HandleWebSocket al conectar o después de crear/unirse a un grupo.
+func (h *Hub) JoinRoom(groupID uint, client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.rooms[groupID] == nil {
+		h.rooms[groupID] = make(map[string]*Client)
+	}
+	h.rooms[groupID][client.Telephon] = client
+	fmt.Printf("[HUB] %s (tel: %s) unido a room del grupo %d\n", client.Username, client.Telephon, groupID)
+}
+
+// JoinRoomByTelephon añade a la room a un cliente identificado por su teléfono.
+// Si el cliente no está conectado en ese momento, la llamada es un no-op.
+func (h *Hub) JoinRoomByTelephon(groupID uint, telephon string) {
+	client, exists := h.GetClient(telephon)
+	if !exists {
+		return
+	}
+	h.JoinRoom(groupID, client)
+}
+
+// SendToGroup envía un mensaje a todos los miembros conectados de un grupo,
+// excepto al sender. Thread-safe: copia las referencias antes de enviar.
+func (h *Hub) SendToGroup(groupID uint, senderTelephon string, msg []byte) {
+	h.mu.RLock()
+	room := h.rooms[groupID]
+	if room == nil {
+		h.mu.RUnlock()
+		return
+	}
+	// Copiar referencias mientras tenemos el RLock para no bloquear el hub mientras enviamos
+	targets := make([]*Client, 0, len(room))
+	for telephon, client := range room {
+		if telephon != senderTelephon {
+			targets = append(targets, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, client := range targets {
+		safeSend(client.Send, msg)
+	}
+}
+
+// safeSend envía a un canal sin bloquear y sin entrar en pánico si el canal está cerrado.
+func safeSend(ch chan []byte, msg []byte) {
+	defer func() { recover() }()
+	select {
+	case ch <- msg:
+	default:
+		// Canal lleno (cliente lento), ignorar
+	}
+}
+
+// leaveAllRoomsLocked elimina al cliente de todas las rooms.
+// REQUIERE que h.mu.Lock() esté adquirido por el llamador.
+func (h *Hub) leaveAllRoomsLocked(telephon string) {
+	for groupID, room := range h.rooms {
+		if _, exists := room[telephon]; exists {
+			delete(room, telephon)
+			// Si la room quedó vacía, limpiarla del mapa
+			if len(room) == 0 {
+				delete(h.rooms, groupID)
+			}
+		}
+	}
 }
 
 // UpdateClientUsername actualiza el username de un cliente conectado (solo para UI, la clave sigue siendo telephon)

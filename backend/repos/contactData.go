@@ -117,6 +117,22 @@ func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.C
 	return count > 0, nil
 }
 
+// IsAcceptedContact verifica si el usuario con userID tiene al usuario con contactID
+// como contacto con status = 'accepted'. Usado para validar si se puede añadir
+// a alguien como miembro de un grupo.
+func (ap *ApiContact) IsAcceptedContact(userID, contactID uint, ctx context.Context) (bool, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var count int64
+	result := ap.data.Model(&models.ContactDataBase{}).WithContext(c).
+		Where("id_user = ? AND id_contact = ? AND status = 'accepted'", userID, contactID).
+		Count(&count)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return count > 0, nil
+}
+
 // GetIdUsername obtiene el ID interno del usuario por su username.
 func (app *ApiContact) GetIdUsername(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)

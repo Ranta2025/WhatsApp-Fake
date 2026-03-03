@@ -79,6 +79,51 @@ type GetContactPut struct {
 	ContactName string `json:"contact_name" binding:"required"`
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Group models
+// ─────────────────────────────────────────────────────────────────────────
+
+// GroupCreate es el body para crear un nuevo grupo.
+// Members es la lista de teléfonos (E.164) de los contactos a añadir como miembros iniciales.
+type GroupCreate struct {
+	Name        string   `json:"name" binding:"required"`
+	Description string   `json:"description,omitempty"`
+	Members     []string `json:"members" binding:"required,min=1"`
+}
+
+// GroupAddMembers añade nuevos miembros a un grupo existente.
+type GroupAddMembers struct {
+	Members []string `json:"members" binding:"required,min=1"`
+}
+
+// GroupMessageSend es el payload de un nuevo mensaje de grupo (HTTP y WebSocket).
+type GroupMessageSend struct {
+	GroupID   uint   `json:"groupID" binding:"required"`
+	Message   string `json:"message"`
+	MediaUrl  string `json:"mediaUrl,omitempty"`
+	MediaType string `json:"mediaType,omitempty"`
+
+	ReplyToMessageID *uint   `json:"replyToMessageID,omitempty"`
+	ReplyToTelephon  *string `json:"replyToTelephon,omitempty"`
+	ReplyToMessage   *string `json:"replyToMessage,omitempty"`
+}
+
+// GroupMessageEdit solicita editar el contenido de un mensaje de grupo.
+type GroupMessageEdit struct {
+	MessageID uint   `json:"messageID" binding:"required"`
+	Message   string `json:"message" binding:"required"`
+}
+
+// GroupMessageDelete solicita eliminar (soft-delete) un mensaje de grupo.
+type GroupMessageDelete struct {
+	MessageID uint `json:"messageID" binding:"required"`
+}
+
+// GroupTyping indica que un miembro está escribiendo en un grupo.
+type GroupTyping struct {
+	GroupID uint `json:"groupID" binding:"required"`
+}
+
 // Call signaling models
 type CallOffer struct {
 	To       string `json:"to" binding:"required"`       // Teléfono del receptor

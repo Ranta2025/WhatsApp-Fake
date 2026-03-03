@@ -381,3 +381,180 @@ func (mh *MessageHandler) HandleDeleteMessage() {
 		mh.Hub.SendTo(msgDel.Receptor, responseBytes)
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Handlers de mensajes grupales
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleGroupChatMessage gestiona el envío de un mensaje a un grupo por WebSocket.
+// Flujo: guardar en BD → confirmar al sender → broadcast a room (todos excepto sender).
+func (mh *MessageHandler) HandleGroupChatMessage() {
+	var msgSend models.GroupMessageSend
+	if err := json.Unmarshal(mh.Payload, &msgSend); err != nil {
+		log.Println("[WS-GROUP] Error al deserializar group_chat:", err)
+		return
+	}
+
+	if msgSend.GroupID == 0 {
+		mh.sendError("El ID del grupo es obligatorio")
+		return
+	}
+	if len(msgSend.Message) == 0 && len(msgSend.MediaUrl) == 0 {
+		mh.sendError("El mensaje no puede estar vacío")
+		return
+	}
+
+	ctx := context.Background()
+	savedMsg, err := mh.Client.ServiceGroup.SendGroupMessage(mh.Client.Telephon, msgSend, ctx)
+	if err != nil {
+		log.Printf("[WS-GROUP] Error al guardar mensaje de grupo: %v", err)
+		mh.sendError("Error al enviar mensaje al grupo: " + err.Error())
+		return
+	}
+
+	responseBytes, _ := json.Marshal(map[string]interface{}{
+		"type":    "group_chat",
+		"payload": savedMsg,
+	})
+
+	// Auto-unir al sender a la room (auto-recuperación: garantiza que el sender
+	// esté en la room incluso si su membresía se perdió por reconexión).
+	mh.Hub.JoinRoom(msgSend.GroupID, mh.Client)
+
+	// Confirmar al sender
+	mh.Client.Send <- responseBytes
+
+	// Broadcast a todos los miembros conectados del grupo (excepto sender)
+	mh.Hub.SendToGroup(msgSend.GroupID, mh.Client.Telephon, responseBytes)
+
+	log.Printf("[WS-GROUP] Mensaje de %s en grupo %d, ID: %d", mh.Client.Telephon, msgSend.GroupID, savedMsg.MessageID)
+}
+
+// HandleGroupTyping notifica a los miembros conectados del grupo que alguien está escribiendo.
+func (mh *MessageHandler) HandleGroupTyping() {
+	var typing models.GroupTyping
+	if err := json.Unmarshal(mh.Payload, &typing); err != nil {
+		log.Println("[WS-GROUP] Error al deserializar group_typing:", err)
+		return
+	}
+
+	notification, _ := json.Marshal(map[string]interface{}{
+		"type": "group_typing",
+		"payload": map[string]interface{}{
+			"groupID": typing.GroupID,
+			"from":    mh.Client.Telephon,
+		},
+	})
+
+	mh.Hub.SendToGroup(typing.GroupID, mh.Client.Telephon, notification)
+}
+
+// HandleGroupEditMessage gestiona la edición de un mensaje de grupo por WebSocket.
+// Solo el autor puede editar; notifica a todos los miembros conectados.
+func (mh *MessageHandler) HandleGroupEditMessage() {
+	var editData models.GroupMessageEdit
+	if err := json.Unmarshal(mh.Payload, &editData); err != nil {
+		log.Println("[WS-GROUP] Error al deserializar group_edit_message:", err)
+		return
+	}
+	if editData.MessageID == 0 {
+		mh.sendError("El ID del mensaje es obligatorio")
+		return
+	}
+
+	// Extraer groupID del payload — lo añadimos como campo extra en el WS payload
+	var rawPayload struct {
+		models.GroupMessageEdit
+		GroupID uint `json:"groupID"`
+	}
+	if err := json.Unmarshal(mh.Payload, &rawPayload); err != nil || rawPayload.GroupID == 0 {
+		mh.sendError("El ID del grupo es obligatorio")
+		return
+	}
+
+	ctx := context.Background()
+	updatedMsg, err := mh.Client.ServiceGroup.EditGroupMessage(mh.Client.Telephon, rawPayload.GroupID, editData, ctx)
+	if err != nil {
+		log.Printf("[WS-GROUP] Error al editar mensaje de grupo: %v", err)
+		mh.sendError("Error al editar mensaje: " + err.Error())
+		return
+	}
+
+	responseBytes, _ := json.Marshal(map[string]interface{}{
+		"type":    "group_edit_message",
+		"payload": updatedMsg,
+	})
+
+	mh.Client.Send <- responseBytes
+	mh.Hub.SendToGroup(rawPayload.GroupID, mh.Client.Telephon, responseBytes)
+}
+
+// HandleGroupDeleteMessage gestiona la eliminación de un mensaje de grupo por WebSocket.
+// Solo el autor puede eliminar; notifica a todos los miembros conectados.
+func (mh *MessageHandler) HandleGroupDeleteMessage() {
+	var rawPayload struct {
+		models.GroupMessageDelete
+		GroupID uint `json:"groupID"`
+	}
+	if err := json.Unmarshal(mh.Payload, &rawPayload); err != nil {
+		log.Println("[WS-GROUP] Error al deserializar group_delete_message:", err)
+		return
+	}
+	if rawPayload.MessageID == 0 || rawPayload.GroupID == 0 {
+		mh.sendError("Los IDs de mensaje y grupo son obligatorios")
+		return
+	}
+
+	ctx := context.Background()
+	err := mh.Client.ServiceGroup.DeleteGroupMessage(mh.Client.Telephon, rawPayload.GroupID, rawPayload.GroupMessageDelete, ctx)
+	if err != nil {
+		log.Printf("[WS-GROUP] Error al eliminar mensaje de grupo: %v", err)
+		mh.sendError("Error al eliminar mensaje: " + err.Error())
+		return
+	}
+
+	responseBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "group_delete_message",
+		"payload": map[string]interface{}{
+			"MessageID": rawPayload.MessageID,
+			"GroupID":   rawPayload.GroupID,
+		},
+	})
+
+	mh.Client.Send <- responseBytes
+	mh.Hub.SendToGroup(rawPayload.GroupID, mh.Client.Telephon, responseBytes)
+}
+
+// HandleGroupJoin añade al cliente a la room WS del grupo si es miembro.
+// El frontend lo llama cada vez que el usuario abre un chat de grupo.
+func (mh *MessageHandler) HandleGroupJoin() {
+	var payload struct {
+		GroupID uint `json:"groupID"`
+	}
+	if err := json.Unmarshal(mh.Payload, &payload); err != nil || payload.GroupID == 0 {
+		return
+	}
+
+	ctx := context.Background()
+	telephons, err := mh.Client.ServiceGroup.GetMemberTelephons(payload.GroupID, ctx)
+	if err != nil {
+		return
+	}
+	for _, t := range telephons {
+		if t == mh.Client.Telephon {
+			mh.Hub.JoinRoom(payload.GroupID, mh.Client)
+			log.Printf("[WS-GROUP] %s joined room for group %d", mh.Client.Telephon, payload.GroupID)
+			return
+		}
+	}
+	log.Printf("[WS-GROUP] %s is NOT a member of group %d — join denied", mh.Client.Telephon, payload.GroupID)
+}
+
+// sendError es un helper para enviar mensajes de error al cliente WebSocket.
+func (mh *MessageHandler) sendError(msg string) {
+	errorMsg, _ := json.Marshal(map[string]interface{}{
+		"type":  "error",
+		"error": msg,
+	})
+	mh.Client.Send <- errorMsg
+}

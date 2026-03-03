@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DashboardProvider, useDashboard } from './context/DashboardContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
+import GroupChatWindow from './components/GroupChatWindow';
 import ProfileModal from './components/ProfileModal';
 import ContactDetails from './components/ContactDetails';
 import NotificationBanner from './components/NotificationBanner';
 import AddContactModal from './components/AddContactModal';
+import CreateGroupModal from './components/CreateGroupModal';
 import PermissionsDialog from '../../components/PermissionsDialog';
 import IncomingCall from '../../components/IncomingCall';
 import CallRoom from '../../components/CallRoom';
@@ -129,12 +131,14 @@ const DashboardContent = () => {
 
     const { 
         profile, user, isConnected, notifPermission, setNotifPermission, 
-        requestNotificationPermission 
+        requestNotificationPermission,
+        selectedGroup,
     } = useDashboard();
 
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [showContactDetails, setShowContactDetails] = useState(false);
     const [showAddContactModal, setShowAddContactModal] = useState(false);
+    const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
     const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
     const [viewImage, setViewImage] = useState(null);
 
@@ -163,12 +167,18 @@ const DashboardContent = () => {
             <Sidebar 
                 onOpenProfile={() => setShowProfileModal(true)} 
                 onAddContact={() => setShowAddContactModal(true)}
+                onCreateGroup={() => setShowCreateGroupModal(true)}
             />
             
-            <ChatWindow 
-                onShowContactDetails={() => setShowContactDetails(true)} 
-                onStartCall={handleStartCall}
-            />
+            {/* Render the group chat window when a group is selected, 1-to-1 chat otherwise */}
+            {selectedGroup ? (
+                <GroupChatWindow />
+            ) : (
+                <ChatWindow 
+                    onShowContactDetails={() => setShowContactDetails(true)} 
+                    onStartCall={handleStartCall}
+                />
+            )}
 
             {/* Panels and Modals */}
             <ContactDetails 
@@ -186,6 +196,11 @@ const DashboardContent = () => {
             <AddContactModal 
                 isOpen={showAddContactModal} 
                 onClose={() => setShowAddContactModal(false)} 
+            />
+
+            <CreateGroupModal
+                isOpen={showCreateGroupModal}
+                onClose={() => setShowCreateGroupModal(false)}
             />
 
             <NotificationBanner />

@@ -11,19 +11,10 @@ import (
 
 func GetMinio() (*minio.Client, error) {
 	endpoint := os.Getenv("MINIO_ENDPOINT")
-	if endpoint == "" {
-		endpoint = "localhost:9000"
-	}
 
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	if accessKey == "" {
-		accessKey = "minioadmin"
-	}
 
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if secretKey == "" {
-		secretKey = "minioadmin"
-	}
 
 	useSSL := os.Getenv("MINIO_USE_SSL") == "true"
 

@@ -11,13 +11,7 @@ import (
 // GetRedis crea el cliente de Redis y verifica la conexión con un PING.
 func GetRedis() (*redis.Client, error) {
 	host := os.Getenv("REDIS_HOST")
-	if host == "" {
-		host = "localhost"
-	}
 	port := os.Getenv("REDIS_PORT")
-	if port == "" {
-		port = "6379"
-	}
 	addr := fmt.Sprintf("%s:%s", host, port)
 	password := os.Getenv("REDIS_PASSWORD")
 	db := 0

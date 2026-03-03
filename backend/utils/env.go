@@ -7,7 +7,7 @@ import (
 )
 
 // LoadEnv carga variables de entorno desde el archivo .env raíz si existe.
-// Las variables ya presentes en el entorno no se sobreescriben.
+// Las variables ya presentes en el entorno NO se sobreescriben.
 func LoadEnv() {
 	f, err := os.Open(".env")
 	if err != nil {
@@ -27,6 +27,9 @@ func LoadEnv() {
 		}
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
 		os.Setenv(key, value)
 	}
 }
