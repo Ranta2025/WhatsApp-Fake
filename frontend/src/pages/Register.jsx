@@ -3,6 +3,9 @@ import api from '../api/axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AuthLayout from '../components/AuthLayout';
+import PhoneInput from 'react-phone-input-2';
+import 'react-phone-input-2/lib/style.css';
+import { validatePhone } from '../utils/phoneValidation';
 
 export default function Register() {
     const [formData, setFormData] = useState({
@@ -15,6 +18,10 @@ export default function Register() {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [error, setError] = useState('');
+    const [phoneError, setPhoneError] = useState('');
+    const [phoneLocalNumber, setPhoneLocalNumber] = useState('');
+    const [phoneCountryIso, setPhoneCountryIso] = useState('cu');
+    const [phoneDialCode, setPhoneDialCode] = useState('53');
     const navigate = useNavigate();
     const { login } = useAuth();
 
@@ -22,25 +29,32 @@ export default function Register() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const phoneE164Regex = /^\+[1-9]\d{6,14}$/;
+    const buildPhoneE164 = (dialCode, localNumber) => {
+        const codeDigits = String(dialCode || '').replace(/\D/g, '');
+        const localDigits = String(localNumber || '').replace(/\D/g, '');
+        if (!codeDigits && !localDigits) return '';
+        return `+${codeDigits}${localDigits}`;
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
 
-        if (!formData.numero.trim()) {
-            setError('El número de teléfono es requerido');
+        const phoneResult = validatePhone(formData.numero);
+        if (!phoneResult.valid) {
+            setError(phoneResult.error);
+            setPhoneError(phoneResult.error);
             return;
         }
-        if (!phoneE164Regex.test(formData.numero.trim())) {
-            setError('El número debe incluir el código de país con "+" delante (ej: +50212345678). Sin espacios ni guiones.');
-            return;
-        }
+        // Usar el número formateado E.164 limpio
+        const cleanFormData = { ...formData, numero: phoneResult.formatted };
+
         if (formData.password !== confirm) {
             setError('Las contraseñas no coinciden');
             return;
         }
         try {
-            await api.post('/register', formData);
+            await api.post('/register', cleanFormData);
             // La cookie HttpOnly se setió automáticamente por el servidor
             navigate('/activate', { state: { username: formData.username, gmail: formData.email } });
         } catch (err) {
@@ -115,23 +129,66 @@ export default function Register() {
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-400 mb-1.5">Número de teléfono</label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
+                    <div className="flex items-stretch gap-2">
+                        <div className="relative w-[96px] h-[46px] shrink-0">
+                            <PhoneInput
+                                country={phoneCountryIso}
+                                enableSearch={true}
+                                disableSearchIcon={true}
+                                searchPlaceholder="Buscar por país..."
+                                value={`+${phoneDialCode}`}
+                                onChange={(phone, countryData) => {
+                                    const code = countryData?.dialCode || phoneDialCode;
+                                    const iso = countryData?.countryCode || phoneCountryIso;
+                                    setPhoneDialCode(code);
+                                    setPhoneCountryIso(iso);
+                                    const full = buildPhoneE164(code, phoneLocalNumber);
+                                    handleChange({ target: { name: 'numero', value: full } });
+                                }}
+                                inputProps={{
+                                    name: 'numero',
+                                    autoFocus: false,
+                                    readOnly: true,
+                                    tabIndex: -1,
+                                }}
+                                containerClass="react-tel-input !w-full !h-full"
+                                inputClass="!hidden"
+                                buttonClass="!absolute !inset-0 !w-full !h-full !bg-slate-800 !border !border-transparent !rounded-xl hover:!border-indigo-500"
+                                dropdownClass="!bg-slate-800 !border !border-slate-700 !text-slate-100 !rounded-xl"
+                                searchClass="!bg-slate-900 !border !border-slate-700 !text-slate-100 !rounded-lg"
+                                copyNumbersOnly={false}
+                                enableAreaCodeStretch
+                                countryCodeEditable={false}
+                                disableCountryCode={false}
+                                disableDropdown={false}
+                            />
+                            <div className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 text-sm text-slate-200 font-medium">
+                                +{phoneDialCode}
+                            </div>
                         </div>
                         <input
                             type="tel"
-                            name="numero"
-                            onChange={handleChange}
-                            className="w-full pl-10 p-3 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm"
-                            placeholder="Ej: +50212345678"
+                            value={phoneLocalNumber}
+                            onChange={(e) => {
+                                const local = e.target.value.replace(/\D/g, '');
+                                setPhoneLocalNumber(local);
+                                setError('');
+                                const full = buildPhoneE164(phoneDialCode, local);
+                                handleChange({ target: { name: 'numero', value: full } });
+                                if (full && full.length > 3) {
+                                    const result = validatePhone(full);
+                                    setPhoneError(result.valid ? '' : result.error);
+                                } else {
+                                    setPhoneError('');
+                                }
+                            }}
+                            className="w-full h-[46px] bg-slate-800 border border-transparent rounded-xl px-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            placeholder="Número de teléfono"
                         />
                     </div>
-                    <p className="text-xs text-slate-500 mt-1.5 ml-1">
-                        Debe incluir el código de país con <span className="font-bold text-slate-400">+</span> delante (ej: <span className="font-mono">+502</span> para Guatemala)
-                    </p>
+                    {phoneError && (
+                        <p className="text-xs text-red-400 mt-1.5 ml-1">{phoneError}</p>
+                    )}
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-400 mb-1.5">Contraseña</label>
