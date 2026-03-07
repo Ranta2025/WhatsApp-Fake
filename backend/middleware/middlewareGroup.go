@@ -118,6 +118,26 @@ func MiddlewareGroupMessageDelete() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareGroupSetRole valida el body de la operación de cambio de rol.
+// Acepta: { "number": "+502...", "role": "admin"|"member" }
+func MiddlewareGroupSetRole() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body models.GroupSetRole
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Datos inválidos: " + err.Error()})
+			c.Abort()
+			return
+		}
+		if body.Role != "admin" && body.Role != "member" {
+			c.JSON(400, gin.H{"error": "El rol debe ser 'admin' o 'member'"})
+			c.Abort()
+			return
+		}
+		c.Set("groupSetRole", body)
+		c.Next()
+	}
+}
+
 // MiddlewareGroupID extrae el parámetro :groupID de la URL y lo convierte a uint.
 func MiddlewareGroupID() gin.HandlerFunc {
 	return func(c *gin.Context) {

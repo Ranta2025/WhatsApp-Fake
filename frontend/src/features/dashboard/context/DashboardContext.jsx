@@ -74,6 +74,14 @@ export const DashboardProvider = ({ children }) => {
     const [sidebarView, setSidebarView] = useState('chats');
     const [sidebarOpen, setSidebarOpen] = useState(true); // show sidebar by default
 
+    // Loading state — tracks which of the 4 initial fetches are done
+    const [loadingSteps, setLoadingSteps] = useState({
+        profile: false, contacts: false, chats: false, groups: false,
+    });
+    const markStep = useCallback((key) => {
+        setLoadingSteps(prev => prev[key] ? prev : { ...prev, [key]: true });
+    }, []);
+
     // Toast functions
     const addToast = useCallback((toast) => {
         const id = Date.now() + Math.random();
@@ -131,8 +139,10 @@ export const DashboardProvider = ({ children }) => {
             if (data?.wallpaper_url) setGlobalWallpaper(data.wallpaper_url);
         } catch (err) {
             console.error('Error fetching profile:', err);
+        } finally {
+            markStep('profile');
         }
-    }, []);
+    }, [markStep]);
 
     const fetchContacts = useCallback(async () => {
         try {
@@ -150,7 +160,24 @@ export const DashboardProvider = ({ children }) => {
             setAvatarMap(prev => ({ ...prev, ...avMap }));
         } catch (err) {
             console.error('Error fetching contacts:', err);
+        } finally {
+            markStep('contacts');
         }
+    }, [markStep]);
+
+    // Renombra el alias local de un contacto vía PUT /api/v1/contact
+    const renameContact = useCallback(async (number, newName) => {
+        const trimmed = newName.trim();
+        if (!trimmed) throw new Error('El nombre no puede estar vacío');
+        await api.put('/api/v1/contact', { number, contact_name: trimmed });
+        // Actualización optimista en lista de contactos
+        setContacts(prev =>
+            prev.map(c => c.Number === number ? { ...c, ContactName: trimmed } : c)
+        );
+        // Actualizar el contacto seleccionado si es el mismo
+        setSelected(prev =>
+            prev?.Number === number ? { ...prev, ContactName: trimmed } : prev
+        );
     }, []);
 
     // Cargar todos los chats (historial de mensajes) desde el backend
@@ -185,8 +212,10 @@ export const DashboardProvider = ({ children }) => {
             setAvatarMap(prev => ({ ...chatAvatarMap, ...prev }));
         } catch (err) {
             console.error('Error fetching all chats:', err);
+        } finally {
+            markStep('chats');
         }
-    }, []);
+    }, [markStep]);
 
     // Cargar mensajes de un contacto específico (bajo demanda)
     const fetchChatMessages = useCallback(async (contactNumber) => {
@@ -206,8 +235,10 @@ export const DashboardProvider = ({ children }) => {
             setGroups(Array.isArray(data?.groups) ? data.groups : []);
         } catch (err) {
             console.error('Error fetching groups:', err);
+        } finally {
+            markStep('groups');
         }
-    }, []);
+    }, [markStep]);
 
     // Fetch message history for a specific group (on demand)
     const fetchGroupMessages = useCallback(async (groupID) => {
@@ -244,14 +275,18 @@ export const DashboardProvider = ({ children }) => {
         }
     }, []);
 
+    // Reset loading steps when user changes (re-login)
     useEffect(() => {
         if (user) {
+            setLoadingSteps({ profile: false, contacts: false, chats: false, groups: false });
             fetchProfile();
             fetchContacts();
             fetchAllChats();
             fetchUserGroups();
         }
-    }, [user, fetchProfile, fetchContacts, fetchAllChats, fetchUserGroups]);
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const dataReady = loadingSteps.profile && loadingSteps.contacts && loadingSteps.chats && loadingSteps.groups;
 
     // WebSocket Handlers (Extracted from Dashboard.jsx)
     useEffect(() => {
@@ -471,6 +506,34 @@ export const DashboardProvider = ({ children }) => {
             fetchUserGroups();
         };
 
+        /** The group description was updated — update state and inject a system message. */
+        const handleGroupDescriptionUpdate = (payload) => {
+            if (!payload?.groupID) return;
+            // 1. Update description in group state
+            setGroups(prev => prev.map(g =>
+                g.ID === payload.groupID ? { ...g, Description: payload.description } : g
+            ));
+            setSelectedGroup(prev =>
+                prev?.ID === payload.groupID ? { ...prev, Description: payload.description } : prev
+            );
+            // 2. Inject system message visible to everyone
+            const editor = payload.changedByUsername || payload.changedBy || 'Alguien';
+            const text = payload.description
+                ? `${editor} editó la descripción del grupo`
+                : `${editor} eliminó la descripción del grupo`;
+            const systemMsg = {
+                MessageID: `system_desc_${Date.now()}_${Math.random()}`,
+                GroupID: payload.groupID,
+                IsSystem: true,
+                Message: text,
+                Time: new Date().toISOString(),
+            };
+            setGroupMessages(prev => {
+                const msgs = prev[payload.groupID] || [];
+                return { ...prev, [payload.groupID]: [...msgs, systemMsg] };
+            });
+        };
+
         /** A group avatar was updated — update it in the groups list and selectedGroup. */
         const handleGroupAvatarUpdate = (payload) => {
             if (!payload?.groupID || !payload?.avatarUrl) return;
@@ -565,10 +628,44 @@ export const DashboardProvider = ({ children }) => {
         on('group_typing', handleGroupTyping);
         on('group_edit_message', handleGroupEditMessage);
         on('group_delete_message', handleGroupDeleteMessage);
+        /** A member's role was changed by an admin — update local member list. */
+        const handleGroupRoleChanged = (payload) => {
+            if (!payload?.groupID || !payload?.targetTelephon) return;
+            // 1. Inject system message (visible to everyone in the group)
+            const changedBy = payload.changedByUsername || payload.changedBy;
+            const target    = payload.targetUsername    || payload.targetTelephon;
+            const text = payload.newRole === 'admin'
+                ? `${changedBy} nombró administrador a ${target}`
+                : `${changedBy} quitó el rol de administrador a ${target}`;
+            const systemMsg = {
+                MessageID: `system_role_${Date.now()}_${Math.random()}`,
+                GroupID: payload.groupID,
+                IsSystem: true,
+                Message: text,
+                Time: new Date().toISOString(),
+            };
+            setGroupMessages(prev => {
+                const msgs = prev[payload.groupID] || [];
+                return { ...prev, [payload.groupID]: [...msgs, systemMsg] };
+            });
+            // 2. Update the member's role in the members list
+            setSelectedGroup(prev => {
+                if (!prev || prev.ID !== payload.groupID) return prev;
+                return {
+                    ...prev,
+                    Members: (prev.Members || []).map(m =>
+                        m.Telephon === payload.targetTelephon ? { ...m, Role: payload.newRole } : m
+                    ),
+                };
+            });
+        };
+
         on('group_added', handleGroupAdded);
+        on('group_description_update', handleGroupDescriptionUpdate);
         on('group_avatar_update', handleGroupAvatarUpdate);
         on('group_member_added', handleGroupMemberAdded);
         on('group_member_left', handleGroupMemberLeft);
+        on('group_role_changed', handleGroupRoleChanged);
 
         return () => {
             off('message', handleIncomingMessage);
@@ -583,9 +680,11 @@ export const DashboardProvider = ({ children }) => {
             off('group_edit_message', handleGroupEditMessage);
             off('group_delete_message', handleGroupDeleteMessage);
             off('group_added', handleGroupAdded);
+            off('group_description_update', handleGroupDescriptionUpdate);
             off('group_avatar_update', handleGroupAvatarUpdate);
             off('group_member_added', handleGroupMemberAdded);
             off('group_member_left', handleGroupMemberLeft);
+            off('group_role_changed', handleGroupRoleChanged);
         };
     }, [isConnected, on, off, markAsRead, fetchUserGroups]);
 
@@ -638,6 +737,7 @@ export const DashboardProvider = ({ children }) => {
         sidebarView, setSidebarView,
         sidebarOpen, setSidebarOpen,
         fetchContacts,
+        renameContact,
         fetchProfile,
         fetchAllChats,
         fetchChatMessages,
@@ -660,7 +760,10 @@ export const DashboardProvider = ({ children }) => {
         sendGroupJoin,
         // Auth passthrough
         user,
-        logout
+        logout,
+        // Loading state
+        dataReady,
+        loadingSteps,
     };
 
     return (

@@ -335,6 +335,50 @@ func (h *HandlerGroup) HandleDeleteGroupMessage() gin.HandlerFunc {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/v1/group/:groupID/description
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleUpdateGroupDescription actualiza la descripción del grupo.
+// Solo los administradores pueden invocar este endpoint.
+func (h *HandlerGroup) HandleUpdateGroupDescription() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		if !exists || !exists2 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		var body struct {
+			Description string `json:"description" binding:"max=300"`
+		}
+		if err := ctx.ShouldBindJSON(&body); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "descripción inválida (máx. 300 caracteres)"})
+			return
+		}
+
+		if err := h.service.UpdateGroupDescription(telephon.(string), groupID.(uint), body.Description, ctx); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Notificar a todos los miembros en tiempo real
+		telephons, err := h.service.GetMemberTelephons(groupID.(uint), ctx)
+		if err == nil {
+			changedByUsername, _ := h.service.GetUsernameByTelephon(telephon.(string), ctx)
+			h.notifyAllGroupMembers(telephons, "group_description_update", map[string]interface{}{
+				"groupID":           groupID.(uint),
+				"description":       body.Description,
+				"changedBy":         telephon.(string),
+				"changedByUsername": changedByUsername,
+			})
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{"description": body.Description})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PATCH /api/v1/group/:groupID/avatar
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -378,7 +422,60 @@ func (h *HandlerGroup) HandleUpdateGroupAvatar() gin.HandlerFunc {
 // DELETE /api/v1/group/:groupID/member
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/v1/group/:groupID/member/role
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleSetMemberRole promueve o degrada el rol de un miembro del grupo.
+// Solo los administradores pueden invocar este endpoint.
+// Emite el evento WS "group_role_changed" a todos los miembros del grupo.
+func (h *HandlerGroup) HandleSetMemberRole() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		data, exists3 := ctx.Get("groupSetRole")
+		if !exists || !exists2 || !exists3 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		roleData := data.(models.GroupSetRole)
+		if err := h.service.SetMemberRole(telephon.(string), groupID.(uint), roleData, ctx); err != nil {
+			status := http.StatusBadRequest
+			if err.Error() == "solo los administradores pueden cambiar roles" {
+				status = http.StatusForbidden
+			}
+			ctx.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Notificar en tiempo real a todos los miembros del grupo
+		telephons, err := h.service.GetMemberTelephons(groupID.(uint), ctx)
+		if err == nil && len(telephons) > 0 {
+			adminUsername, _ := h.service.GetUsernameByTelephon(telephon.(string), ctx)
+			targetUsername, _ := h.service.GetUsernameByTelephon(roleData.Number, ctx)
+			h.notifyAllGroupMembers(telephons, "group_role_changed", map[string]interface{}{
+				"groupID":           groupID.(uint),
+				"targetTelephon":    roleData.Number,
+				"targetUsername":    targetUsername,
+				"newRole":           roleData.Role,
+				"changedBy":         telephon.(string),
+				"changedByUsername": adminUsername,
+			})
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "rol actualizado correctamente",
+			"number":  roleData.Number,
+			"role":    roleData.Role,
+		})
+	}
+}
+
 // HandleLeaveGroup elimina la membresía del usuario autenticado en el grupo.
+// Si era el único admin y quedan otros miembros, el servicio auto-promueve al
+// miembro más antiguo; en ese caso este handler notifica el cambio de rol antes
+// de notificar la salida.
 func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exists := ctx.Get("telephon")
@@ -388,10 +485,10 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 			return
 		}
 
-		// Obtener el username antes de salir para incluirlo en la notificación
+		// Obtener username antes de salir para incluirlo en las notificaciones
 		username, _ := h.service.GetUsernameByTelephon(telephon.(string), ctx)
 
-		err := h.service.LeaveGroup(telephon.(string), groupID.(uint), ctx)
+		promotedTelephon, err := h.service.LeaveGroup(telephon.(string), groupID.(uint), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -400,6 +497,20 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 		// Notificar a los miembros restantes (el usuario ya no está en la lista)
 		telephons, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx)
 		if notifyErr == nil && len(telephons) > 0 {
+			// Si hubo auto-promoción, notificar el cambio de rol primero
+			if promotedTelephon != "" {
+				promotedUsername, _ := h.service.GetUsernameByTelephon(promotedTelephon, ctx)
+				h.notifyAllGroupMembers(telephons, "group_role_changed", map[string]interface{}{
+					"groupID":           groupID.(uint),
+					"targetTelephon":    promotedTelephon,
+					"targetUsername":    promotedUsername,
+					"newRole":           "admin",
+					"changedBy":         telephon.(string),
+					"changedByUsername": username,
+					"autoTransfer":      true,
+				})
+			}
+			// Notificar la salida del miembro
 			h.notifyAllGroupMembers(telephons, "group_member_left", map[string]interface{}{
 				"groupID":  groupID.(uint),
 				"telephon": telephon.(string),

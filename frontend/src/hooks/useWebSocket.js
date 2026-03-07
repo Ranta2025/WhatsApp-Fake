@@ -114,6 +114,14 @@ export function useWebSocket() {
         return wsManager.sendGroupJoin(groupID);
     }, []);
 
+    const sendGroupCallOffer = useCallback((groupID, roomID, callType) => {
+        return wsManager.sendGroupCallOffer(groupID, roomID, callType);
+    }, []);
+
+    const sendGroupCallEnd = useCallback((groupID, roomID) => {
+        return wsManager.sendGroupCallEnd(groupID, roomID);
+    }, []);
+
     // Cleanup de handlers al desmontar
     useEffect(() => {
         return () => {
@@ -139,6 +147,8 @@ export function useWebSocket() {
         sendCallAccept,
         sendCallReject,
         sendCallEnd,
+        sendGroupCallOffer,
+        sendGroupCallEnd,
         // Group
         sendGroupMessage,
         sendGroupTyping,

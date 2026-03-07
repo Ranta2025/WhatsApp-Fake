@@ -264,6 +264,77 @@ func (r *RepoGroup) LeaveGroup(groupID, userID uint, ctx context.Context) error 
 	return nil
 }
 
+// UpdateMemberRole actualiza el rol ("admin" | "member") de un miembro activo en un grupo.
+func (r *RepoGroup) UpdateMemberRole(groupID, userID uint, role string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	result := r.data.WithContext(c).
+		Model(&models.GroupMember{}).
+		Where("group_id = ? AND user_id = ? AND deleted_at IS NULL", groupID, userID).
+		Update("role", role)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("el usuario no es miembro activo del grupo")
+	}
+	return nil
+}
+
+// CountAdminMembers retorna cuántos miembros activos tienen rol "admin" en un grupo.
+// Usado para evitar dejar un grupo sin administradores.
+func (r *RepoGroup) CountAdminMembers(groupID uint, ctx context.Context) (int, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var count int64
+	err := r.data.WithContext(c).
+		Model(&models.GroupMember{}).
+		Where("group_id = ? AND role = ? AND deleted_at IS NULL", groupID, "admin").
+		Count(&count).Error
+	return int(count), err
+}
+
+// GetFirstActiveMember retorna el primer miembro activo del grupo excluyendo al usuario dado.
+// Usado para auto-promover un nuevo admin cuando el único admin sale del grupo.
+func (r *RepoGroup) GetFirstActiveMember(groupID, excludeUserID uint, ctx context.Context) (*models.GroupMember, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var member models.GroupMember
+	err := r.data.WithContext(c).
+		Where("group_id = ? AND user_id != ? AND deleted_at IS NULL", groupID, excludeUserID).
+		Order("created_at ASC").
+		First(&member).Error
+	if err != nil {
+		return nil, err
+	}
+	return &member, nil
+}
+
+// DeleteGroup elimina de forma definitiva el grupo, sus membresías y sus mensajes.
+// Se llama cuando el último miembro sale del grupo.
+func (r *RepoGroup) DeleteGroup(groupID uint, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		tx.Unscoped().Where("group_id = ?", groupID).Delete(&models.GroupMember{})
+		tx.Unscoped().Where("group_id = ?", groupID).Delete(&models.GroupMessage{})
+		return tx.Unscoped().Delete(&models.Group{}, groupID).Error
+	})
+}
+
+// UpdateGroupDescription actualiza la descripción del grupo.
+func (r *RepoGroup) UpdateGroupDescription(groupID uint, description string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return r.data.WithContext(c).Model(&models.Group{}).Where("id = ?", groupID).
+		Update("description", description).Error
+}
+
 // UpdateGroupAvatar actualiza la URL del avatar del grupo.
 func (r *RepoGroup) UpdateGroupAvatar(groupID uint, avatarUrl string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)

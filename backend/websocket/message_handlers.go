@@ -550,6 +550,103 @@ func (mh *MessageHandler) HandleGroupJoin() {
 	log.Printf("[WS-GROUP] %s is NOT a member of group %d — join denied", mh.Client.Telephon, payload.GroupID)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Handlers de llamadas grupales
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleGroupCallOffer inicia una llamada grupal: crea los call-logs y envía
+// "incoming_call" a todos los miembros conectados del grupo (excepto el caller).
+func (mh *MessageHandler) HandleGroupCallOffer() {
+	var callOffer models.GroupCallOffer
+	if err := json.Unmarshal(mh.Payload, &callOffer); err != nil {
+		log.Println("[WS-GROUP-CALL] Error al deserializar group_call_offer:", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Obtener miembros del grupo
+	memberTelephons, err := mh.Client.ServiceGroup.GetMemberTelephons(callOffer.GroupID, ctx)
+	if err != nil {
+		log.Printf("[WS-GROUP-CALL] Error obteniendo miembros del grupo %d: %v", callOffer.GroupID, err)
+		mh.sendError("Error al iniciar llamada grupal")
+		return
+	}
+
+	// Obtener nombre del grupo para los call-logs y la notificación
+	groupName := ""
+	if detail, err := mh.Client.ServiceGroup.GetGroupDetail(mh.Client.Telephon, callOffer.GroupID, ctx); err == nil && detail != nil {
+		groupName = detail.Name
+	}
+
+	// Registrar un CallLog por cada miembro (excepto el caller)
+	if mh.Client.ServiceCall != nil {
+		if err := mh.Client.ServiceCall.CreateGroupCallLogs(
+			mh.Client.Telephon, memberTelephons,
+			callOffer.GroupID, groupName,
+			callOffer.RoomID, callOffer.CallType, ctx,
+		); err != nil {
+			log.Printf("[WS-GROUP-CALL] Error registrando logs de llamada grupal: %v", err)
+		}
+	}
+
+	// Notificar a todos los miembros conectados (excepto el caller)
+	notificationBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "incoming_call",
+		"payload": map[string]interface{}{
+			"from":      mh.Client.Telephon,
+			"username":  mh.Client.Username,
+			"roomID":    callOffer.RoomID,
+			"callType":  callOffer.CallType,
+			"groupID":   callOffer.GroupID,
+			"groupName": groupName,
+		},
+	})
+
+	for _, memberTelephon := range memberTelephons {
+		if memberTelephon == mh.Client.Telephon {
+			continue
+		}
+		if _, connected := mh.Hub.GetClient(memberTelephon); connected {
+			mh.Hub.SendTo(memberTelephon, notificationBytes)
+		}
+	}
+
+	log.Printf("[WS-GROUP-CALL] Llamada grupal iniciada por %s en grupo %d (sala: %s, tipo: %s)",
+		mh.Client.Telephon, callOffer.GroupID, callOffer.RoomID, callOffer.CallType)
+}
+
+// HandleGroupCallEnd finaliza una llamada grupal: actualiza el call-log y
+// notifica a todos los miembros del grupo (excepto quien la terminó).
+func (mh *MessageHandler) HandleGroupCallEnd() {
+	var callEnd models.GroupCallEnd
+	if err := json.Unmarshal(mh.Payload, &callEnd); err != nil {
+		log.Println("[WS-GROUP-CALL] Error al deserializar group_call_end:", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	if mh.Client.ServiceCall != nil {
+		if err := mh.Client.ServiceCall.MarkCallEnded(callEnd.RoomID, ctx); err != nil {
+			log.Printf("[WS-GROUP-CALL] Error marcando llamada como finalizada: %v", err)
+		}
+	}
+
+	// Notificar a todos en la room (excepto quien terminó la llamada)
+	notificationBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "call_ended",
+		"payload": map[string]interface{}{
+			"from":    mh.Client.Telephon,
+			"roomID":  callEnd.RoomID,
+			"groupID": callEnd.GroupID,
+		},
+	})
+	mh.Hub.SendToGroup(callEnd.GroupID, mh.Client.Telephon, notificationBytes)
+
+	log.Printf("[WS-GROUP-CALL] Llamada grupal finalizada por %s en grupo %d", mh.Client.Telephon, callEnd.GroupID)
+}
+
 // sendError es un helper para enviar mensajes de error al cliente WebSocket.
 func (mh *MessageHandler) sendError(msg string) {
 	errorMsg, _ := json.Marshal(map[string]interface{}{

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
@@ -17,13 +17,13 @@ export default function UnblockAccount() {
     const location = useLocation();
 
     // Si viene desde el login con email pre-cargado
-    const preloadedEmail = location.state?.gmail || '';
+    const preloadedEmail = location.state?.gmail || location.state?.email || '';
 
-    useState(() => {
+    useEffect(() => {
         if (preloadedEmail) {
             setGmail(preloadedEmail);
         }
-    }, []);
+    }, [preloadedEmail]);
 
     // STEP 1: Solicitar código de desbloqueo
     const handleStep1 = async (e) => {

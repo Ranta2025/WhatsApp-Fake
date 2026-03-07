@@ -3,6 +3,8 @@ import { useDashboard } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
+import MediaUploadMenu from '../../../components/MediaUploadMenu';
+import AudioPlayer from '../../../components/AudioPlayer';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -26,37 +28,64 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
     }, [menuOpen, setMenuOpen]);
 
     const renderMedia = () => {
-        if (!msg.MediaType) return null;
-        const url = msg.MediaUrl || msg.Message;
-        if (msg.MediaType === 'image') {
-            return (
-                <img
-                    src={url}
-                    alt="imagen"
-                    className="max-w-[260px] rounded-xl mt-1 cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => window.open(url, '_blank')}
-                />
-            );
+        let mediaType = msg.MediaType;
+        let mediaUrl  = msg.MediaUrl;
+        const text    = msg.Message || '';
+
+        // Fallback: infer type from URL path if MediaType is missing
+        if (!mediaType && text.includes('/media/')) {
+            mediaUrl = text;
+            if (text.includes('/audio/'))  mediaType = 'audio';
+            else if (text.includes('/images/')) mediaType = 'image';
+            else if (text.includes('/videos/')) mediaType = 'video';
+            else if (text.includes('/docs/'))   mediaType = 'document';
         }
-        if (msg.MediaType === 'audio') {
-            return <audio controls src={url} className="mt-1 w-full max-w-[260px]" />;
+
+        if (!mediaType || !mediaUrl) return null;
+
+        switch (mediaType) {
+            case 'image':
+                return (
+                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
+                        <img
+                            src={mediaUrl}
+                            alt="Imagen adjunta"
+                            loading="lazy"
+                            className="w-full h-auto object-cover max-h-80 cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open(mediaUrl, '_blank')}
+                        />
+                    </div>
+                );
+            case 'video':
+                return (
+                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
+                        <video src={mediaUrl} controls className="w-full max-h-80 bg-black/20" />
+                    </div>
+                );
+            case 'audio':
+                return (
+                    <div className="mb-1 w-full min-w-[240px]">
+                        <AudioPlayer src={mediaUrl} isMine={isMine} />
+                    </div>
+                );
+            case 'document':
+                return (
+                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer"
+                       className="mb-2 flex items-center gap-3 p-3 bg-black/20 hover:bg-black/30 rounded-xl transition-all border border-white/5 group">
+                        <div className="w-11 h-11 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold text-white truncate">Documento</div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300/60">Clic para descargar</div>
+                        </div>
+                    </a>
+                );
+            default:
+                return null;
         }
-        if (msg.MediaType === 'video') {
-            return (
-                <video controls src={url} className="mt-1 max-w-[260px] rounded-xl" />
-            );
-        }
-        // document or other
-        return (
-            <a href={url} target="_blank" rel="noopener noreferrer"
-               className="mt-1 flex items-center gap-2 text-indigo-400 hover:underline text-sm">
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-                Documento adjunto
-            </a>
-        );
     };
 
     const isMenuOpen = menuOpen === msg.MessageID;
@@ -90,7 +119,7 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
                     {renderMedia()}
 
                     {/* Text (always show unless it's a pure media URL) */}
-                    {msg.Message && !(msg.MediaType && msg.Message === msg.MediaUrl) && (
+                    {msg.Message && !(msg.MediaType && (msg.Message === msg.MediaUrl || msg.Message.startsWith('http'))) && (
                         <span>{msg.Message}</span>
                     )}
 
@@ -168,16 +197,24 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
 // ── GroupMessageInput ─────────────────────────────────────────────────────────
 
 const GroupMessageInput = () => {
-    const [text, setText] = useState('');
-    const inputRef = useRef(null);
+    const [text, setText]                     = useState('');
+    const [showAttachMenu, setShowAttachMenu] = useState(false);
+    const [isRecording, setIsRecording]       = useState(false);
+    const [recordingTime, setRecordingTime]   = useState(0);
+    const inputRef          = useRef(null);
+    const mediaRecorderRef  = useRef(null);
+    const audioChunksRef    = useRef([]);
+    const recordingTimerRef = useRef(null);
+
     const {
         handleSend, handleTyping,
         editingMessageId, editingMessageText, handleEditMessageChange,
         handleEditMessageSave, handleEditMessageCancel,
         replyingTo, cancelReply,
+        handleMediaUploadSuccess,
     } = useGroupMessaging();
 
-    const { isConnected, selectedGroup } = useDashboard();
+    const { isConnected, selectedGroup, addToast } = useDashboard();
 
     // If the user has left the group, show a read-only banner
     if (selectedGroup?.UserRole === 'left') {
@@ -191,6 +228,76 @@ const GroupMessageInput = () => {
         );
     }
 
+    // ── Voice recording ───────────────────────────────────────────────────────
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'voice_note.webm');
+                try {
+                    const response = await api.post('/api/v1/upload', formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                    });
+                    if (response.data && response.data.url) {
+                        handleMediaUploadSuccess(response.data.url, 'audio');
+                    }
+                } catch (error) {
+                    console.error('Error uploading voice note:', error);
+                    addToast({ type: 'error', message: 'Error al enviar nota de voz' });
+                }
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+            setRecordingTime(0);
+            recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+        } catch (err) {
+            console.error('Error accessing microphone:', err);
+            addToast({ type: 'error', message: 'No se pudo acceder al micrófono.' });
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.onstop = mediaRecorderRef.current.onstop; // keep upload handler
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            clearInterval(recordingTimerRef.current);
+            setRecordingTime(0);
+        }
+    };
+
+    const cancelRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            // Overwrite onstop so no upload happens
+            mediaRecorderRef.current.onstop = () => {
+                mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+            };
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            clearInterval(recordingTimerRef.current);
+            setRecordingTime(0);
+        }
+    };
+
+    const formatRecordingTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // ── Text send ─────────────────────────────────────────────────────────────
     const onSend = () => {
         if (!text.trim()) return;
         handleSend(text.trim());
@@ -212,11 +319,12 @@ const GroupMessageInput = () => {
         }
     };
 
-    // Switch between edit mode and regular mode
-    const inputValue   = editingMessageId ? editingMessageText : text;
+    const inputValue    = editingMessageId ? editingMessageText : text;
     const inputOnChange = editingMessageId
         ? handleEditMessageChange
         : (e) => { setText(e.target.value); handleTyping(); };
+
+    const hasText = editingMessageId ? editingMessageText.trim() : text.trim();
 
     return (
         <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md">
@@ -254,37 +362,95 @@ const GroupMessageInput = () => {
 
             {/* Input row */}
             <div className="flex items-end gap-2 px-3 py-3">
-                <textarea
-                    ref={inputRef}
-                    rows={1}
-                    value={inputValue}
-                    onChange={inputOnChange}
-                    onKeyDown={onKeyDown}
-                    disabled={!isConnected}
-                    placeholder={isConnected ? 'Escribe un mensaje en el grupo...' : 'Sin conexión...'}
-                    className="flex-1 resize-none bg-slate-800 border border-white/10 rounded-2xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto transition-all"
-                    style={{ height: 'auto', minHeight: '42px' }}
-                    onInput={e => {
-                        e.target.style.height = 'auto';
-                        e.target.style.height = Math.min(e.target.scrollHeight, 144) + 'px';
-                    }}
-                />
-                <button
-                    onClick={editingMessageId ? handleEditMessageSave : onSend}
-                    disabled={!isConnected || !(editingMessageId ? editingMessageText.trim() : text.trim())}
-                    className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg"
-                    aria-label="Enviar"
-                >
-                    {editingMessageId ? (
+                {/* Attach button */}
+                <div className="relative flex-shrink-0">
+                    <button
+                        onClick={() => setShowAttachMenu(v => !v)}
+                        disabled={!isConnected || isRecording}
+                        className="p-2.5 text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Adjuntar archivo"
+                    >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                         </svg>
-                    ) : (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                        </svg>
+                    </button>
+                    {showAttachMenu && (
+                        <MediaUploadMenu
+                            onUploadSuccess={(url, type) => { handleMediaUploadSuccess(url, type); setShowAttachMenu(false); }}
+                            onUploadError={(err) => { addToast({ type: 'error', message: err }); setShowAttachMenu(false); }}
+                            onClose={() => setShowAttachMenu(false)}
+                        />
                     )}
-                </button>
+                </div>
+
+                {/* Text area / recording indicator */}
+                <div className="flex-1 relative bg-slate-800 rounded-2xl border border-white/10 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                    {isRecording ? (
+                        <div className="flex items-center justify-between px-4 h-[42px] text-red-400">
+                            <div className="flex items-center gap-3">
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                                <span className="font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
+                            </div>
+                            <button onClick={cancelRecording} className="text-red-400 hover:text-red-300 text-sm font-medium">
+                                Cancelar
+                            </button>
+                        </div>
+                    ) : (
+                        <textarea
+                            ref={inputRef}
+                            rows={1}
+                            value={inputValue}
+                            onChange={inputOnChange}
+                            onKeyDown={onKeyDown}
+                            disabled={!isConnected}
+                            placeholder={isConnected ? 'Escribe un mensaje en el grupo...' : 'Sin conexión...'}
+                            className="w-full resize-none bg-transparent px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto"
+                            style={{ minHeight: '42px' }}
+                            onInput={e => {
+                                e.target.style.height = 'auto';
+                                e.target.style.height = Math.min(e.target.scrollHeight, 144) + 'px';
+                            }}
+                        />
+                    )}
+                </div>
+
+                {/* Send / confirm-edit / mic button */}
+                {hasText || editingMessageId ? (
+                    <button
+                        onClick={editingMessageId ? handleEditMessageSave : onSend}
+                        disabled={!isConnected || !hasText}
+                        className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg"
+                        aria-label={editingMessageId ? 'Confirmar edición' : 'Enviar'}
+                    >
+                        {editingMessageId ? (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                        ) : (
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                            </svg>
+                        )}
+                    </button>
+                ) : (
+                    <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        disabled={!isConnected}
+                        className={`p-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg ${isRecording ? 'bg-red-500 hover:bg-red-400' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500'}`}
+                        aria-label={isRecording ? 'Detener grabación' : 'Grabar audio'}
+                    >
+                        {isRecording ? (
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path fillRule="evenodd" d="M4.5 7.5a3 3 0 013-3h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9z" clipRule="evenodd" />
+                            </svg>
+                        ) : (
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2a1 1 0 0 0-2 0v2a9 9 0 0 0 8 8.94V21H8a1 1 0 0 0 0 2h8a1 1 0 0 0 0-2h-3v-2.06A9 9 0 0 0 21 12v-2a1 1 0 0 0-2 0z" />
+                            </svg>
+                        )}
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -437,7 +603,7 @@ const AddMembersModal = ({ isOpen, onClose, group }) => {
 
 // ── GroupChatWindow (inner — needs GroupMessagingProvider) ────────────────────
 
-const GroupChatWindowInner = () => {
+const GroupChatWindowInner = ({ onStartGroupCall }) => {
     const {
         selectedGroup, setSelectedGroup,
         groupMessages, setGroupMessages, fetchGroupMessages, fetchGroupDetail,
@@ -462,6 +628,11 @@ const GroupChatWindowInner = () => {
     const [showAvatarMenu, setShowAvatarMenu]     = useState(false);
     const [viewAvatarOpen, setViewAvatarOpen]     = useState(false);
     const [memberMenuOpen, setMemberMenuOpen]     = useState(null);
+    const [roleLoading, setRoleLoading]           = useState(null); // telephon currently being role-updated
+    const [editingDesc, setEditingDesc]           = useState(false);
+    const [descInput, setDescInput]               = useState('');
+    const [savingDesc, setSavingDesc]             = useState(false);
+    const [descError, setDescError]               = useState('');
     const [addContactOpen, setAddContactOpen]     = useState(false);
     const [addContactTarget, setAddContactTarget] = useState({ number: '', username: '' });
     const optionsRef                               = useRef(null);
@@ -563,6 +734,50 @@ const GroupChatWindowInner = () => {
         } finally {
             setLoadingLeave(false);
             setConfirmLeave(false);
+        }
+    };
+
+    const handleSaveDesc = async () => {
+        setSavingDesc(true);
+        setDescError('');
+        try {
+            const { updateGroupDescription } = await import('../../../api/groupApi');
+            await updateGroupDescription(selectedGroup.ID, descInput.trim());
+            const gid     = selectedGroup.ID;
+            const newDesc = descInput.trim();
+            // Optimistic update — WS broadcast arrives shortly for other members
+            setGroups(prev => prev.map(g => g.ID === gid ? { ...g, Description: newDesc } : g));
+            setSelectedGroup(prev => prev ? { ...prev, Description: newDesc } : prev);
+            setEditingDesc(false);
+            addToast({ type: 'success', message: 'Descripción actualizada' });
+        } catch (err) {
+            setDescError(err?.response?.data?.error || 'Error al guardar la descripción');
+        } finally {
+            setSavingDesc(false);
+        }
+    };
+
+    const handleSetRole = async (targetTelephon, newRole) => {
+        setRoleLoading(targetTelephon);
+        try {
+            const { setMemberRole } = await import('../../../api/groupApi');
+            await setMemberRole(selectedGroup.ID, targetTelephon, newRole);
+            // Optimistic local update — WS broadcast will arrive shortly too
+            setSelectedGroup(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    Members: (prev.Members || []).map(m =>
+                        m.Telephon === targetTelephon ? { ...m, Role: newRole } : m
+                    ),
+                };
+            });
+            addToast({ type: 'success', message: newRole === 'admin' ? 'Ahora es administrador' : 'Ya no es administrador' });
+        } catch (err) {
+            addToast({ type: 'error', message: err?.response?.data?.error || 'Error al cambiar el rol' });
+        } finally {
+            setRoleLoading(null);
+            setMemberMenuOpen(null);
         }
     };
 
@@ -679,6 +894,31 @@ const GroupChatWindowInner = () => {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
+                    {/* Voice call */}
+                    {selectedGroup?.UserRole !== 'left' && (
+                        <>
+                            <button
+                                onClick={() => onStartGroupCall?.('audio')}
+                                disabled={!isConnected}
+                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white disabled:opacity-40"
+                                title="Llamada de voz grupal"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => onStartGroupCall?.('video')}
+                                disabled={!isConnected}
+                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white disabled:opacity-40"
+                                title="Videollamada grupal"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.362a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                            </button>
+                        </>
+                    )}
                     {/* More options kebab */}
                     <div className="relative" ref={optionsRef}>
                         <button onClick={() => setShowOptions(v => !v)}
@@ -805,9 +1045,66 @@ const GroupChatWindowInner = () => {
                                     />
                                 </div>
                                 <h2 className="text-xl font-bold text-white text-center">{selectedGroup.Name}</h2>
-                                {selectedGroup.Description && (
-                                    <p className="text-sm text-slate-400 text-center mt-1 max-w-xs">{selectedGroup.Description}</p>
+
+                                {/* ── Description (WhatsApp-style inline edit) ── */}
+                                {editingDesc ? (
+                                    <div className="w-full max-w-xs mt-3">
+                                        <textarea
+                                            rows={2}
+                                            maxLength={300}
+                                            autoFocus
+                                            value={descInput}
+                                            onChange={e => setDescInput(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Escape') { setEditingDesc(false); setDescError(''); } }}
+                                            className="w-full bg-slate-800 text-sm text-slate-200 rounded-xl px-3 py-2 border border-indigo-500/50 focus:outline-none focus:border-indigo-400 resize-none placeholder-slate-500"
+                                            placeholder="Descripción del grupo..."
+                                        />
+                                        <div className="text-right text-[10px] text-slate-600 mt-0.5 pr-1">{descInput.length}/300</div>
+                                        {descError && <p className="text-xs text-red-400 mt-1 text-center">{descError}</p>}
+                                        <div className="flex justify-center gap-2 mt-2">
+                                            <button
+                                                onClick={() => { setEditingDesc(false); setDescError(''); }}
+                                                className="px-3 py-1.5 text-xs rounded-lg bg-white/10 text-slate-300 hover:bg-white/20 transition-colors">
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                disabled={savingDesc}
+                                                onClick={handleSaveDesc}
+                                                className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+                                                {savingDesc ? 'Guardando...' : 'Guardar'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 text-center max-w-xs w-full px-2">
+                                        {selectedGroup.Description ? (
+                                            <div
+                                                onClick={() => selectedGroup.UserRole !== 'left' && (setDescInput(selectedGroup.Description), setEditingDesc(true))}
+                                                className={`group/desc flex items-start justify-center gap-1.5 ${selectedGroup.UserRole !== 'left' ? 'cursor-pointer' : ''}`}>
+                                                <p className={`text-sm text-slate-400 leading-relaxed ${selectedGroup.UserRole !== 'left' ? 'group-hover/desc:text-slate-300 transition-colors' : ''}`}>
+                                                    {selectedGroup.Description}
+                                                </p>
+                                                {selectedGroup.UserRole !== 'left' && (
+                                                    <svg className="w-3.5 h-3.5 text-indigo-400/50 group-hover/desc:text-indigo-400 transition-colors flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            selectedGroup.UserRole !== 'left' && (
+                                                <button
+                                                    onClick={() => { setDescInput(''); setEditingDesc(true); }}
+                                                    className="flex items-center gap-1.5 mx-auto text-xs text-indigo-400/60 hover:text-indigo-400 transition-colors">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                    </svg>
+                                                    Añadir descripción
+                                                </button>
+                                            )
+                                        )}
+                                    </div>
                                 )}
+
                                 <p className="text-xs text-slate-500 mt-2">
                                     Grupo · {selectedGroup.MemberCount ?? (selectedGroup.Members?.length ?? '?')} participantes
                                 </p>
@@ -928,6 +1225,32 @@ const GroupChatWindowInner = () => {
                                                                 </svg>
                                                                 Agregar a contactos
                                                             </button>
+                                                        )}
+                                                        {myRole === 'admin' && !isSelf && (
+                                                            <>
+                                                                <div className="border-t border-white/5 my-1" />
+                                                                {m.Role !== 'admin' ? (
+                                                                    <button
+                                                                        disabled={roleLoading === m.Telephon}
+                                                                        onClick={() => handleSetRole(m.Telephon, 'admin')}
+                                                                        className="w-full text-left px-4 py-2.5 text-sm text-indigo-400 hover:bg-indigo-500/10 flex items-center gap-2 disabled:opacity-50 transition-colors">
+                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                                                        </svg>
+                                                                        {roleLoading === m.Telephon ? 'Guardando...' : 'Hacer admin'}
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        disabled={roleLoading === m.Telephon}
+                                                                        onClick={() => handleSetRole(m.Telephon, 'member')}
+                                                                        className="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 disabled:opacity-50 transition-colors">
+                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                        </svg>
+                                                                        {roleLoading === m.Telephon ? 'Guardando...' : 'Quitar admin'}
+                                                                    </button>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </div>
                                                 )}
@@ -1115,10 +1438,10 @@ const GroupChatWindowInner = () => {
 
 // ── Public export: wrap with providers ───────────────────────────────────────
 
-const GroupChatWindow = () => {
+const GroupChatWindow = ({ onStartGroupCall }) => {
     return (
         <GroupMessagingProvider>
-            <GroupChatWindowInner />
+            <GroupChatWindowInner onStartGroupCall={onStartGroupCall} />
         </GroupMessagingProvider>
     );
 };

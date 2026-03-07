@@ -11,6 +11,7 @@ import CreateGroupModal from './components/CreateGroupModal';
 import PermissionsDialog from '../../components/PermissionsDialog';
 import IncomingCall from '../../components/IncomingCall';
 import CallRoom from '../../components/CallRoom';
+import LoadingScreen from '../../components/LoadingScreen';
 import { usePresence } from './hooks/usePresence';
 import { useCalls } from './hooks/useCalls';
 
@@ -126,13 +127,14 @@ const DashboardContent = () => {
     usePresence();
     const { 
         callState, incomingCall, handleAcceptIncomingCall, 
-        handleRejectIncomingCall, handleEndCall, handleStartCall 
+        handleRejectIncomingCall, handleEndCall, handleStartCall, handleStartGroupCall
     } = useCalls();
 
     const { 
         profile, user, isConnected, notifPermission, setNotifPermission, 
         requestNotificationPermission,
         selectedGroup,
+        dataReady, loadingSteps,
     } = useDashboard();
 
     const [showProfileModal, setShowProfileModal] = useState(false);
@@ -142,24 +144,26 @@ const DashboardContent = () => {
     const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
     const [viewImage, setViewImage] = useState(null);
 
-    // Loading Screen logic (optional, can be integrated in DashboardProvider or here)
-    const isInitialLoading = !profile;
+    // Keep loading screen mounted for fade-out transition
+    const [showLoader, setShowLoader] = useState(true);
+    const [loaderFading, setLoaderFading] = useState(false);
+    useEffect(() => {
+        if (dataReady && showLoader) {
+            setLoaderFading(true);
+            const t = setTimeout(() => setShowLoader(false), 500);
+            return () => clearTimeout(t);
+        }
+    }, [dataReady, showLoader]);
 
     return (
         <div className="flex h-screen bg-slate-950 text-white overflow-hidden relative" style={{height: '100dvh'}}>
-            {/* Pantalla de carga estilo WhatsApp Web */}
-            {isInitialLoading && (
-                <div className="absolute inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950">
-                    <div className="flex flex-col items-center gap-6 animate-fade-in">
-                        <div className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center shadow-2xl shadow-indigo-500/30">
-                            <img src="/todos.svg" alt="todos" className="w-14 h-14" />
-                        </div>
-                        <h1 className="text-3xl font-bold text-white tracking-wide">todos</h1>
-                        <div className="w-56 h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
-                            <div className="h-full bg-indigo-500 rounded-full animate-loading-bar"></div>
-                        </div>
-                        <p className="text-slate-400 text-sm mt-1">Cargando aplicación...</p>
-                    </div>
+            {/* Pantalla de carga moderna */}
+            {showLoader && (
+                <div
+                    className="absolute inset-0 z-[99999] transition-opacity duration-500"
+                    style={{ opacity: loaderFading ? 0 : 1, pointerEvents: loaderFading ? 'none' : 'auto' }}
+                >
+                    <LoadingScreen loadingSteps={loadingSteps} />
                 </div>
             )}
 
@@ -172,7 +176,7 @@ const DashboardContent = () => {
             
             {/* Render the group chat window when a group is selected, 1-to-1 chat otherwise */}
             {selectedGroup ? (
-                <GroupChatWindow />
+                <GroupChatWindow onStartGroupCall={handleStartGroupCall} />
             ) : (
                 <ChatWindow 
                     onShowContactDetails={() => setShowContactDetails(true)} 
@@ -248,6 +252,7 @@ const DashboardContent = () => {
                     callerName={incomingCall.username} 
                     callerNumber={incomingCall.from} 
                     callType={incomingCall.callType}
+                    groupName={incomingCall.groupName}
                     onAccept={handleAcceptIncomingCall}
                     onReject={handleRejectIncomingCall}
                 />

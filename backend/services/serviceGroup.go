@@ -23,9 +23,14 @@ type GroupServicer interface {
 	EditGroupMessage(telephon string, groupID uint, data models.GroupMessageEdit, ctx context.Context) (*schemas.GroupMessageResponse, error)
 	DeleteGroupMessage(telephon string, groupID uint, data models.GroupMessageDelete, ctx context.Context) error
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
-	LeaveGroup(telephon string, groupID uint, ctx context.Context) error
+	// LeaveGroup sale del grupo; devuelve el telephon del miembro auto-promovido si aplica.
+	LeaveGroup(telephon string, groupID uint, ctx context.Context) (string, error)
 	UpdateGroupAvatar(telephon string, groupID uint, avatarUrl string, ctx context.Context) error
 	GetUsernameByTelephon(telephon string, ctx context.Context) (string, error)
+	// SetMemberRole promueve o degrada a un miembro. Solo admins pueden llamarlo.
+	SetMemberRole(telephonAdmin string, groupID uint, data models.GroupSetRole, ctx context.Context) error
+	// UpdateGroupDescription actualiza la descripción del grupo. Solo admins.
+	UpdateGroupDescription(telephon string, groupID uint, description string, ctx context.Context) error
 }
 
 // GroupRepoInterface define las operaciones de persistencia que necesita el servicio.
@@ -46,6 +51,11 @@ type GroupRepoInterface interface {
 	DeleteGroupMessage(messageID, senderID uint, ctx context.Context) error
 	LeaveGroup(groupID, userID uint, ctx context.Context) error
 	UpdateGroupAvatar(groupID uint, avatarUrl string, ctx context.Context) error
+	UpdateMemberRole(groupID, userID uint, role string, ctx context.Context) error
+	CountAdminMembers(groupID uint, ctx context.Context) (int, error)
+	GetFirstActiveMember(groupID, excludeUserID uint, ctx context.Context) (*models.GroupMember, error)
+	DeleteGroup(groupID uint, ctx context.Context) error
+	UpdateGroupDescription(groupID uint, description string, ctx context.Context) error
 }
 
 // GroupContactRepoInterface es el subconjunto del repo de contactos que necesita
@@ -56,10 +66,6 @@ type GroupContactRepoInterface interface {
 	IsAcceptedContact(userID, contactID uint, ctx context.Context) (bool, error)
 	GetUsernameByTelephon(telephon string, ctx context.Context) (string, error)
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Implementación
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ServiceGroup contiene la lógica de negocio del dominio de grupos.
 type ServiceGroup struct {
@@ -427,20 +433,63 @@ func groupMessageToSchema(m *models.GroupMessage, senderTelephon, senderUsername
 	}
 }
 
-// LeaveGroup elimina al usuario de la membresía del grupo.
-func (s *ServiceGroup) LeaveGroup(telephon string, groupID uint, ctx context.Context) error {
+// LeaveGroup saca al usuario del grupo con las siguientes reglas:
+//  1. Si es el último miembro, elimina el grupo completo.
+//  2. Si es el único admin y quedan otros miembros, auto-promueve al miembro más antiguo.
+//
+// Devuelve el telephon del miembro auto-promovido (vacío si no hubo promoción).
+func (s *ServiceGroup) LeaveGroup(telephon string, groupID uint, ctx context.Context) (string, error) {
 	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
-		return errors.New("usuario no encontrado")
+		return "", errors.New("usuario no encontrado")
 	}
 	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !isMember {
-		return errors.New("no eres miembro de este grupo")
+		return "", errors.New("no eres miembro de este grupo")
 	}
-	return s.repo.LeaveGroup(groupID, uint(userID), ctx)
+
+	// Verificar cuántos miembros activos hay en total
+	memberCount, err := s.repo.GetMemberCount(groupID, ctx)
+	if err != nil {
+		return "", err
+	}
+	if memberCount <= 1 {
+		// Último miembro: eliminar el grupo completo
+		_ = s.repo.DeleteGroup(groupID, ctx)
+		return "", nil
+	}
+
+	// Quedan otros miembros — comprobar si el que sale es el único admin
+	var promotedTelephon string
+	myRole, err := s.repo.GetMemberRole(groupID, uint(userID), ctx)
+	if err != nil {
+		return "", err
+	}
+	if myRole == "admin" {
+		adminCount, err := s.repo.CountAdminMembers(groupID, ctx)
+		if err != nil {
+			return "", err
+		}
+		if adminCount <= 1 {
+			// Único admin saliendo — auto-promover al miembro más antiguo
+			newAdmin, err := s.repo.GetFirstActiveMember(groupID, uint(userID), ctx)
+			if err != nil {
+				return "", errors.New("error al transferir la administración del grupo")
+			}
+			if err := s.repo.UpdateMemberRole(groupID, newAdmin.UserID, "admin", ctx); err != nil {
+				return "", errors.New("error al promover al nuevo administrador")
+			}
+			promotedTelephon, _ = s.contactRepo.GetTelephonByID(newAdmin.UserID, ctx)
+		}
+	}
+
+	if err := s.repo.LeaveGroup(groupID, uint(userID), ctx); err != nil {
+		return "", err
+	}
+	return promotedTelephon, nil
 }
 
 // UpdateGroupAvatar actualiza el avatar del grupo verificando que el usuario sea miembro.
@@ -462,4 +511,81 @@ func (s *ServiceGroup) UpdateGroupAvatar(telephon string, groupID uint, avatarUr
 // GetUsernameByTelephon retorna el username de un usuario por su número de teléfono.
 func (s *ServiceGroup) GetUsernameByTelephon(telephon string, ctx context.Context) (string, error) {
 	return s.contactRepo.GetUsernameByTelephon(telephon, ctx)
+}
+
+// UpdateGroupDescription actualiza la descripción del grupo. Cualquier miembro activo puede hacerlo.
+func (s *ServiceGroup) UpdateGroupDescription(telephon string, groupID uint, description string, ctx context.Context) error {
+	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
+	if err != nil {
+		return errors.New("usuario no encontrado")
+	}
+	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return errors.New("no eres miembro de este grupo")
+	}
+	return s.repo.UpdateGroupDescription(groupID, description, ctx)
+}
+
+// SetMemberRole promueve o degrada el rol de un miembro del grupo.
+// Reglas de negocio:
+//  1. Solo un admin activo puede ejecutar esta operación.
+//  2. Un admin no puede cambiar su propio rol.
+//  3. No se puede degradar al último admin del grupo.
+func (s *ServiceGroup) SetMemberRole(telephonAdmin string, groupID uint, data models.GroupSetRole, ctx context.Context) error {
+	// 1. Resolver ID del admin
+	adminID, err := s.contactRepo.GetIdByTelephon(telephonAdmin, ctx)
+	if err != nil {
+		return errors.New("usuario no encontrado")
+	}
+
+	// 2. Verificar que el solicitante es admin del grupo
+	requesterRole, err := s.repo.GetMemberRole(groupID, uint(adminID), ctx)
+	if err != nil {
+		return errors.New("no eres miembro de este grupo")
+	}
+	if requesterRole != "admin" {
+		return errors.New("solo los administradores pueden cambiar roles")
+	}
+
+	// 3. Resolver ID del miembro objetivo
+	targetID, err := s.contactRepo.GetIdByTelephon(data.Number, ctx)
+	if err != nil {
+		return errors.New("el usuario objetivo no fue encontrado")
+	}
+
+	// 4. No se puede cambiar el propio rol
+	if uint(adminID) == uint(targetID) {
+		return errors.New("no puedes cambiar tu propio rol")
+	}
+
+	// 5. El objetivo debe ser miembro activo
+	isMember, err := s.repo.IsMember(groupID, uint(targetID), ctx)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return errors.New("el usuario no es miembro del grupo")
+	}
+
+	// 6. Si se degrada a "member", garantizar que no sea el último admin
+	if data.Role == "member" {
+		currentRole, err := s.repo.GetMemberRole(groupID, uint(targetID), ctx)
+		if err != nil {
+			return err
+		}
+		if currentRole == "admin" {
+			count, err := s.repo.CountAdminMembers(groupID, ctx)
+			if err != nil {
+				return err
+			}
+			if count <= 1 {
+				return errors.New("no puedes degradar al único administrador del grupo")
+			}
+		}
+	}
+
+	return s.repo.UpdateMemberRole(groupID, uint(targetID), data.Role, ctx)
 }

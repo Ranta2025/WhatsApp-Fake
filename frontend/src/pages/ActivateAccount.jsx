@@ -75,7 +75,7 @@ export default function ActivateAccount() {
 
         setResendLoading(true);
         try {
-            await api.post('/recover', {
+            await api.post('/activate-cuenta', {
                 username: username
             });
             setResendSuccess(true);

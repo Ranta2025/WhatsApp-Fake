@@ -55,6 +55,7 @@ func main() {
 	serviceGroup := services.InitServiceGroup(repoGroup, repo)
 	handlerGroup := handlers.InitHandlerGroup(serviceGroup, hub)
 
+	middleware.InitRateLimiter(rd)
 	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall, handlerMedia, handlerGroup, serviceGroup)
 
 	app.Welcome()

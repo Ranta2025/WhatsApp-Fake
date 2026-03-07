@@ -8,8 +8,8 @@ import { useDashboard } from '../context/DashboardContext';
  * Implementa reintentos, timeouts y gestión de estados.
  */
 export const useCalls = () => {
-    const { on, off, sendCallOffer, sendCallAccept, sendCallReject, sendCallEnd } = useWebSocket();
-    const { selected, callState, setCallState, incomingCall, setIncomingCall, isConnected, addToast } = useDashboard();
+    const { on, off, sendCallOffer, sendCallAccept, sendCallReject, sendCallEnd, sendGroupCallOffer, sendGroupCallEnd } = useWebSocket();
+    const { selected, selectedGroup, callState, setCallState, incomingCall, setIncomingCall, isConnected, addToast } = useDashboard();
     
     const callTimeoutRef = useRef(null);
     const retryCountRef = useRef(0);
@@ -137,10 +137,13 @@ export const useCalls = () => {
         setCallState({
             roomID: incomingCall.roomID,
             remoteTelephon: incomingCall.from,
-            remoteName: incomingCall.username,
+            remoteName: incomingCall.groupName || incomingCall.username,
             callType: incomingCall.callType,
             role: 'receiver',
-            status: 'active'
+            status: 'active',
+            isGroupCall: !!incomingCall.groupID,
+            groupID: incomingCall.groupID,
+            groupName: incomingCall.groupName,
         });
         setIncomingCall(null);
     }, [incomingCall, sendCallAccept, setCallState, setIncomingCall]);
@@ -156,21 +159,59 @@ export const useCalls = () => {
     }, [incomingCall, sendCallReject, setIncomingCall]);
 
     /**
-     * Finaliza la llamada actual.
+     * Finaliza la llamada actual (1:1 o grupal).
      */
     const handleEndCall = useCallback(() => {
         if (callState) {
             console.log('[CALL] Ending call manually');
-            sendCallEnd(callState.remoteTelephon, callState.roomID);
+            if (callState.isGroupCall) {
+                sendGroupCallEnd(callState.groupID, callState.roomID);
+            } else {
+                sendCallEnd(callState.remoteTelephon, callState.roomID);
+            }
         }
         clearCallTimeout();
         setCallState(null);
-    }, [callState, sendCallEnd, setCallState, clearCallTimeout]);
+    }, [callState, sendCallEnd, sendGroupCallEnd, setCallState, clearCallTimeout]);
+
+    /**
+     * Inicia una llamada grupal (llama a todos los miembros del grupo).
+     * El caller entra directamente a la sala de ZegoCloud.
+     */
+    const handleStartGroupCall = useCallback((callType = 'video') => {
+        if (!selectedGroup) return;
+        if (!isConnected) {
+            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            return;
+        }
+        if (callState) {
+            addToast({ type: 'error', message: 'Ya tienes una llamada activa' });
+            return;
+        }
+
+        const roomID = `group_call_${selectedGroup.ID}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`[CALL] Starting ${callType} group call. Room: ${roomID}`);
+
+        sendGroupCallOffer(selectedGroup.ID, roomID, callType);
+
+        // Para llamadas grupales el caller entra directamente (status 'active')
+        setCallState({
+            roomID,
+            remoteName: selectedGroup.Name,
+            callType,
+            role: 'caller',
+            status: 'active',
+            isGroupCall: true,
+            groupID: selectedGroup.ID,
+            groupName: selectedGroup.Name,
+        });
+    }, [selectedGroup, isConnected, callState, sendGroupCallOffer, setCallState, addToast]);
 
     return { 
         callState, 
         incomingCall, 
         handleStartCall, 
+        handleStartGroupCall,
         handleAcceptIncomingCall, 
         handleRejectIncomingCall, 
         handleEndCall 

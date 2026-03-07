@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 
@@ -9,11 +9,56 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
         lastSeenMap, 
         avatarMap, 
         isConnected, 
-        globalWallpaper 
+        globalWallpaper,
+        renameContact,
     } = useDashboard();
 
     const [chatWallpapers, setChatWallpapers] = useState({});
     const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
+
+    // ── Edit contact name ─────────────────────────────────────────────────
+    const [editingName, setEditingName] = useState(false);
+    const [nameInput, setNameInput] = useState('');
+    const [savingName, setSavingName] = useState(false);
+    const [nameError, setNameError] = useState('');
+    const nameInputRef = useRef(null);
+
+    const startEditName = () => {
+        setNameInput(selected.ContactName || selected.Username || '');
+        setNameError('');
+        setEditingName(true);
+    };
+
+    useEffect(() => {
+        if (editingName) nameInputRef.current?.focus();
+    }, [editingName]);
+
+    const cancelEditName = () => {
+        setEditingName(false);
+        setNameError('');
+    };
+
+    const submitEditName = async () => {
+        if (!nameInput.trim()) {
+            setNameError('El nombre no puede estar vacío');
+            return;
+        }
+        setSavingName(true);
+        setNameError('');
+        try {
+            await renameContact(selected.Number, nameInput.trim());
+            setEditingName(false);
+        } catch (err) {
+            setNameError(err?.response?.data?.error || err.message || 'Error al guardar');
+        } finally {
+            setSavingName(false);
+        }
+    };
+
+    const handleNameKeyDown = (e) => {
+        if (e.key === 'Enter') submitEditName();
+        if (e.key === 'Escape') cancelEditName();
+    };
 
     // Cargar fondos de chat guardados en localStorage
     useEffect(() => {
@@ -117,9 +162,64 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
                     )}
                 </div>
                 
-                <h2 className="text-2xl font-bold text-white mb-1 text-center">
-                    {displayName}
-                </h2>
+                {/* Contact name with inline edit */}
+                {editingName ? (
+                    <div className="w-full mb-1 flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-2 w-full max-w-xs">
+                            <input
+                                ref={nameInputRef}
+                                value={nameInput}
+                                onChange={e => setNameInput(e.target.value)}
+                                onKeyDown={handleNameKeyDown}
+                                disabled={savingName}
+                                maxLength={100}
+                                className="flex-1 bg-white/10 border border-indigo-400/60 text-white text-lg font-bold text-center rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-400 disabled:opacity-50"
+                                placeholder="Nombre del contacto"
+                            />
+                            <button
+                                onClick={submitEditName}
+                                disabled={savingName}
+                                title="Guardar"
+                                className="p-1.5 bg-indigo-500 hover:bg-indigo-600 rounded-lg text-white disabled:opacity-50 transition-colors"
+                            >
+                                {savingName ? (
+                                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                )}
+                            </button>
+                            <button
+                                onClick={cancelEditName}
+                                disabled={savingName}
+                                title="Cancelar"
+                                className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-slate-300 disabled:opacity-50 transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        {nameError && <p className="text-red-400 text-xs mt-0.5">{nameError}</p>}
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 mb-1">
+                        <h2 className="text-2xl font-bold text-white text-center">{displayName}</h2>
+                        <button
+                            onClick={startEditName}
+                            title="Editar nombre"
+                            className="p-1 text-slate-400 hover:text-indigo-300 hover:bg-white/10 rounded-full transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
                 <p className="text-indigo-300 mb-6 text-center">
                     {selected.Number}
                 </p>

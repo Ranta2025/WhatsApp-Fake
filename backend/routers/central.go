@@ -7,6 +7,7 @@ import (
 	"gorm/backend/routers/log"
 	"gorm/backend/services"
 	"gorm/backend/websocket"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,7 +24,11 @@ func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handler
 	router.Logs()
 
 	// Ruta pública para reportes de bugs (no requiere autenticación)
-	app.POST("/api/v1/bug-report", middleware.MiddlewareBugReport(), handlerBugReport.HandleReportBug())
+	// Rate limit: 5 req/min por IP – evitar flood de reportes
+	app.POST("/api/v1/bug-report",
+		middleware.RateLimitByIP("bug_report", 5, time.Minute),
+		middleware.MiddlewareBugReport(),
+		handlerBugReport.HandleReportBug())
 
 	subrouter := app.Group("/api/v1/")
 	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, handlerCall, handlerMedia, handlerGroup, hub, chatService, contactService, callService, groupService)

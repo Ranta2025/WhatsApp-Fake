@@ -283,6 +283,18 @@ class WebSocketManager {
         return this._send('call_end', { to, roomID });
     }
 
+    // --- Group call signaling methods ---
+
+    /** Inicia una llamada grupal: el backend notifica a todos los miembros. */
+    sendGroupCallOffer(groupID, roomID, callType = 'video') {
+        return this._send('group_call_offer', { groupID, roomID, callType });
+    }
+
+    /** Finaliza/abandona una llamada grupal: el backend notifica a todos los miembros. */
+    sendGroupCallEnd(groupID, roomID) {
+        return this._send('group_call_end', { groupID, roomID });
+    }
+
     // --- Group chat methods ---
 
     /**

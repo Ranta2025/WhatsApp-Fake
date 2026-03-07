@@ -23,6 +23,10 @@ type CallLog struct {
 	DeletedByCaller   bool `gorm:"default:false"`
 	DeletedByReceiver bool `gorm:"default:false"`
 
+	// Campos para llamadas grupales (nil = llamada 1:1)
+	GroupID   *uint  `gorm:"index"`    // ID del grupo si es llamada grupal
+	GroupName string `gorm:"size:100"` // Snapshot del nombre del grupo
+
 	Caller   UserDataBase `gorm:"foreignKey:CallerID;references:ID"`
 	Receiver UserDataBase `gorm:"foreignKey:ReceiverID;references:ID"`
 }

@@ -9,10 +9,11 @@ import React, { useEffect, useState, useRef } from 'react';
  * @param {string} props.callerName - Nombre del que llama
  * @param {string} props.callerNumber - Teléfono del que llama
  * @param {string} props.callType - "video" | "audio"
+ * @param {string} [props.groupName] - Nombre del grupo (para llamadas grupales)
  * @param {Function} props.onAccept - Callback al aceptar
  * @param {Function} props.onReject - Callback al rechazar
  */
-export default function IncomingCall({ callerName, callerNumber, callType = 'video', onAccept, onReject }) {
+export default function IncomingCall({ callerName, callerNumber, callType = 'video', groupName, onAccept, onReject }) {
     const [elapsed, setElapsed] = useState(0);
     const audioCtxRef = useRef(null);
     const ringIntervalRef = useRef(null);
@@ -92,7 +93,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                     <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping duration-1000"></div>
                     <div className="absolute inset-4 bg-indigo-500/30 rounded-full animate-ping duration-1000 delay-300"></div>
                     <div className="relative w-32 h-32 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-2xl">
-                        {(callerName || callerNumber)?.charAt(0)?.toUpperCase()}
+                        {groupName ? groupName.charAt(0).toUpperCase() : (callerName || callerNumber)?.charAt(0)?.toUpperCase()}
                     </div>
                     {/* Icono de tipo de llamada */}
                     <div className="absolute -bottom-1 -right-1 bg-slate-800 border-4 border-slate-900 rounded-full p-2.5 shadow-lg">
@@ -111,13 +112,22 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                 {/* Identificación */}
                 <div className="space-y-2 mb-10">
                     <h3 className="text-white text-3xl font-bold tracking-tight">
-                        {callerName || 'Desconocido'}
+                        {groupName || callerName || 'Desconocido'}
                     </h3>
-                    <p className="text-indigo-400 font-medium tracking-wider">
-                        {callerNumber}
-                    </p>
+                    {groupName ? (
+                        <p className="text-indigo-400 font-medium tracking-wider">
+                            {callerName || callerNumber} te está llamando
+                        </p>
+                    ) : (
+                        <p className="text-indigo-400 font-medium tracking-wider">
+                            {callerNumber}
+                        </p>
+                    )}
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 rounded-full text-indigo-300 text-sm font-semibold animate-pulse">
-                        {callType === 'video' ? 'VIDEOLLAMADA ENTRANTE' : 'LLAMADA DE VOZ ENTRANTE'}
+                        {groupName
+                            ? (callType === 'video' ? 'VIDEOLLAMADA GRUPAL' : 'LLAMADA GRUPAL')
+                            : (callType === 'video' ? 'VIDEOLLAMADA ENTRANTE' : 'LLAMADA DE VOZ ENTRANTE')
+                        }
                     </div>
                 </div>
 

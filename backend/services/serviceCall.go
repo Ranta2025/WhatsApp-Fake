@@ -11,6 +11,8 @@ import (
 
 type CallServicer interface {
 	CreateCallLog(callerTelephon, receiverTelephon, roomID, callType string, ctx context.Context) error
+	// CreateGroupCallLogs registra una entrada de llamada por cada miembro del grupo.
+	CreateGroupCallLogs(callerTelephon string, memberTelephons []string, groupID uint, groupName string, roomID string, callType string, ctx context.Context) error
 	MarkCallAnswered(roomID string, ctx context.Context) error
 	MarkCallRejected(roomID string, ctx context.Context) error
 	MarkCallUnavailable(roomID string, ctx context.Context) error
@@ -66,6 +68,43 @@ func (s *ServiceCall) CreateCallLog(callerTelephon, receiverTelephon, roomID, ca
 	}
 
 	log.Printf("[CALL-SERVICE] Llamada registrada: %s -> %s (sala: %s)", callerTelephon, receiverTelephon, roomID)
+	return nil
+}
+
+// CreateGroupCallLogs crea un CallLog por cada miembro del grupo (exceptuando al caller).
+func (s *ServiceCall) CreateGroupCallLogs(callerTelephon string, memberTelephons []string, groupID uint, groupName string, roomID string, callType string, ctx context.Context) error {
+	callerID, err := s.repo.GetIdByTelephon(callerTelephon, ctx)
+	if err != nil {
+		log.Printf("[CALL-SERVICE] Error obteniendo ID del caller en llamada grupal: %v", err)
+		return err
+	}
+
+	gid := groupID
+	for _, memberTel := range memberTelephons {
+		if memberTel == callerTelephon {
+			continue
+		}
+		memberID, err := s.repo.GetIdByTelephon(memberTel, ctx)
+		if err != nil {
+			log.Printf("[CALL-SERVICE] Miembro %s no encontrado, omitiendo: %v", memberTel, err)
+			continue
+		}
+		callLog := &models.CallLog{
+			CallerID:   uint(callerID),
+			ReceiverID: uint(memberID),
+			RoomID:     roomID,
+			CallType:   callType,
+			Status:     "missed",
+			StartedAt:  time.Now(),
+			GroupID:    &gid,
+			GroupName:  groupName,
+		}
+		if err := s.repo.CreateCallLog(callLog, ctx); err != nil {
+			log.Printf("[CALL-SERVICE] Error creando log para miembro %s: %v", memberTel, err)
+		}
+	}
+
+	log.Printf("[CALL-SERVICE] Llamada grupal registrada: %s -> grupo %d (sala: %s)", callerTelephon, groupID, roomID)
 	return nil
 }
 
@@ -155,6 +194,9 @@ func (s *ServiceCall) GetCallHistory(telephon string, ctx context.Context) ([]sc
 			EndedAt:          call.EndedAt,
 			Duration:         duration,
 			IsOutgoing:       call.CallerID == uint(userID),
+			IsGroupCall:      call.GroupID != nil,
+			GroupID:          call.GroupID,
+			GroupName:        call.GroupName,
 		})
 	}
 

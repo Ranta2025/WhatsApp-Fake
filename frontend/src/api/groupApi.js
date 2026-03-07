@@ -82,3 +82,20 @@ export const leaveGroup = (groupID) =>
  */
 export const updateGroupAvatar = (groupID, avatarUrl) =>
     api.patch(`/api/v1/group/${groupID}/avatar`, { avatarUrl });
+
+/**
+ * Set the role of a group member. Admin-only.
+ * @param {number} groupID
+ * @param {string} number - telephon of the target member
+ * @param {'admin'|'member'} role
+ */
+export const setMemberRole = (groupID, number, role) =>
+    api.patch(`/api/v1/group/${groupID}/member/role`, { number, role });
+
+/**
+ * Update the group description. Admin-only.
+ * @param {number} groupID
+ * @param {string} description - New description (max 300 chars, empty string to clear)
+ */
+export const updateGroupDescription = (groupID, description) =>
+    api.patch(`/api/v1/group/${groupID}/description`, { description });

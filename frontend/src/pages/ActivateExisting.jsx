@@ -20,7 +20,7 @@ export default function ActivateExisting() {
 
         setLoading(true);
         try {
-            await api.post('/recover', {
+            await api.post('/activate-cuenta', {
                 username: username
             });
             navigate('/activate', { state: { username } });

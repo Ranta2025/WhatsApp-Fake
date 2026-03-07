@@ -16,4 +16,7 @@ type CallLogResponse struct {
 	EndedAt          *time.Time `json:"endedAt,omitempty"`
 	Duration         int        `json:"duration"`   // Segundos
 	IsOutgoing       bool       `json:"isOutgoing"` // true si el usuario actual fue quien llamó
+	IsGroupCall      bool       `json:"isGroupCall"` // true si es llamada grupal
+	GroupID          *uint      `json:"groupID,omitempty"`
+	GroupName        string     `json:"groupName,omitempty"`
 }

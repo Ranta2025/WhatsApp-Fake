@@ -119,6 +119,18 @@ type GroupMessageDelete struct {
 	MessageID uint `json:"messageID" binding:"required"`
 }
 
+// GroupSetRole cambia el rol de un miembro dentro de un grupo.
+// Solo un admin puede ejecutar esta operación.
+type GroupSetRole struct {
+	Number string `json:"number" binding:"required,e164"` // teléfono E.164 del miembro objetivo
+	Role   string `json:"role"   binding:"required"`       // "admin" | "member"
+}
+
+// GroupUpdateDescription actualiza la descripción de un grupo. Solo admins.
+type GroupUpdateDescription struct {
+	Description string `json:"description" binding:"max=300"`
+}
+
 // GroupTyping indica que un miembro está escribiendo en un grupo.
 type GroupTyping struct {
 	GroupID uint `json:"groupID" binding:"required"`
@@ -139,4 +151,17 @@ type CallResponse struct {
 type CallEnd struct {
 	To     string `json:"to" binding:"required"`
 	RoomID string `json:"roomID" binding:"required"`
+}
+
+// GroupCallOffer se envía cuando un usuario inicia una llamada a todo el grupo.
+type GroupCallOffer struct {
+	GroupID  uint   `json:"groupID" binding:"required"`
+	RoomID   string `json:"roomID" binding:"required"`
+	CallType string `json:"callType" binding:"required"` // "video" o "audio"
+}
+
+// GroupCallEnd se envía cuando alguien finaliza/abandona una llamada grupal.
+type GroupCallEnd struct {
+	GroupID uint   `json:"groupID" binding:"required"`
+	RoomID  string `json:"roomID" binding:"required"`
 }
