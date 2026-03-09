@@ -5,6 +5,7 @@ const STEPS = [
     { key: 'contacts', label: 'Cargando contactos...' },
     { key: 'chats',    label: 'Cargando conversaciones...' },
     { key: 'groups',   label: 'Cargando grupos...' },
+    { key: 'statuses', label: 'Cargando estados...' },
 ];
 
 /**
@@ -12,7 +13,7 @@ const STEPS = [
  * Pantalla de carga moderna que muestra el progreso de inicialización.
  *
  * @param {Object}  props
- * @param {Object}  props.loadingSteps  - { profile: bool, contacts: bool, chats: bool, groups: bool }
+ * @param {Object}  props.loadingSteps  - { profile: bool, contacts: bool, chats: bool, groups: bool, statuses: bool }
  */
 export default function LoadingScreen({ loadingSteps = {} }) {
     const done = Object.values(loadingSteps).filter(Boolean).length;

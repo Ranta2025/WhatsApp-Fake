@@ -93,6 +93,14 @@ export const setMemberRole = (groupID, number, role) =>
     api.patch(`/api/v1/group/${groupID}/member/role`, { number, role });
 
 /**
+ * Remove a member from a group. Admin-only; cannot remove self.
+ * @param {number} groupID
+ * @param {string} number - telephon of the member to remove
+ */
+export const removeMember = (groupID, number) =>
+    api.delete(`/api/v1/group/${groupID}/members`, { data: { number } });
+
+/**
  * Update the group description. Admin-only.
  * @param {number} groupID
  * @param {string} description - New description (max 300 chars, empty string to clear)

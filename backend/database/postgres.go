@@ -54,6 +54,8 @@ func Conection() (*gorm.DB, error) {
 		&models.Group{},
 		&models.GroupMember{},
 		&models.GroupMessage{},
+		&models.Status{},
+		&models.StatusView{},
 	); err != nil {
 		return nil, fmt.Errorf("postgres: AutoMigrate failed: %w", err)
 	}

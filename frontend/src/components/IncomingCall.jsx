@@ -86,44 +86,44 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
     }, [onReject]);
 
     return (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-sm text-center shadow-2xl animate-in fade-in zoom-in duration-300">
-                {/* Avatar animado */}
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-xl">
+            <div className="w-full max-w-sm animate-in rounded-[2.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(15,23,42,0.94))] p-8 text-center shadow-[0_36px_140px_-50px_rgba(15,23,42,0.95)] fade-in zoom-in duration-300">
+                <div className="mb-5 inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+                    {groupName ? 'Llamada grupal' : 'Llamada entrante'}
+                </div>
                 <div className="relative mx-auto w-32 h-32 mb-8">
-                    <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping duration-1000"></div>
-                    <div className="absolute inset-4 bg-indigo-500/30 rounded-full animate-ping duration-1000 delay-300"></div>
-                    <div className="relative w-32 h-32 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-2xl">
+                    <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping duration-1000"></div>
+                    <div className="absolute inset-4 rounded-full bg-sky-500/25 animate-ping duration-1000 delay-300"></div>
+                    <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(14,165,233,0.85),rgba(16,185,129,0.72))] text-4xl font-bold text-white shadow-2xl">
                         {groupName ? groupName.charAt(0).toUpperCase() : (callerName || callerNumber)?.charAt(0)?.toUpperCase()}
                     </div>
-                    {/* Icono de tipo de llamada */}
-                    <div className="absolute -bottom-1 -right-1 bg-slate-800 border-4 border-slate-900 rounded-full p-2.5 shadow-lg">
+                    <div className="absolute -bottom-1 -right-1 rounded-full border-4 border-slate-900 bg-slate-800 p-2.5 shadow-lg">
                         {callType === 'video' ? (
-                            <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="w-6 h-6 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                         ) : (
-                            <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="w-6 h-6 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                             </svg>
                         )}
                     </div>
                 </div>
 
-                {/* Identificación */}
                 <div className="space-y-2 mb-10">
                     <h3 className="text-white text-3xl font-bold tracking-tight">
                         {groupName || callerName || 'Desconocido'}
                     </h3>
                     {groupName ? (
-                        <p className="text-indigo-400 font-medium tracking-wider">
+                        <p className="font-medium tracking-wider text-slate-300">
                             {callerName || callerNumber} te está llamando
                         </p>
                     ) : (
-                        <p className="text-indigo-400 font-medium tracking-wider">
+                        <p className="font-medium tracking-wider text-slate-300">
                             {callerNumber}
                         </p>
                     )}
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 rounded-full text-indigo-300 text-sm font-semibold animate-pulse">
+                    <div className="inline-flex animate-pulse items-center gap-2 rounded-full bg-white/[0.05] px-4 py-1.5 text-sm font-semibold text-slate-200">
                         {groupName
                             ? (callType === 'video' ? 'VIDEOLLAMADA GRUPAL' : 'LLAMADA GRUPAL')
                             : (callType === 'video' ? 'VIDEOLLAMADA ENTRANTE' : 'LLAMADA DE VOZ ENTRANTE')
@@ -131,9 +131,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                     </div>
                 </div>
 
-                {/* Acciones */}
                 <div className="flex justify-center gap-10">
-                    {/* Botón Rechazar */}
                     <div className="flex flex-col gap-3 items-center">
                         <button
                             onClick={() => {
@@ -141,7 +139,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                                 if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch(e) {} }
                                 onReject();
                             }}
-                            className="w-20 h-20 bg-red-500 hover:bg-red-600 active:scale-90 rounded-full flex items-center justify-center transition-all shadow-xl shadow-red-500/20 group"
+                            className="group flex h-20 w-20 items-center justify-center rounded-full bg-rose-500 transition-all shadow-xl shadow-rose-500/20 hover:bg-rose-600 active:scale-90"
                             aria-label="Rechazar llamada"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white rotate-[135deg] group-hover:rotate-[145deg] transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -151,7 +149,6 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                         <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Rechazar</span>
                     </div>
 
-                    {/* Botón Aceptar */}
                     <div className="flex flex-col gap-3 items-center">
                         <button
                             onClick={() => {
@@ -159,7 +156,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                                 if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch(e) {} }
                                 onAccept();
                             }}
-                            className="w-20 h-20 bg-emerald-500 hover:bg-emerald-600 active:scale-90 rounded-full flex items-center justify-center transition-all shadow-xl shadow-emerald-500/20 group"
+                            className="group flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 transition-all shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 active:scale-90"
                             aria-label="Aceptar llamada"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -170,8 +167,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                     </div>
                 </div>
 
-                {/* Temporizador discreto */}
-                <div className="mt-10 text-slate-500 text-[10px] font-bold tracking-widest uppercase">
+                <div className="mt-10 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                     Se rechazará automáticamente en {30 - elapsed}s
                 </div>
             </div>

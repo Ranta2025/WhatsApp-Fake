@@ -51,7 +51,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
         }
         const n = phoneResult.formatted;
         if (!cn) {
-            setAddMsg('Debes ingresar un nombre para el contacto');
+            setAddMsg('Escribe un nombre para guardar este contacto.');
             return;
         }
 
@@ -67,7 +67,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                     [n]: { ...prev[n], IsContact: true, ContactName: cn }
                 }));
                 
-                setAddMsg('Contacto creado exitosamente');
+                setAddMsg('Contacto guardado correctamente.');
                 setTimeout(() => {
                     setSelected(created);
                     setSidebarView('chats');
@@ -84,22 +84,32 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
             }
         } catch (err) {
             const d = err?.response?.data;
-            const msg = typeof d === 'string' ? d : d?.message || d?.error || 'Error al agregar';
+            const msg = typeof d === 'string' ? d : d?.message || d?.error || 'No pudimos guardar este contacto en este momento.';
             setAddMsg(msg);
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 rounded-2xl w-full max-w-md overflow-visible shadow-2xl border border-slate-700/50">
-                <div className="p-6 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/50">
-                    <h2 className="text-xl font-semibold text-slate-100">Añadir Contacto</h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-200 p-2 hover:bg-slate-700/50 rounded-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md overflow-visible rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(15,23,42,0.94))] shadow-[0_32px_120px_-48px_rgba(15,23,42,0.95)]">
+                <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.16),transparent_44%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                        <div>
+                            <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">Contactos</div>
+                            <h2 className="mt-3 text-xl font-semibold text-slate-100">Añadir contacto</h2>
+                            <p className="mt-1 text-sm text-slate-400">Guarda este contacto con un nombre claro para encontrarlo y escribirle más rápido.</p>
+                        </div>
+                        <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-white/10 hover:text-slate-200">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2"><span className="block text-slate-500">Región</span><span className="mt-1 block font-semibold text-white uppercase">{phoneCountryIso}</span></div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2"><span className="block text-slate-500">Código</span><span className="mt-1 block font-semibold text-white">+{phoneDialCode}</span></div>
+                    </div>
                 </div>
                 <form onSubmit={submitAddContact} className="p-6 space-y-4">
                     <div>
@@ -108,7 +118,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                             type="text"
                             value={contactNameInput}
                             onChange={(e) => setContactNameInput(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 focus:border-indigo-500 text-slate-100 placeholder-slate-500 focus:outline-none"
+                            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 placeholder-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
                             placeholder="Ej: Juan Pérez"
                         />
                     </div>
@@ -137,7 +147,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                                     }}
                                     containerClass="react-tel-input !w-full !h-full"
                                     inputClass="!hidden"
-                                    buttonClass="!absolute !inset-0 !w-full !h-full !bg-slate-900/50 !border !border-slate-700 !rounded-xl hover:!border-indigo-500"
+                                    buttonClass="!absolute !inset-0 !w-full !h-full !bg-slate-950/70 !border !border-white/10 !rounded-2xl hover:!border-emerald-400"
                                     dropdownClass="!bg-slate-800 !border !border-slate-700 !text-slate-100 !rounded-xl"
                                     searchClass="!bg-slate-900 !border !border-slate-700 !text-slate-100 !rounded-lg"
                                     copyNumbersOnly={false}
@@ -165,7 +175,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                                         setPhoneError('');
                                     }
                                 }}
-                                className="w-full h-[46px] bg-slate-900/50 border border-slate-700 rounded-xl px-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                className="h-[46px] w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
                                 placeholder="Número de teléfono"
                             />
                         </div>
@@ -174,24 +184,24 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                         )}
                     </div>
                     {addMsg && (
-                        <div className={`text-sm ${addMsg.includes('exitosamente') ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className={`rounded-2xl border px-4 py-3 text-sm ${addMsg.includes('exitosamente') ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200' : 'border-rose-400/20 bg-rose-500/10 text-rose-200'}`}>
                             {addMsg}
                         </div>
                     )}
-                    <div className="flex gap-3 pt-4 border-t border-slate-700/50">
+                    <div className="flex gap-3 border-t border-white/10 pt-4">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-slate-300 bg-slate-700/50 hover:bg-slate-700 transition-colors"
+                            className="flex-1 rounded-2xl bg-slate-800 px-4 py-3 font-medium text-slate-300 transition-colors hover:bg-slate-700"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
+                            className="flex-1 rounded-2xl bg-[linear-gradient(135deg,#10b981,#0f766e)] px-4 py-3 font-medium text-white shadow-[0_18px_45px_-20px_rgba(16,185,129,0.9)] transition-all hover:brightness-110 active:scale-[0.98]"
                         >
-                            {isLoading ? 'Añadiendo...' : 'Añadir'}
+                            {isLoading ? 'Guardando...' : 'Guardar contacto'}
                         </button>
                     </div>
                 </form>

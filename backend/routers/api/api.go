@@ -17,6 +17,7 @@ type RouterApiMessage struct {
 	handlerCall    *handlers.HandlerCall
 	handlerMedia   *handlers.HandlerMedia
 	handlerGroup   *handlers.HandlerGroup
+	handlerStatus  *handlers.HandlerStatus
 	hub            *websocket.Hub
 	chatService    services.ChatServicer
 	contactService services.ContactServicer
@@ -26,7 +27,7 @@ type RouterApiMessage struct {
 
 // InitRouterApiMessage inicializa el subrouter /api/v1/ con todos los handlers
 // y aplica el middleware de validación de token JWT.
-func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) *RouterApiMessage {
+func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, handlerStatus *handlers.HandlerStatus, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) *RouterApiMessage {
 	rout := &RouterApiMessage{
 		app:            app,
 		handlerContact: handler,
@@ -34,6 +35,7 @@ func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact
 		handlerCall:    handlerCall,
 		handlerMedia:   handlerMedia,
 		handlerGroup:   handlerGroup,
+		handlerStatus:  handlerStatus,
 		hub:            hub,
 		chatService:    chatService,
 		contactService: contactService,
@@ -163,6 +165,28 @@ func (rt *RouterApiMessage) ApiMedia() {
 		rt.handlerMedia.HandlerUploadMedia())
 }
 
+func (rt *RouterApiMessage) ApiStatus() {
+	s := rt.app.Group("status")
+	{
+		s.GET("",
+			middleware.RateLimitByUser("get_status_feed", 30, time.Minute),
+			rt.handlerStatus.HandleGetFeed())
+
+		s.POST("",
+			middleware.RateLimitByUser("create_status", 15, time.Minute),
+			middleware.MiddlewareStatusCreate(),
+			rt.handlerStatus.HandleCreateStatus())
+
+		s.PUT("/:statusID/view",
+			middleware.RateLimitByUser("view_status", 60, time.Minute),
+			rt.handlerStatus.HandleMarkViewed())
+
+		s.DELETE("/:statusID",
+			middleware.RateLimitByUser("delete_status", 20, time.Minute),
+			rt.handlerStatus.HandleDeleteStatus())
+	}
+}
+
 // ApiCall registra las rutas del sistema de llamadas (token ZegoCloud, historial, eliminar).
 //
 // Rate limits (user-based):
@@ -197,6 +221,7 @@ func (rt *RouterApiMessage) ApiWebSocket() {
 //	GET    /api/v1/group                           → mis grupos
 //	GET    /api/v1/group/:groupID                  → detalle del grupo
 //	POST   /api/v1/group/:groupID/members          → añadir miembros
+//	DELETE /api/v1/group/:groupID/members          → eliminar miembro (solo admins)
 //	POST   /api/v1/group/:groupID/message          → enviar mensaje
 //	GET    /api/v1/group/:groupID/message          → historial (paginado)
 //	PUT    /api/v1/group/:groupID/message          → editar mensaje
@@ -236,6 +261,12 @@ func (rt *RouterApiMessage) ApiGroup() {
 			middleware.MiddlewareGroupID(),
 			middleware.MiddlewareGroupAddMembers(),
 			rt.handlerGroup.HandleAddMembers())
+
+		g.DELETE("/:groupID/members",
+			middleware.RateLimitByUser("remove_group_member", 10, time.Minute),
+			middleware.MiddlewareGroupID(),
+			middleware.MiddlewareGroupRemoveMember(),
+			rt.handlerGroup.HandleRemoveMember())
 
 		g.DELETE("/:groupID/member",
 			middleware.RateLimitByUser("leave_group", 10, time.Minute),

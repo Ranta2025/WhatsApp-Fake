@@ -29,6 +29,9 @@ type GroupServicer interface {
 	GetUsernameByTelephon(telephon string, ctx context.Context) (string, error)
 	// SetMemberRole promueve o degrada a un miembro. Solo admins pueden llamarlo.
 	SetMemberRole(telephonAdmin string, groupID uint, data models.GroupSetRole, ctx context.Context) error
+	// RemoveMember elimina a un miembro del grupo. Solo admins pueden llamarlo;
+	// el admin no puede eliminarse a sí mismo.
+	RemoveMember(telephonAdmin string, groupID uint, data models.GroupRemoveMember, ctx context.Context) error
 	// UpdateGroupDescription actualiza la descripción del grupo. Solo admins.
 	UpdateGroupDescription(telephon string, groupID uint, description string, ctx context.Context) error
 }
@@ -588,4 +591,43 @@ func (s *ServiceGroup) SetMemberRole(telephonAdmin string, groupID uint, data mo
 	}
 
 	return s.repo.UpdateMemberRole(groupID, uint(targetID), data.Role, ctx)
+}
+
+// RemoveMember elimina a un miembro del grupo. Solo admins pueden invocarlo.
+// Reglas de negocio:
+//  1. Solo un admin activo puede ejecutar esta operación.
+//  2. El admin no puede eliminarse a sí mismo (debe usar LeaveGroup).
+//  3. El objetivo debe ser miembro activo del grupo.
+func (s *ServiceGroup) RemoveMember(telephonAdmin string, groupID uint, data models.GroupRemoveMember, ctx context.Context) error {
+	adminID, err := s.contactRepo.GetIdByTelephon(telephonAdmin, ctx)
+	if err != nil {
+		return errors.New("usuario no encontrado")
+	}
+
+	requesterRole, err := s.repo.GetMemberRole(groupID, uint(adminID), ctx)
+	if err != nil {
+		return errors.New("no eres miembro de este grupo")
+	}
+	if requesterRole != "admin" {
+		return errors.New("solo los administradores pueden eliminar miembros")
+	}
+
+	targetID, err := s.contactRepo.GetIdByTelephon(data.Number, ctx)
+	if err != nil {
+		return errors.New("el usuario objetivo no fue encontrado")
+	}
+
+	if uint(adminID) == uint(targetID) {
+		return errors.New("no puedes eliminarte a ti mismo del grupo; usa 'salir del grupo'")
+	}
+
+	isMember, err := s.repo.IsMember(groupID, uint(targetID), ctx)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return errors.New("el usuario no es miembro del grupo")
+	}
+
+	return s.repo.LeaveGroup(groupID, uint(targetID), ctx)
 }

@@ -15,7 +15,7 @@ import (
 // Router registra todas las rutas de la aplicación: autenticación (log), bug-report
 // público y el subgrupo /api/v1/ con usuario, contactos, chat, media, llamadas,
 // grupos y WebSocket.
-func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, handlerBugReport *handlers.HandlerBugReport, callService services.CallServicer, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, groupService services.GroupServicer) {
+func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, handlerBugReport *handlers.HandlerBugReport, callService services.CallServicer, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, groupService services.GroupServicer, handlerStatus *handlers.HandlerStatus) {
 	// Middleware de recuperación de panics
 	app.Use(gin.Recovery())
 
@@ -31,11 +31,12 @@ func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handler
 		handlerBugReport.HandleReportBug())
 
 	subrouter := app.Group("/api/v1/")
-	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, handlerCall, handlerMedia, handlerGroup, hub, chatService, contactService, callService, groupService)
+	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, handlerCall, handlerMedia, handlerGroup, handlerStatus, hub, chatService, contactService, callService, groupService)
 	apiMessage.ApiUser()
 	apiMessage.ApiContact()
 	apiMessage.ApiChat()
 	apiMessage.ApiMedia()
+	apiMessage.ApiStatus()
 	apiMessage.ApiCall()
 	apiMessage.ApiGroup()
 	apiMessage.ApiWebSocket()

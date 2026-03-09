@@ -22,17 +22,17 @@ export default function ActivateAccount() {
         setError('');
         
         if (isBloqueado) {
-            setError('Tu cuenta está bloqueada. Contacta soporte.');
+            setError('Tu acceso está protegido temporalmente. Si lo necesitas, podemos ayudarte a recuperarlo.');
             return;
         }
 
         if (!code.trim()) {
-            setError('Por favor ingresa el código de activación');
+            setError('Ingresa el código para completar tu acceso.');
             return;
         }
 
         if (!username) {
-            setError('Usuario no encontrado. Vuelve a registrarte.');
+            setError('No pudimos identificar tu cuenta. Intenta iniciar el proceso nuevamente.');
             return;
         }
 
@@ -44,15 +44,13 @@ export default function ActivateAccount() {
             });
             // Establecer el usuario en el contexto ANTES de navegar
             setUser({ username: username });
-            alert("Cuenta activada exitosamente");
-            // Navegar al dashboard
+            alert('Tu cuenta ya está lista. Bienvenido.');
             navigate('/dashboard', { replace: true });
         } catch (err) {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
                 ? data
-                : data?.message || data?.error || 'Error al activar cuenta. Verifica el código.';
-            alert("Error: " + msg);
+                : data?.message || data?.error || 'No pudimos confirmar el código. Revisa la información e inténtalo nuevamente.';
             setError(msg);
         } finally {
             setLoading(false);
@@ -64,12 +62,12 @@ export default function ActivateAccount() {
         setResendSuccess(false);
 
         if (isBloqueado) {
-            setError('Tu cuenta está bloqueada. No puedes reenviar códigos.');
+            setError('Tu acceso sigue protegido temporalmente, por ahora no es posible enviar un nuevo código.');
             return;
         }
 
         if (!username) {
-            setError('Usuario no encontrado. Vuelve a registrarte.');
+            setError('No pudimos identificar tu cuenta. Intenta iniciar el proceso nuevamente.');
             return;
         }
 
@@ -85,7 +83,7 @@ export default function ActivateAccount() {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
                 ? data
-                : data?.message || data?.error || 'Error al reenviar el código.';
+                : data?.message || data?.error || 'No pudimos enviar un nuevo código en este momento.';
             setError(msg);
             // Si el error es "usuario bloqueado", marcar como bloqueado
             if (msg.toLowerCase().includes('bloqueado')) {
@@ -99,30 +97,47 @@ export default function ActivateAccount() {
     return (
         <AuthLayout
             title={isBloqueado ? "Cuenta Bloqueada" : "Verifica tu cuenta"}
-            subtitle={isBloqueado ? "Tu cuenta ha sido bloqueada" : "Ingresa el código enviado a tu email"}
+            subtitle={isBloqueado ? "Tu acceso quedó protegido temporalmente" : "Ingresa el código que enviamos para completar tu acceso"}
             footer={(
                 <span>
-                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver al login</Link>
+                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver a iniciar sesión</Link>
                 </span>
             )}
         >
-            {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
-            {resendSuccess && <p className="text-green-400 text-sm mb-4 text-center">✓ Código reenviado a tu email</p>}
+            {error && <div className="mb-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-center text-sm text-rose-200">{error}</div>}
+            {resendSuccess && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-200">✓ Te enviamos un nuevo código a tu correo</div>}
             
             {isBloqueado ? (
                 <div className="text-center py-8">
-                    <p className="text-red-400 mb-4">Tu cuenta ha sido bloqueada. Por favor contacta con soporte para más información.</p>
-                    <Link to="/login" className="text-indigo-300 hover:text-white underline">
+                    <div className="mb-5 rounded-3xl border border-rose-400/20 bg-rose-500/10 p-5 text-left">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300/80">Estado</div>
+                        <p className="mt-2 text-sm leading-6 text-rose-100">Detectamos varios intentos fallidos y protegimos tu cuenta temporalmente. Si necesitas ayuda, nuestro equipo puede orientarte.</p>
+                    </div>
+                    <Link to="/login" className="text-amber-300 hover:text-amber-200 underline">
                         Volver al inicio
                     </Link>
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-400 sm:grid-cols-3">
+                        <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
+                            <div className="uppercase tracking-[0.2em] text-amber-300/80">Cuenta</div>
+                            <div className="mt-1 text-sm font-semibold text-slate-100">Último paso</div>
+                        </div>
+                        <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
+                            <div className="uppercase tracking-[0.2em] text-sky-300/80">Cuenta</div>
+                            <div className="mt-1 truncate text-sm font-semibold text-slate-100">{username || 'Pendiente'}</div>
+                        </div>
+                        <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
+                            <div className="uppercase tracking-[0.2em] text-emerald-300/80">Confianza</div>
+                            <div className="mt-1 text-sm font-semibold text-slate-100">Acceso confirmado</div>
+                        </div>
+                    </div>
                     <div>
-                        <label className="block text-sm font-medium text-indigo-100 mb-1.5">Código de Activación</label>
+                        <label className="block text-sm font-medium text-slate-300 mb-1.5">Código de Activación</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                <svg className="w-5 h-5 text-indigo-300/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                                 </svg>
                             </div>
@@ -130,19 +145,19 @@ export default function ActivateAccount() {
                                 type="text"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}
-                                className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200 text-center tracking-widest text-lg"
+                                className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-3.5 pl-10 text-center text-lg tracking-widest text-white placeholder-slate-500 transition-all duration-200 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                                 placeholder="000000"
                                 maxLength="20"
                             />
                         </div>
-                        <p className="text-indigo-300/80 text-xs mt-2 ml-1">
+                        <p className="text-slate-500 text-xs mt-2 ml-1">
                             Revisa tu email para encontrar el código
                         </p>
                     </div>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="mt-6 w-full rounded-2xl bg-[linear-gradient(135deg,#f59e0b,#ea580c)] py-3.5 font-bold text-white shadow-[0_20px_50px_-20px_rgba(249,115,22,0.8)] transition-all duration-200 hover:scale-[1.01] hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
                     >
                         {loading ? 'Verificando...' : 'Activar cuenta'}
                     </button>
@@ -150,7 +165,7 @@ export default function ActivateAccount() {
                         type="button"
                         onClick={handleResendCode}
                         disabled={resendLoading}
-                        className="w-full bg-white/5 hover:bg-white/10 disabled:opacity-50 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
+                        className="w-full rounded-2xl bg-slate-800/80 py-3.5 font-bold text-slate-300 transition-all duration-200 hover:bg-slate-700 disabled:opacity-50"
                     >
                         {resendLoading ? 'Reenviando...' : 'No recibí el código'}
                     </button>

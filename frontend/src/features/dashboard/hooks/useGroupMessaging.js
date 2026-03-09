@@ -41,7 +41,7 @@ const useGroupMessagingInternal = () => {
         if (!selectedGroup || (!text?.trim() && !mediaType)) return;
 
         if (!isConnected) {
-            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            addToast({ type: 'error', message: 'No hay conexión disponible en este momento' });
             return;
         }
 
@@ -50,7 +50,7 @@ const useGroupMessagingInternal = () => {
             setReplyingTo(null);
         } catch (err) {
             console.error('[GroupMessaging] Error sending message:', err);
-            addToast({ type: 'error', message: 'Error al enviar el mensaje' });
+            addToast({ type: 'error', message: 'No pudimos enviar tu mensaje al grupo. Inténtalo nuevamente.' });
         }
     }, [selectedGroup, isConnected, sendGroupMessage, replyingTo, addToast]);
 
@@ -70,7 +70,7 @@ const useGroupMessagingInternal = () => {
         if (!editingMessageId || !selectedGroup) return;
 
         if (!isConnected) {
-            addToast({ type: 'error', message: 'Sin conexión' });
+            addToast({ type: 'error', message: 'No hay conexión disponible en este momento' });
             return;
         }
 

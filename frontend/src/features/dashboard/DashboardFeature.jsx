@@ -3,11 +3,13 @@ import { DashboardProvider, useDashboard } from './context/DashboardContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import GroupChatWindow from './components/GroupChatWindow';
+import StatusesPanel from './components/StatusesPanel';
 import ProfileModal from './components/ProfileModal';
 import ContactDetails from './components/ContactDetails';
 import NotificationBanner from './components/NotificationBanner';
 import AddContactModal from './components/AddContactModal';
 import CreateGroupModal from './components/CreateGroupModal';
+import StatusComposerModal from './components/StatusComposerModal';
 import PermissionsDialog from '../../components/PermissionsDialog';
 import IncomingCall from '../../components/IncomingCall';
 import CallRoom from '../../components/CallRoom';
@@ -134,6 +136,7 @@ const DashboardContent = () => {
         profile, user, isConnected, notifPermission, setNotifPermission, 
         requestNotificationPermission,
         selectedGroup,
+        sidebarView,
         dataReady, loadingSteps,
     } = useDashboard();
 
@@ -141,6 +144,7 @@ const DashboardContent = () => {
     const [showContactDetails, setShowContactDetails] = useState(false);
     const [showAddContactModal, setShowAddContactModal] = useState(false);
     const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+    const [showStatusComposer, setShowStatusComposer] = useState(false);
     const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
     const [viewImage, setViewImage] = useState(null);
 
@@ -156,7 +160,7 @@ const DashboardContent = () => {
     }, [dataReady, showLoader]);
 
     return (
-        <div className="flex h-screen bg-slate-950 text-white overflow-hidden relative" style={{height: '100dvh'}}>
+        <div className="relative flex h-[100dvh] min-h-0 min-w-0 overflow-hidden bg-slate-950 text-white">
             {/* Pantalla de carga moderna */}
             {showLoader && (
                 <div
@@ -172,10 +176,12 @@ const DashboardContent = () => {
                 onOpenProfile={() => setShowProfileModal(true)} 
                 onAddContact={() => setShowAddContactModal(true)}
                 onCreateGroup={() => setShowCreateGroupModal(true)}
+                onCreateStatus={() => setShowStatusComposer(true)}
             />
             
-            {/* Render the group chat window when a group is selected, 1-to-1 chat otherwise */}
-            {selectedGroup ? (
+            {sidebarView === 'statuses' ? (
+                <StatusesPanel onCreateStatus={() => setShowStatusComposer(true)} />
+            ) : selectedGroup ? (
                 <GroupChatWindow onStartGroupCall={handleStartGroupCall} />
             ) : (
                 <ChatWindow 
@@ -205,6 +211,11 @@ const DashboardContent = () => {
             <CreateGroupModal
                 isOpen={showCreateGroupModal}
                 onClose={() => setShowCreateGroupModal(false)}
+            />
+
+            <StatusComposerModal
+                isOpen={showStatusComposer}
+                onClose={() => setShowStatusComposer(false)}
             />
 
             <NotificationBanner />

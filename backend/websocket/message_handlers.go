@@ -57,7 +57,7 @@ func (mh *MessageHandler) HandleChatMessage() {
 			"type":  "error",
 			"error": "Error al enviar mensaje",
 		})
-		mh.Client.Send <- errorMsg
+		safeSend(mh.Client.Send, errorMsg)
 		return
 	}
 
@@ -74,7 +74,7 @@ func (mh *MessageHandler) HandleChatMessage() {
 	log.Printf("[WS] JSON a enviar: %s", string(responseBytes))
 
 	// 6. Enviar al remitente (confirmación)
-	mh.Client.Send <- responseBytes
+	safeSend(mh.Client.Send, responseBytes)
 
 	// 7. Enviar al receptor si está conectado (usando telephon)
 	if receptorConnected {
@@ -156,7 +156,7 @@ func (mh *MessageHandler) HandleEditMessage() {
 			"type":  "error",
 			"error": "El mensaje editado no puede estar vacío",
 		})
-		mh.Client.Send <- errorMsg
+		safeSend(mh.Client.Send, errorMsg)
 		return
 	}
 
@@ -169,7 +169,7 @@ func (mh *MessageHandler) HandleEditMessage() {
 			"type":  "error",
 			"error": "Error al editar mensaje: " + err.Error(),
 		})
-		mh.Client.Send <- errorMsg
+		safeSend(mh.Client.Send, errorMsg)
 		return
 	}
 
@@ -183,7 +183,7 @@ func (mh *MessageHandler) HandleEditMessage() {
 	responseBytes, _ := json.Marshal(responseMsg)
 
 	// 5. Enviar confirmación al remitente
-	mh.Client.Send <- responseBytes
+	safeSend(mh.Client.Send, responseBytes)
 
 	// 6. Enviar al receptor si está conectado
 	_, receptorConnected := mh.Hub.GetClient(msgEdit.Receptor)
@@ -367,7 +367,7 @@ func (mh *MessageHandler) HandleDeleteMessage() {
 			"type":  "error",
 			"error": "Error al eliminar mensaje: " + err.Error(),
 		})
-		mh.Client.Send <- errorMsg
+		safeSend(mh.Client.Send, errorMsg)
 		return
 	}
 	responseMsg := map[string]interface{}{
@@ -375,7 +375,7 @@ func (mh *MessageHandler) HandleDeleteMessage() {
 		"payload": deletedMsg,
 	}
 	responseBytes, _ := json.Marshal(responseMsg)
-	mh.Client.Send <- responseBytes
+	safeSend(mh.Client.Send, responseBytes)
 	_, receptorConnected := mh.Hub.GetClient(msgDel.Receptor)
 	if receptorConnected {
 		mh.Hub.SendTo(msgDel.Receptor, responseBytes)
@@ -422,7 +422,7 @@ func (mh *MessageHandler) HandleGroupChatMessage() {
 	mh.Hub.JoinRoom(msgSend.GroupID, mh.Client)
 
 	// Confirmar al sender
-	mh.Client.Send <- responseBytes
+	safeSend(mh.Client.Send, responseBytes)
 
 	// Broadcast a todos los miembros conectados del grupo (excepto sender)
 	mh.Hub.SendToGroup(msgSend.GroupID, mh.Client.Telephon, responseBytes)
@@ -485,7 +485,7 @@ func (mh *MessageHandler) HandleGroupEditMessage() {
 		"payload": updatedMsg,
 	})
 
-	mh.Client.Send <- responseBytes
+	safeSend(mh.Client.Send, responseBytes)
 	mh.Hub.SendToGroup(rawPayload.GroupID, mh.Client.Telephon, responseBytes)
 }
 
@@ -521,7 +521,7 @@ func (mh *MessageHandler) HandleGroupDeleteMessage() {
 		},
 	})
 
-	mh.Client.Send <- responseBytes
+	safeSend(mh.Client.Send, responseBytes)
 	mh.Hub.SendToGroup(rawPayload.GroupID, mh.Client.Telephon, responseBytes)
 }
 
@@ -653,5 +653,5 @@ func (mh *MessageHandler) sendError(msg string) {
 		"type":  "error",
 		"error": msg,
 	})
-	mh.Client.Send <- errorMsg
+	safeSend(mh.Client.Send, errorMsg)
 }

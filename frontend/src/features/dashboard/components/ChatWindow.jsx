@@ -62,9 +62,9 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
                     <div className="w-32 h-32 bg-slate-900 rounded-full flex items-center justify-center mb-8 shadow-lg border border-white/5">
                         <img src="/todos.svg" alt="todos" className="w-16 h-16 opacity-50 grayscale" />
                     </div>
-                    <h2 className="text-3xl font-semibold mb-3 text-slate-200">Bienvenido a todos</h2>
+                    <h2 className="text-3xl font-semibold mb-3 text-slate-200">Tus conversaciones empiezan aquí</h2>
                     <p className="max-w-md text-slate-500 text-lg">
-                        Selecciona un chat para comenzar a enviar mensajes.
+                        Elige un chat para retomar la conversación, responder más rápido o empezar una nueva.
                     </p>
                     <div className="mt-8 flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-full border border-white/5">
                         <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
@@ -96,7 +96,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
 
     const handleClearChat = async () => {
         if (!selected) return;
-        if (!window.confirm(`¿Seguro que quieres vaciar el chat con ${selected.ContactName || selected.Username}?`)) return;
+        if (!window.confirm(`¿Quieres vaciar la conversación con ${selected.ContactName || selected.Username}? Los mensajes desaparecerán de esta vista.`)) return;
         try {
             await api.delete(`/api/v1/chat/${selected.Number}`);
             setMessagesByChat(prev => ({
@@ -105,13 +105,13 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
             }));
         } catch (err) {
             console.error('Error al vaciar chat:', err);
-            alert('Error al vaciar el chat');
+            alert('No pudimos vaciar la conversación en este momento. Inténtalo nuevamente.');
         }
     };
 
     const handleCallClick = (type) => {
         if (!isConnected) {
-            alert('No se puede iniciar la llamada: El servidor no está conectado.');
+            alert('Ahora mismo no podemos iniciar la llamada. Revisa tu conexión e inténtalo de nuevo.');
             return;
         }
         if (!selected) return;
@@ -125,11 +125,11 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden bg-slate-950">
             {/* Header fijo */}
             <div className="flex-shrink-0 px-4 py-3 border-b border-white/5 bg-slate-900/95 backdrop-blur-md flex flex-col gap-2 z-10 shadow-sm">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3">
                     {/* Botón atrás para móvil (estilo WhatsApp) */}
                     <button
                         onClick={() => setSelected(null)}
-                        className="lg:hidden p-2 hover:bg-white/10 rounded-full transition-colors flex-shrink-0 text-slate-400"
+                        className="lg:hidden p-2 hover:bg-white/10 rounded-2xl transition-colors flex-shrink-0 text-slate-400"
                         aria-label="Volver a chats"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -138,10 +138,10 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
                     </button>
                     
                     <div 
-                        className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-1.5 rounded-xl transition-colors flex-1 min-w-0"
+                        className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-1.5 rounded-2xl transition-colors flex-1 min-w-0"
                         onClick={onShowContactDetails}
                     >
-                        <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-slate-700 rounded-full flex items-center justify-center shadow-sm overflow-hidden flex-shrink-0">
+                        <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-sm overflow-hidden flex-shrink-0 bg-gradient-to-br from-cyan-500 to-sky-600">
                             {avatarMap[selected.Number] ? (
                                 <img src={avatarMap[selected.Number]} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -157,9 +157,9 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
                             <div className="font-semibold text-base truncate text-slate-100">{selected.ContactName || selected.Username}</div>
                             <div className="text-sm text-slate-400 truncate">
                                 {isContactTyping(selected.Number) ? (
-                                    <span className="text-indigo-400 italic font-medium animate-pulse">escribiendo...</span>
+                                    <span className="text-cyan-400 italic font-medium animate-pulse">escribiendo...</span>
                                 ) : isContactOnline(selected.Number) ? (
-                                    <span className="text-green-400 font-medium">en línea</span>
+                                    <span className="text-emerald-400 font-medium">en línea</span>
                                 ) : (
                                     <span>{getLastSeenText(selected.Number) || selected.Number}</span>
                                 )}
@@ -172,7 +172,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
                         <button
                             onClick={() => handleCallClick('audio')}
                             disabled={!isConnected}
-                            className="p-2 hover:bg-white/10 rounded-full transition-all text-slate-400 hover:text-indigo-400 disabled:opacity-30"
+                            className="p-2 hover:bg-emerald-500/10 rounded-2xl transition-all text-slate-400 hover:text-emerald-400 disabled:opacity-30"
                             title="Llamada de voz"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -182,7 +182,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
                         <button
                             onClick={() => handleCallClick('video')}
                             disabled={!isConnected}
-                            className="p-2 hover:bg-white/10 rounded-full transition-all text-slate-400 hover:text-purple-400 disabled:opacity-30"
+                            className="p-2 hover:bg-sky-500/10 rounded-2xl transition-all text-slate-400 hover:text-sky-400 disabled:opacity-30"
                             title="Videollamada"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -192,7 +192,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
                         <div className="w-px h-6 bg-white/10 mx-1"></div>
                         <button
                             onClick={handleClearChat}
-                            className="p-2.5 hover:bg-red-500/20 rounded-full transition-all text-slate-400 hover:text-red-400"
+                            className="p-2.5 hover:bg-red-500/20 rounded-2xl transition-all text-slate-400 hover:text-red-400"
                             title="Vaciar Chat"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -205,19 +205,19 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
 
             {/* Banner "Agregar / Bloquear" para contactos desconocidos */}
             {selected && allChatGroups[selected.Number] && !allChatGroups[selected.Number].IsContact && (
-                <div className="flex-shrink-0 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between gap-3">
-                    <span className="text-sm text-amber-300">
+                <div className="flex-shrink-0 px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <span className="text-sm text-amber-200 leading-relaxed">
                         <strong>{selected.Username || selected.Number}</strong> no está en tus contactos
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-stretch sm:self-auto w-full sm:w-auto">
                         <button
                             onClick={() => setShowAddContactModal(true)}
-                            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                            className="flex-1 sm:flex-none px-3 py-2 text-sm font-medium rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white transition-colors"
                         >
                             Agregar
                         </button>
                         <button
-                            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-red-600/80 hover:bg-red-500 text-white transition-colors"
+                            className="flex-1 sm:flex-none px-3 py-2 text-sm font-medium rounded-xl bg-red-600/80 hover:bg-red-500 text-white transition-colors"
                             title="Bloquear contacto"
                         >
                             Bloquear

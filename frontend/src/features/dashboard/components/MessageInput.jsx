@@ -21,6 +21,7 @@ const MessageInput = () => {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
+    const textareaRef = useRef(null);
 
     const currentDraft = selected ? (drafts[selected.Number] || '') : '';
 
@@ -35,6 +36,12 @@ const MessageInput = () => {
     const handleSend = () => {
         messagingHandleSend(currentDraft);
     };
+
+    useEffect(() => {
+        if (!textareaRef.current) return;
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }, [currentDraft, selected?.Number]);
 
     const startRecording = async () => {
         try {
@@ -60,7 +67,7 @@ const MessageInput = () => {
                     }
                 } catch (error) {
                     console.error('Error uploading voice note:', error);
-                    alert('Error al enviar nota de voz');
+                    alert('No pudimos enviar la nota de voz. Inténtalo nuevamente.');
                 }
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -71,7 +78,7 @@ const MessageInput = () => {
             recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
         } catch (err) {
             console.error('Error accessing microphone:', err);
-            alert('No se pudo acceder al micrófono.');
+            alert('No pudimos acceder al micrófono. Revisa los permisos de tu navegador.');
         }
     };
 
@@ -104,17 +111,17 @@ const MessageInput = () => {
     if (!selected) return null;
 
     return (
-        <div className="flex-shrink-0 bg-slate-900 border-t border-white/5">
+        <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md">
             {replyingTo && (
-                <div className="px-4 py-2 bg-slate-800/50 border-b border-white/5 flex items-center gap-3">
-                    <div className="w-1 h-8 bg-indigo-500 rounded-full"></div>
+                <div className="px-4 py-2.5 bg-slate-950/35 border-b border-white/5 flex items-center gap-3">
+                    <div className="w-1 h-9 bg-gradient-to-b from-cyan-400 to-indigo-500 rounded-full"></div>
                     <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-indigo-400">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-300/85">
                             Respondiendo a {replyingTo.SenderTelephon === profile?.Telephon ? 'ti mismo' : replyingTo.SenderUsername || 'mensaje'}
                         </div>
-                        <div className="text-xs text-slate-400 truncate">{replyingTo.Message}</div>
+                        <div className="text-xs text-slate-400 truncate mt-0.5">{replyingTo.Message}</div>
                     </div>
-                    <button onClick={cancelReply} className="p-1.5 text-slate-400 hover:text-slate-200">
+                    <button onClick={cancelReply} className="p-1.5 text-slate-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>
@@ -122,11 +129,11 @@ const MessageInput = () => {
                 </div>
             )}
             
-            <div className="p-3 sm:p-4 flex gap-2 sm:gap-3 items-end bg-slate-900 relative">
+            <div className="p-3 sm:p-4 flex gap-2 sm:gap-3 items-end bg-transparent relative">
                 <div className="relative">
                     <button
                         onClick={() => setShowAttachMenu(!showAttachMenu)}
-                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+                        className="h-[44px] w-[44px] flex items-center justify-center rounded-2xl border border-white/8 bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700 transition-all shadow-lg shadow-black/10"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 transform -rotate-45">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
@@ -135,15 +142,15 @@ const MessageInput = () => {
                     {showAttachMenu && (
                         <MediaUploadMenu 
                             onUploadSuccess={(url, type) => { handleMediaUploadSuccess(url, type); setShowAttachMenu(false); }}
-                            onUploadError={(err) => { alert(err); setShowAttachMenu(false); }}
+                            onUploadError={(err) => { alert(err || 'No pudimos adjuntar tu archivo. Inténtalo nuevamente.'); setShowAttachMenu(false); }}
                             onClose={() => setShowAttachMenu(false)}
                         />
                     )}
                 </div>
 
-                <div className="flex-1 relative bg-slate-800 rounded-3xl flex items-end border border-transparent focus-within:border-slate-700 transition-colors">
+                <div className="flex-1 relative rounded-[26px] flex items-end border border-white/8 bg-slate-800/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-within:border-cyan-500/40 focus-within:ring-2 focus-within:ring-cyan-500/10 transition-all overflow-hidden">
                     {isRecording ? (
-                        <div className="w-full h-[44px] flex items-center justify-between px-4 text-red-400">
+                        <div className="w-full h-[46px] flex items-center justify-between px-4 text-red-400">
                             <div className="flex items-center gap-3">
                                 <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
                                 <span className="font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
@@ -152,11 +159,16 @@ const MessageInput = () => {
                         </div>
                     ) : (
                         <textarea 
+                            ref={textareaRef}
                             value={currentDraft}
                             onChange={handleInputChange}
                             placeholder="Escribe un mensaje..."
-                            className="w-full p-3 px-4 bg-transparent focus:outline-none text-slate-100 placeholder-slate-500 text-[15px] resize-none min-h-[44px] max-h-[120px] transition-all"
+                            className="w-full bg-transparent px-4 py-3 focus:outline-none text-slate-100 placeholder-slate-500 text-[15px] resize-none min-h-[46px] max-h-[120px] leading-relaxed transition-all"
                             rows={1}
+                            onInput={(e) => {
+                                e.target.style.height = 'auto';
+                                e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                            }}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
@@ -169,7 +181,7 @@ const MessageInput = () => {
                 
                 {currentDraft.trim() ? (
                     <button
-                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full bg-indigo-600 text-white"
+                        className="h-[46px] w-[46px] flex items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-lg shadow-sky-900/30 transition-all hover:scale-[1.03] hover:from-sky-400 hover:to-indigo-500"
                         onClick={handleSend}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 ml-1">
@@ -178,7 +190,7 @@ const MessageInput = () => {
                     </button>
                 ) : (
                     <button
-                        className={`h-[44px] w-[44px] flex items-center justify-center rounded-full text-white ${isRecording ? 'bg-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}
+                        className={`h-[46px] w-[46px] flex items-center justify-center rounded-2xl text-white shadow-lg transition-all hover:scale-[1.03] ${isRecording ? 'bg-red-500 shadow-red-950/30' : 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-950/30 hover:from-emerald-400 hover:to-teal-500'}`}
                         onClick={isRecording ? stopRecording : startRecording}
                     >
                         {isRecording ? (

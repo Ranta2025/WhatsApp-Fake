@@ -126,15 +126,14 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
         >
             {/* Card principal */}
             <div
-                className="relative overflow-hidden rounded-2xl border border-white/[0.06]"
+                className="relative overflow-hidden rounded-[1.6rem] border border-white/[0.08]"
                 style={{
-                    background: 'linear-gradient(145deg, #1e1b4b 0%, #0f172a 50%, #1e1b4b 100%)',
-                    boxShadow: '0 20px 60px -12px rgba(0,0,0,0.6), 0 4px 20px -4px rgba(79,70,229,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+                    background: 'linear-gradient(145deg, #082f49 0%, #0f172a 52%, #1f2937 100%)',
+                    boxShadow: '0 20px 60px -12px rgba(0,0,0,0.6), 0 4px 20px -4px rgba(14,165,233,0.18), inset 0 1px 0 rgba(255,255,255,0.05)',
                 }}
             >
-                {/* Glow sutil en hover */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    style={{ background: 'radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(99,102,241,0.06), transparent 40%)' }}
+                <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                    style={{ background: 'radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(34,211,238,0.07), transparent 40%)' }}
                 />
 
                 <div className="relative flex items-center gap-3.5 p-3.5 pr-3">
@@ -157,8 +156,7 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
                             </div>
                         </div>
 
-                        {/* Badge app */}
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center shadow-lg ring-2 ring-slate-900">
+                        <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-md bg-sky-500 shadow-lg ring-2 ring-slate-900">
                             <span className="text-[9px] font-black text-white leading-none">T</span>
                         </div>
                     </div>
@@ -169,7 +167,7 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
                             <span className="font-semibold text-[14px] text-white truncate leading-tight">
                                 {notif.senderName}
                             </span>
-                            <span className="text-[10px] text-indigo-400/60 flex-shrink-0 font-medium uppercase tracking-wider">
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-sky-200/60 flex-shrink-0">
                                 Ahora
                             </span>
                         </div>
@@ -197,7 +195,7 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
                         className="h-full rounded-full"
                         style={{
                             width: `${progress}%`,
-                            background: 'linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7)',
+                            background: 'linear-gradient(90deg, #06b6d4, #0ea5e9, #f59e0b)',
                             transition: 'none',
                         }}
                     />

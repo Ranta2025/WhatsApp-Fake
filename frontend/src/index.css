@@ -4,7 +4,19 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+}
+
+html {
+  overflow-y: auto;
+}
+
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+#root {
+  min-height: 100%;
 }
 
 @keyframes slideIn {
@@ -29,6 +41,15 @@ html, body, #root {
 
 .animate-fade-in {
   animation: fade-in 0.5s ease-out;
+}
+
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
 }
 
 .react-tel-input {

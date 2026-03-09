@@ -138,6 +138,21 @@ func MiddlewareGroupSetRole() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareGroupRemoveMember valida el body de la operación de eliminación de miembro.
+// Acepta: { "number": "+502..." }
+func MiddlewareGroupRemoveMember() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body models.GroupRemoveMember
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Datos inválidos: " + err.Error()})
+			c.Abort()
+			return
+		}
+		c.Set("groupRemoveMember", body)
+		c.Next()
+	}
+}
+
 // MiddlewareGroupID extrae el parámetro :groupID de la URL y lo convierte a uint.
 func MiddlewareGroupID() gin.HandlerFunc {
 	return func(c *gin.Context) {

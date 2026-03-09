@@ -13,6 +13,12 @@ const formatTime = (iso) => {
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+const isNearBottom = (element, threshold = 120) => {
+    if (!element) return true;
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    return distanceFromBottom <= threshold;
+};
+
 // ── GroupMessageBubble ────────────────────────────────────────────────────────
 
 const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen }) => {
@@ -64,7 +70,7 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
                 );
             case 'audio':
                 return (
-                    <div className="mb-1 w-full min-w-[240px]">
+                    <div className="mb-1 w-full max-w-full min-w-0">
                         <AudioPlayer src={mediaUrl} isMine={isMine} />
                     </div>
                 );
@@ -458,16 +464,62 @@ const GroupMessageInput = () => {
 
 // ── GroupMessageList ──────────────────────────────────────────────────────────
 
-const GroupMessageList = ({ messages, myTelephon, activeWallpaper }) => {
+const GroupMessageList = ({ groupID, messages, myTelephon, activeWallpaper }) => {
+    const containerRef = useRef(null);
     const bottomRef = useRef(null);
+    const previousMessageCountRef = useRef(0);
+    const shouldStickToBottomRef = useRef(true);
+    const [showJumpToBottom, setShowJumpToBottom] = useState(false);
     const {
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
 
+    const scrollToBottom = useCallback((behavior = 'smooth') => {
+        if (!bottomRef.current) return;
+        bottomRef.current.scrollIntoView({ behavior, block: 'end' });
+    }, []);
+
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages?.length]);
+        previousMessageCountRef.current = messages?.length || 0;
+        shouldStickToBottomRef.current = true;
+        setShowJumpToBottom(false);
+        requestAnimationFrame(() => {
+            scrollToBottom('auto');
+        });
+    }, [groupID, scrollToBottom]);
+
+    useEffect(() => {
+        const messageCount = messages?.length || 0;
+        const previousCount = previousMessageCountRef.current;
+        previousMessageCountRef.current = messageCount;
+
+        if (messageCount === 0) {
+            return;
+        }
+
+        if (previousCount === 0) {
+            requestAnimationFrame(() => {
+                scrollToBottom('auto');
+            });
+            return;
+        }
+
+        if (shouldStickToBottomRef.current) {
+            requestAnimationFrame(() => {
+                scrollToBottom('smooth');
+            });
+        } else {
+            setShowJumpToBottom(true);
+        }
+    }, [messages?.length, scrollToBottom]);
+
+    const handleScroll = useCallback(() => {
+        const container = containerRef.current;
+        const nearBottom = isNearBottom(container);
+        shouldStickToBottomRef.current = nearBottom;
+        setShowJumpToBottom(!nearBottom);
+    }, []);
 
     const containerStyle = activeWallpaper
         ? { backgroundImage: `url(${activeWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
@@ -482,32 +534,57 @@ const GroupMessageList = ({ messages, myTelephon, activeWallpaper }) => {
     }
 
     return (
-        <div className="flex-1 overflow-y-auto py-3 space-y-0.5" style={containerStyle}>
-            {messages.map((msg) => {
-                if (msg.IsSystem) {
+        <div className="relative flex-1 min-h-0">
+            <div
+                ref={containerRef}
+                onScroll={handleScroll}
+                className="h-full overflow-y-auto py-3 space-y-0.5"
+                style={containerStyle}
+            >
+                {messages.map((msg) => {
+                    if (msg.IsSystem) {
+                        return (
+                            <div key={msg.MessageID} className="flex justify-center py-1 px-4">
+                                <span className="bg-black/40 backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
+                                    {msg.Message}
+                                </span>
+                            </div>
+                        );
+                    }
                     return (
-                        <div key={msg.MessageID} className="flex justify-center py-1 px-4">
-                            <span className="bg-black/40 backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
-                                {msg.Message}
-                            </span>
-                        </div>
+                        <GroupMessageBubble
+                            key={msg.MessageID}
+                            msg={msg}
+                            isMine={msg.SenderTelephon === myTelephon}
+                            onEdit={handleEditMessage}
+                            onDelete={handleDeleteMessage}
+                            onReply={handleReplyToMessage}
+                            onDeleteForMe={handleDeleteMessageForMe}
+                            menuOpen={messageMenuOpen}
+                            setMenuOpen={setMessageMenuOpen}
+                        />
                     );
-                }
-                return (
-                    <GroupMessageBubble
-                        key={msg.MessageID}
-                        msg={msg}
-                        isMine={msg.SenderTelephon === myTelephon}
-                        onEdit={handleEditMessage}
-                        onDelete={handleDeleteMessage}
-                        onReply={handleReplyToMessage}
-                        onDeleteForMe={handleDeleteMessageForMe}
-                        menuOpen={messageMenuOpen}
-                        setMenuOpen={setMessageMenuOpen}
-                    />
-                );
-            })}
-            <div ref={bottomRef} />
+                })}
+                <div ref={bottomRef} />
+            </div>
+
+            {showJumpToBottom && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        shouldStickToBottomRef.current = true;
+                        setShowJumpToBottom(false);
+                        scrollToBottom('smooth');
+                    }}
+                    className="absolute bottom-4 right-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-200 shadow-xl backdrop-blur-md transition-all hover:scale-105 hover:bg-slate-800"
+                    aria-label="Ir al final del chat"
+                    title="Ir al final"
+                >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                </button>
+            )}
         </div>
     );
 };
@@ -635,6 +712,8 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
     const [descError, setDescError]               = useState('');
     const [addContactOpen, setAddContactOpen]     = useState(false);
     const [addContactTarget, setAddContactTarget] = useState({ number: '', username: '' });
+    const [confirmRemove, setConfirmRemove]       = useState(null); // { telephon, username }
+    const [removeLoading, setRemoveLoading]       = useState(false);
     const optionsRef                               = useRef(null);
     const memberMenuRef                            = useRef(null);
     const avatarInputRef                           = useRef(null);
@@ -757,6 +836,31 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         }
     };
 
+    const handleRemoveMember = async () => {
+        if (!confirmRemove || !selectedGroup) return;
+        setRemoveLoading(true);
+        try {
+            const { removeMember } = await import('../../../api/groupApi');
+            await removeMember(selectedGroup.ID, confirmRemove.telephon);
+            // Optimistic update — WS broadcast will confirm to all
+            setSelectedGroup(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    MemberCount: Math.max((prev.MemberCount || 1) - 1, 0),
+                    Members: (prev.Members || []).filter(m => m.Telephon !== confirmRemove.telephon),
+                };
+            });
+            addToast({ type: 'success', message: `${confirmRemove.username || confirmRemove.telephon} fue eliminado del grupo` });
+            setConfirmRemove(null);
+            setMemberMenuOpen(null);
+        } catch (err) {
+            addToast({ type: 'error', message: err?.response?.data?.error || 'Error al eliminar al miembro' });
+        } finally {
+            setRemoveLoading(false);
+        }
+    };
+
     const handleSetRole = async (targetTelephon, newRole) => {
         setRoleLoading(targetTelephon);
         try {
@@ -865,7 +969,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
             <div className="flex-shrink-0 px-4 py-3 border-b border-white/5 bg-slate-900/95 backdrop-blur-md flex items-center gap-3 z-10 shadow-sm">
                 {/* Back (mobile) */}
                 <button onClick={() => setSelectedGroup(null)}
-                        className="lg:hidden p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400"
+                        className="lg:hidden p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-400"
                         aria-label="Volver">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -873,7 +977,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                 </button>
 
                 {/* Avatar */}
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-white text-lg flex-shrink-0 shadow overflow-hidden">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-full flex items-center justify-center font-bold text-white text-lg flex-shrink-0 shadow overflow-hidden">
                     {selectedGroup.AvatarUrl
                         ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
                         : selectedGroup.Name?.charAt(0)?.toUpperCase()
@@ -885,7 +989,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                     <div className="font-semibold text-slate-100 truncate">{selectedGroup.Name}</div>
                     <div className="text-xs text-slate-400 truncate">
                         {typingInGroup.length > 0 ? (
-                            <span className="text-indigo-400 italic animate-pulse">alguien está escribiendo...</span>
+                            <span className="text-cyan-400 italic animate-pulse">alguien está escribiendo...</span>
                         ) : (
                             `${selectedGroup.MemberCount ?? '?'} miembros`
                         )}
@@ -900,7 +1004,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                             <button
                                 onClick={() => onStartGroupCall?.('audio')}
                                 disabled={!isConnected}
-                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white disabled:opacity-40"
+                                className="p-2 hover:bg-emerald-500/10 rounded-2xl transition-colors text-slate-400 hover:text-emerald-400 disabled:opacity-40"
                                 title="Llamada de voz grupal"
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -910,7 +1014,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                             <button
                                 onClick={() => onStartGroupCall?.('video')}
                                 disabled={!isConnected}
-                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white disabled:opacity-40"
+                                className="p-2 hover:bg-sky-500/10 rounded-2xl transition-colors text-slate-400 hover:text-sky-400 disabled:opacity-40"
                                 title="Videollamada grupal"
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -922,7 +1026,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                     {/* More options kebab */}
                     <div className="relative" ref={optionsRef}>
                         <button onClick={() => setShowOptions(v => !v)}
-                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+                            className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-400 hover:text-white"
                                 title="Más opciones">
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
@@ -991,7 +1095,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                                         onClick={() => setShowAvatarMenu(v => !v)}
                                         className="relative w-24 h-24 rounded-full overflow-hidden shadow-xl focus:outline-none"
                                         disabled={uploadingAvatar}>
-                                        <div className="w-full h-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-4xl font-bold text-white">
+                                        <div className="w-full h-full bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-4xl font-bold text-white">
                                             {selectedGroup.AvatarUrl
                                                 ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
                                                 : selectedGroup.Name?.charAt(0)?.toUpperCase()
@@ -1250,6 +1354,15 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                                                                         {roleLoading === m.Telephon ? 'Guardando...' : 'Quitar admin'}
                                                                     </button>
                                                                 )}
+                                                                <div className="border-t border-white/5 my-1" />
+                                                                <button
+                                                                    onClick={() => { setConfirmRemove({ telephon: m.Telephon, username: m.ContactName || m.Username }); setMemberMenuOpen(null); }}
+                                                                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                                                                    </svg>
+                                                                    Eliminar del grupo
+                                                                </button>
                                                             </>
                                                         )}
                                                     </div>
@@ -1300,7 +1413,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
             <style>{`@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
 
             {/* ── Message list ── */}
-            <GroupMessageList messages={messages} myTelephon={myTelephon} activeWallpaper={activeWallpaper} />
+            <GroupMessageList groupID={selectedGroup.ID} messages={messages} myTelephon={myTelephon} activeWallpaper={activeWallpaper} />
 
             {/* ── Input ── */}
             <GroupMessageInput />
@@ -1382,9 +1495,39 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                 </div>
             )}
 
+            {/* ── Confirm remove member dialog ── */}
+            {confirmRemove && (
+                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                     onClick={() => !removeLoading && setConfirmRemove(null)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
+                         onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="font-semibold text-white">¿Eliminar a {confirmRemove.username || confirmRemove.telephon}?</p>
+                                <p className="text-xs text-slate-400 mt-0.5">Esta persona será eliminada del grupo y ya no podrá ver los mensajes futuros.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmRemove(null)} disabled={removeLoading}
+                                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors disabled:opacity-50">
+                                Cancelar
+                            </button>
+                            <button onClick={handleRemoveMember} disabled={removeLoading}
+                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                                {removeLoading ? 'Eliminando...' : 'Eliminar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ── Avatar full-screen lightbox ── */}
-            {viewAvatarOpen && selectedGroup.AvatarUrl && (
-                <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
+            {viewAvatarOpen && selectedGroup.AvatarUrl && (                <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
                      onClick={() => setViewAvatarOpen(false)}>
                     <button onClick={() => setViewAvatarOpen(false)}
                             className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">

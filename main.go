@@ -55,8 +55,12 @@ func main() {
 	serviceGroup := services.InitServiceGroup(repoGroup, repo)
 	handlerGroup := handlers.InitHandlerGroup(serviceGroup, hub)
 
+	repoStatus := repos.InitRepoStatus(db)
+	serviceStatus := services.InitServiceStatus(repoStatus)
+	handlerStatus := handlers.InitHandlerStatus(serviceStatus, hub)
+
 	middleware.InitRateLimiter(rd)
-	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall, handlerMedia, handlerGroup, serviceGroup)
+	routers.Router(*handlerLog, app.app, *handlerContact, *handlerChat, handlerCall, hub, serviceChat, serviceContact, handlerBugReport, serviceCall, handlerMedia, handlerGroup, serviceGroup, handlerStatus)
 
 	app.Welcome()
 	app.Run()

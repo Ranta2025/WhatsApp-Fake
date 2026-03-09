@@ -99,7 +99,7 @@ func (c *Client) readPump(hub *Hub) {
 
 		// 3. Ping tiene respuesta directa, no necesita handler
 		if baseMsg.Type == "ping" {
-			c.Send <- []byte(`{"type":"pong"}`)
+			safeSend(c.Send, []byte(`{"type":"pong"}`))
 			continue
 		}
 

@@ -50,7 +50,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
             setGlobalWallpaper(data.url);
         } catch (err) {
             console.error('Error uploading wallpaper:', err);
-            alert('Error al subir el fondo');
+            alert('No pudimos actualizar tu fondo en este momento. Inténtalo nuevamente.');
         } finally {
             setUploadingWallpaper(false);
         }
@@ -63,7 +63,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
             setGlobalWallpaper("");
         } catch (err) {
             console.error('Error removing wallpaper:', err);
-            alert('Error al quitar el fondo');
+            alert('No pudimos quitar el fondo en este momento. Inténtalo nuevamente.');
         } finally {
             setUploadingWallpaper(false);
         }
@@ -82,12 +82,12 @@ const ProfileModal = ({ isOpen, onClose }) => {
         }
 
         if (nameChanged && nu.length < 5) {
-            setStatus('El usuario tiene que tener mas de 5 caracteres');
+            setStatus('Tu nombre visible debe tener al menos 5 caracteres.');
             return;
         }
 
         try {
-            setStatus('Guardando cambios...');
+            setStatus('Guardando tus cambios...');
             setUploadingAvatar(true);
 
             if (photoChanged) {
@@ -117,7 +117,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
             setNewAvatarPreview(null);
         } catch (err) {
             const d = err?.response?.data;
-            const msg = typeof d === 'string' ? d : d?.message || d?.error || err?.message || 'Error al actualizar';
+            const msg = typeof d === 'string' ? d : d?.message || d?.error || err?.message || 'No pudimos actualizar tu perfil en este momento.';
             setStatus(msg);
         } finally {
             setUploadingAvatar(false);
@@ -125,26 +125,37 @@ const ProfileModal = ({ isOpen, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-700/50">
-                <div className="p-6 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/50">
-                    <h2 className="text-xl font-semibold text-slate-100">Editar Perfil</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-slate-400 hover:text-slate-200 transition-colors p-2 hover:bg-slate-700/50 rounded-lg"
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(15,23,42,0.94))] shadow-[0_32px_120px_-48px_rgba(15,23,42,0.95)]">
+                <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_40%),linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.01))] p-6">
+                    <div className="mb-4 flex items-start justify-between gap-4">
+                        <div>
+                            <div className="inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200">Perfil</div>
+                            <h2 className="mt-3 text-xl font-semibold text-slate-100">Editar perfil</h2>
+                            <p className="mt-1 text-sm text-slate-400">Personaliza cómo te ven y dale a tus conversaciones una presencia más tuya.</p>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="rounded-full p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-200"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs text-slate-300">
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2"><span className="block text-slate-500">Nombre</span><span className="mt-1 block truncate font-semibold text-white">{user?.username || 'Por definir'}</span></div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2"><span className="block text-slate-500">Imagen</span><span className="mt-1 block font-semibold text-white">{newAvatarPreview || myAvatar ? 'Actualizada' : 'Predeterminada'}</span></div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2"><span className="block text-slate-500">Ambiente</span><span className="mt-1 block font-semibold text-white">{globalWallpaper ? 'Personalizado' : 'Base'}</span></div>
+                    </div>
                 </div>
                 <form onSubmit={submitEdit} className="p-6 space-y-6">
                     <div className="flex flex-col items-center mb-6">
                         <label className="relative w-24 h-24 rounded-full cursor-pointer group mb-2 shadow-lg" title="Cambiar foto de perfil">
                             {newAvatarPreview || (myAvatar && !removeAvatar) ? (
-                                <img src={newAvatarPreview || myAvatar} alt="avatar" className="w-24 h-24 rounded-full object-cover border-2 border-indigo-500/50" />
+                                <img src={newAvatarPreview || myAvatar} alt="avatar" className="w-24 h-24 rounded-full object-cover border-2 border-sky-400/40" />
                             ) : (
-                                <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-slate-600 rounded-full flex items-center justify-center font-bold text-3xl border-2 border-indigo-500/50 text-white">
+                                <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-sky-400/40 bg-[linear-gradient(135deg,rgba(56,189,248,0.75),rgba(14,116,144,0.65))] text-3xl font-bold text-white">
                                     {user?.username?.charAt(0).toUpperCase()}
                                 </div>
                             )}
@@ -184,16 +195,16 @@ const ProfileModal = ({ isOpen, onClose }) => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Fondo Global de Chats</label>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Fondo general de conversaciones</label>
                         {globalWallpaper ? (
-                            <div className="relative rounded-xl overflow-hidden mb-2 h-32 bg-slate-900/50 border border-slate-700/50 group">
+                            <div className="group relative mb-2 h-32 overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-900/50">
                                 <img
                                     src={globalWallpaper.startsWith('/') ? window.location.origin + globalWallpaper : globalWallpaper}
                                     alt="Fondo actual"
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-3 gap-3">
-                                    <label className="cursor-pointer flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-500/80 hover:bg-indigo-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg">
+                                    <label className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-sky-500/80 px-3 py-1.5 text-sm font-medium text-white shadow-lg transition-all hover:bg-sky-500 backdrop-blur-md">
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
@@ -203,7 +214,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
                                     <button
                                         type="button"
                                         onClick={handleRemoveGlobalWallpaper}
-                                        className="flex items-center gap-1.5 text-sm font-medium text-white bg-rose-500/80 hover:bg-rose-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg"
+                                        className="flex items-center gap-1.5 rounded-xl bg-rose-500/80 px-3 py-1.5 text-sm font-medium text-white shadow-lg transition-all hover:bg-rose-500 backdrop-blur-md"
                                     >
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -213,7 +224,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
                                 </div>
                                 {uploadingWallpaper && (
                                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center">
-                                        <svg className="animate-spin h-8 w-8 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <svg className="animate-spin h-8 w-8 text-sky-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                         </svg>
@@ -221,20 +232,20 @@ const ProfileModal = ({ isOpen, onClose }) => {
                                 )}
                             </div>
                         ) : (
-                            <label className={`flex flex-col items-center justify-center h-32 rounded-xl border-2 border-dashed border-slate-600 hover:border-indigo-500/50 bg-slate-800/50 hover:bg-slate-700/30 transition-all cursor-pointer gap-3 group ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <label className={`group flex h-32 cursor-pointer flex-col items-center justify-center gap-3 rounded-[1.4rem] border-2 border-dashed border-slate-600 bg-slate-800/50 transition-all hover:border-sky-400/50 hover:bg-slate-700/30 ${uploadingWallpaper ? 'pointer-events-none opacity-50' : ''}`}>
                                 {uploadingWallpaper ? (
-                                    <svg className="animate-spin h-8 w-8 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <svg className="animate-spin h-8 w-8 text-sky-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                     </svg>
                                 ) : (
                                     <>
-                                        <div className="p-3 rounded-full bg-slate-700/50 group-hover:bg-indigo-500/20 transition-colors">
-                                            <svg className="w-6 h-6 text-slate-400 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <div className="rounded-full bg-slate-700/50 p-3 transition-colors group-hover:bg-sky-500/20">
+                                            <svg className="w-6 h-6 text-slate-400 transition-colors group-hover:text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
                                         </div>
-                                        <span className="text-sm font-medium text-slate-400 group-hover:text-indigo-300 transition-colors">Seleccionar imagen de fondo</span>
+                                        <span className="text-sm font-medium text-slate-400 transition-colors group-hover:text-sky-300">Seleccionar imagen de fondo</span>
                                     </>
                                 )}
                                 <input type="file" accept="image/*" className="hidden" onChange={handleGlobalWallpaperUpload} disabled={uploadingWallpaper} />
@@ -244,41 +255,41 @@ const ProfileModal = ({ isOpen, onClose }) => {
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            Se aplica a todos los chats que no tengan fondo propio
+                            Se mostrará en todas las conversaciones que no tengan una imagen personalizada
                         </p>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Nombre de usuario</label>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Nombre visible</label>
                         <input
                             type="text"
                             value={newUsername}
                             onChange={(e) => setNewUsername(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none text-slate-100 placeholder-slate-500 transition-all"
+                            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 placeholder-slate-500 transition-all focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                             placeholder="Tu nombre visible"
                         />
                     </div>
 
                     {status && (
-                        <div className={`text-sm ${status.includes('Error') || status.includes('caracteres') ? 'text-red-400' : 'text-indigo-400'}`}>
+                        <div className={`rounded-2xl border px-4 py-3 text-sm ${status.includes('Error') || status.includes('caracteres') ? 'border-rose-400/20 bg-rose-500/10 text-rose-200' : 'border-sky-400/20 bg-sky-500/10 text-sky-200'}`}>
                             {status}
                         </div>
                     )}
 
-                    <div className="flex gap-3 pt-4 border-t border-slate-700/50">
+                    <div className="flex gap-3 border-t border-white/10 pt-4">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-slate-300 bg-slate-700/50 hover:bg-slate-700 hover:text-white transition-colors"
+                            className="flex-1 rounded-2xl bg-slate-800 px-4 py-3 font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
+                            className="flex-1 rounded-2xl bg-[linear-gradient(135deg,#0ea5e9,#0369a1)] px-4 py-3 font-medium text-white shadow-[0_18px_45px_-20px_rgba(14,165,233,0.9)] transition-all hover:brightness-110 active:scale-[0.98]"
                             disabled={uploadingAvatar || uploadingWallpaper}
                         >
-                            {uploadingAvatar ? 'Guardando...' : 'Guardar Cambios'}
+                            {uploadingAvatar ? 'Guardando...' : 'Guardar cambios'}
                         </button>
                     </div>
                 </form>

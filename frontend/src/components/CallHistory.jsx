@@ -127,16 +127,23 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
 
     if (!calls || calls.length === 0) {
         return (
-            <div className="text-center text-indigo-200 py-8">
-                <PhoneIcon className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p className="text-sm">No hay llamadas recientes</p>
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] px-5 py-10 text-center text-slate-300">
+                <PhoneIcon className="mx-auto mb-3 h-10 w-10 opacity-40" />
+                <p className="text-sm font-medium">Aún no hay llamadas recientes</p>
+                <p className="mt-1 text-xs text-slate-500">Cuando inicies o recibas una llamada, aquí tendrás el historial a mano.</p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-1">
-            <div className="text-indigo-200 text-sm mb-2 uppercase">Llamadas Recientes</div>
+        <div className="space-y-2">
+            <div className="mb-3 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-300/80">Llamadas</div>
+                    <div className="mt-1 text-sm font-semibold text-white">Tus últimas llamadas</div>
+                </div>
+                <div className="rounded-full bg-slate-900/70 px-3 py-1 text-xs text-slate-400">{calls.length} movimientos</div>
+            </div>
             {calls.map((call) => {
                 const callID = call.id ?? call.ID;
                 const isOutgoing = call.isOutgoing ?? call.IsOutgoing;
@@ -160,7 +167,7 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
                 return (
                     <div
                         key={callID}
-                        className="group relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded flex items-center gap-3 cursor-pointer transition"
+                        className="group relative flex w-full cursor-pointer items-center gap-3 rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-3 text-left transition hover:border-sky-400/20 hover:bg-white/[0.07]"
                         onClick={() => {
                             // Al hacer click, abrir chat con ese contacto
                             const contact = contacts?.find(c => c.Number === remoteTelephon);
@@ -177,25 +184,22 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
                         }}
                     >
                         {/* Avatar */}
-                        <div className="relative w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-sm shrink-0">
+                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(34,211,238,0.18),rgba(59,130,246,0.18))] text-sm font-semibold text-white ring-1 ring-white/10">
                             {displayName?.charAt(0)?.toUpperCase()}
                         </div>
 
                         {/* Info */}
                         <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">{displayName}</div>
+                            <div className="truncate text-sm font-medium text-white">{displayName}</div>
                             <div className="flex items-center gap-1 text-xs">
-                                {/* Icono dirección */}
                                 <span className={statusInfo.color}>
                                     {isOutgoing ? <OutgoingIcon /> : <IncomingIcon />}
                                 </span>
-                                {/* Icono tipo */}
-                                <span className="text-indigo-300 opacity-60">
+                                <span className="text-slate-400">
                                     {isVideo ? <VideoIcon className="w-3 h-3" /> : <PhoneIcon className="w-3 h-3" />}
                                 </span>
-                                {/* Estado / duración */}
                                 {status === 'answered' && duration ? (
-                                    <span className="text-indigo-200">{duration}</span>
+                                    <span className="text-slate-300">{duration}</span>
                                 ) : (
                                     <span className={statusInfo.color}>{statusInfo.label}</span>
                                 )}
@@ -204,9 +208,8 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
 
                         {/* Fecha + acciones */}
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className="text-[10px] text-indigo-300">{dateStr}</span>
+                            <span className="text-[10px] text-slate-500">{dateStr}</span>
                             <div className="flex gap-1">
-                                {/* Botón rellamar */}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -214,15 +217,14 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
                                             onStartCall(remoteTelephon, displayName, callType);
                                         }
                                     }}
-                                    className="p-1 rounded hover:bg-white/20 text-indigo-300 hover:text-white transition opacity-0 group-hover:opacity-100"
+                                    className="rounded-xl p-2 text-slate-400 opacity-0 transition hover:bg-sky-500/15 hover:text-sky-200 group-hover:opacity-100"
                                     title={isVideo ? 'Videollamada' : 'Llamar'}
                                 >
                                     {isVideo ? <VideoIcon className="w-3.5 h-3.5" /> : <PhoneIcon className="w-3.5 h-3.5" />}
                                 </button>
-                                {/* Botón eliminar */}
                                 <button
                                     onClick={(e) => handleDelete(callID, e)}
-                                    className="p-1 rounded hover:bg-red-500/20 text-indigo-300 hover:text-red-400 transition opacity-0 group-hover:opacity-100"
+                                    className="rounded-xl p-2 text-slate-400 opacity-0 transition hover:bg-rose-500/15 hover:text-rose-300 group-hover:opacity-100"
                                     title="Eliminar"
                                 >
                                     <TrashIcon className="w-3.5 h-3.5" />

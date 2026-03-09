@@ -123,7 +123,13 @@ type GroupMessageDelete struct {
 // Solo un admin puede ejecutar esta operación.
 type GroupSetRole struct {
 	Number string `json:"number" binding:"required,e164"` // teléfono E.164 del miembro objetivo
-	Role   string `json:"role"   binding:"required"`       // "admin" | "member"
+	Role   string `json:"role"   binding:"required"`      // "admin" | "member"
+}
+
+// GroupRemoveMember solicita eliminar a un miembro del grupo.
+// Solo un admin puede ejecutar esta operación; no puede usarse para eliminarse a uno mismo.
+type GroupRemoveMember struct {
+	Number string `json:"number" binding:"required,e164"` // teléfono E.164 del miembro a eliminar
 }
 
 // GroupUpdateDescription actualiza la descripción de un grupo. Solo admins.
@@ -134,6 +140,13 @@ type GroupUpdateDescription struct {
 // GroupTyping indica que un miembro está escribiendo en un grupo.
 type GroupTyping struct {
 	GroupID uint `json:"groupID" binding:"required"`
+}
+
+type StatusCreate struct {
+	Text       string `json:"text,omitempty"`
+	MediaUrl   string `json:"mediaUrl,omitempty"`
+	MediaType  string `json:"mediaType,omitempty"`
+	Background string `json:"background,omitempty"`
 }
 
 // Call signaling models

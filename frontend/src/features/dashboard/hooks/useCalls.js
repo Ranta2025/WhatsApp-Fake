@@ -99,7 +99,7 @@ export const useCalls = () => {
     const handleStartCall = useCallback((callType = 'video') => {
         if (!selected) return;
         if (!isConnected) {
-            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            addToast({ type: 'error', message: 'No hay conexión disponible para iniciar la llamada' });
             return;
         }
 
@@ -122,7 +122,7 @@ export const useCalls = () => {
         callTimeoutRef.current = setTimeout(() => {
             console.log('[CALL] Call signaling timeout');
             setCallState(null);
-            addToast({ type: 'error', message: 'La llamada no pudo establecerse (Timeout)' });
+            addToast({ type: 'error', message: 'La llamada no pudo completarse a tiempo. Inténtalo nuevamente.' });
         }, 30000);
         
     }, [selected, isConnected, sendCallOffer, setCallState, addToast, clearCallTimeout]);
@@ -181,11 +181,11 @@ export const useCalls = () => {
     const handleStartGroupCall = useCallback((callType = 'video') => {
         if (!selectedGroup) return;
         if (!isConnected) {
-            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            addToast({ type: 'error', message: 'No hay conexión disponible para iniciar la llamada' });
             return;
         }
         if (callState) {
-            addToast({ type: 'error', message: 'Ya tienes una llamada activa' });
+            addToast({ type: 'error', message: 'Ya tienes una llamada en curso' });
             return;
         }
 

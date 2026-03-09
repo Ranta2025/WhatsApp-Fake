@@ -27,45 +27,45 @@ export default function Welcome() {
     const features = [
         {
             icon: '💬',
-            title: 'Chat en Tiempo Real',
-            description: 'Comunícate instantáneamente con tus contactos mediante WebSockets.'
+            title: 'Conversaciones al instante',
+            description: 'Envía y recibe mensajes con fluidez, sin fricciones y con una lectura clara.'
         },
         {
             icon: '🔒',
-            title: 'Seguridad Avanzada',
-            description: 'Autenticación JWT, contraseñas encriptadas y tokens seguros.'
+            title: 'Privacidad que transmite confianza',
+            description: 'Tu cuenta y tus accesos están protegidos para que solo te ocupes de conversar.'
         },
         {
             icon: '👥',
-            title: 'Gestión de Contactos',
-            description: 'Añade, gestiona y organiza tus contactos de forma sencilla.'
+            title: 'Contactos bien organizados',
+            description: 'Encuentra a cada persona rápido y mantén tus conversaciones mejor ordenadas.'
         },
         {
             icon: '⚡',
-            title: 'Rápido y Eficiente',
-            description: 'Backend en Go con Redis y PostgreSQL para máximo rendimiento.'
+            title: 'Rendimiento que se siente',
+            description: 'La experiencia responde con rapidez para que todo se sienta inmediato.'
         },
         {
             icon: '🎨',
-            title: 'Interfaz Moderna',
-            description: 'Diseño elegante y responsive con React y Tailwind CSS.'
+            title: 'Diseño limpio y actual',
+            description: 'Una interfaz pensada para que cada acción sea intuitiva en móvil y escritorio.'
         },
         {
             icon: '🔔',
-            title: 'Notificaciones',
-            description: 'Recibe alertas en tiempo real de mensajes y actividades.'
+            title: 'Avisos oportunos',
+            description: 'Mantente al tanto de lo importante sin perder el foco en tu día.'
         }
     ];
 
     const stats = [
-        { number: '100%', label: 'Seguro' },
-        { number: '<50ms', label: 'Latencia' },
-        { number: '24/7', label: 'Disponible' },
-        { number: '∞', label: 'Mensajes' }
+        { number: '1', label: 'Lugar para todo' },
+        { number: '24/7', label: 'Siempre disponible' },
+        { number: '∞', label: 'Conversaciones' },
+        { number: '100%', label: 'Enfocado en ti' }
     ];
 
     return (
-        <div ref={containerRef} className="h-full bg-slate-950 overflow-y-auto">
+        <div ref={containerRef} className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),transparent_28%),linear-gradient(180deg,#020617_0%,#0f172a_45%,#020617_100%)]">
             {/* Navbar */}
             <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
                 isScrolled ? 'bg-slate-900/95 backdrop-blur-sm shadow-lg border-b border-white/5' : 'bg-transparent'
@@ -73,7 +73,7 @@ export default function Welcome() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-2">
-                            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0ea5e9,#f59e0b)] shadow-lg shadow-sky-500/20">
                                 <img src="/todos.svg" alt="todos" className="w-5 h-5" />
                             </div>
                             <span className="text-white font-bold text-xl">todos</span>
@@ -82,10 +82,10 @@ export default function Welcome() {
                             <button
                                 onClick={() => setIsBugReportOpen(true)}
                                 className="flex items-center gap-2 px-4 py-2 text-slate-400 hover:text-red-400 transition group"
-                                title="Reportar un bug"
+                                title="Reportar un problema"
                             >
                                 <span className="text-lg group-hover:scale-110 transition-transform">🐛</span>
-                                <span className="hidden md:inline">Reportar Bug</span>
+                                <span className="hidden md:inline">Reportar problema</span>
                             </button>
                             <Link 
                                 to="/login" 
@@ -95,9 +95,9 @@ export default function Welcome() {
                             </Link>
                             <Link 
                                 to="/register" 
-                                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                                className="rounded-xl bg-[linear-gradient(135deg,#0ea5e9,#2563eb)] px-6 py-2.5 font-semibold text-white shadow-lg shadow-sky-500/20 transition-all duration-200 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
                             >
-                                Registrarse
+                                Crear cuenta
                             </Link>
                         </div>
                     </div>
@@ -108,24 +108,29 @@ export default function Welcome() {
             <section className="min-h-screen flex items-center justify-center px-4 pt-16">
                 <div className="max-w-5xl mx-auto text-center">
                     <div className="animate-fade-in">
-                        <h1 className="text-5xl md:text-7xl font-bold text-white mb-6">
-                            Conecta con el
-                            <span className="text-indigo-500"> Mundo</span>
+                        <div className="mx-auto mb-6 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 backdrop-blur-md">
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-400/20 ring-1 ring-sky-300/30">
+                                <img src="/todos.svg" alt="todos" className="h-5 w-5" />
+                            </span>
+                            Mensajes, grupos y llamadas con una experiencia más clara
+                        </div>
+                        <h1 className="mb-6 text-5xl font-black text-white md:text-7xl">
+                            Hablar, organizarte y conectar
+                            <span className="bg-[linear-gradient(135deg,#38bdf8,#f59e0b)] bg-clip-text text-transparent"> se siente mejor aquí</span>
                         </h1>
-                        <p className="text-xl md:text-2xl text-slate-400 mb-8 max-w-3xl mx-auto">
-                            La plataforma de mensajería instantánea más rápida y segura. 
-                            Chatea en tiempo real con tus contactos desde cualquier lugar.
+                        <p className="mx-auto mb-8 max-w-3xl text-xl text-slate-400 md:text-2xl">
+                            Una plataforma pensada para conversar con naturalidad, mantenerte cerca de tus contactos y moverte entre chats, grupos y llamadas sin esfuerzo.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                             <Link 
                                 to="/register" 
-                                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                                className="rounded-2xl bg-[linear-gradient(135deg,#0ea5e9,#2563eb)] px-8 py-4 font-bold text-white shadow-lg shadow-sky-500/20 transition-all duration-200 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
                             >
-                                Comenzar Gratis
+                                Empieza ahora
                             </Link>
                             <Link 
                                 to="/login" 
-                                className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-all duration-200 border border-white/5"
+                                className="rounded-2xl border border-white/10 bg-slate-900/80 px-8 py-4 font-semibold text-white transition-all duration-200 hover:bg-slate-800"
                             >
                                 Ya tengo cuenta
                             </Link>
@@ -135,7 +140,7 @@ export default function Welcome() {
                     {/* Stats */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-20">
                         {stats.map((stat, index) => (
-                            <div key={index} className="bg-slate-900 rounded-xl p-6 border border-white/5 shadow-xl">
+                            <div key={index} className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 shadow-xl backdrop-blur-md">
                                 <div className="text-3xl md:text-4xl font-bold text-white mb-2">{stat.number}</div>
                                 <div className="text-slate-400 text-sm">{stat.label}</div>
                             </div>
@@ -145,14 +150,14 @@ export default function Welcome() {
             </section>
 
             {/* Features Section */}
-            <section className="py-20 px-4 bg-slate-900/50">
+            <section className="bg-slate-900/35 py-20 px-4">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">
                         <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                            Características Increíbles
+                            Todo lo que esperas de una experiencia moderna
                         </h2>
                         <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-                            Todo lo que necesitas para una experiencia de chat excepcional
+                            Menos fricción, más claridad y una comunicación que acompaña tu ritmo
                         </p>
                     </div>
                     
@@ -160,7 +165,7 @@ export default function Welcome() {
                         {features.map((feature, index) => (
                             <div 
                                 key={index}
-                                className="bg-slate-900 rounded-2xl p-8 border border-white/5 hover:border-indigo-500/30 transition-all hover:transform hover:scale-105 shadow-xl"
+                                className="rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(15,23,42,0.9))] p-8 shadow-xl transition-all hover:scale-[1.02] hover:border-sky-400/20"
                             >
                                 <div className="text-5xl mb-4">{feature.icon}</div>
                                 <h3 className="text-xl font-bold text-white mb-3">{feature.title}</h3>
@@ -176,10 +181,10 @@ export default function Welcome() {
                 <div className="max-w-5xl mx-auto">
                     <div className="text-center mb-16">
                         <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                            Cómo Funciona
+                            Empezar es muy simple
                         </h2>
                         <p className="text-xl text-slate-400">
-                            En solo 3 simples pasos
+                            En pocos minutos tendrás todo listo para conversar
                         </p>
                     </div>
                     
@@ -189,9 +194,9 @@ export default function Welcome() {
                                 1
                             </div>
                             <div className="flex-1 text-center md:text-left">
-                                <h3 className="text-2xl font-bold text-white mb-2">Regístrate</h3>
+                                <h3 className="text-2xl font-bold text-white mb-2">Crea tu cuenta</h3>
                                 <p className="text-slate-400">
-                                    Crea tu cuenta en segundos. Solo necesitas un nombre de usuario, email y contraseña.
+                                    Define tus datos, personaliza tu perfil y prepara tu espacio en cuestión de segundos.
                                 </p>
                             </div>
                         </div>
@@ -201,9 +206,9 @@ export default function Welcome() {
                                 2
                             </div>
                             <div className="flex-1 text-center md:text-left">
-                                <h3 className="text-2xl font-bold text-white mb-2">Añade Contactos</h3>
+                                <h3 className="text-2xl font-bold text-white mb-2">Organiza tus contactos</h3>
                                 <p className="text-slate-400">
-                                    Busca y añade a tus amigos usando su código único de 8 dígitos.
+                                    Reúne a las personas importantes y mantén cada conversación siempre al alcance.
                                 </p>
                             </div>
                         </div>
@@ -213,9 +218,9 @@ export default function Welcome() {
                                 3
                             </div>
                             <div className="flex-1 text-center md:text-left">
-                                <h3 className="text-2xl font-bold text-white mb-2">¡Chatea!</h3>
+                                <h3 className="text-2xl font-bold text-white mb-2">Empieza a conversar</h3>
                                 <p className="text-slate-400">
-                                    Comienza a chatear en tiempo real. Tus mensajes se entregan instantáneamente.
+                                    Envía mensajes, crea grupos y pasa a llamada cuando la conversación lo pida.
                                 </p>
                             </div>
                         </div>
@@ -227,16 +232,16 @@ export default function Welcome() {
             <section className="py-20 px-4 bg-slate-900 border-y border-white/5">
                 <div className="max-w-4xl mx-auto text-center">
                     <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                        ¿Listo para comenzar?
+                        Tu próxima conversación puede empezar ahora
                     </h2>
                     <p className="text-xl text-slate-400 mb-8">
-                        Únete a miles de usuarios que ya disfrutan de la mejor experiencia de chat
+                        Entra con una interfaz pensada para comunicarte mejor desde el primer clic
                     </p>
                     <Link 
                         to="/register" 
-                        className="inline-block px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg rounded-xl shadow-xl shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="inline-block rounded-2xl bg-[linear-gradient(135deg,#f59e0b,#ea580c)] px-10 py-4 text-lg font-bold text-white shadow-xl shadow-orange-500/20 transition-all duration-200 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
                     >
-                        Crear Cuenta Ahora
+                        Crear mi cuenta
                     </Link>
                 </div>
             </section>
@@ -247,31 +252,31 @@ export default function Welcome() {
                     <div className="grid md:grid-cols-4 gap-8 mb-8">
                         <div>
                             <div className="flex items-center space-x-2 mb-4">
-                                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0ea5e9,#f59e0b)] shadow-lg shadow-sky-500/20">
                                     <img src="/todos.svg" alt="todos" className="w-5 h-5" />
                                 </div>
                                 <span className="text-white font-bold text-xl">todos</span>
                             </div>
                             <p className="text-slate-400 text-sm">
-                                La plataforma de mensajería instantánea del futuro.
+                                Una forma más simple, actual y cercana de mantener tus conversaciones en movimiento.
                             </p>
                         </div>
                         
                         <div>
-                            <h4 className="text-white font-semibold mb-4">Producto</h4>
+                            <h4 className="text-white font-semibold mb-4">Experiencia</h4>
                             <ul className="space-y-2 text-slate-400 text-sm">
-                                <li><a href="#" className="hover:text-white transition">Características</a></li>
-                                <li><a href="#" className="hover:text-white transition">Seguridad</a></li>
-                                <li><a href="#" className="hover:text-white transition">Precios</a></li>
+                                <li><a href="#" className="hover:text-white transition">Mensajes</a></li>
+                                <li><a href="#" className="hover:text-white transition">Grupos</a></li>
+                                <li><a href="#" className="hover:text-white transition">Llamadas</a></li>
                             </ul>
                         </div>
                         
                         <div>
-                            <h4 className="text-white font-semibold mb-4">Soporte</h4>
+                            <h4 className="text-white font-semibold mb-4">Ayuda</h4>
                             <ul className="space-y-2 text-slate-400 text-sm">
-                                <li><a href="#" className="hover:text-white transition">Ayuda</a></li>
-                                <li><a href="#" className="hover:text-white transition">Documentación</a></li>
-                                <li><a href="#" className="hover:text-white transition">Contacto</a></li>
+                                <li><a href="#" className="hover:text-white transition">Centro de ayuda</a></li>
+                                <li><a href="#" className="hover:text-white transition">Soporte</a></li>
+                                <li><a href="#" className="hover:text-white transition">Reportar un problema</a></li>
                             </ul>
                         </div>
                         
@@ -293,7 +298,7 @@ export default function Welcome() {
                     
                     <div className="border-t border-white/5 pt-8">
                         <p className="text-center text-slate-500 text-sm">
-                            © 2026 ChatApp. Todos los derechos reservados.
+                            © 2026 todos. Diseñado para conversar mejor.
                         </p>
                     </div>
                 </div>

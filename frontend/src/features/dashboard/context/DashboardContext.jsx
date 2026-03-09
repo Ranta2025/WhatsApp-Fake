@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../../api/axios';
 import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/groupApi';
+import { getStatusFeed, createStatus as createStatusApi, markStatusViewed as markStatusViewedApi, deleteStatus as deleteStatusApi } from '../../../api/statusApi';
 import { useAuth } from '../../../context/AuthContext';
 import { useWebSocket } from '../../../hooks/useWebSocket';
 import { onNotificationClick, offNotificationClick, showNativeNotification } from '../../../utils/notifications';
@@ -47,17 +48,33 @@ export const DashboardProvider = ({ children }) => {
     const [groups, setGroups] = useState([]);
     const [groupMessages, setGroupMessages] = useState({}); // { [groupID]: GroupMessageResponse[] }
     const [selectedGroup, setSelectedGroupState] = useState(null);
+    const [statusFeed, setStatusFeed] = useState({ myStatuses: null, contacts: [] });
+    const [selectedStatusOwner, setSelectedStatusOwnerState] = useState(null);
 
     /** Set selected group and clear 1-to-1 selection (mutual exclusivity). */
     const setSelectedGroup = useCallback((group) => {
         setSelectedGroupState(group);
-        if (group) setSelected(null);
+        if (group) {
+            setSelected(null);
+            setSelectedStatusOwnerState(null);
+        }
     }, []);
 
     /** Override setSelected to also clear selectedGroup. */
     const setSelectedContact = useCallback((contact) => {
         setSelected(contact);
-        if (contact) setSelectedGroupState(null);
+        if (contact) {
+            setSelectedGroupState(null);
+            setSelectedStatusOwnerState(null);
+        }
+    }, []);
+
+    const setSelectedStatusOwner = useCallback((ownerTelephon) => {
+        setSelectedStatusOwnerState(ownerTelephon);
+        if (ownerTelephon) {
+            setSelected(null);
+            setSelectedGroupState(null);
+        }
     }, []);
     
     // Notifications & Toasts
@@ -76,7 +93,7 @@ export const DashboardProvider = ({ children }) => {
 
     // Loading state — tracks which of the 4 initial fetches are done
     const [loadingSteps, setLoadingSteps] = useState({
-        profile: false, contacts: false, chats: false, groups: false,
+        profile: false, contacts: false, chats: false, groups: false, statuses: false,
     });
     const markStep = useCallback((key) => {
         setLoadingSteps(prev => prev[key] ? prev : { ...prev, [key]: true });
@@ -240,6 +257,81 @@ export const DashboardProvider = ({ children }) => {
         }
     }, [markStep]);
 
+    const fetchStatuses = useCallback(async () => {
+        try {
+            const { data } = await getStatusFeed();
+            setStatusFeed({
+                myStatuses: data?.myStatuses || null,
+                contacts: Array.isArray(data?.contacts) ? data.contacts : [],
+            });
+        } catch (err) {
+            console.error('Error fetching statuses:', err);
+        } finally {
+            markStep('statuses');
+        }
+    }, [markStep]);
+
+    const createStatus = useCallback(async (payload) => {
+        const { data } = await createStatusApi(payload);
+        await fetchStatuses();
+        if (profileRef.current?.Telephon) {
+            setSelectedStatusOwnerState(profileRef.current.Telephon);
+        }
+        setSidebarView('statuses');
+        return data?.status;
+    }, [fetchStatuses]);
+
+    const markStatusViewed = useCallback(async (statusID) => {
+        setStatusFeed((prev) => ({
+            ...prev,
+            contacts: (prev.contacts || []).map((thread) => {
+                const nextStatuses = thread.statuses.map((status) =>
+                    status.id === statusID ? { ...status, viewed: true } : status
+                );
+                return {
+                    ...thread,
+                    statuses: nextStatuses,
+                    hasUnviewed: nextStatuses.some((status) => !status.viewed),
+                };
+            }),
+        }));
+        await markStatusViewedApi(statusID);
+    }, []);
+
+    const deleteStatus = useCallback(async (statusID) => {
+        await deleteStatusApi(statusID);
+        await fetchStatuses();
+    }, [fetchStatuses]);
+
+    const applyStatusViewedEvent = useCallback((payload) => {
+        if (!payload?.statusID || !payload?.viewer) return;
+        setStatusFeed((prev) => {
+            if (!prev?.myStatuses) return prev;
+
+            const nextStatuses = (prev.myStatuses.statuses || []).map((status) => {
+                if (status.id !== payload.statusID) return status;
+
+                const existingViewers = Array.isArray(status.viewers) ? status.viewers : [];
+                const deduped = existingViewers.filter((viewer) => viewer.viewerTelephon !== payload.viewer.viewerTelephon);
+                const nextViewers = [payload.viewer, ...deduped].sort((left, right) => new Date(right.viewedAt) - new Date(left.viewedAt));
+
+                return {
+                    ...status,
+                    viewCount: payload.viewCount ?? nextViewers.length,
+                    viewers: nextViewers,
+                };
+            });
+
+            return {
+                ...prev,
+                myStatuses: {
+                    ...prev.myStatuses,
+                    statuses: nextStatuses,
+                },
+            };
+        });
+    }, []);
+
     // Fetch message history for a specific group (on demand)
     const fetchGroupMessages = useCallback(async (groupID) => {
         try {
@@ -278,15 +370,16 @@ export const DashboardProvider = ({ children }) => {
     // Reset loading steps when user changes (re-login)
     useEffect(() => {
         if (user) {
-            setLoadingSteps({ profile: false, contacts: false, chats: false, groups: false });
+            setLoadingSteps({ profile: false, contacts: false, chats: false, groups: false, statuses: false });
             fetchProfile();
             fetchContacts();
             fetchAllChats();
             fetchUserGroups();
+            fetchStatuses();
         }
     }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const dataReady = loadingSteps.profile && loadingSteps.contacts && loadingSteps.chats && loadingSteps.groups;
+    const dataReady = loadingSteps.profile && loadingSteps.contacts && loadingSteps.chats && loadingSteps.groups && loadingSteps.statuses;
 
     // WebSocket Handlers (Extracted from Dashboard.jsx)
     useEffect(() => {
@@ -435,6 +528,14 @@ export const DashboardProvider = ({ children }) => {
                 const updated = msgs.filter(m => m.MessageID !== deletedMsg.MessageID);
                 return { ...prev, [contactNumber]: updated };
             });
+        };
+
+        const handleStatusChanged = () => {
+            fetchStatuses();
+        };
+
+        const handleStatusViewed = (payload) => {
+            applyStatusViewedEvent(payload);
         };
 
         // ── Group event handlers ───────────────────────────────────────────────────
@@ -660,12 +761,61 @@ export const DashboardProvider = ({ children }) => {
             });
         };
 
+        /** An admin removed a member from the group. */
+        const handleGroupMemberRemoved = (payload) => {
+            if (!payload?.groupID) return;
+            const myTelephon = profileRef.current?.Telephon;
+            const displayName = payload.username || payload.telephon;
+            const removedByName = payload.removedByUsername || payload.removedBy || 'Un administrador';
+
+            // If I'm the removed member, clear the group from local state
+            if (myTelephon === payload.telephon) {
+                setGroups(prev => prev.filter(g => g.ID !== payload.groupID));
+                setGroupMessages(prev => { const n = { ...prev }; delete n[payload.groupID]; return n; });
+                setSelectedGroup(prev => prev?.ID === payload.groupID ? null : prev);
+                return;
+            }
+
+            // Inject system message visible to remaining members
+            const systemMsg = {
+                MessageID: `system_removed_${Date.now()}_${Math.random()}`,
+                GroupID: payload.groupID,
+                IsSystem: true,
+                Message: `${removedByName} eliminó a ${displayName} del grupo`,
+                Time: new Date().toISOString(),
+            };
+            setGroupMessages(prev => {
+                const msgs = prev[payload.groupID] || [];
+                return { ...prev, [payload.groupID]: [...msgs, systemMsg] };
+            });
+            // Update member count and remove from members list
+            setGroups(prev => prev.map(g =>
+                g.ID === payload.groupID
+                    ? { ...g, MemberCount: Math.max((g.MemberCount || 1) - 1, 0) }
+                    : g
+            ));
+            setSelectedGroup(prev => {
+                if (!prev || prev.ID !== payload.groupID) return prev;
+                return {
+                    ...prev,
+                    MemberCount: Math.max((prev.MemberCount || 1) - 1, 0),
+                    Members: prev.Members
+                        ? prev.Members.filter(m => m.Telephon !== payload.telephon)
+                        : prev.Members,
+                };
+            });
+        };
+
         on('group_added', handleGroupAdded);
         on('group_description_update', handleGroupDescriptionUpdate);
         on('group_avatar_update', handleGroupAvatarUpdate);
         on('group_member_added', handleGroupMemberAdded);
         on('group_member_left', handleGroupMemberLeft);
         on('group_role_changed', handleGroupRoleChanged);
+        on('group_member_removed', handleGroupMemberRemoved);
+        on('status_created', handleStatusChanged);
+        on('status_deleted', handleStatusChanged);
+        on('status_viewed', handleStatusViewed);
 
         return () => {
             off('message', handleIncomingMessage);
@@ -685,8 +835,12 @@ export const DashboardProvider = ({ children }) => {
             off('group_member_added', handleGroupMemberAdded);
             off('group_member_left', handleGroupMemberLeft);
             off('group_role_changed', handleGroupRoleChanged);
+            off('group_member_removed', handleGroupMemberRemoved);
+            off('status_created', handleStatusChanged);
+            off('status_deleted', handleStatusChanged);
+            off('status_viewed', handleStatusViewed);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, fetchStatuses, applyStatusViewedEvent]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
@@ -749,6 +903,12 @@ export const DashboardProvider = ({ children }) => {
         fetchUserGroups,
         fetchGroupMessages,
         fetchGroupDetail,
+        statusFeed, setStatusFeed,
+        selectedStatusOwner, setSelectedStatusOwner,
+        fetchStatuses,
+        createStatus,
+        markStatusViewed,
+        deleteStatus,
         // WebSocket state & actions
         isConnected,
         sendMessage,

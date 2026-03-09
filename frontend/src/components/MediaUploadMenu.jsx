@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../api/axios';
 
 /**
@@ -16,9 +17,11 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
     const [uploadProgress, setUploadProgress] = useState(0);
     const [showCameraPreview, setShowCameraPreview] = useState(false);
     const [cameraStream, setCameraStream] = useState(null);
+    const [menuPosition, setMenuPosition] = useState({ left: 12, bottom: 72, width: 224 });
     const fileInputRef = useRef(null);
     const videoPreviewRef = useRef(null);
     const canvasRef = useRef(null);
+    const menuRef = useRef(null);
     const [uploadType, setUploadType] = useState(null);
 
     // Extensiones permitidas para documentos y sus tipos MIME asociados
@@ -34,12 +37,53 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
         };
     }, [cameraStream]);
 
+    useEffect(() => {
+        if (!showCameraPreview) return undefined;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [showCameraPreview]);
+
     // Conectar stream al video preview cuando esté disponible
     useEffect(() => {
         if (videoPreviewRef.current && cameraStream) {
             videoPreviewRef.current.srcObject = cameraStream;
         }
     }, [cameraStream, showCameraPreview]);
+
+    useEffect(() => {
+        const updateMenuPosition = () => {
+            const anchor = menuRef.current?.parentElement;
+            if (!anchor) return;
+
+            const rect = anchor.getBoundingClientRect();
+            const preferredWidth = 224;
+            const viewportPadding = 12;
+            const left = Math.min(
+                Math.max(rect.left, viewportPadding),
+                Math.max(viewportPadding, window.innerWidth - preferredWidth - viewportPadding)
+            );
+
+            setMenuPosition({
+                left,
+                bottom: Math.max(window.innerHeight - rect.top + 8, 72),
+                width: Math.min(preferredWidth, window.innerWidth - viewportPadding * 2),
+            });
+        };
+
+        updateMenuPosition();
+        window.addEventListener('resize', updateMenuPosition);
+        window.addEventListener('scroll', updateMenuPosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updateMenuPosition);
+            window.removeEventListener('scroll', updateMenuPosition, true);
+        };
+    }, []);
 
     /**
      * Detecta si el dispositivo es móvil (soporta capture attribute nativo).
@@ -280,112 +324,149 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
 
     // Si se muestra el preview de la cámara, renderizar la interfaz de captura
     if (showCameraPreview) {
-        return (
-            <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center">
+        return createPortal(
+            <div className="fixed inset-0 z-[10020] bg-black/95 text-white">
                 <canvas ref={canvasRef} className="hidden" />
-                <div className="relative w-full max-w-lg flex-1 flex items-center justify-center">
-                    <video 
-                        ref={videoPreviewRef}
-                        autoPlay 
-                        playsInline 
-                        muted 
-                        className="w-full h-full object-cover rounded-xl max-h-[70vh]"
-                    />
+
+                <div className="relative flex min-h-[100dvh] flex-col px-3 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(12px,env(safe-area-inset-top))] sm:px-6">
+                    <div className="flex items-center justify-between pb-3">
+                        <div className="rounded-full bg-black/35 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white/70 backdrop-blur-sm">
+                            Cámara
+                        </div>
+                        <button
+                            onClick={closeCameraPreview}
+                            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-white transition-colors hover:bg-white/20"
+                            aria-label="Cerrar cámara"
+                        >
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[28px] bg-slate-950 ring-1 ring-white/10 sm:flex-none sm:min-h-[320px] sm:max-h-[min(68vh,720px)]">
+                        <video
+                            ref={videoPreviewRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="h-full w-full object-cover"
+                        />
+                        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/45 to-transparent" />
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/55 to-transparent" />
+                    </div>
+
+                    <div className="flex shrink-0 items-center justify-center gap-5 py-4 sm:py-5">
+                        <button
+                            onClick={closeCameraPreview}
+                            className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-slate-800/90 text-white transition-colors hover:bg-slate-700"
+                            aria-label="Cancelar"
+                        >
+                            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={capturePhoto}
+                            className="inline-flex h-20 w-20 items-center justify-center rounded-full border-4 border-white/30 bg-white shadow-2xl shadow-black/40 transition-transform hover:scale-[1.03]"
+                            aria-label="Tomar foto"
+                        >
+                            <div className="h-16 w-16 rounded-full border-2 border-slate-300 bg-white" />
+                        </button>
+                        <div className="h-14 w-14" aria-hidden="true" />
+                    </div>
                 </div>
-                <div className="flex items-center gap-6 py-6">
-                    <button
-                        onClick={closeCameraPreview}
-                        className="w-14 h-14 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all text-white"
-                        aria-label="Cancelar"
-                    >
-                        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                    <button
-                        onClick={capturePhoto}
-                        className="w-20 h-20 bg-white hover:bg-gray-200 rounded-full flex items-center justify-center transition-all shadow-lg border-4 border-white/50"
-                        aria-label="Tomar foto"
-                    >
-                        <div className="w-16 h-16 bg-white rounded-full border-2 border-gray-300"></div>
-                    </button>
-                    <div className="w-14 h-14"></div>
-                </div>
-            </div>
+            </div>,
+            document.body
         );
     }
 
     return (
-        <div className="absolute bottom-full mb-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 z-50 min-w-[200px] animate-slide-up origin-bottom-left">
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                onChange={handleFileSelect}
-            />
-            
-            {isUploading ? (
-                <div className="flex flex-col items-center justify-center p-6 text-indigo-300 min-h-[120px]">
-                    <div className="relative w-12 h-12 mb-3">
-                        <svg className="animate-spin h-full w-full" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold">
-                            {uploadProgress}%
-                        </span>
+        <>
+            <div ref={menuRef} className="hidden" aria-hidden="true" />
+            {createPortal(
+                <div
+                    className="fixed z-[10010] animate-slide-up origin-bottom-left"
+                    style={{
+                        left: menuPosition.left,
+                        bottom: menuPosition.bottom,
+                        width: menuPosition.width,
+                    }}
+                >
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        onChange={handleFileSelect}
+                    />
+
+                    <div className="rounded-3xl border border-white/10 bg-slate-900/96 p-2 shadow-2xl backdrop-blur-xl">
+                        {isUploading ? (
+                            <div className="flex min-h-[120px] flex-col items-center justify-center p-6 text-indigo-300">
+                                <div className="relative mb-3 h-12 w-12">
+                                    <svg className="h-full w-full animate-spin" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold">
+                                        {uploadProgress}%
+                                    </span>
+                                </div>
+                                <span className="animate-pulse text-xs font-bold uppercase tracking-widest">Subiendo...</span>
+                            </div>
+                        ) : (
+                            <>
+                                <button 
+                                    onClick={handleCameraCapture}
+                                    className="group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm text-white transition-all hover:bg-white/10"
+                                >
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 shadow-lg shadow-emerald-500/10 transition-all group-hover:scale-110 group-active:scale-95">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-slate-100">Cámara</span>
+                                        <span className="text-[10px] text-slate-400">Captura inmediata</span>
+                                    </div>
+                                </button>
+
+                                <button 
+                                    onClick={() => triggerFileInput('image', 'image/*')}
+                                    className="group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm text-white transition-all hover:bg-white/10"
+                                >
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 shadow-lg shadow-blue-500/10 transition-all group-hover:scale-110 group-active:scale-95">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-slate-100">Galería</span>
+                                        <span className="text-[10px] text-slate-400">Fotos y videos</span>
+                                    </div>
+                                </button>
+
+                                <button 
+                                    onClick={() => triggerFileInput('document', '.doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx,.txt')}
+                                    className="group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm text-white transition-all hover:bg-white/10"
+                                >
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-500/20 text-purple-400 shadow-lg shadow-purple-500/10 transition-all group-hover:scale-110 group-active:scale-95">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-slate-100">Documento</span>
+                                        <span className="text-[10px] text-slate-400">Word, PDF, Excel...</span>
+                                    </div>
+                                </button>
+                            </>
+                        )}
                     </div>
-                    <span className="text-xs font-bold uppercase tracking-widest animate-pulse">Subiendo...</span>
-                </div>
-            ) : (
-                <>
-                    <button 
-                        onClick={handleCameraCapture}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-all text-left text-sm text-white group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 group-active:scale-95 transition-all shadow-lg shadow-emerald-500/10">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="font-bold text-slate-100">Cámara</span>
-                            <span className="text-[10px] text-slate-400">Captura inmediata</span>
-                        </div>
-                    </button>
-
-                    <button 
-                        onClick={() => triggerFileInput('image', 'image/*')}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-all text-left text-sm text-white group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-110 group-active:scale-95 transition-all shadow-lg shadow-blue-500/10">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="font-bold text-slate-100">Galería</span>
-                            <span className="text-[10px] text-slate-400">Fotos y videos</span>
-                        </div>
-                    </button>
-
-                    <button 
-                        onClick={() => triggerFileInput('document', '.doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx,.txt')}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-all text-left text-sm text-white group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 group-active:scale-95 transition-all shadow-lg shadow-purple-500/10">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="font-bold text-slate-100">Documento</span>
-                            <span className="text-[10px] text-slate-400">Word, PDF, Excel...</span>
-                        </div>
-                    </button>
-                </>
+                </div>,
+                document.body
             )}
-        </div>
+        </>
     );
 }

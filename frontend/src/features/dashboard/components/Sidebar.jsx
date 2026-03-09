@@ -3,13 +3,14 @@ import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import CallHistory from '../../../components/CallHistory';
 
-const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
-    const { 
-        contacts, onlineUsers, selected, setSelected, 
+const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup, onCreateStatus }) => {
+    const {
+        contacts, onlineUsers, selected, setSelected,
         sidebarView, setSidebarView, sidebarOpen, setSidebarOpen,
         lastSeenMap, avatarMap, isConnected, myAvatar, profile,
         messagesByChat, allChatGroups, logout,
         groups, selectedGroup, setSelectedGroup,
+        statusFeed, selectedStatusOwner, setSelectedStatusOwner,
     } = useDashboard();
     const { user } = useAuth();
     // logout is proxied through DashboardContext from AuthContext
@@ -63,11 +64,11 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
 
     return (
         <aside className={`
-            bg-slate-900 border-r border-white/5 flex flex-col
-            ${(selected || selectedGroup) ? 'hidden lg:flex lg:w-80' : 'w-full lg:w-80'}
+            min-w-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.08),_transparent_28%),linear-gradient(to_bottom,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))] border-r border-white/5 flex flex-col
+            ${(selected || selectedGroup || (sidebarView === 'statuses' && selectedStatusOwner)) ? 'hidden lg:flex lg:w-72 xl:w-80' : 'w-full lg:w-72 xl:w-80'}
         `}>
             {/* Header del Sidebar (Perfil y Ajustes) */}
-            <div className="p-4 bg-slate-900 flex items-center justify-between border-b border-white/5">
+            <div className="p-4 bg-transparent flex items-center justify-between border-b border-white/5">
                 <div className="flex items-center gap-3">
                     <div 
                         className="relative w-10 h-10 rounded-full cursor-pointer group flex-shrink-0" 
@@ -77,7 +78,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                         {myAvatar ? (
                             <img src={myAvatar} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
                         ) : (
-                            <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-white">
+                            <div className="w-10 h-10 bg-gradient-to-tr from-cyan-500 to-indigo-600 rounded-full flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-950/30">
                                 {user?.username?.charAt(0).toUpperCase()}
                             </div>
                         )}
@@ -91,7 +92,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                 <div className="flex gap-1">
                     <button 
                         onClick={onOpenProfile} 
-                        className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-colors" 
+                        className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-2xl transition-colors" 
                         title="Ajustes"
                         aria-label="Abrir ajustes de perfil"
                     >
@@ -99,7 +100,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                     </button>
                     <button 
                         onClick={logout} 
-                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/5 rounded-full transition-colors" 
+                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/5 rounded-2xl transition-colors" 
                         title="Cerrar Sesión"
                         aria-label="Cerrar sesión de la aplicación"
                     >
@@ -109,7 +110,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
             </div>
 
             {/* Barra de Búsqueda */}
-            <div className="p-3 bg-slate-900">
+            <div className="p-3 bg-transparent">
                 <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -118,16 +119,18 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-full leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:bg-slate-800 focus:border-slate-700 focus:ring-0 sm:text-sm transition-colors"
+                        className="block w-full pl-10 pr-10 py-3 border border-white/5 rounded-2xl leading-5 bg-slate-800/85 text-slate-200 placeholder-slate-500 focus:outline-none focus:bg-slate-800 focus:border-cyan-500/30 focus:ring-2 focus:ring-cyan-500/10 sm:text-sm transition-all"
                         placeholder={
                             sidebarView === 'chats' ? "Buscar chats..." :
                             sidebarView === 'calls' ? "Buscar llamadas..." :
+                            sidebarView === 'statuses' ? "Buscar estados..." :
                             sidebarView === 'groups' ? "Buscar grupos..." :
                             "Buscar contactos..."
                         }
                         aria-label={
                             sidebarView === 'chats' ? "Buscar en tus chats activos" :
                             sidebarView === 'calls' ? "Buscar en tu historial de llamadas" :
+                            sidebarView === 'statuses' ? "Buscar entre estados activos" :
                             sidebarView === 'groups' ? "Buscar en tus grupos" :
                             "Buscar en tu lista de contactos"
                         }
@@ -147,12 +150,12 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
             </div>
             
             {/* Navegación (Tabs) */}
-            <nav className="flex px-2 bg-slate-900 border-b border-white/5" role="tablist">
+            <nav className="scrollbar-hidden mx-3 mb-2 mt-1 flex gap-1 overflow-x-auto rounded-2xl border border-white/5 bg-slate-800/70 p-1" role="tablist">
                 <button
                     role="tab"
                     aria-selected={sidebarView === 'chats'}
                     onClick={() => { setSidebarView('chats'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'chats' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                    className={`shrink-0 rounded-xl px-3 py-2.5 text-xs font-medium leading-tight text-center transition-colors xl:text-sm ${sidebarView === 'chats' ? 'bg-slate-950 text-cyan-300 shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
                 >
                     Chats
                 </button>
@@ -160,15 +163,23 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                     role="tab"
                     aria-selected={sidebarView === 'calls'}
                     onClick={() => { setSidebarView('calls'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'calls' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                    className={`shrink-0 rounded-xl px-3 py-2.5 text-xs font-medium leading-tight text-center transition-colors xl:text-sm ${sidebarView === 'calls' ? 'bg-slate-950 text-cyan-300 shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
                 >
                     Llamadas
                 </button>
                 <button
                     role="tab"
+                    aria-selected={sidebarView === 'statuses'}
+                    onClick={() => { setSidebarView('statuses'); }}
+                    className={`shrink-0 rounded-xl px-3 py-2.5 text-xs font-medium leading-tight text-center transition-colors xl:text-sm ${sidebarView === 'statuses' ? 'bg-slate-950 text-cyan-300 shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+                >
+                    Estados
+                </button>
+                <button
+                    role="tab"
                     aria-selected={sidebarView === 'contacts'}
                     onClick={() => { setSidebarView('contacts'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'contacts' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                    className={`shrink-0 rounded-xl px-3 py-2.5 text-xs font-medium leading-tight text-center transition-colors xl:text-sm ${sidebarView === 'contacts' ? 'bg-slate-950 text-cyan-300 shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
                 >
                     Contactos
                 </button>
@@ -176,13 +187,13 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                     role="tab"
                     aria-selected={sidebarView === 'groups'}
                     onClick={() => { setSidebarView('groups'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'groups' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                    className={`shrink-0 rounded-xl px-3 py-2.5 text-xs font-medium leading-tight text-center transition-colors xl:text-sm ${sidebarView === 'groups' ? 'bg-slate-950 text-cyan-300 shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
                 >
                     Grupos
                 </button>
             </nav>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto px-3 pb-4 pt-2">
                 {/* Vista de Chats Activos */}
                 {sidebarView === 'chats' && (
                     <>
@@ -233,9 +244,9 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                                 };
                                                 setSelected(contactToSelect);
                                             }}
-                                            className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === contactNumber ? 'bg-slate-800' : ''}`}
+                                            className={`relative w-full text-left rounded-2xl px-3 py-3 transition-all flex items-center gap-3 border ${selected?.Number === contactNumber ? 'bg-slate-800/95 border-cyan-500/20 shadow-lg shadow-cyan-950/10' : 'bg-slate-900/55 border-transparent hover:bg-slate-800/80 hover:border-white/5'}`}
                                         >
-                                            <div className="relative w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0">
+                                            <div className="relative w-12 h-12 bg-gradient-to-br from-slate-700 to-slate-600 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0 shadow-lg shadow-black/15">
                                                 {avatarMap[contactNumber] ? (
                                                     <img src={avatarMap[contactNumber]} alt="" className="w-full h-full object-cover" />
                                                 ) : (
@@ -245,11 +256,11 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                                 )}
                                             </div>
-                                            <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
+                                            <div className="flex-1 overflow-hidden min-w-0">
                                                 <div className="flex justify-between items-baseline mb-0.5">
                                                     <div className="font-semibold text-slate-100 truncate flex items-center gap-1">
                                                         {displayName}
-                                                        {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
+                                                        {isUnknown && <span className="text-[9px] bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded-full">nuevo</span>}
                                                     </div>
                                                     {lastMessage?.Time && (
                                                         <div className="text-xs text-slate-500 flex-shrink-0 ml-2">
@@ -257,12 +268,12 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="text-sm text-slate-400 truncate">
+                                                <div className="text-sm text-slate-400 truncate mt-0.5 pr-8">
                                                     {formatLastMessage(lastMessage)}
                                                 </div>
                                             </div>
                                             {getUnreadCount(contact || {Number: contactNumber}) > 0 && (
-                                                <span className="absolute top-1/2 -translate-y-1/2 right-4 bg-indigo-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                                <span className="absolute top-1/2 -translate-y-1/2 right-4 bg-cyan-500 text-slate-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg shadow-cyan-950/20">
                                                     {getUnreadCount(contact || {Number: contactNumber})}
                                                 </span>
                                             )}
@@ -285,6 +296,101 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                     />
                 )}
 
+                {sidebarView === 'statuses' && (
+                    <>
+                        <div className="flex justify-between items-center mb-3 px-2">
+                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                                {debouncedSearchQuery ? 'Resultados de búsqueda' : 'Estados activos'}
+                            </div>
+                            <button
+                                onClick={onCreateStatus}
+                                className="text-xs bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 rounded-xl transition-colors font-medium"
+                            >
+                                + Publicar
+                            </button>
+                        </div>
+                        <div className="space-y-1">
+                            {(() => {
+                                const myThread = statusFeed?.myStatuses || null;
+                                const contactThreads = Array.isArray(statusFeed?.contacts) ? statusFeed.contacts : [];
+                                const filteredThreads = contactThreads.filter((thread) => {
+                                    if (!debouncedSearchQuery) return true;
+                                    const query = debouncedSearchQuery.toLowerCase();
+                                    return (thread.ownerName || '').toLowerCase().includes(query)
+                                        || (thread.ownerUsername || '').toLowerCase().includes(query)
+                                        || thread.ownerTelephon.includes(query);
+                                });
+
+                                return (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                if (myThread?.ownerTelephon) {
+                                                    setSelectedStatusOwner(myThread.ownerTelephon);
+                                                }
+                                                setSidebarView('statuses');
+                                            }}
+                                            className={`w-full text-left rounded-2xl px-3 py-3 transition-all flex items-center gap-3 border ${selectedStatusOwner === myThread?.ownerTelephon ? 'bg-slate-800/95 border-cyan-500/20 shadow-lg shadow-cyan-950/10' : 'bg-slate-900/55 border-transparent hover:bg-slate-800/80 hover:border-white/5'}`}
+                                        >
+                                            <div className={`relative w-12 h-12 rounded-full p-[2px] ${myThread?.statuses?.length ? 'bg-gradient-to-br from-sky-400 via-cyan-400 to-indigo-500' : 'bg-white/10'}`}>
+                                                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900">
+                                                    {myAvatar ? (
+                                                        <img src={myAvatar} alt="Mi avatar" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-lg font-medium text-white bg-gradient-to-br from-slate-700 to-slate-600">
+                                                            {user?.username?.charAt(0)?.toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-semibold text-slate-100 truncate">Mi estado</div>
+                                                <div className="flex items-center gap-2 text-sm text-slate-400 truncate">
+                                                    <span className={`inline-flex h-2.5 w-2.5 rounded-full ${myThread?.statuses?.length ? 'bg-sky-400 shadow-[0_0_0_4px_rgba(56,189,248,0.12)]' : 'bg-slate-600'}`} />
+                                                    <span className="truncate">{myThread?.statuses?.length ? `${myThread.statuses.length} publicación${myThread.statuses.length === 1 ? '' : 'es'} activas` : 'Publica un texto, una foto o un video'}</span>
+                                                </div>
+                                            </div>
+                                        </button>
+
+                                        {filteredThreads.length === 0 ? (
+                                            <div className="text-center text-slate-500 py-10">No hay estados disponibles</div>
+                                        ) : filteredThreads.map((thread) => (
+                                            <button
+                                                key={thread.ownerTelephon}
+                                                onClick={() => {
+                                                    setSelectedStatusOwner(thread.ownerTelephon);
+                                                    setSidebarView('statuses');
+                                                }}
+                                                className={`w-full text-left rounded-2xl px-3 py-3 transition-all flex items-center gap-3 border ${selectedStatusOwner === thread.ownerTelephon ? 'bg-slate-800/95 border-cyan-500/20 shadow-lg shadow-cyan-950/10' : 'bg-slate-900/55 border-transparent hover:bg-slate-800/80 hover:border-white/5'}`}
+                                            >
+                                                <div className={`relative w-12 h-12 rounded-full p-[2px] ${thread.hasUnviewed ? 'bg-gradient-to-br from-emerald-400 via-sky-400 to-indigo-500' : 'bg-white/10'}`}>
+                                                    <div className="w-full h-full rounded-full overflow-hidden bg-slate-900">
+                                                        {thread.ownerAvatar ? (
+                                                            <img src={thread.ownerAvatar} alt="avatar" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-lg font-medium text-white bg-gradient-to-br from-slate-700 to-slate-600">
+                                                                {(thread.ownerName || thread.ownerUsername || thread.ownerTelephon)?.charAt(0)?.toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-semibold text-slate-100 truncate">{thread.ownerName}</div>
+                                                    <div className="flex items-center gap-2 text-sm text-slate-400 truncate">
+                                                        <span className={`inline-flex h-2.5 w-2.5 rounded-full ${thread.hasUnviewed ? 'bg-emerald-400 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]' : 'bg-slate-600'}`} />
+                                                        <span className="truncate">{thread.hasUnviewed ? 'Tiene novedades sin ver' : 'Ya viste sus estados'}</span>
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs text-slate-500">{thread.statuses.length}</span>
+                                            </button>
+                                        ))}
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    </>
+                )}
+
                 {/* Vista de Contactos */}
                 {sidebarView === 'contacts' && (
                     <>
@@ -294,7 +400,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                             </div>
                             <button
                                 onClick={onAddContact}
-                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
+                                className="text-xs bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white px-3 py-1.5 rounded-xl transition-colors font-medium"
                             >
                                 + Agregar
                             </button>
@@ -318,9 +424,9 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                         onClick={() => {
                                             setSelected(c);
                                         }}
-                                        className={`w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === c.Number ? 'bg-slate-800' : ''}`}
+                                        className={`w-full text-left rounded-2xl px-3 py-3 transition-all flex items-center gap-3 border ${selected?.Number === c.Number ? 'bg-slate-800/95 border-cyan-500/20 shadow-lg shadow-cyan-950/10' : 'bg-slate-900/55 border-transparent hover:bg-slate-800/80 hover:border-white/5'}`}
                                     >
-                                        <div className="relative w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0">
+                                        <div className="relative w-12 h-12 bg-gradient-to-br from-slate-700 to-slate-600 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0 shadow-lg shadow-black/15">
                                             {avatarMap[c.Number] ? (
                                                 <img src={avatarMap[c.Number]} alt="" className="w-full h-full object-cover" />
                                             ) : (
@@ -330,7 +436,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                             )}
                                         </div>
-                                        <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
+                                        <div className="flex-1 overflow-hidden min-w-0">
                                             <div className="font-semibold text-slate-100 truncate">{c.ContactName || c.Username}</div>
                                             <div className="text-sm text-slate-400 truncate">
                                                 {isContactOnline(c.Number) ? 'En línea' : (lastSeenMap[c.Number] ? `Últ. vez: ${new Date(lastSeenMap[c.Number]).toLocaleTimeString()}` : c.Number)}
@@ -351,7 +457,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                             </div>
                             <button
                                 onClick={onCreateGroup}
-                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
+                                className="text-xs bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white px-3 py-1.5 rounded-xl transition-colors font-medium"
                             >
                                 + Nuevo
                             </button>
@@ -371,7 +477,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                                 <div className="mt-3">
                                                     <button
                                                         onClick={onCreateGroup}
-                                                        className="text-indigo-400 hover:text-indigo-300 text-xs underline"
+                                                        className="text-amber-300 hover:text-amber-200 text-xs underline"
                                                     >
                                                         Crear tu primer grupo
                                                     </button>
@@ -388,23 +494,23 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                             setSelectedGroup(g);
                                             setSidebarOpen(false);
                                         }}
-                                        className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${
-                                            selectedGroup?.ID === g.ID ? 'bg-slate-800' : ''
+                                        className={`relative w-full text-left rounded-2xl px-3 py-3 transition-all flex items-center gap-3 border ${
+                                            selectedGroup?.ID === g.ID ? 'bg-slate-800/95 border-amber-500/20 shadow-lg shadow-orange-950/10' : 'bg-slate-900/55 border-transparent hover:bg-slate-800/80 hover:border-white/5'
                                         }`}
                                     >
                                         {/* Group avatar */}
-                                        <div className="w-12 h-12 bg-gradient-to-tr from-purple-700 to-indigo-600 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 overflow-hidden">
+                                        <div className="w-12 h-12 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 overflow-hidden shadow-lg shadow-orange-950/20">
                                             {g.AvatarUrl
                                                 ? <img src={g.AvatarUrl} alt={g.Name} className="w-full h-full object-cover" />
                                                 : g.Name?.charAt(0)?.toUpperCase()
                                             }
                                         </div>
 
-                                        <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
+                                        <div className="flex-1 overflow-hidden min-w-0">
                                             <div className="flex justify-between items-baseline mb-0.5">
                                                 <div className="font-semibold text-slate-100 truncate">{g.Name}</div>
                                                 {g.UserRole === 'admin' && (
-                                                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">admin</span>
+                                                    <span className="text-[9px] bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">admin</span>
                                                 )}
                                             </div>
                                             <div className="text-xs text-slate-400 truncate">

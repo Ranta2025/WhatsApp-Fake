@@ -71,7 +71,7 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 					"contacts": onlineContacts,
 				},
 			})
-			client.Send <- initialMsg
+			safeSend(client.Send, initialMsg)
 
 			// 2. Marcar mensajes 1:1 pendientes como "entregado" y notificar remitentes
 			senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon.(string), ctx)

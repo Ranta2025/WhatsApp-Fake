@@ -77,7 +77,7 @@ func (h *Hub) Run() {
 		case msg := <-h.Broadcast:
 			h.mu.RLock()
 			for _, c := range h.Clients {
-				c.Send <- msg
+				safeSend(c.Send, msg)
 			}
 			h.mu.RUnlock()
 		}
@@ -91,11 +91,33 @@ func (h *Hub) SendTo(telephon string, msg []byte) {
 	h.mu.RUnlock()
 
 	if exists {
-		select {
-		case client.Send <- msg:
-		default:
-			// Canal lleno, ignorar
-		}
+		safeSend(client.Send, msg)
+	}
+}
+
+func (h *Hub) NotifyStatusCreated(targets []string, ownerTelephon string, statusID uint) {
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type": "status_created",
+		"payload": map[string]interface{}{
+			"ownerTelephon": ownerTelephon,
+			"statusID":      statusID,
+		},
+	})
+	for _, target := range targets {
+		h.SendTo(target, msg)
+	}
+}
+
+func (h *Hub) NotifyStatusDeleted(targets []string, ownerTelephon string, statusID uint) {
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type": "status_deleted",
+		"payload": map[string]interface{}{
+			"ownerTelephon": ownerTelephon,
+			"statusID":      statusID,
+		},
+	})
+	for _, target := range targets {
+		h.SendTo(target, msg)
 	}
 }
 
@@ -178,6 +200,14 @@ func (h *Hub) leaveAllRoomsLocked(telephon string) {
 			}
 		}
 	}
+}
+
+func (h *Hub) NotifyStatusViewed(ownerTelephon string, payload interface{}) {
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type":    "status_viewed",
+		"payload": payload,
+	})
+	h.SendTo(ownerTelephon, msg)
 }
 
 // UpdateClientUsername actualiza el username de un cliente conectado (solo para UI, la clave sigue siendo telephon)
@@ -325,12 +355,8 @@ func (h *Hub) NotifyContactRequest(recipientUsername string, senderUsername stri
 	}
 
 	fmt.Printf("[HUB] Enviando solicitud de contacto de %s a %s (tel: %s)\n", senderUsername, recipientUsername, recipientTelephon)
-	select {
-	case client.Send <- msg:
-		fmt.Printf("[HUB] Solicitud de contacto enviada exitosamente\n")
-	default:
-		fmt.Printf("[HUB] No se pudo enviar solicitud de contacto, canal lleno\n")
-	}
+	safeSend(client.Send, msg)
+	fmt.Printf("[HUB] Solicitud de contacto enviada o descartada de forma segura\n")
 }
 
 // NotifyContactResponse notifica a un usuario sobre la respuesta a su solicitud de contacto
@@ -371,12 +397,8 @@ func (h *Hub) NotifyContactResponse(recipientUsername string, responderUsername 
 	}
 
 	fmt.Printf("[HUB] Enviando respuesta de contacto de %s a %s (tel: %s, accepted: %v)\n", responderUsername, recipientUsername, recipientTelephon, accepted)
-	select {
-	case client.Send <- msg:
-		fmt.Printf("[HUB] Respuesta de contacto enviada exitosamente\n")
-	default:
-		fmt.Printf("[HUB] No se pudo enviar respuesta de contacto, canal lleno\n")
-	}
+	safeSend(client.Send, msg)
+	fmt.Printf("[HUB] Respuesta de contacto enviada o descartada de forma segura\n")
 
 	// Si fue aceptada, notificar a ambos usuarios el estado online del otro
 	if accepted {

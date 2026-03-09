@@ -91,8 +91,22 @@ export default function Register() {
                 </div>
             )}
         >
-            {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 text-red-400 text-sm text-center">{error}</div>}
+            {error && <div className="mb-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-center text-sm text-rose-200">{error}</div>}
             <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-400 sm:grid-cols-3">
+                    <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
+                        <div className="uppercase tracking-[0.2em] text-sky-300/80">Perfil</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-100">Tu identidad</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
+                        <div className="uppercase tracking-[0.2em] text-emerald-300/80">Telefono</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-100">Contacto directo</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
+                        <div className="uppercase tracking-[0.2em] text-amber-300/80">Seguridad</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-100">Protección real</div>
+                    </div>
+                </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-400 mb-1.5">Usuario</label>
                     <div className="relative">
@@ -105,7 +119,7 @@ export default function Register() {
                             type="text"
                             name="username"
                             onChange={handleChange}
-                            className="w-full pl-10 p-3 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm"
+                            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-3 pl-10 text-sm text-white placeholder-slate-500 transition-colors focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                             placeholder="Mínimo 5 caracteres"
                         />
                     </div>
@@ -122,7 +136,7 @@ export default function Register() {
                             type="email"
                             name="email"
                             onChange={handleChange}
-                            className="w-full pl-10 p-3 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm"
+                            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-3 pl-10 text-sm text-white placeholder-slate-500 transition-colors focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                             placeholder="ejemplo@gmail.com"
                         />
                     </div>
@@ -153,7 +167,7 @@ export default function Register() {
                                 }}
                                 containerClass="react-tel-input !w-full !h-full"
                                 inputClass="!hidden"
-                                buttonClass="!absolute !inset-0 !w-full !h-full !bg-slate-800 !border !border-transparent !rounded-xl hover:!border-indigo-500"
+                                buttonClass="!absolute !inset-0 !w-full !h-full !bg-slate-950/70 !border !border-white/10 !rounded-2xl hover:!border-sky-400"
                                 dropdownClass="!bg-slate-800 !border !border-slate-700 !text-slate-100 !rounded-xl"
                                 searchClass="!bg-slate-900 !border !border-slate-700 !text-slate-100 !rounded-lg"
                                 copyNumbersOnly={false}
@@ -182,7 +196,7 @@ export default function Register() {
                                     setPhoneError('');
                                 }
                             }}
-                            className="w-full h-[46px] bg-slate-800 border border-transparent rounded-xl px-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            className="h-[46px] w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 text-sm text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                             placeholder="Número de teléfono"
                         />
                     </div>
@@ -202,7 +216,7 @@ export default function Register() {
                             type={showPassword ? 'text' : 'password'}
                             name="password"
                             onChange={handleChange}
-                            className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm tracking-wide"
+                            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-3 pl-10 pr-12 text-sm tracking-wide text-white placeholder-slate-500 transition-colors focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                             placeholder="Min. 8 caracteres, número, mayúscula"
                         />
                         <button
@@ -228,7 +242,7 @@ export default function Register() {
                             name="confirm"
                             value={confirm}
                             onChange={(e) => setConfirm(e.target.value)}
-                            className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm tracking-wide"
+                            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-3 pl-10 pr-12 text-sm tracking-wide text-white placeholder-slate-500 transition-colors focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
                             placeholder="Repite tu contraseña"
                         />
                         <button
@@ -243,7 +257,7 @@ export default function Register() {
                 </div>
                 <button
                     type="submit"
-                    className="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                    className="mt-4 w-full rounded-2xl bg-[linear-gradient(135deg,#f59e0b,#ea580c)] py-3.5 font-bold text-white shadow-[0_20px_50px_-20px_rgba(249,115,22,0.8)] transition-all duration-200 hover:scale-[1.01] hover:brightness-110 active:scale-[0.98]"
                 >
                     Registrarse
                 </button>

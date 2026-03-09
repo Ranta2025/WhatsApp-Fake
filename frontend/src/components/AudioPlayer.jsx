@@ -99,7 +99,7 @@ export default function AudioPlayer({ src, isMine = false }) {
     const iconColor = isMine ? 'text-white' : 'text-indigo-400';
 
     return (
-        <div className="flex items-center gap-3 py-1 min-w-[240px]">
+        <div className="flex max-w-full min-w-0 items-center gap-3 py-1">
             <audio ref={audioRef} src={src} preload="metadata" />
             
             {/* Botón Play/Pause */}
@@ -153,7 +153,7 @@ export default function AudioPlayer({ src, isMine = false }) {
             </div>
 
             {/* Waveform visual estática simplificada */}
-            <div className="flex items-end gap-0.5 h-6 opacity-30">
+            <div className="hidden h-6 items-end gap-0.5 opacity-30 sm:flex">
                 {[3, 5, 2, 6, 4, 7, 3, 5, 8, 4, 6, 2].map((h, i) => (
                     <div 
                         key={i} 

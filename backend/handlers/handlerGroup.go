@@ -335,8 +335,52 @@ func (h *HandlerGroup) HandleDeleteGroupMessage() gin.HandlerFunc {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PATCH /api/v1/group/:groupID/description
+// DELETE /api/v1/group/:groupID/members
 // ─────────────────────────────────────────────────────────────────────────────
+
+// HandleRemoveMember elimina a un miembro del grupo.
+// Solo los administradores pueden invocarlo; no pueden eliminarse a sí mismos.
+// Emite el evento WS "group_member_removed" a todos los miembros (incluido el eliminado).
+func (h *HandlerGroup) HandleRemoveMember() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		data, exists3 := ctx.Get("groupRemoveMember")
+		if !exists || !exists2 || !exists3 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		removeData := data.(models.GroupRemoveMember)
+
+		// Obtener todos los miembros ANTES de eliminar para incluir al removido en la notificación WS
+		allTelephons, _ := h.service.GetMemberTelephons(groupID.(uint), ctx)
+
+		if err := h.service.RemoveMember(telephon.(string), groupID.(uint), removeData, ctx); err != nil {
+			status := http.StatusBadRequest
+			if err.Error() == "solo los administradores pueden eliminar miembros" {
+				status = http.StatusForbidden
+			}
+			ctx.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Notificar en tiempo real a todos (incluido el miembro eliminado, que ya no está en la lista)
+		if len(allTelephons) > 0 {
+			adminUsername, _ := h.service.GetUsernameByTelephon(telephon.(string), ctx)
+			removedUsername, _ := h.service.GetUsernameByTelephon(removeData.Number, ctx)
+			h.notifyAllGroupMembers(allTelephons, "group_member_removed", map[string]interface{}{
+				"groupID":           groupID.(uint),
+				"telephon":          removeData.Number,
+				"username":          removedUsername,
+				"removedBy":         telephon.(string),
+				"removedByUsername": adminUsername,
+			})
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{"message": "miembro eliminado correctamente"})
+	}
+}
 
 // HandleUpdateGroupDescription actualiza la descripción del grupo.
 // Solo los administradores pueden invocar este endpoint.

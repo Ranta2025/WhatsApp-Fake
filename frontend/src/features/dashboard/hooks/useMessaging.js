@@ -41,7 +41,7 @@ const useMessagingInternal = () => {
         if (!selected || (!text?.trim() && !mediaType)) return;
         
         if (!isConnected) {
-            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            addToast({ type: 'error', message: 'No hay conexión disponible en este momento' });
             return;
         }
 
@@ -53,7 +53,7 @@ const useMessagingInternal = () => {
             setReplyingTo(null);
         } catch (err) {
             console.error('Error sending message:', err);
-            addToast({ type: 'error', message: 'Error al enviar el mensaje' });
+            addToast({ type: 'error', message: 'No pudimos enviar tu mensaje. Inténtalo nuevamente.' });
         }
     }, [selected, isConnected, sendMessage, replyingTo, setDrafts, addToast]);
 
@@ -76,11 +76,11 @@ const useMessagingInternal = () => {
                 setEditingMessageId(null);
                 setEditingMessageText('');
             } else {
-                addToast({ type: 'error', message: 'Sin conexión' });
+                addToast({ type: 'error', message: 'No hay conexión disponible en este momento' });
             }
         } catch (err) {
             console.error('Error editing message:', err);
-            addToast({ type: 'error', message: 'Error al editar mensaje' });
+            addToast({ type: 'error', message: 'No pudimos guardar los cambios del mensaje.' });
         }
     }, [editingMessageId, selected, isConnected, sendEditMessage, editingMessageText, addToast]);
 
@@ -97,7 +97,7 @@ const useMessagingInternal = () => {
                 if (isConnected) {
                     sendDeleteMessage(message.MessageID, selected.Number);
                 } else {
-                    addToast({ type: 'error', message: 'Sin conexión' });
+                    addToast({ type: 'error', message: 'No hay conexión disponible en este momento' });
                 }
             } else {
                 await api.delete(`/api/v1/message/${message.MessageID}/me`);
@@ -112,7 +112,7 @@ const useMessagingInternal = () => {
             setMessageMenuOpen(null);
         } catch (err) {
             console.error('Error deleting message:', err);
-            addToast({ type: 'error', message: 'Error al eliminar mensaje' });
+            addToast({ type: 'error', message: 'No pudimos eliminar el mensaje. Inténtalo nuevamente.' });
         }
     }, [selected, isConnected, sendDeleteMessage, setMessagesByChat, addToast]);
 
@@ -134,7 +134,7 @@ const useMessagingInternal = () => {
     const executeForward = useCallback((targetNumbers) => {
         if (!forwardingMessage || !targetNumbers?.length) return;
         if (!isConnected) {
-            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            addToast({ type: 'error', message: 'No hay conexión disponible en este momento' });
             return;
         }
         const mediaType = forwardingMessage.MediaType || null;
@@ -183,7 +183,7 @@ const useMessagingInternal = () => {
             }
         } catch (error) {
             console.error('Error uploading file:', error);
-            addToast({ type: 'error', message: 'Error al subir el archivo' });
+            addToast({ type: 'error', message: 'No pudimos subir tu archivo. Inténtalo nuevamente.' });
         }
     }, [selected, handleSend, addToast]);
 

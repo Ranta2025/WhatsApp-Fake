@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import AudioPlayer from '../../../components/AudioPlayer';
@@ -55,25 +55,69 @@ const MessageList = () => {
     } = useMessaging();
 
     const messagesContainerRef = useRef(null);
+    const bottomRef = useRef(null);
+    const previousMessageCountRef = useRef(0);
+    const shouldStickToBottomRef = useRef(true);
+    const [showJumpToBottom, setShowJumpToBottom] = useState(false);
 
-    // Scroll automático al final cuando cambian los mensajes
+    const currentMessages = selected ? (messagesByChat[selected.Number] || []) : [];
+
+    const scrollToBottom = useCallback((behavior = 'smooth') => {
+        if (!bottomRef.current) return;
+        bottomRef.current.scrollIntoView({ behavior, block: 'end' });
+    }, []);
+
     useEffect(() => {
-        if (messagesContainerRef.current && selected) {
-            const container = messagesContainerRef.current;
-            requestAnimationFrame(() => {
-                container.scrollTop = container.scrollHeight;
-            });
+        if (!selected) return;
+        previousMessageCountRef.current = currentMessages.length;
+        shouldStickToBottomRef.current = true;
+        setShowJumpToBottom(false);
+        requestAnimationFrame(() => {
+            scrollToBottom('auto');
+        });
+    }, [selected?.Number, scrollToBottom]);
+
+    useEffect(() => {
+        const messageCount = currentMessages.length;
+        const previousCount = previousMessageCountRef.current;
+        previousMessageCountRef.current = messageCount;
+
+        if (messageCount === 0) {
+            return;
         }
-    }, [messagesByChat, selected]);
+
+        if (previousCount === 0) {
+            requestAnimationFrame(() => {
+                scrollToBottom('auto');
+            });
+            return;
+        }
+
+        if (shouldStickToBottomRef.current) {
+            requestAnimationFrame(() => {
+                scrollToBottom('smooth');
+            });
+        } else {
+            setShowJumpToBottom(true);
+        }
+    }, [currentMessages.length, scrollToBottom]);
+
+    const handleScroll = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const nearBottom = distanceFromBottom <= 120;
+        shouldStickToBottomRef.current = nearBottom;
+        setShowJumpToBottom(!nearBottom);
+    }, []);
 
     // Agrupación de mensajes por fecha
     const groupedMessages = useMemo(() => {
         if (!selected) return [];
-        const messages = messagesByChat[selected.Number] || [];
         const groups = [];
         let currentGroup = null;
 
-        messages.forEach((m) => {
+        currentMessages.forEach((m) => {
             const date = new Date(m.Time || m.Timestamp || Date.now());
             const dateStr = date.toLocaleDateString(undefined, { 
                 weekday: 'long', 
@@ -90,7 +134,7 @@ const MessageList = () => {
         });
 
         return groups;
-    }, [messagesByChat, selected]);
+    }, [currentMessages, selected]);
 
     if (!selected) return null;
 
@@ -184,7 +228,7 @@ const MessageList = () => {
                 );
             case 'audio':
                 return (
-                    <div className="mb-1 w-full min-w-[240px]">
+                    <div className="mb-1 w-full max-w-full min-w-0">
                         <AudioPlayer src={mediaUrl} isMine={isMine} />
                     </div>
                 );
@@ -224,6 +268,7 @@ const MessageList = () => {
     return (
         <div 
             ref={messagesContainerRef}
+            onScroll={handleScroll}
             className="flex-1 overflow-y-auto px-4 py-6 space-y-8 relative"
             style={containerStyle}
         >
@@ -265,10 +310,10 @@ const MessageList = () => {
 
                                     <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`}>
                                         {/* Menú de opciones contextual */}
-                                        <div className={`absolute top-0 ${isMine ? '-left-10' : '-right-10'} opacity-0 group-hover/bubble:opacity-100 transition-opacity z-20`}>
+                                        <div className={`absolute top-0 ${isMine ? '-left-11' : '-right-11'} opacity-0 group-hover/bubble:opacity-100 transition-opacity z-20`}>
                                             <button 
                                                 onClick={() => setMessageMenuOpen(isMenuOpen ? null : m.MessageID)}
-                                                className="p-1.5 bg-slate-800/80 backdrop-blur-md border border-white/10 rounded-full text-slate-400 hover:text-white transition-all shadow-xl"
+                                                className={`p-2 backdrop-blur-md border rounded-2xl transition-all shadow-xl ${isMenuOpen ? 'bg-slate-700 border-cyan-500/30 text-cyan-300' : 'bg-slate-800/80 border-white/10 text-slate-400 hover:text-white hover:bg-slate-700'}`}
                                                 aria-label="Opciones"
                                             >
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -277,28 +322,28 @@ const MessageList = () => {
                                             </button>
                                             
                                             {isMenuOpen && (
-                                                <div className={`absolute ${isMine ? 'left-0' : 'right-0'} mt-2 w-44 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 origin-top-left`}>
-                                                    <button onClick={() => handleReplyToMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
+                                                <div className={`absolute ${isMine ? 'left-0' : 'right-0'} mt-2 w-48 bg-slate-900/98 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 origin-top-left backdrop-blur-md`}>
+                                                    <button onClick={() => handleReplyToMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-sky-500/15 hover:text-white transition-colors flex items-center gap-2">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                         Responder
                                                     </button>
-                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
+                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-sky-500/15 hover:text-white transition-colors flex items-center gap-2">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
                                                         Reenviar
                                                     </button>
                                                     {isMine && (
                                                         <>
-                                                            <button onClick={() => handleEditMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
+                                                            <button onClick={() => handleEditMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500/15 hover:text-white transition-colors flex items-center gap-2">
                                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                                 Editar
                                                             </button>
-                                                            <button onClick={() => handleDeleteMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
+                                                            <button onClick={() => handleDeleteMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-red-400 hover:bg-red-500/20 hover:text-red-200 transition-colors flex items-center gap-2">
                                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                                 Eliminar para todos
                                                             </button>
                                                         </>
                                                     )}
-                                                    <button onClick={() => handleDeleteMessageForMe(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors flex items-center gap-2">
+                                                    <button onClick={() => handleDeleteMessageForMe(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-white/5 transition-colors flex items-center gap-2">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                         Eliminar para mí
                                                     </button>
@@ -308,15 +353,15 @@ const MessageList = () => {
 
                                         {/* Burbuja de mensaje */}
                                         <div className={`
-                                            px-4 py-2.5 rounded-2xl shadow-xl
+                                            px-4 py-3 rounded-[22px] shadow-xl ring-1 ring-inset
                                             ${isMine 
-                                                ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-tr-none' 
-                                                : 'bg-slate-800/80 backdrop-blur-sm text-slate-100 border border-white/5 rounded-tl-none'}
+                                                ? 'bg-gradient-to-br from-sky-500 to-indigo-600 text-white rounded-tr-md ring-white/5 shadow-sky-950/20' 
+                                                : 'bg-slate-800/85 backdrop-blur-sm text-slate-100 rounded-tl-md ring-white/5 border border-white/5'}
                                         `}>
                                             {/* Respuesta */}
                                             {m.ReplyToMessage && (
-                                                <div className={`mb-2 p-2 rounded-lg border-l-4 ${isMine ? 'bg-black/10 border-white/30' : 'bg-slate-900/50 border-indigo-500'} text-[11px] opacity-80 line-clamp-2`}>
-                                                    <div className="font-black uppercase tracking-widest text-[9px] mb-0.5">Respondiendo a:</div>
+                                                <div className={`mb-2 p-2.5 rounded-2xl border-l-4 ${isMine ? 'bg-black/10 border-white/35' : 'bg-slate-900/50 border-cyan-400'} text-[11px] opacity-85 line-clamp-2`}>
+                                                    <div className="font-black uppercase tracking-widest text-[9px] mb-1">Respondiendo a:</div>
                                                     {m.ReplyToMessage}
                                                 </div>
                                             )}
@@ -326,9 +371,9 @@ const MessageList = () => {
 
                                             {/* Texto del mensaje - Ocultar si es una URL de media */}
                                             {m.Message && !isMediaUrl(m) && (
-                                                <div className="text-[14px] leading-relaxed break-words font-medium">
+                                                <div className="text-[14px] leading-relaxed break-words font-medium tracking-[0.01em]">
                                                     {editingMessageId === m.MessageID ? (
-                                                        <div className="flex flex-col gap-2 min-w-[200px]">
+                                                        <div className="flex min-w-0 flex-col gap-2 sm:min-w-[200px]">
                                                             <textarea 
                                                                 autoFocus
                                                                 value={editingMessageText}
@@ -346,8 +391,8 @@ const MessageList = () => {
                                             )}
 
                                             {/* Info de pie de burbuja */}
-                                            <div className={`mt-1.5 flex items-center justify-end gap-1.5`}>
-                                                <span className={`text-[10px] font-bold uppercase tracking-widest ${isMine ? 'text-indigo-200/70' : 'text-slate-400'}`}>
+                                            <div className={`mt-2 flex items-center justify-end gap-1.5`}>
+                                                <span className={`text-[10px] font-bold uppercase tracking-widest ${isMine ? 'text-sky-100/70' : 'text-slate-400'}`}>
                                                     {m.Edited && 'Editado • '}{time}
                                                 </span>
                                                 {isMine && getStatusIcon(m.Status)}
@@ -360,6 +405,26 @@ const MessageList = () => {
                     </div>
                 </div>
             ))}
+
+            <div ref={bottomRef} className="relative z-[1]" />
+
+            {showJumpToBottom && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        shouldStickToBottomRef.current = true;
+                        setShowJumpToBottom(false);
+                        scrollToBottom('smooth');
+                    }}
+                    className="absolute bottom-4 right-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-200 shadow-xl backdrop-blur-md transition-all hover:scale-105 hover:bg-slate-800"
+                    aria-label="Ir al final del chat"
+                    title="Ir al final"
+                >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                </button>
+            )}
         </div>
     );
 };
