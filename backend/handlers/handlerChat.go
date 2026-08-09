@@ -24,10 +24,7 @@ func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 		telephon, exist := ctx.Get("telephon")
 		msgData, exist2 := ctx.Get("message")
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener los datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 		messageExtract := models.MessageCreat{
@@ -37,10 +34,7 @@ func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 
 		createdMsg, err := hd.service.ServiceCreatMessage(messageExtract, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{
@@ -54,18 +48,12 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 		telephon, exist := ctx.Get("telephon")
 		contact, exist2 := ctx.Get("contact")
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener los datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 		message, err := hd.service.ServiceGetMessages(telephon.(string), contact.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 		ctx.IndentedJSON(http.StatusOK, message)
@@ -77,19 +65,13 @@ func (hd *HandlerChat) HandlerPutChat() gin.HandlerFunc {
 		telephon, exist := ctx.Get("telephon")
 		contact, exist2 := ctx.Get("contact")
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener los datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		err := hd.service.ServicePutMessageStatusDelivered(telephon.(string), contact.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -103,18 +85,12 @@ func (hd *HandlerChat) HandlerGetAllChats() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener los datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 		chats, err := hd.service.ServiceGetAllChats(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 		ctx.IndentedJSON(http.StatusOK, chats)
@@ -125,19 +101,13 @@ func (hd *HandlerChat) HandlerPutAllChat() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener los datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		senders, err := hd.service.ServiceGetSendersAndMarkDelivered(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -149,8 +119,7 @@ func (hd *HandlerChat) HandlerPutAllChat() gin.HandlerFunc {
 				},
 			})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "error interno al notificar entrega"})
-				ctx.Abort()
+				respondErrorMsg(ctx, http.StatusInternalServerError, "error interno al notificar entrega")
 				return
 			}
 			for _, senderTel := range senders {
@@ -170,10 +139,7 @@ func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
 		msgEditInterface, exist2 := ctx.Get("messageEdit")
 
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener los datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -181,10 +147,7 @@ func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
 
 		updatedMsg, err := hd.service.ServiceEditMessage(telephon.(string), msgEdit.MessageID, msgEdit.Message, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -197,14 +160,12 @@ func (hd *HandlerChat) HandlerClearChat() gin.HandlerFunc {
 		telephonUser, exist := ctx.Get("telephon")
 		telephonContact, exist2 := ctx.Get("contact")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		if err := hd.service.ServiceClearChat(telephonUser.(string), telephonContact.(string), ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -217,15 +178,13 @@ func (hd *HandlerChat) HandlerDeleteMessageForMe() gin.HandlerFunc {
 		telephonUser, exist := ctx.Get("telephon")
 		messageID, exist2 := ctx.Get("messageID")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		deletedMsg, err := hd.service.ServiceDeleteMessageForMe(telephonUser.(string), messageID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 

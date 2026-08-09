@@ -27,18 +27,12 @@ func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 		user, err := hd.service.ServicesGetUserByTelephon(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusNotFound, err)
 			return
 		}
 		ctx.IndentedJSON(http.StatusOK, user)
@@ -50,10 +44,7 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 		telephon, exist := ctx.Get("telephon")
 		usernameUpedate, exist2 := ctx.Get("usernameUpdate")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 
@@ -62,10 +53,7 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 
 		user, oldUsername, token, err := hd.service.ServiceUpdateUsername(userTelephon, newUsername, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -87,19 +75,13 @@ func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 		telephon, exist := ctx.Get("telephon")
 		contactAdd, exist2 := ctx.Get("contactAdd")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 
 		contact, err := hd.service.AddContactByTelephon(telephon.(string), contactAdd.(models.ContactAdd), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -113,19 +95,13 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 
 		contacts, err := hd.service.ServiceGetContactsByTelephon(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -138,10 +114,7 @@ func (hd *HandlerContact) HandlerPutContact() gin.HandlerFunc {
 		contact, exist := ctx.Get("contactPut")
 		number, exist2 := ctx.Get("telephon")
 		if !(exist && exist2) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al obtener datos",
-			})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 		putContact := models.ContactPut{
@@ -150,10 +123,10 @@ func (hd *HandlerContact) HandlerPutContact() gin.HandlerFunc {
 
 		contact, err := hd.service.ServicePutContactByTelephon(putContact, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-			ctx.Abort()
+			// Mensajes del servicio verificados como literales seguros
+			// (usuario/contacto no encontrado, no puedes editar tu propio
+			// contacto, ...). El error real se registra en logs.
+			respondError(ctx, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{
@@ -167,15 +140,13 @@ func (hd *HandlerContact) HandlerUpdateAvatar() gin.HandlerFunc {
 		telephon, exist := ctx.Get("telephon")
 		avatarUrl, exist2 := ctx.Get("avatarUrl")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 
 		url := avatarUrl.(string)
 		if err := hd.service.ServiceUpdateAvatar(telephon.(string), url, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -191,8 +162,7 @@ func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 
@@ -200,14 +170,12 @@ func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 			WallpaperUrl string `json:"wallpaper_url"`
 		}
 		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "datos inválidos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "datos inválidos")
 			return
 		}
 
 		if err := hd.service.ServiceUpdateWallpaper(telephon.(string), body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -219,8 +187,7 @@ func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 
@@ -229,14 +196,12 @@ func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
 			WallpaperUrl    string `json:"wallpaper_url"`
 		}
 		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "contact_telephon requerido"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "contact_telephon requerido")
 			return
 		}
 
 		if err := hd.service.ServiceUpdateContactWallpaper(telephon.(string), body.ContactTelephon, body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 

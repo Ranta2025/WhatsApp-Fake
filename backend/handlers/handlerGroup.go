@@ -64,15 +64,13 @@ func (h *HandlerGroup) HandleCreateGroup() gin.HandlerFunc {
 		telephon, exists := ctx.Get("telephon")
 		data, exists2 := ctx.Get("groupCreate")
 		if !exists || !exists2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		detail, err := h.service.CreateGroup(telephon.(string), data.(models.GroupCreate), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -95,15 +93,13 @@ func (h *HandlerGroup) HandleGetUserGroups() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exists := ctx.Get("telephon")
 		if !exists {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		groups, err := h.service.GetUserGroups(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusInternalServerError, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"groups": groups})
@@ -115,15 +111,13 @@ func (h *HandlerGroup) HandleGetGroupDetail() gin.HandlerFunc {
 		telephon, exists := ctx.Get("telephon")
 		groupID, exists2 := ctx.Get("groupID")
 		if !exists || !exists2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		detail, err := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusForbidden, err)
 			return
 		}
 		if h.notifier != nil {
@@ -139,8 +133,7 @@ func (h *HandlerGroup) HandleAddMembers() gin.HandlerFunc {
 		groupID, exists2 := ctx.Get("groupID")
 		data, exists3 := ctx.Get("groupAddMembers")
 		if !exists || !exists2 || !exists3 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -148,8 +141,7 @@ func (h *HandlerGroup) HandleAddMembers() gin.HandlerFunc {
 
 		err := h.service.AddMembers(telephon.(string), groupID.(uint), data.(models.GroupAddMembers), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -191,8 +183,7 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 		groupID, exists2 := ctx.Get("groupID")
 		data, exists3 := ctx.Get("groupMessage")
 		if !exists || !exists2 || !exists3 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -201,8 +192,7 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 
 		msg, err := h.service.SendGroupMessage(telephon.(string), msgData, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 		ctx.JSON(http.StatusCreated, gin.H{"message": msg})
@@ -214,8 +204,7 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 		telephon, exists := ctx.Get("telephon")
 		groupID, exists2 := ctx.Get("groupID")
 		if !exists || !exists2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -230,8 +219,7 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 
 		messages, err := h.service.GetGroupMessages(telephon.(string), groupID.(uint), limit, offset, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusForbidden, err)
 			return
 		}
 		if h.notifier != nil {
@@ -247,15 +235,13 @@ func (h *HandlerGroup) HandleEditGroupMessage() gin.HandlerFunc {
 		groupID, exists2 := ctx.Get("groupID")
 		data, exists3 := ctx.Get("groupMessageEdit")
 		if !exists || !exists2 || !exists3 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		msg, err := h.service.EditGroupMessage(telephon.(string), groupID.(uint), data.(models.GroupMessageEdit), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": msg})
@@ -268,15 +254,13 @@ func (h *HandlerGroup) HandleDeleteGroupMessage() gin.HandlerFunc {
 		groupID, exists2 := ctx.Get("groupID")
 		data, exists3 := ctx.Get("groupMessageDelete")
 		if !exists || !exists2 || !exists3 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
 		err := h.service.DeleteGroupMessage(telephon.(string), groupID.(uint), data.(models.GroupMessageDelete), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": "mensaje eliminado correctamente"})
@@ -289,8 +273,7 @@ func (h *HandlerGroup) HandleRemoveMember() gin.HandlerFunc {
 		groupID, exists2 := ctx.Get("groupID")
 		data, exists3 := ctx.Get("groupRemoveMember")
 		if !exists || !exists2 || !exists3 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -303,8 +286,9 @@ func (h *HandlerGroup) HandleRemoveMember() gin.HandlerFunc {
 			if err.Error() == "solo los administradores pueden eliminar miembros" {
 				status = http.StatusForbidden
 			}
-			ctx.JSON(status, gin.H{"error": err.Error()})
-			ctx.Abort()
+			// Mensaje del servicio verificado como literal seguro; el error
+			// real se registra en logs.
+			respondError(ctx, status, models.NewAppError(status, err.Error(), err))
 			return
 		}
 
@@ -329,8 +313,7 @@ func (h *HandlerGroup) HandleUpdateGroupDescription() gin.HandlerFunc {
 		telephon, exists := ctx.Get("telephon")
 		groupID, exists2 := ctx.Get("groupID")
 		if !exists || !exists2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -338,14 +321,12 @@ func (h *HandlerGroup) HandleUpdateGroupDescription() gin.HandlerFunc {
 			Description string `json:"description" binding:"max=300"`
 		}
 		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "descripción inválida (máx. 300 caracteres)"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "descripción inválida (máx. 300 caracteres)")
 			return
 		}
 
 		if err := h.service.UpdateGroupDescription(telephon.(string), groupID.(uint), body.Description, ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -369,8 +350,7 @@ func (h *HandlerGroup) HandleUpdateGroupAvatar() gin.HandlerFunc {
 		telephon, exists := ctx.Get("telephon")
 		groupID, exists2 := ctx.Get("groupID")
 		if !exists || !exists2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -378,14 +358,12 @@ func (h *HandlerGroup) HandleUpdateGroupAvatar() gin.HandlerFunc {
 			AvatarUrl string `json:"avatarUrl" binding:"required"`
 		}
 		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "avatarUrl requerido"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "avatarUrl requerido")
 			return
 		}
 
 		if err := h.service.UpdateGroupAvatar(telephon.(string), groupID.(uint), body.AvatarUrl, ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -407,8 +385,7 @@ func (h *HandlerGroup) HandleSetMemberRole() gin.HandlerFunc {
 		groupID, exists2 := ctx.Get("groupID")
 		data, exists3 := ctx.Get("groupSetRole")
 		if !exists || !exists2 || !exists3 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -418,8 +395,9 @@ func (h *HandlerGroup) HandleSetMemberRole() gin.HandlerFunc {
 			if err.Error() == "solo los administradores pueden cambiar roles" {
 				status = http.StatusForbidden
 			}
-			ctx.JSON(status, gin.H{"error": err.Error()})
-			ctx.Abort()
+			// Mensaje del servicio verificado como literal seguro; el error
+			// real se registra en logs.
+			respondError(ctx, status, models.NewAppError(status, err.Error(), err))
 			return
 		}
 
@@ -450,8 +428,7 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 		telephon, exists := ctx.Get("telephon")
 		groupID, exists2 := ctx.Get("groupID")
 		if !exists || !exists2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 
@@ -459,8 +436,7 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 
 		promotedTelephon, err := h.service.LeaveGroup(telephon.(string), groupID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 

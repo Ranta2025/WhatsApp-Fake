@@ -104,7 +104,9 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 		token, err := s.service.LogIn(user, ctx)
 		if err != nil {
 			log.Println("[HANDLER] Error en LogIn:", err.Error())
-			respondError(c, http.StatusUnauthorized, models.NewAppError(http.StatusUnauthorized, err.Error(), err))
+			// LogIn puede envolver errores internos (DB/Redis vía %w): el
+			// mensaje se sanea, el detalle real queda en logs.
+			respondError(c, http.StatusUnauthorized, err)
 			return
 		}
 		log.Printf("[HANDLER] Login exitoso para usuario: %s", username)
@@ -158,7 +160,8 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 		}
 		err := s.service.ActivateAccount(userActivate.(models.UserActivate), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
+			// ActivateAccount puede envolver errores internos (%w): sanea.
+			respondError(c, http.StatusBadRequest, err)
 			return
 		}
 
@@ -190,7 +193,8 @@ func (s *HandlerUser) HandlerRecoverAccount() gin.HandlerFunc {
 		}
 		username, err := s.service.RecoverAccount(username.(string), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
+			// RecoverAccount puede envolver errores internos de email (%w): sanea.
+			respondError(c, http.StatusBadRequest, err)
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
