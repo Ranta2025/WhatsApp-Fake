@@ -41,11 +41,11 @@ type GroupMessage struct {
 	GroupID  uint      `gorm:"not null;index"`
 	SenderID uint      `gorm:"not null;index"`
 	Message  string    `gorm:"size:400"`
-	Time     time.Time `gorm:"not null"`
+	SentAt   time.Time `gorm:"column:sent_at;not null;index"`
 	Edited   bool      `gorm:"default:false"`
 
 	// Campos de media (mismos tipos que Message)
-	MediaUrl  string `gorm:"size:500"`
+	MediaUrl  string `gorm:"size:2048"`
 	MediaType string `gorm:"size:20"`
 
 	// Campos para responder mensajes

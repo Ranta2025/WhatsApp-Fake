@@ -13,7 +13,8 @@ import (
 func TestServicesUser_LogIn_Success(t *testing.T) {
 	mockRepo := new(MockUserRepo)
 	mockCache := new(MockUserCache)
-	service := InitServices(mockRepo, mockCache)
+	mockTokenStore := new(MockTokenStore)
+	service := InitServices(mockRepo, mockCache, mockTokenStore)
 
 	user := models.UserLogin{Username: "testuser", Password: "password123"}
 	ctx := context.Background()
@@ -27,6 +28,7 @@ func TestServicesUser_LogIn_Success(t *testing.T) {
 	mockCache.On("CachePassword", "testuser", ctx).Return(hashed, nil)
 
 	mockRepo.On("GetTelephonByUsername", "testuser", ctx).Return("12345678", true)
+	mockCache.On("ResetFailedAttempts", "testuser", ctx).Return(nil)
 
 	// Necesitamos configurar SECRETKEY para GenerateToken
 	os.Setenv("SECRETKEY", "super-secret-key-32-characters-long")
@@ -43,12 +45,13 @@ func TestServicesUser_LogIn_Success(t *testing.T) {
 func TestServicesUser_CreateUser_Success(t *testing.T) {
 	mockRepo := new(MockUserRepo)
 	mockCache := new(MockUserCache)
-	service := InitServices(mockRepo, mockCache)
+	mockTokenStore := new(MockTokenStore)
+	service := InitServices(mockRepo, mockCache, mockTokenStore)
 
 	user := models.UserDataBase{
 		User: models.User{
 			Username: "newuser",
-			Gmail:    "newuser@gmail.com",
+			Email:    "newuser@gmail.com",
 			Telephon: "12345678",
 		},
 		Password: "password123",
@@ -56,7 +59,7 @@ func TestServicesUser_CreateUser_Success(t *testing.T) {
 	ctx := context.Background()
 
 	mockRepo.On("UsernameExist", user.Username, ctx).Return(false)
-	mockRepo.On("EmailExist", user.Gmail, ctx).Return("", false)
+	mockRepo.On("EmailExist", user.Email, ctx).Return("", false)
 	mockRepo.On("TelephonExist", user.Telephon, ctx).Return(false)
 
 	// Saltamos el resto del test por la complejidad de mockear Tx

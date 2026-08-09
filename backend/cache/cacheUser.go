@@ -50,7 +50,6 @@ func (ch *CacheUser) DeleteRefreshToken(username string, ctx context.Context) er
 func (ch *CacheUser) CachePassword(username string, ctx context.Context) (string, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	// Consulta directa a BD — no cacheamos hashes de password en Redis por seguridad
 	passwordDB, exist := ch.repo.GetPassword(username, c)
 	if !exist {
 		return "", errors.New("contraseña inexistente")
@@ -100,6 +99,13 @@ func (ch *CacheUser) GetCodigo(tipoCodigo string, username string, ctx context.C
 	return codigo, err
 }
 
+// DeleteActivationCode elimina el código de activación del usuario de Redis.
+func (ch *CacheUser) DeleteActivationCode(username string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Del(c, "codigoactivacion:"+username).Err()
+}
+
 // CacheBloqueado revisa en Redis si el usuario está bloqueado; si no está cacheado lo
 // consulta en la BD y lo almacena con TTL de 2 min.
 func (ch *CacheUser) CacheBloqueado(username string, ctx context.Context) (bool, error) {
@@ -138,9 +144,27 @@ func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (
 	return intentosInt, nil
 }
 
-// SetIntentosFallidos actualiza el contador de intentos fallidos en Redis con TTL de 30 min.
-func (ch *CacheUser) SetIntentosFallidos(username string, intentos int, ctx context.Context) error {
+// IncrementFailedAttempts incrementa atómicamente el contador de intentos fallidos
+// en Redis usando INCR y establece TTL de 30 min. Devuelve el nuevo valor.
+func (ch *CacheUser) IncrementFailedAttempts(username string, ctx context.Context) (int, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Set(c, "intentos:"+username, strconv.Itoa(intentos), 30*time.Minute).Err()
+	key := "intentos:" + username
+
+	newVal, err := ch.rd.Incr(c, key).Result()
+	if err != nil {
+		return 0, err
+	}
+
+	if newVal == 1 {
+		ch.rd.Expire(c, key, 30*time.Minute)
+	}
+	return int(newVal), nil
+}
+
+// ResetFailedAttempts resetea (elimina) el contador de intentos fallidos de login.
+func (ch *CacheUser) ResetFailedAttempts(username string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Del(c, "intentos:"+username).Err()
 }

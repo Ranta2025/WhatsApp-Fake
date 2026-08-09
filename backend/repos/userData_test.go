@@ -23,7 +23,7 @@ func TestCreateUserStructure(t *testing.T) {
 	user := models.UserDataBase{
 		User: models.User{
 			Username: "testuser",
-			Gmail:    "test@test.com",
+			Email:    "test@test.com",
 			Telephon: "1234567890",
 		},
 		Password:  "hashed_password",
@@ -31,7 +31,7 @@ func TestCreateUserStructure(t *testing.T) {
 		Bloqueado: false,
 	}
 	assert.Equal(t, "testuser", user.Username)
-	assert.Equal(t, "test@test.com", user.Gmail)
+	assert.Equal(t, "test@test.com", user.Email)
 	assert.Equal(t, "1234567890", user.Telephon)
 }
 

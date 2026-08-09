@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"gorm/backend/config"
 	"gorm/backend/services"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -16,13 +16,15 @@ import (
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		log.Printf("[WS] CheckOrigin called. Origin: %s", origin)
+		// A9: se eliminó el bypass que permitía conexiones sin Origin.
+		// Todo upgrade debe traer un Origin permitido (browsers siempre lo
+		// envían); las conexiones sin Origin se rechazan con 403.
 		if origin == "" {
-			log.Println("[WS] Origin empty, allowing direct connection")
-			return true // Conexiones directas sin Origin (ej: clientes nativos)
+			slog.Warn("[WS] Rechazando conexión sin Origin header")
+			return false
 		}
 		allowed := config.IsAllowedOrigin(origin)
-		log.Printf("[WS] Origin allowed: %v", allowed)
+		slog.Debug("[WS] Origin allowed", "allowed", allowed)
 		return allowed
 	},
 }
@@ -41,7 +43,7 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			log.Printf("[WS] Upgrade failed: %v", err)
+			slog.Warn("[WS] Upgrade failed", "error", err)
 			return
 		}
 
@@ -59,9 +61,15 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 
 		// Goroutine de inicialización: enviar estado inicial y unirse a rooms de grupos
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("[WS] panic en goroutine de inicializacion", "panic", r, "telephon", telephon.(string))
+				}
+			}()
 			time.Sleep(100 * time.Millisecond)
 
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
 
 			// 1. Enviar lista de contactos online
 			onlineContacts := hub.GetOnlineContacts(telephon.(string))
@@ -76,7 +84,7 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 			// 2. Marcar mensajes 1:1 pendientes como "entregado" y notificar remitentes
 			senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon.(string), ctx)
 			if err != nil {
-				log.Printf("[WS] Error marcando mensajes como entregados al conectar: %v", err)
+				slog.Warn("[WS] Error marcando mensajes como entregados al conectar", "error", err, "telephon", telephon.(string))
 			} else if len(senders) > 0 {
 				deliveredMsg, _ := json.Marshal(map[string]interface{}{
 					"type": "message_delivered",
@@ -87,7 +95,7 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 				for _, senderTel := range senders {
 					hub.SendTo(senderTel, deliveredMsg)
 				}
-				log.Printf("[WS] Notificados %d remitentes de entrega para %s", len(senders), telephon.(string))
+				slog.Info("[WS] Notificados remitentes de entrega", "count", len(senders), "telephon", telephon.(string))
 			}
 
 			// 3. Unirse a las rooms de todos los grupos del usuario
@@ -97,7 +105,7 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 					for _, g := range groups {
 						hub.JoinRoom(g.ID, client)
 					}
-					log.Printf("[WS] %s unido a %d rooms de grupos", telephon.(string), len(groups))
+					slog.Info("[WS] Unido a rooms de grupos", "count", len(groups), "telephon", telephon.(string))
 				}
 			}
 		}()

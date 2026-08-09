@@ -8,10 +8,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// MiddlewareLogOut valida el JSON de registro de usuario: longitud de username,
-// formato del teléfono y reglas de contraseña.
-// (Nombre histórico; en realidad es MiddlewareRegister.)
-func MiddlewareLogOut() gin.HandlerFunc {
+func validatePasswordStrength(password string) (bool, string) {
+	if len(password) < 8 {
+		return false, "La contraseña debe tener al menos 8 caracteres"
+	}
+	if !utils.ValidationPasswordNumber(password) {
+		return false, "La contraseña debe contener algun numero"
+	}
+	if !utils.ValidationPasswordUpper(password) {
+		return false, "La contraseña debe contener alguna mayuscula"
+	}
+	if !utils.ValidationPasswordCharacterSpecial(password) {
+		return false, "La contraseña debe contener algun caracter especial"
+	}
+	return true, ""
+}
+
+func MiddlewareRegister() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var user models.UserDataBase
 		if err := c.ShouldBindJSON(&user); err != nil {
@@ -30,8 +43,6 @@ func MiddlewareLogOut() gin.HandlerFunc {
 			return
 		}
 
-		// La validación de formato E.164 ya se hace en el binding del modelo
-		// Solo verificamos que no esté vacío (redundante con binding:"required" pero por seguridad)
 		if len(user.Telephon) < 2 || user.Telephon[0] != '+' {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "El número de teléfono debe estar en formato internacional (ej: +50212345678)",
@@ -40,33 +51,9 @@ func MiddlewareLogOut() gin.HandlerFunc {
 			return
 		}
 
-		if !utils.ValidationPasswordLen(user.Password) {
+		if ok, msg := validatePasswordStrength(user.Password); !ok {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener mas de 8 caracteres",
-			})
-			c.Abort()
-			return
-		}
-
-		if !utils.ValidationPasswordNumber(user.Password) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun numero",
-			})
-			c.Abort()
-			return
-		}
-
-		if !utils.ValidationPasswordCharacterSpecial(user.Password) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun caracter especial",
-			})
-			c.Abort()
-			return
-		}
-
-		if !utils.ValidationPasswordUpper(user.Password) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener alguna mayuscula",
+				"error": msg,
 			})
 			c.Abort()
 			return
@@ -84,8 +71,6 @@ func MiddlewareLogOut() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareLogIn extrae las credenciales (username y contraseña) del cuerpo
-// JSON de la petición de login.
 func MiddlewareLogIn() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var b models.UserLogin
@@ -109,7 +94,6 @@ func MiddlewareLogIn() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareUsername valida que el nuevo username tenga mínimo 5 caracteres.
 func MiddlewareUsername() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var b models.Username
@@ -134,7 +118,6 @@ func MiddlewareUsername() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareActivateAccount valida el JSON de activación de cuenta (username y código).
 func MiddlewareActivateAccount() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var b models.UserActivate
@@ -150,8 +133,6 @@ func MiddlewareActivateAccount() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareRecoverAccount extrae el username de la petición de solicitud
-// de recuperación de contraseña.
 func MiddlewareRecoverAccount() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
@@ -169,8 +150,6 @@ func MiddlewareRecoverAccount() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareResendCode extrae el email de la petición de reenvío de código
-// de activación.
 func MiddlewareResendCode() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
@@ -188,8 +167,6 @@ func MiddlewareResendCode() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareRecoverCuenta valida el JSON de recuperación de cuenta
-// (email + código de verificación).
 func MiddlewareRecoverCuenta() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserRecover
@@ -205,8 +182,6 @@ func MiddlewareRecoverCuenta() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareChangePassword valida el JSON de cambio de contraseña dentro
-// de una sesión activa (email + nueva contraseña con sus reglas).
 func MiddlewareChangePassword() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserChangePassword
@@ -217,30 +192,9 @@ func MiddlewareChangePassword() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		if !utils.ValidationPasswordLen(request.Password) {
+		if ok, msg := validatePasswordStrength(request.Password); !ok {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener mas de 8 caracteres",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordNumber(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun numero",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordCharacterSpecial(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun caracter especial",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordUpper(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener alguna mayuscula",
+				"error": msg,
 			})
 			ctx.Abort()
 			return
@@ -250,8 +204,6 @@ func MiddlewareChangePassword() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareRecoverAndChangePassword valida el JSON de recuperación completa:
-// email, código y nueva contraseña con sus reglas.
 func MiddlewareRecoverAndChangePassword() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserRecoverAndChange
@@ -262,30 +214,9 @@ func MiddlewareRecoverAndChangePassword() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		if !utils.ValidationPasswordLen(request.Password) {
+		if ok, msg := validatePasswordStrength(request.Password); !ok {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener mas de 8 caracteres",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordNumber(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun numero",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordCharacterSpecial(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun caracter especial",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordUpper(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener alguna mayuscula",
+				"error": msg,
 			})
 			ctx.Abort()
 			return
@@ -295,8 +226,6 @@ func MiddlewareRecoverAndChangePassword() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareSendForgotPasswordCode extrae el email de la petición que solicita
-// un código para restablecer contraseña olvidada.
 func MiddlewareSendForgotPasswordCode() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
@@ -314,8 +243,6 @@ func MiddlewareSendForgotPasswordCode() gin.HandlerFunc {
 	}
 }
 
-// MiddlewareForgotPasswordChange valida el JSON de restablecimiento de contraseña
-// olvidada: email, código y nueva contraseña con sus reglas.
 func MiddlewareForgotPasswordChange() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request models.UserForgotPassword
@@ -326,30 +253,9 @@ func MiddlewareForgotPasswordChange() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		if !utils.ValidationPasswordLen(request.Password) {
+		if ok, msg := validatePasswordStrength(request.Password); !ok {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener mas de 8 caracteres",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordNumber(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun numero",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordCharacterSpecial(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener algun caracter especial",
-			})
-			ctx.Abort()
-			return
-		}
-		if !utils.ValidationPasswordUpper(request.Password) {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "La contraseña debe contener alguna mayuscula",
+				"error": msg,
 			})
 			ctx.Abort()
 			return

@@ -53,7 +53,7 @@ func TestConvertMessagesToSchemas(t *testing.T) {
 		{
 			Message: "Hello",
 			Status:  "enviado",
-			Time:    time.Now(),
+			SentAt:  time.Now(),
 		},
 	}
 

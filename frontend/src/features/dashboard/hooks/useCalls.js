@@ -12,6 +12,7 @@ export const useCalls = () => {
     const { selected, selectedGroup, callState, setCallState, incomingCall, setIncomingCall, isConnected, addToast } = useDashboard();
     
     const callTimeoutRef = useRef(null);
+    const retryTimeoutRef = useRef(null);
     const retryCountRef = useRef(0);
     const MAX_RETRIES = 3;
 
@@ -22,6 +23,10 @@ export const useCalls = () => {
         if (callTimeoutRef.current) {
             clearTimeout(callTimeoutRef.current);
             callTimeoutRef.current = null;
+        }
+        if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current);
+            retryTimeoutRef.current = null;
         }
     }, []);
 
@@ -65,7 +70,8 @@ export const useCalls = () => {
                 retryCountRef.current++;
                 console.log(`[CALL] Retrying in ${delay}ms (Attempt ${retryCountRef.current}/${MAX_RETRIES})`);
                 
-                setTimeout(() => {
+                clearTimeout(retryTimeoutRef.current);
+                retryTimeoutRef.current = setTimeout(() => {
                     if (callState) {
                         sendCallOffer(callState.remoteTelephon, callState.roomID, callState.callType);
                     }
@@ -193,6 +199,14 @@ export const useCalls = () => {
         console.log(`[CALL] Starting ${callType} group call. Room: ${roomID}`);
 
         sendGroupCallOffer(selectedGroup.ID, roomID, callType);
+
+        // Timeout de 30 segundos para señalización grupal
+        clearCallTimeout();
+        callTimeoutRef.current = setTimeout(() => {
+            console.log('[CALL] Group call signaling timeout');
+            setCallState(null);
+            addToast({ type: 'error', message: 'La llamada grupal no pudo completarse a tiempo.' });
+        }, 30000);
 
         // Para llamadas grupales el caller entra directamente (status 'active')
         setCallState({

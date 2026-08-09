@@ -2,8 +2,11 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,9 +32,38 @@ import (
 
 var rl *RateLimiter
 
+// errCircuitOpen se devuelve cuando el circuito está abierto y la petición se
+// rechaza sin consultar Redis.
+var errCircuitOpen = errors.New("rate limiter: circuito abierto (Redis no disponible)")
+
+// circuitState modela el estado del circuit breaker del rate limiter.
+type circuitState int
+
+const (
+	// circuitClosed: Redis responde normal; se cuentan los fallos.
+	circuitClosed circuitState = iota
+	// circuitOpen: Redis falló repetidamente; se rechaza con 503 sin consultarlo.
+	circuitOpen
+	// circuitHalfOpen: cooldown superado; la siguiente petición prueba Redis.
+	circuitHalfOpen
+)
+
+// circuitFailureThreshold: cantidad de fallos consecutivos de Redis antes de
+// abrir el circuito.
+const circuitFailureThreshold = 3
+
+// circuitCooldown: tiempo que el circuito permanece abierto antes de probar
+// Redis de nuevo. Es var para poder acortarlo en tests.
+var circuitCooldown = 30 * time.Second
+
 // RateLimiter holds the Redis client used for all rate-limit counters.
 type RateLimiter struct {
 	rd *redis.Client
+
+	mu                  sync.Mutex
+	state               circuitState
+	openUntil           time.Time
+	consecutiveFailures int
 }
 
 // InitRateLimiter must be called once before any route is registered.
@@ -42,35 +74,71 @@ func InitRateLimiter(rd *redis.Client) {
 // ─── Core: atomic fixed-window increment ─────────────────────────────────────
 
 // luaIncr increments a counter and sets expiry only on first creation.
-// Returns the count after increment.
+// Returns {current, ttl} as a Lua table.
 var luaIncr = redis.NewScript(`
 local current = redis.call("INCR", KEYS[1])
 if current == 1 then
     redis.call("EXPIRE", KEYS[1], ARGV[1])
 end
-return current
+local ttl = redis.call("TTL", KEYS[1])
+return {current, ttl}
 `)
 
-func (r *RateLimiter) allow(key string, limit int, window time.Duration) (allowed bool, remaining int, resetIn time.Duration) {
+// allow incrementa el contador atómicamente. Ante un error de Redis la
+// petición NO se permite (fail-closed, C8): devuelve err y el middleware
+// responde 503. Tras circuitFailureThreshold fallos consecutivos el circuito
+// se abre (rechazo sin tocar Redis); pasado circuitCooldown pasa a half-open y
+// la siguiente petición prueba Redis: si funciona, vuelve a closed; si no,
+// vuelve a abrirse.
+func (r *RateLimiter) allow(key string, limit int, window time.Duration) (allowed bool, remaining int, resetIn time.Duration, err error) {
 	ctx := context.Background()
 	windowSecs := int(window.Seconds())
 
-	count, err := luaIncr.Run(ctx, r.rd, []string{key}, windowSecs).Int()
+	// Circuito abierto: rechazar sin consultar Redis (fail-closed).
+	r.mu.Lock()
+	if r.state == circuitOpen {
+		if time.Now().Before(r.openUntil) {
+			r.mu.Unlock()
+			return false, 0, 0, errCircuitOpen
+		}
+		// Cooldown superado → half-open: esta petición prueba Redis.
+		r.state = circuitHalfOpen
+	}
+	r.mu.Unlock()
+
+	vals, err := luaIncr.Run(ctx, r.rd, []string{key}, windowSecs).Slice()
 	if err != nil {
-		// Redis unavailable → fail open (don't block legitimate traffic)
-		return true, limit, window
+		slog.Error("rate limiter: Redis no disponible, rechazando (fail-closed)", "error", err)
+		r.mu.Lock()
+		r.consecutiveFailures++
+		if r.consecutiveFailures >= circuitFailureThreshold || r.state == circuitHalfOpen {
+			r.state = circuitOpen
+			r.openUntil = time.Now().Add(circuitCooldown)
+		}
+		r.mu.Unlock()
+		return false, 0, 0, err
 	}
 
-	ttl, err := r.rd.TTL(ctx, key).Result()
-	if err != nil || ttl < 0 {
-		ttl = window
+	// Éxito → el circuito se cierra.
+	r.mu.Lock()
+	if r.state == circuitHalfOpen {
+		r.state = circuitClosed
+	}
+	r.consecutiveFailures = 0
+	r.mu.Unlock()
+
+	count, _ := vals[0].(int64)
+	ttlSecs, _ := vals[1].(int64)
+
+	if ttlSecs <= 0 {
+		ttlSecs = int64(windowSecs)
 	}
 
-	remaining = limit - count
+	remaining = limit - int(count)
 	if remaining < 0 {
 		remaining = 0
 	}
-	return count <= limit, remaining, ttl
+	return int(count) <= limit, remaining, time.Duration(ttlSecs) * time.Second, nil
 }
 
 // ─── Public factory functions ─────────────────────────────────────────────────
@@ -90,7 +158,17 @@ func RateLimitByIP(tag string, limit int, window time.Duration) gin.HandlerFunc 
 
 		ip := ctx.ClientIP()
 		key := fmt.Sprintf("rl:ip:%s:%s", tag, ip)
-		allowed, remaining, resetIn := rl.allow(key, limit, window)
+		allowed, remaining, resetIn, err := rl.allow(key, limit, window)
+
+		if err != nil {
+			// Fail-closed (C8): Redis no disponible → 503, nunca tráfico ilimitado.
+			slog.Error("rate limiter rechazando petición por indisponibilidad de Redis", "key", key, "error", err)
+			ctx.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "servicio temporalmente no disponible, intente más tarde",
+			})
+			ctx.Abort()
+			return
+		}
 
 		setRateLimitHeaders(ctx, limit, remaining, resetIn)
 		if !allowed {
@@ -127,7 +205,17 @@ func RateLimitByUser(tag string, limit int, window time.Duration) gin.HandlerFun
 		}
 
 		key := fmt.Sprintf("rl:user:%s:%s", tag, subject)
-		allowed, remaining, resetIn := rl.allow(key, limit, window)
+		allowed, remaining, resetIn, err := rl.allow(key, limit, window)
+
+		if err != nil {
+			// Fail-closed (C8): Redis no disponible → 503, nunca tráfico ilimitado.
+			slog.Error("rate limiter rechazando petición por indisponibilidad de Redis", "key", key, "error", err)
+			ctx.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "servicio temporalmente no disponible, intente más tarde",
+			})
+			ctx.Abort()
+			return
+		}
 
 		setRateLimitHeaders(ctx, limit, remaining, resetIn)
 		if !allowed {

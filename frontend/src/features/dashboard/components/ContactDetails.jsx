@@ -16,7 +16,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
     const [chatWallpapers, setChatWallpapers] = useState({});
     const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
 
-    // ── Edit contact name ─────────────────────────────────────────────────
+    // -- Edit contact name ------------------------------------------------
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState('');
     const [savingName, setSavingName] = useState(false);
@@ -40,7 +40,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
 
     const submitEditName = async () => {
         if (!nameInput.trim()) {
-            setNameError('El nombre no puede quedar vacío.');
+            setNameError('El nombre no puede quedar vacio.');
             return;
         }
         setSavingName(true);
@@ -106,7 +106,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
             window.dispatchEvent(new CustomEvent('chat-wallpaper-changed', { detail: newWps }));
         } catch (err) {
             console.error('Error uploading contact wallpaper:', err);
-            alert('No pudimos actualizar el fondo de esta conversación. Inténtalo nuevamente.');
+            alert('No pudimos actualizar el fondo de esta conversacion. Intentalo nuevamente.');
         } finally {
             setUploadingWallpaper(false);
         }
@@ -124,8 +124,8 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
     const displayName = selected.ContactName || selected.Username;
 
     return (
-        <div className="fixed inset-0 lg:static lg:w-80 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.08),_transparent_30%),linear-gradient(to_bottom,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))] lg:border-l border-white/10 flex flex-col h-full z-50 lg:z-40 shadow-2xl transition-all duration-300">
-            <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-white/5">
+        <div className="fixed inset-0 lg:static lg:w-80 bg-[#0B1120] lg:bg-transparent flex flex-col h-full z-50 lg:z-40 shadow-2xl transition-all duration-300">
+            <div className="h-14 glass-strong border-b border-white/5 flex items-center gap-3 px-4">
                 <button 
                     onClick={onClose}
                     className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-400 hover:text-white"
@@ -134,12 +134,12 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                 </button>
-                <h3 className="font-bold text-lg text-white">Info. del contacto</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Info. del contacto</h3>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
                 <div 
-                    className="relative w-32 h-32 rounded-full mb-4 cursor-pointer group shadow-2xl border-4 border-slate-800"
+                    className="relative w-28 h-28 rounded-full mb-4 cursor-pointer group ring-4 ring-sky-500/15 ring-offset-4 ring-offset-slate-950 shadow-2xl"
                     onClick={() => avatarUrl && setViewImage(avatarUrl)}
                     title={avatarUrl ? "Ver foto" : ""}
                 >
@@ -212,7 +212,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
                         <button
                             onClick={startEditName}
                             title="Editar nombre"
-                            className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-white/10 rounded-2xl transition-colors"
+                            className="p-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-sky-400 transition-colors"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -225,23 +225,23 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
                 </p>
 
                 <div className="w-full space-y-4">
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 shadow-lg shadow-black/10">
+                    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
                         <div className="text-xs text-cyan-300/70 mb-1 uppercase tracking-wider font-semibold">Estado</div>
                         <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full ${isContactOnline(selected.Number) ? 'bg-green-500' : 'bg-slate-500'}`}></span>
                             <span className="text-white font-medium">
-                                {isContactOnline(selected.Number) ? 'En línea' : (getLastSeenText(selected.Number) || 'Desconectado')}
+                                {isContactOnline(selected.Number) ? 'En linea' : (getLastSeenText(selected.Number) || 'Desconectado')}
                             </span>
                         </div>
                     </div>
                     
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 shadow-lg shadow-black/10">
+                    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
                         <div className="text-xs text-cyan-300/70 mb-1 uppercase tracking-wider font-semibold">Acciones</div>
                         <div className="flex gap-2 mt-3">
                             <button 
                                 onClick={() => onStartCall('audio')}
                                 disabled={!isConnected}
-                                className="flex-1 flex flex-col items-center justify-center gap-2 p-3 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 hover:text-emerald-100 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -251,7 +251,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
                             <button 
                                 onClick={() => onStartCall('video')}
                                 disabled={!isConnected}
-                                className="flex-1 flex flex-col items-center justify-center gap-2 p-3 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-sky-100 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -261,7 +261,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
                         </div>
                     </div>
 
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 shadow-lg shadow-black/10">
+                    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
                         <div className="text-xs text-cyan-300/70 mb-3 uppercase tracking-wider font-semibold">Fondo de este chat</div>
                         {chatWallpapers[selected.Number] ? (
                             <div className="relative rounded-xl overflow-hidden h-28 mb-2">

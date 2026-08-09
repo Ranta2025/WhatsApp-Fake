@@ -24,14 +24,12 @@ func (hd *HandlerStatus) HandleGetFeed() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 		feed, err := hd.service.GetFeed(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, feed)
@@ -43,15 +41,13 @@ func (hd *HandlerStatus) HandleCreateStatus() gin.HandlerFunc {
 		telephon, exist := ctx.Get("telephon")
 		statusPayload, exist2 := ctx.Get("statusCreate")
 		if !exist || !exist2 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 
 		status, err := hd.service.CreateStatus(telephon.(string), statusPayload.(models.StatusCreate), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -70,20 +66,17 @@ func (hd *HandlerStatus) HandleMarkViewed() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 		statusID, err := strconv.ParseUint(ctx.Param("statusID"), 10, 64)
 		if err != nil || statusID == 0 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "identificador de estado inválido"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "identificador de estado inválido")
 			return
 		}
 		viewedEvent, err := hd.service.MarkViewed(telephon.(string), uint(statusID), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 		if hd.hub != nil && viewedEvent != nil && viewedEvent.OwnerTelephon != "" {
@@ -97,19 +90,16 @@ func (hd *HandlerStatus) HandleDeleteStatus() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exist := ctx.Get("telephon")
 		if !exist {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener datos"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "error al obtener datos")
 			return
 		}
 		statusID, err := strconv.ParseUint(ctx.Param("statusID"), 10, 64)
 		if err != nil || statusID == 0 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "identificador de estado inválido"})
-			ctx.Abort()
+			respondErrorMsg(ctx, http.StatusBadRequest, "identificador de estado inválido")
 			return
 		}
 		if err := hd.service.DeleteStatus(telephon.(string), uint(statusID), ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			ctx.Abort()
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 		if hd.hub != nil {

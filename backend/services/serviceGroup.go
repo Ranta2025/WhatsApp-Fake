@@ -3,8 +3,11 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"gorm/backend/models"
+	"gorm/backend/repos"
 	"gorm/backend/schemas"
+	"log"
 	"time"
 )
 
@@ -43,6 +46,7 @@ type GroupRepoInterface interface {
 	GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error)
 	GetGroupMembers(groupID uint, ctx context.Context) ([]models.GroupMember, error)
 	GetUserGroups(userID uint, ctx context.Context) ([]models.Group, error)
+	GetUserGroupsWithDetails(userID uint, ctx context.Context) ([]repos.UserGroupDetail, error)
 	IsMember(groupID, userID uint, ctx context.Context) (bool, error)
 	GetMemberRole(groupID, userID uint, ctx context.Context) (string, error)
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
@@ -173,28 +177,25 @@ func (s *ServiceGroup) AddMembers(telephonRequester string, groupID uint, data m
 func (s *ServiceGroup) GetUserGroups(telephon string, ctx context.Context) ([]schemas.GroupResponse, error) {
 	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
-		return nil, errors.New("usuario no encontrado")
+		return nil, fmt.Errorf("GetUserGroups: usuario no encontrado: %w", err)
 	}
 
-	groups, err := s.repo.GetUserGroups(uint(userID), ctx)
+	details, err := s.repo.GetUserGroupsWithDetails(uint(userID), ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetUserGroups: error obteniendo grupos: %w", err)
 	}
 
-	responses := make([]schemas.GroupResponse, 0, len(groups))
-	for _, g := range groups {
-		count, _ := s.repo.GetMemberCount(g.ID, ctx)
-		creatorTel, _ := s.contactRepo.GetTelephonByID(g.CreatorID, ctx)
-		role, _ := s.repo.GetMemberRole(g.ID, uint(userID), ctx)
+	responses := make([]schemas.GroupResponse, 0, len(details))
+	for _, d := range details {
 		responses = append(responses, schemas.GroupResponse{
-			ID:              g.ID,
-			Name:            g.Name,
-			Description:     g.Description,
-			AvatarUrl:       g.AvatarUrl,
-			CreatorTelephon: creatorTel,
-			MemberCount:     count,
-			UserRole:        role,
-			CreatedAt:       g.CreatedAt,
+			ID:              d.ID,
+			Name:            d.Name,
+			Description:     d.Description,
+			AvatarUrl:       d.AvatarUrl,
+			CreatorTelephon: d.CreatorTelephon,
+			MemberCount:     d.MemberCount,
+			UserRole:        d.UserRole,
+			CreatedAt:       d.CreatedAt,
 		})
 	}
 	return responses, nil
@@ -229,7 +230,11 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 		return nil, err
 	}
 
-	creatorTel, _ := s.contactRepo.GetTelephonByID(group.CreatorID, ctx)
+	creatorTel, err := s.contactRepo.GetTelephonByID(group.CreatorID, ctx)
+	if err != nil {
+		log.Printf("[GetGroupDetail] error obteniendo telephon del creador %d: %v", group.CreatorID, err)
+		creatorTel = ""
+	}
 	memberCount := len(members)
 
 	detail := &schemas.GroupDetail{
@@ -269,7 +274,7 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		GroupID:          data.GroupID,
 		SenderID:         uint(senderID),
 		Message:          data.Message,
-		Time:             time.Now(),
+		SentAt:           time.Now(),
 		MediaUrl:         data.MediaUrl,
 		MediaType:        data.MediaType,
 		ReplyToMessageID: data.ReplyToMessageID,
@@ -281,7 +286,11 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		return nil, errors.New("error al guardar el mensaje")
 	}
 
-	senderUsername, _ := s.contactRepo.GetUsernameByTelephon(telephonSender, ctx)
+	senderUsername, err := s.contactRepo.GetUsernameByTelephon(telephonSender, ctx)
+	if err != nil {
+		log.Printf("[SendGroupMessage] error obteniendo username del sender: %v", err)
+		senderUsername = ""
+	}
 
 	return &schemas.GroupMessageResponse{
 		MessageID:        msg.ID,
@@ -289,7 +298,7 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		SenderTelephon:   telephonSender,
 		SenderUsername:   senderUsername,
 		Message:          msg.Message,
-		Time:             msg.Time,
+		Time:             msg.SentAt,
 		Edited:           false,
 		MediaUrl:         msg.MediaUrl,
 		MediaType:        msg.MediaType,
@@ -344,7 +353,11 @@ func (s *ServiceGroup) EditGroupMessage(telephon string, groupID uint, data mode
 		return nil, err
 	}
 
-	senderUsername, _ := s.contactRepo.GetUsernameByTelephon(telephon, ctx)
+	senderUsername, err := s.contactRepo.GetUsernameByTelephon(telephon, ctx)
+	if err != nil {
+		log.Printf("[EditGroupMessage] error obteniendo username del sender: %v", err)
+		senderUsername = ""
+	}
 	resp := groupMessageToSchema(msg, telephon, senderUsername)
 	return &resp, nil
 }
@@ -426,7 +439,7 @@ func groupMessageToSchema(m *models.GroupMessage, senderTelephon, senderUsername
 		SenderTelephon:   senderTelephon,
 		SenderUsername:   senderUsername,
 		Message:          m.Message,
-		Time:             m.Time,
+		Time:             m.SentAt,
 		Edited:           m.Edited,
 		MediaUrl:         m.MediaUrl,
 		MediaType:        m.MediaType,
@@ -460,8 +473,9 @@ func (s *ServiceGroup) LeaveGroup(telephon string, groupID uint, ctx context.Con
 		return "", err
 	}
 	if memberCount <= 1 {
-		// Último miembro: eliminar el grupo completo
-		_ = s.repo.DeleteGroup(groupID, ctx)
+		if err := s.repo.DeleteGroup(groupID, ctx); err != nil {
+			return "", fmt.Errorf("error eliminando grupo: %w", err)
+		}
 		return "", nil
 	}
 
@@ -485,7 +499,10 @@ func (s *ServiceGroup) LeaveGroup(telephon string, groupID uint, ctx context.Con
 			if err := s.repo.UpdateMemberRole(groupID, newAdmin.UserID, "admin", ctx); err != nil {
 				return "", errors.New("error al promover al nuevo administrador")
 			}
-			promotedTelephon, _ = s.contactRepo.GetTelephonByID(newAdmin.UserID, ctx)
+			promotedTelephon, err = s.contactRepo.GetTelephonByID(newAdmin.UserID, ctx)
+			if err != nil {
+				log.Printf("[LeaveGroup] error obteniendo telephon del nuevo admin %d: %v", newAdmin.UserID, err)
+			}
 		}
 	}
 

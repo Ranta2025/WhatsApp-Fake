@@ -163,10 +163,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
             {/* Capa de estado / Overlay */}
             {callStatus === 'connecting' && (
                 <div className="absolute inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center gap-6">
-                    <div className="relative w-24 h-24">
-                        <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
-                        <div className="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
-                    </div>
+                    <div className="w-16 h-16 border-4 border-sky-500/20 border-t-sky-400 rounded-full animate-spin"></div>
                     <div className="text-center space-y-2">
                         <h2 className="text-white text-xl font-bold tracking-tight">Estableciendo conexión segura</h2>
                         <p className="text-slate-400 text-sm animate-pulse">Configurando cifrado de extremo a extremo...</p>
@@ -175,8 +172,8 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
             )}
 
             {callStatus === 'error' && (
-                <div className="absolute inset-0 z-50 bg-red-950/20 backdrop-blur-xl flex flex-col items-center justify-center gap-4">
-                    <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">
+                <div className="absolute inset-0 z-50 bg-red-950/30 backdrop-blur-xl flex flex-col items-center justify-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center">
                         <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -186,9 +183,9 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
             )}
 
             {/* Header minimalista */}
-            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-6 py-4 bg-gradient-to-b from-slate-950/80 to-transparent pointer-events-none">
+            <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-slate-950/90 to-transparent px-6 py-4 z-10 flex items-center justify-between pointer-events-none">
                 <div className="flex items-center gap-3">
-                    <div className={`w-2.5 h-2.5 rounded-full ${callStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
+                    <div className={`w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse`}></div>
                     <div className="flex flex-col">
                         <span className="text-white text-xs font-black uppercase tracking-[0.2em]">
                             {callType === 'video' ? 'Videollamada' : 'Llamada de voz'}
@@ -210,7 +207,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
             {/* Botón de colgar flotante (Backup) */}
             <button 
                 onClick={onCallEnd}
-                className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 w-16 h-16 bg-red-500 hover:bg-red-600 active:scale-95 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/30 transition-all sm:hidden"
+                className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 w-14 h-14 rounded-full bg-red-500 hover:bg-red-400 flex items-center justify-center shadow-2xl shadow-red-500/30 transition-all sm:hidden"
                 aria-label="Finalizar llamada"
             >
                 <svg className="w-8 h-8 text-white rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor">

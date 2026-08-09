@@ -8,8 +8,8 @@ import (
 
 type ContactDataBase struct {
 	gorm.Model
-	IdUser       uint   `gorm:"not null" json:"id_user" binding:"required"`
-	IdContact    uint   `gorm:"not null" json:"id_contact" binding:"required"`
+	IdUser       uint   `gorm:"uniqueIndex:idx_contact_pair;not null" json:"id_user"`
+	IdContact    uint   `gorm:"uniqueIndex:idx_contact_pair;not null" json:"id_contact"`
 	Status       string `gorm:"size:25;not null"`
 	ContactName  string `gorm:"size:100"` // Nombre personalizado que el usuario le pone al contacto
 	WallpaperUrl string `gorm:"size:500"` // Fondo de pantalla específico para este chat

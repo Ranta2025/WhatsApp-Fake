@@ -26,6 +26,16 @@ func MiddlewareStatusCreate() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
+		if len(body.Text) > 700 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "el texto no puede exceder los 700 caracteres"})
+			ctx.Abort()
+			return
+		}
+		if len(body.MediaUrl) > 2048 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "la URL del medio no puede exceder los 2048 caracteres"})
+			ctx.Abort()
+			return
+		}
 		ctx.Set("statusCreate", body)
 		ctx.Next()
 	}

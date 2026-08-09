@@ -28,6 +28,11 @@ func InitRepoContact(data *gorm.DB, rd *redis.Client) *ApiContact {
 	}
 }
 
+// BeginTx inicia una transacción GORM.
+func (ap *ApiContact) BeginTx() *gorm.DB {
+	return ap.data.Begin()
+}
+
 // GetUserDataBase obtiene los datos de perfil de un usuario buscando por username.
 func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -105,12 +110,31 @@ func (ap *ApiContact) AddContact(contact models.ContactDataBase, ctx context.Con
 	return ap.data.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
 }
 
+// AddContactTx persiste una nueva relación de contacto dentro de una transacción.
+func (ap *ApiContact) AddContactTx(tx *gorm.DB, contact models.ContactDataBase, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return tx.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
+}
+
 // ExistContactAdd verifica si ya existe la relación de contacto entre dos usuarios.
 func (ap *ApiContact) ExistContactAdd(idUser uint, IdContact uint, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var count int64
 	result := ap.data.Model(&models.ContactDataBase{}).WithContext(c).Where("id_user = ?", idUser).Where("id_contact = ?", IdContact).Count(&count)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return count > 0, nil
+}
+
+// ExistContactAddTx verifica si ya existe la relación de contacto entre dos usuarios dentro de una transacción.
+func (ap *ApiContact) ExistContactAddTx(tx *gorm.DB, idUser uint, IdContact uint, ctx context.Context) (bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var count int64
+	result := tx.Model(&models.ContactDataBase{}).WithContext(c).Where("id_user = ?", idUser).Where("id_contact = ?", IdContact).Count(&count)
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -169,7 +193,6 @@ func (app *ApiContact) GetContactNumber(number string, ctx context.Context) (*mo
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	// No establecer status aquí, se debe obtener de la relación de contacto
 	return &contact, nil
 }
 
@@ -210,8 +233,6 @@ func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Co
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var messages []models.Message
-	// Consultar en DESC LIMIT 200 para obtener los más recientes, luego invertir
-	// para devolver en orden cronológico (más antiguo primero) sin cambiar la interfaz.
 	result := app.data.Model(&models.Message{}).WithContext(c).
 		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false).
 		Order("time DESC").
@@ -220,7 +241,6 @@ func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Co
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	// Invertir para devolver en orden cronológico (más antiguo primero)
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
@@ -284,24 +304,29 @@ func (app *ApiContact) GetAllMessagesForUser(id_user uint, ctx context.Context) 
 }
 
 // ClearChatForUser marca todos los mensajes entre id_user y id_contact como borrados para id_user
+// dentro de una transacción GORM para garantizar atomicidad de los dos UPDATEs.
 func (app *ApiContact) ClearChatForUser(id_user uint, id_contact uint, ctx context.Context) error {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	return app.data.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		c, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		txCtx := tx.WithContext(c)
 
-	// 1. Mensajes donde el usuario es el remitente
-	err1 := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id_user = ? AND id_receptor = ?", id_user, id_contact).
-		Update("deleted_by_sender", true).Error
+		err1 := txCtx.Model(&models.Message{}).
+			Where("id_user = ? AND id_receptor = ?", id_user, id_contact).
+			Update("deleted_by_sender", true).Error
 
-	// 2. Mensajes donde el usuario es el receptor
-	err2 := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id_user = ? AND id_receptor = ?", id_contact, id_user).
-		Update("deleted_by_receiver", true).Error
+		err2 := txCtx.Model(&models.Message{}).
+			Where("id_user = ? AND id_receptor = ?", id_contact, id_user).
+			Update("deleted_by_receiver", true).Error
 
-	if err1 != nil {
-		return err1
-	}
-	return err2
+		if err1 != nil {
+			return fmt.Errorf("error marcando mensajes enviados como borrados: %w", err1)
+		}
+		if err2 != nil {
+			return fmt.Errorf("error marcando mensajes recibidos como borrados: %w", err2)
+		}
+		return nil
+	})
 }
 
 // GetAddedContactIDs devuelve el conjunto de IDs de contactos que el usuario tiene agregados
@@ -341,6 +366,27 @@ func (app *ApiContact) GetUserByID(id uint, ctx context.Context) (*models.UserDa
 	return &user, nil
 }
 
+// GetUserByIDs obtiene múltiples usuarios por sus IDs en una sola consulta batch (evita N+1).
+func (app *ApiContact) GetUserByIDs(ids []uint, ctx context.Context) (map[uint]*models.UserDataBase, error) {
+	if len(ids) == 0 {
+		return make(map[uint]*models.UserDataBase), nil
+	}
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var users []models.UserDataBase
+	result := app.data.Model(&models.UserDataBase{}).WithContext(c).
+		Where("id IN ?", ids).
+		Find(&users)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	m := make(map[uint]*models.UserDataBase, len(users))
+	for i := range users {
+		m[users[i].ID] = &users[i]
+	}
+	return m, nil
+}
+
 // GetUsernameByTelephon obtiene el username por número de teléfono
 func (app *ApiContact) GetUsernameByTelephon(telephon string, ctx context.Context) (string, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -369,7 +415,6 @@ func (app *ApiContact) GetTelephonByUsername(username string, ctx context.Contex
 func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
 	cacheKey := fmt.Sprintf("user:id:%s", telephon)
 
-	// 1. Intentar obtener de Redis
 	if app.rd != nil {
 		idStr, err := app.rd.Get(ctx, cacheKey).Result()
 		if err == nil {
@@ -380,16 +425,14 @@ func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (in
 		}
 	}
 
-	// 2. Si no está en caché o hay error, consultar BD
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var id int
 	result := app.data.Model(&models.UserDataBase{}).WithContext(c).Select("id").Where("telephon = ?", telephon).Scan(&id)
 	if result.Error != nil || id == 0 {
-		return -1, errors.New("id usuario no encontrado")
+		return -1, fmt.Errorf("GetIdByTelephon: id usuario no encontrado para telephon %s: %w", telephon, result.Error)
 	}
 
-	// 3. Guardar en Redis para futuras consultas (TTL 24h)
 	if app.rd != nil {
 		app.rd.Set(ctx, cacheKey, id, 24*time.Hour)
 	}
@@ -397,11 +440,28 @@ func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (in
 	return id, nil
 }
 
-// GetCachedContactsTelephons obtiene la lista bidireccional de contactos con caché en Redis
+// InvalidateUserIDCache elimina la entrada user:id:<telephon> del caché Redis.
+func (app *ApiContact) InvalidateUserIDCache(telephon string, ctx context.Context) {
+	if app.rd != nil {
+		cacheKey := fmt.Sprintf("user:id:%s", telephon)
+		app.rd.Del(ctx, cacheKey)
+	}
+}
+
+// InvalidateContactsCache elimina la entrada user:contacts:<telephon> del caché Redis.
+func (app *ApiContact) InvalidateContactsCache(telephon string, ctx context.Context) {
+	if app.rd != nil {
+		cacheKey := fmt.Sprintf("user:contacts:%s", telephon)
+		app.rd.Del(ctx, cacheKey)
+	}
+}
+
+// GetCachedContactsTelephons obtiene la lista bidireccional de contactos con caché en Redis.
+// NOTA: Esta lógica se mantiene en la capa de repositorio por razones de rendimiento,
+// ya que la unión bidireccional y la caché Redis están estrechamente acopladas a los datos.
 func (app *ApiContact) GetCachedContactsTelephons(telephon string, ctx context.Context) []string {
 	cacheKey := fmt.Sprintf("user:contacts:%s", telephon)
 
-	// 1. Intentar obtener de Redis
 	if app.rd != nil {
 		contacts, err := app.rd.SMembers(ctx, cacheKey).Result()
 		if err == nil && len(contacts) > 0 {
@@ -409,25 +469,21 @@ func (app *ApiContact) GetCachedContactsTelephons(telephon string, ctx context.C
 		}
 	}
 
-	// 2. Si no está en caché o está vacío, consultar BD
 	id, err := app.GetIdByTelephon(telephon, ctx)
 	if err != nil {
 		return []string{}
 	}
 
-	// Dirección 1: personas que YO tengo agregadas
 	contacts, err := app.GetContactsTelephons(uint(id), ctx)
 	if err != nil {
 		contacts = &[]models.ContactChat{}
 	}
 
-	// Dirección 2: personas que ME tienen agregado a mí
 	reverse, err := app.GetUsersWhoHaveMeAsContactTelephons(uint(id), ctx)
 	if err != nil {
 		reverse = []string{}
 	}
 
-	// Unión sin duplicados
 	seen := make(map[string]struct{})
 	var result []string
 	for _, t := range *contacts {
@@ -445,9 +501,7 @@ func (app *ApiContact) GetCachedContactsTelephons(telephon string, ctx context.C
 		}
 	}
 
-	// 3. Guardar en Redis (TTL 1h)
 	if app.rd != nil && len(result) > 0 {
-		// Usamos un set para evitar duplicados en Redis y facilitar búsquedas futuras
 		app.rd.SAdd(ctx, cacheKey, result)
 		app.rd.Expire(ctx, cacheKey, 1*time.Hour)
 	}
@@ -585,7 +639,6 @@ func (app *ApiContact) DeleteMessageForMe(messageID uint, userID uint, ctx conte
 		return nil, find.Error
 	}
 
-	// Actualizar la bandera correspondiente
 	updates := map[string]interface{}{}
 	if msg.IdUser == userID {
 		updates["deleted_by_sender"] = true
