@@ -71,7 +71,9 @@ func (m *MockUserRepo) GetGmail(username string, ctx context.Context) (string, b
 
 type MockUserCache struct {
 	mock.Mock
-}func (m *MockUserCache) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
+}
+
+func (m *MockUserCache) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
 	args := m.Called(username, refreshToken, ctx)
 	return args.Error(0)
 }
