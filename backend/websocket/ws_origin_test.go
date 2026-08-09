@@ -1,7 +1,6 @@
 package websocket
 
 import (
-	"net/http"
 	"net/http/httptest"
 	"testing"
 
