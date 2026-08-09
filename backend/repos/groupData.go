@@ -104,6 +104,44 @@ func (r *RepoGroup) GetUserGroups(userID uint, ctx context.Context) ([]models.Gr
 	return groups, err
 }
 
+// UserGroupDetail agrupa los datos enriquecidos de un grupo del usuario en una sola consulta.
+type UserGroupDetail struct {
+	ID              uint
+	Name            string
+	Description     string
+	AvatarUrl       string
+	CreatorID       uint
+	CreatorTelephon string
+	MemberCount     int
+	UserRole        string
+	CreatedAt       time.Time
+}
+
+// GetUserGroupsWithDetails obtiene los grupos del usuario con conteo de miembros,
+// teléfono del creador y rol del usuario en una sola consulta JOIN con agregación.
+func (r *RepoGroup) GetUserGroupsWithDetails(userID uint, ctx context.Context) ([]UserGroupDetail, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var details []UserGroupDetail
+	err := r.data.WithContext(c).
+		Table("groups").
+		Select(`groups.id,
+			groups.name,
+			groups.description,
+			groups.avatar_url,
+			groups.creator_id,
+			creator.telephon AS creator_telephon,
+			(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = groups.id AND gm.deleted_at IS NULL) AS member_count,
+			my_membership.role AS user_role,
+			groups.created_at`).
+		Joins("JOIN group_members AS my_membership ON my_membership.group_id = groups.id AND my_membership.user_id = ? AND my_membership.deleted_at IS NULL", userID).
+		Joins("JOIN user_data_bases AS creator ON creator.id = groups.creator_id AND creator.deleted_at IS NULL").
+		Where("groups.deleted_at IS NULL").
+		Scan(&details).Error
+	return details, err
+}
+
 // IsMember verifica si un usuario es miembro activo de un grupo.
 func (r *RepoGroup) IsMember(groupID, userID uint, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)

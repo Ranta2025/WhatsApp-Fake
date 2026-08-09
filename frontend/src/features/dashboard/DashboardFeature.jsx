@@ -83,16 +83,16 @@ const CallingOverlay = ({ callState, onEndCall }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[9998] bg-black/80 backdrop-blur-md flex items-center justify-center">
-            <div className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-[2rem] p-10 w-80 text-center shadow-2xl border border-white/10 relative overflow-hidden">
+        <div className="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-xl flex items-center justify-center">
+            <div className="rounded-3xl bg-[#0B1120] border border-white/[0.06] p-10 w-80 text-center shadow-float relative overflow-hidden">
                 {/* Animación de ondas */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-40 h-40 border border-indigo-500/20 rounded-full animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-                    <div className="absolute w-32 h-32 border border-indigo-500/15 rounded-full animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite_0.5s]"></div>
+                    <div className="w-40 h-40 border border-sky-500/15 rounded-full animate-[ping_2s_ease-in-out_infinite]"></div>
+                    <div className="absolute w-32 h-32 border border-sky-500/15 rounded-full animate-[ping_2s_ease-in-out_infinite_0.5s]"></div>
                 </div>
                 <div className="relative z-10">
                     {/* Avatar / Icono */}
-                    <div className="w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-indigo-500/30">
+                    <div className="w-24 h-24 rounded-full gradient-brand mx-auto mb-6 flex items-center justify-center">
                         <span className="text-white text-3xl font-bold">
                             {(callState.remoteName || callState.remoteTelephon)?.charAt(0)?.toUpperCase() || '?'}
                         </span>
@@ -111,7 +111,7 @@ const CallingOverlay = ({ callState, onEndCall }) => {
                     {/* Botón colgar */}
                     <button
                         onClick={onEndCall}
-                        className="w-16 h-16 bg-red-500 hover:bg-red-600 rounded-full mx-auto flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 shadow-lg shadow-red-500/25"
+                        className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-400 shadow-lg shadow-red-500/20 mx-auto flex items-center justify-center"
                         aria-label="Cancelar llamada"
                     >
                         <svg className="w-8 h-8 text-white rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -160,11 +160,11 @@ const DashboardContent = () => {
     }, [dataReady, showLoader]);
 
     return (
-        <div className="relative flex h-[100dvh] min-h-0 min-w-0 overflow-hidden bg-slate-950 text-white">
+        <div className="relative flex h-[100dvh] min-h-0 min-w-0 overflow-hidden bg-[#0B1120] text-white">
             {/* Pantalla de carga moderna */}
             {showLoader && (
                 <div
-                    className="absolute inset-0 z-[99999] transition-opacity duration-500"
+                    className="absolute inset-0 z-[99999] transition-opacity duration-500 bg-[#0B1120]"
                     style={{ opacity: loaderFading ? 0 : 1, pointerEvents: loaderFading ? 'none' : 'auto' }}
                 >
                     <LoadingScreen loadingSteps={loadingSteps} />
@@ -221,33 +221,33 @@ const DashboardContent = () => {
             <NotificationBanner />
 
             {/* Modal para ver imagen en grande */}
-            {viewImage && (
-                <div 
-                    className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300"
-                    onClick={() => setViewImage(null)}
-                >
-                    <div className="relative max-w-5xl max-h-[90vh] w-full h-full flex items-center justify-center p-4">
-                        <button 
-                            className="absolute -top-12 right-0 text-white/50 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-3 transition-all active:scale-90"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setViewImage(null);
-                            }}
-                            title="Cerrar imagen"
-                        >
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                        <img 
-                            src={viewImage} 
-                            alt="Vista previa" 
-                            className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in duration-300"
-                            onClick={(e) => e.stopPropagation()}
-                        />
+                {viewImage && (
+                    <div 
+                        className="fixed inset-0 bg-[#0B1120]/95 backdrop-blur-2xl flex items-center justify-center z-[100] p-4"
+                        onClick={() => setViewImage(null)}
+                    >
+                        <div className="relative max-w-5xl max-h-[90vh] w-full h-full flex items-center justify-center p-4">
+                            <button 
+                                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-center border border-white/[0.06] transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewImage(null);
+                                }}
+                                title="Cerrar imagen"
+                            >
+                                <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                            <img 
+                                src={viewImage} 
+                                alt="Vista previa" 
+                                className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
             {/* ========== Diálogo de Permisos ========== */}
             {showPermissionsDialog && (

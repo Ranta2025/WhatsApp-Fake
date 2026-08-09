@@ -15,19 +15,18 @@ export default function ActivateAccount() {
     const { setUser } = useAuth();
     const location = useLocation();
     const username = location.state?.username || '';
-    const gmail = location.state?.gmail || '';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         
         if (isBloqueado) {
-            setError('Tu acceso está protegido temporalmente. Si lo necesitas, podemos ayudarte a recuperarlo.');
+            setError('Tu acceso esta protegido temporalmente.');
             return;
         }
 
         if (!code.trim()) {
-            setError('Ingresa el código para completar tu acceso.');
+            setError('Ingresa el codigo para completar tu acceso.');
             return;
         }
 
@@ -38,19 +37,15 @@ export default function ActivateAccount() {
 
         setLoading(true);
         try {
-            const response = await api.post('/activate', {
-                username: username,
-                code: code
-            });
-            // Establecer el usuario en el contexto ANTES de navegar
-            setUser({ username: username });
-            alert('Tu cuenta ya está lista. Bienvenido.');
+            await api.post('/activate', { username, code });
+            setUser({ username });
+            alert('Tu cuenta ya esta lista. Bienvenido.');
             navigate('/dashboard', { replace: true });
         } catch (err) {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
                 ? data
-                : data?.message || data?.error || 'No pudimos confirmar el código. Revisa la información e inténtalo nuevamente.';
+                : data?.message || data?.error || 'No pudimos confirmar el codigo.';
             setError(msg);
         } finally {
             setLoading(false);
@@ -62,20 +57,18 @@ export default function ActivateAccount() {
         setResendSuccess(false);
 
         if (isBloqueado) {
-            setError('Tu acceso sigue protegido temporalmente, por ahora no es posible enviar un nuevo código.');
+            setError('Tu acceso sigue protegido temporalmente.');
             return;
         }
 
         if (!username) {
-            setError('No pudimos identificar tu cuenta. Intenta iniciar el proceso nuevamente.');
+            setError('No pudimos identificar tu cuenta.');
             return;
         }
 
         setResendLoading(true);
         try {
-            await api.post('/activate-cuenta', {
-                username: username
-            });
+            await api.post('/activate-cuenta', { username });
             setResendSuccess(true);
             setCode('');
             setTimeout(() => setResendSuccess(false), 5000);
@@ -83,9 +76,8 @@ export default function ActivateAccount() {
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
                 ? data
-                : data?.message || data?.error || 'No pudimos enviar un nuevo código en este momento.';
+                : data?.message || data?.error || 'No pudimos enviar un nuevo codigo.';
             setError(msg);
-            // Si el error es "usuario bloqueado", marcar como bloqueado
             if (msg.toLowerCase().includes('bloqueado')) {
                 setIsBloqueado(true);
             }
@@ -97,67 +89,62 @@ export default function ActivateAccount() {
     return (
         <AuthLayout
             title={isBloqueado ? "Cuenta Bloqueada" : "Verifica tu cuenta"}
-            subtitle={isBloqueado ? "Tu acceso quedó protegido temporalmente" : "Ingresa el código que enviamos para completar tu acceso"}
+            subtitle={isBloqueado ? "Tu acceso quedo protegido temporalmente" : "Ingresa el codigo que enviamos a tu correo"}
             footer={(
                 <span>
-                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver a iniciar sesión</Link>
+                    Necesitas ayuda? <Link to="/login" className="text-sky-400 hover:text-sky-300 font-medium">Volver al inicio</Link>
                 </span>
             )}
         >
-            {error && <div className="mb-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-center text-sm text-rose-200">{error}</div>}
-            {resendSuccess && <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-200">✓ Te enviamos un nuevo código a tu correo</div>}
+            {error && (
+                <div className="mb-5 rounded-xl bg-red-500/10 border border-red-500/15 px-4 py-3 text-center text-sm text-red-300">
+                    {error}
+                </div>
+            )}
+            {resendSuccess && (
+                <div className="mb-5 rounded-xl bg-emerald-500/10 border border-emerald-500/15 px-4 py-3 text-center text-sm text-emerald-300">
+                    Te enviamos un nuevo codigo a tu correo
+                </div>
+            )}
             
             {isBloqueado ? (
-                <div className="text-center py-8">
-                    <div className="mb-5 rounded-3xl border border-rose-400/20 bg-rose-500/10 p-5 text-left">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300/80">Estado</div>
-                        <p className="mt-2 text-sm leading-6 text-rose-100">Detectamos varios intentos fallidos y protegimos tu cuenta temporalmente. Si necesitas ayuda, nuestro equipo puede orientarte.</p>
+                <div className="text-center py-6">
+                    <div className="mb-5 rounded-xl bg-red-500/10 border border-red-500/15 p-4 text-left">
+                        <p className="text-sm leading-relaxed text-red-200">
+                            Detectamos varios intentos fallidos y protegimos tu cuenta temporalmente.
+                        </p>
                     </div>
-                    <Link to="/login" className="text-amber-300 hover:text-amber-200 underline">
+                    <Link to="/login" className="text-sky-400 hover:text-sky-300 font-medium transition-colors">
                         Volver al inicio
                     </Link>
                 </div>
             ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-400 sm:grid-cols-3">
-                        <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
-                            <div className="uppercase tracking-[0.2em] text-amber-300/80">Cuenta</div>
-                            <div className="mt-1 text-sm font-semibold text-slate-100">Último paso</div>
-                        </div>
-                        <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
-                            <div className="uppercase tracking-[0.2em] text-sky-300/80">Cuenta</div>
-                            <div className="mt-1 truncate text-sm font-semibold text-slate-100">{username || 'Pendiente'}</div>
-                        </div>
-                        <div className="rounded-xl bg-slate-950/60 px-3 py-2.5">
-                            <div className="uppercase tracking-[0.2em] text-emerald-300/80">Confianza</div>
-                            <div className="mt-1 text-sm font-semibold text-slate-100">Acceso confirmado</div>
-                        </div>
-                    </div>
+                <form onSubmit={handleSubmit} className="space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1.5">Código de Activación</label>
+                        <label className="block text-sm font-medium text-slate-400 mb-2">Codigo de Activacion</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                 <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                                 </svg>
                             </div>
                             <input
                                 type="text"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}
-                                className="w-full rounded-2xl border border-white/10 bg-slate-950/70 p-3.5 pl-10 text-center text-lg tracking-widest text-white placeholder-slate-500 transition-all duration-200 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                className="w-full rounded-xl border border-white/[0.06] bg-slate-900/50 p-3 pl-10 text-center text-lg tracking-widest text-white placeholder-slate-500 transition-all focus:border-amber-500/30 focus:outline-none focus:ring-1 focus:ring-amber-500/15"
                                 placeholder="000000"
                                 maxLength="20"
                             />
                         </div>
                         <p className="text-slate-500 text-xs mt-2 ml-1">
-                            Revisa tu email para encontrar el código
+                            Revisa tu email para encontrar el codigo
                         </p>
                     </div>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="mt-6 w-full rounded-2xl bg-[linear-gradient(135deg,#f59e0b,#ea580c)] py-3.5 font-bold text-white shadow-[0_20px_50px_-20px_rgba(249,115,22,0.8)] transition-all duration-200 hover:scale-[1.01] hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+                        className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 py-3 font-semibold text-white shadow-lg shadow-amber-500/10 transition-all duration-200 hover:shadow-amber-500/20 hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
                     >
                         {loading ? 'Verificando...' : 'Activar cuenta'}
                     </button>
@@ -165,9 +152,9 @@ export default function ActivateAccount() {
                         type="button"
                         onClick={handleResendCode}
                         disabled={resendLoading}
-                        className="w-full rounded-2xl bg-slate-800/80 py-3.5 font-bold text-slate-300 transition-all duration-200 hover:bg-slate-700 disabled:opacity-50"
+                        className="w-full rounded-xl bg-slate-800/60 border border-white/[0.06] py-3 font-medium text-slate-300 transition-all duration-200 hover:bg-slate-800 disabled:opacity-50"
                     >
-                        {resendLoading ? 'Reenviando...' : 'No recibí el código'}
+                        {resendLoading ? 'Reenviando...' : 'No recibi el codigo'}
                     </button>
                 </form>
             )}

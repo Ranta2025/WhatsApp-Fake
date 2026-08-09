@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"gorm/backend/models"
 	"net/http"
-	"os"
 	"time"
 )
 
@@ -18,62 +17,55 @@ type ServiceBugReport struct {
 	githubToken string
 	owner       string
 	repo        string
+	httpClient  *http.Client
 }
 
-// InitServiceBugReport crea el servicio de reportes leyendo credenciales de GitHub, devolviendo la interfaz BugReportServicer.
-func InitServiceBugReport() BugReportServicer {
+func InitServiceBugReport(githubToken, githubOwner, githubRepo string, httpClient *http.Client) BugReportServicer {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 10 * time.Second}
+	}
 	return &ServiceBugReport{
-		githubToken: os.Getenv("GITHUB_TOKEN"),
-		owner:       os.Getenv("GITHUB_OWNER"),
-		repo:        os.Getenv("GITHUB_REPO"),
+		githubToken: githubToken,
+		owner:       githubOwner,
+		repo:        githubRepo,
+		httpClient:  httpClient,
 	}
 }
 
-// CreateGitHubIssue crea un issue en el repositorio de GitHub usando la API REST,
-// formateando el reporte del usuario como Markdown.
 func (s *ServiceBugReport) CreateGitHubIssue(report models.BugReport) error {
-	// Validar que tengamos las credenciales necesarias
 	if s.githubToken == "" || s.owner == "" || s.repo == "" {
 		return fmt.Errorf("GitHub configuration is missing. Please set GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO environment variables")
 	}
 
-	// Construir el cuerpo del issue con formato Markdown
 	body := s.formatIssueBody(report)
 
-	// Crear el objeto del issue
 	issue := models.GitHubIssue{
 		Title:  report.Title,
 		Body:   body,
 		Labels: []string{"bug", "user-reported"},
 	}
 
-	// Convertir a JSON
 	jsonData, err := json.Marshal(issue)
 	if err != nil {
 		return fmt.Errorf("error marshaling issue: %v", err)
 	}
 
-	// Crear la petición
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues", s.owner, s.repo)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("error creating request: %v", err)
 	}
 
-	// Configurar headers
 	req.Header.Set("Authorization", fmt.Sprintf("token %s", s.githubToken))
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("Content-Type", "application/json")
 
-	// Enviar la petición
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error sending request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Verificar la respuesta
 	if resp.StatusCode != http.StatusCreated {
 		var errorResp map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResp)
@@ -98,7 +90,6 @@ func (s *ServiceBugReport) formatIssueBody(report models.BugReport) string {
 		body += fmt.Sprintf("## ❌ Comportamiento Actual\n\n%s\n\n", report.Actual)
 	}
 
-	// Información del sistema
 	body += "## 💻 Información del Sistema\n\n"
 
 	if report.Browser != "" {

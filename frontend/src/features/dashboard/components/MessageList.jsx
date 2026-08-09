@@ -1,18 +1,14 @@
-import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
-import AudioPlayer from '../../../components/AudioPlayer';
+import { useScrollToBottom } from '../../../hooks/useScrollToBottom';
+import AudioPlayer from '../../../components/ui/AudioPlayer';
 
-/**
- * MessageList Component
- * Renderiza la lista de mensajes de un chat con optimizaciones de UI/UX.
- */
 const MessageList = () => {
     const { 
         selected, messagesByChat, profile, avatarMap, globalWallpaper 
     } = useDashboard();
 
-    // Per-chat wallpapers from localStorage (set via ContactDetails)
     const [chatWallpapers, setChatWallpapers] = useState({});
 
     useEffect(() => {
@@ -20,13 +16,11 @@ const MessageList = () => {
         if (saved) {
             try { setChatWallpapers(JSON.parse(saved)); } catch (e) { /* ignore */ }
         }
-        // Listen for storage changes (cross-tab)
         const onStorage = (e) => {
             if (e.key === 'chat_wallpapers') {
                 try { setChatWallpapers(e.newValue ? JSON.parse(e.newValue) : {}); } catch (e2) { /* ignore */ }
             }
         };
-        // Listen for same-tab wallpaper changes (dispatched by ContactDetails)
         const onCustom = (e) => {
             setChatWallpapers(e.detail || {});
         };
@@ -38,7 +32,6 @@ const MessageList = () => {
         };
     }, []);
 
-    // Also refresh when selected contact changes (in case ContactDetails updated in same tab)
     useEffect(() => {
         const saved = localStorage.getItem('chat_wallpapers');
         if (saved) {
@@ -54,64 +47,22 @@ const MessageList = () => {
         messageMenuOpen, setMessageMenuOpen
     } = useMessaging();
 
-    const messagesContainerRef = useRef(null);
-    const bottomRef = useRef(null);
-    const previousMessageCountRef = useRef(0);
-    const shouldStickToBottomRef = useRef(true);
-    const [showJumpToBottom, setShowJumpToBottom] = useState(false);
-
     const currentMessages = selected ? (messagesByChat[selected.Number] || []) : [];
 
-    const scrollToBottom = useCallback((behavior = 'smooth') => {
-        if (!bottomRef.current) return;
-        bottomRef.current.scrollIntoView({ behavior, block: 'end' });
-    }, []);
+    const {
+        containerRef: messagesContainerRef,
+        bottomRef,
+        showJump: showJumpToBottom,
+        onScroll: handleScroll,
+        jump,
+        scrollToBottom,
+        handleNewItems,
+    } = useScrollToBottom([selected?.Number]);
 
     useEffect(() => {
-        if (!selected) return;
-        previousMessageCountRef.current = currentMessages.length;
-        shouldStickToBottomRef.current = true;
-        setShowJumpToBottom(false);
-        requestAnimationFrame(() => {
-            scrollToBottom('auto');
-        });
-    }, [selected?.Number, scrollToBottom]);
+        handleNewItems(currentMessages.length);
+    }, [currentMessages.length, handleNewItems]);
 
-    useEffect(() => {
-        const messageCount = currentMessages.length;
-        const previousCount = previousMessageCountRef.current;
-        previousMessageCountRef.current = messageCount;
-
-        if (messageCount === 0) {
-            return;
-        }
-
-        if (previousCount === 0) {
-            requestAnimationFrame(() => {
-                scrollToBottom('auto');
-            });
-            return;
-        }
-
-        if (shouldStickToBottomRef.current) {
-            requestAnimationFrame(() => {
-                scrollToBottom('smooth');
-            });
-        } else {
-            setShowJumpToBottom(true);
-        }
-    }, [currentMessages.length, scrollToBottom]);
-
-    const handleScroll = useCallback(() => {
-        const container = messagesContainerRef.current;
-        if (!container) return;
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        const nearBottom = distanceFromBottom <= 120;
-        shouldStickToBottomRef.current = nearBottom;
-        setShowJumpToBottom(!nearBottom);
-    }, []);
-
-    // Agrupación de mensajes por fecha
     const groupedMessages = useMemo(() => {
         if (!selected) return [];
         const groups = [];
@@ -138,21 +89,12 @@ const MessageList = () => {
 
     if (!selected) return null;
 
-    /**
-     * Detecta si el contenido de m.Message es una URL de media (archivo adjunto).
-     * Retorna true si el mensaje no debe mostrarse como texto plano.
-     */
     const isMediaUrl = (m) => {
         const text = m.Message || '';
-        // Si tiene MediaType y MediaUrl, el texto es redundante si coincide con la URL
         if (m.MediaType && m.MediaUrl) return true;
-        // Si tiene MediaType y el mensaje es la URL
         if (m.MediaType && text.startsWith('http')) return true;
-        // Detectar URLs de media en el texto del mensaje
         if (text.match(/^https?:\/\/.+\/(media|upload)\/.+\.(jpg|jpeg|png|gif|webp|mp4|webm|ogg|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt)(\?.*)?$/i)) return true;
-        // Detectar rutas de media del backend (/media/images/, /media/audio/, etc.)
         if (text.match(/^https?:\/\/.+\/media\/(images|audio|videos|docs)\//i)) return true;
-        // Detectar si el texto es exactamente una URL y hay media renderizada
         if (m.MediaType && text.trim() === (m.MediaUrl || '').trim()) return true;
         return false;
     };
@@ -160,34 +102,31 @@ const MessageList = () => {
     const getStatusIcon = (status) => {
         const base = "h-3.5 w-3.5 transition-colors duration-300";
         if (status === 'visto') {
-            // Doble check verde (leído)
             return (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
-                    <path fill="#34d399" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
-                    <path fill="#34d399" d="M10 13l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z" transform="translate(-4,-4)"></path>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`${base} text-emerald-400`}>
+                    <path d="M5 13l4 4L19 7" />
+                    <path d="M9 13l4 4L23 7" />
                 </svg>
             );
         }
         if (status === 'entregado') {
-            // Doble check gris (entregado)
             return (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
-                    <path fill="#94a3b8" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
-                    <path fill="#94a3b8" d="M10 13l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z" transform="translate(-4,-4)"></path>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`${base} text-slate-400`}>
+                    <path d="M5 13l4 4L19 7" />
+                    <path d="M9 13l4 4L23 7" />
                 </svg>
             );
         }
         if (status === 'enviado') {
-            // Un solo check gris (enviado al servidor)
             return (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
-                    <path fill="#64748b" d="M4 12l4 4 10-10 2 2-12 12-6-6z"></path>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`${base} text-slate-400`}>
+                    <path d="M5 13l4 4L19 7" />
                 </svg>
             );
         }
         return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={`${base} opacity-50`}>
-                <path fill="#94a3b8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`${base} text-slate-500 opacity-50`}>
+                <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         );
     };
@@ -210,10 +149,10 @@ const MessageList = () => {
         switch (mediaType) {
             case 'image':
                 return (
-                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
+                    <div className={`mb-2 rounded-xl overflow-hidden max-w-sm shadow-sm ${isMine ? '' : 'bg-slate-800/30'}`}>
                         <img 
                             src={mediaUrl} 
-                            alt="Imagen adjunta" 
+                            alt="Imagen" 
                             loading="lazy"
                             className="w-full h-auto object-cover max-h-80 cursor-pointer hover:opacity-90 transition-opacity" 
                             onClick={() => window.open(mediaUrl, '_blank')} 
@@ -222,8 +161,8 @@ const MessageList = () => {
                 );
             case 'video':
                 return (
-                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
-                        <video src={mediaUrl} controls className="w-full max-h-80 bg-black/20" />
+                    <div className={`mb-2 rounded-xl overflow-hidden max-w-sm shadow-sm ${isMine ? '' : 'bg-slate-800/30'}`}>
+                        <video src={mediaUrl} controls className="w-full max-h-80 bg-black/10" />
                     </div>
                 );
             case 'audio':
@@ -234,15 +173,15 @@ const MessageList = () => {
                 );
             case 'document':
                 return (
-                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-2 flex items-center gap-3 p-3 bg-black/20 hover:bg-black/30 rounded-xl transition-all border border-white/5 group">
-                        <div className="w-11 h-11 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className={`mb-2 flex items-center gap-3 p-3 rounded-xl transition-all border border-white/[0.04] group ${isMine ? '' : 'bg-black/10 hover:bg-black/20'}`}>
+                        <div className="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-white truncate">Documento</div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300/60">Clic para descargar</div>
+                            <div className="text-sm font-medium text-white truncate">Documento</div>
+                            <div className="text-[10px] uppercase tracking-wider text-indigo-300/50">Clic para descargar</div>
                         </div>
                     </a>
                 );
@@ -251,7 +190,6 @@ const MessageList = () => {
         }
     };
 
-    // Wallpaper priority: per-chat > global > default pattern
     const activeWallpaper = (selected && chatWallpapers[selected.Number]) || globalWallpaper || null;
 
     const containerStyle = activeWallpaper
@@ -261,26 +199,22 @@ const MessageList = () => {
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
         }
-        : {
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23334155' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-          };
+        : {};
 
     return (
         <div 
             ref={messagesContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto px-4 py-6 space-y-8 relative"
+            className="flex-1 overflow-y-auto px-4 py-6 space-y-8 relative scrollbar-elegant"
             style={containerStyle}
         >
-            {/* Overlay oscuro sobre wallpaper para legibilidad */}
             {activeWallpaper && (
-                <div className="absolute inset-0 bg-slate-950/40 pointer-events-none" style={{ zIndex: 0 }} />
+                <div className="absolute inset-0 bg-[#0B1120]/50 pointer-events-none" style={{ zIndex: 0 }} />
             )}
             {groupedMessages.map((group) => (
-                <div key={group.date} className="space-y-6 relative z-[1]">
-                    {/* Separador de fecha */}
+                <div key={group.date} className="space-y-5 relative z-[1]">
                     <div className="flex justify-center sticky top-0 z-10 py-2">
-                        <span className="px-4 py-1 bg-slate-900/80 backdrop-blur-md border border-white/5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 shadow-xl">
+                        <span className="px-3 py-1 bg-[#0B1120]/90 border border-white/[0.06] rounded-full text-[10px] uppercase tracking-widest text-slate-500 font-medium">
                             {group.date}
                         </span>
                     </div>
@@ -294,106 +228,97 @@ const MessageList = () => {
                             return (
                                 <div 
                                     key={m.MessageID} 
-                                    className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                                    className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2`}
                                 >
                                     {!isMine && (
-                                        <div className="w-8 h-8 rounded-full bg-slate-800 overflow-hidden flex-shrink-0 border border-white/5 shadow-lg">
+                                        <div className="w-7 h-7 rounded-full bg-slate-800 overflow-hidden flex-shrink-0 border border-white/[0.04]">
                                             {avatarMap[m.SenderTelephon] ? (
-                                                <img src={avatarMap[m.SenderTelephon]} alt="Avatar" className="w-full h-full object-cover" />
+                                                <img src={avatarMap[m.SenderTelephon]} alt="" className="w-full h-full object-cover" />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-indigo-400">
+                                                <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">
                                                     {m.SenderTelephon.slice(-2)}
                                                 </div>
                                             )}
                                         </div>
                                     )}
 
-                                    <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`}>
-                                        {/* Menú de opciones contextual */}
-                                        <div className={`absolute top-0 ${isMine ? '-left-11' : '-right-11'} opacity-0 group-hover/bubble:opacity-100 transition-opacity z-20`}>
+                                    <div className={`relative max-w-[85%] sm:max-w-[65%] group/bubble`}>
+                                        <div className={`absolute top-1 ${isMine ? '-left-9' : '-right-9'} opacity-0 group-hover/bubble:opacity-100 transition-opacity z-20`}>
                                             <button 
                                                 onClick={() => setMessageMenuOpen(isMenuOpen ? null : m.MessageID)}
-                                                className={`p-2 backdrop-blur-md border rounded-2xl transition-all shadow-xl ${isMenuOpen ? 'bg-slate-700 border-cyan-500/30 text-cyan-300' : 'bg-slate-800/80 border-white/10 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                                                className={`p-1.5 rounded-lg transition-all ${isMenuOpen ? 'bg-slate-700 text-sky-400' : 'bg-slate-800/80 text-slate-400 hover:text-white'}`}
                                                 aria-label="Opciones"
                                             >
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                                 </svg>
                                             </button>
                                             
                                             {isMenuOpen && (
-                                                <div className={`absolute ${isMine ? 'left-0' : 'right-0'} mt-2 w-48 bg-slate-900/98 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 origin-top-left backdrop-blur-md`}>
-                                                    <button onClick={() => handleReplyToMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-sky-500/15 hover:text-white transition-colors flex items-center gap-2">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                                <div className={`absolute ${isMine ? 'left-0' : 'right-0'} mt-1 w-44 rounded-xl bg-[#1a2235] border border-white/[0.06] shadow-2xl overflow-hidden origin-top-left`}>
+                                                    <button onClick={() => handleReplyToMessage(m)} className="w-full px-4 py-2.5 text-left text-xs text-slate-300 hover:bg-white/[0.04] transition-colors flex items-center gap-2">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                         Responder
                                                     </button>
-                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-sky-500/15 hover:text-white transition-colors flex items-center gap-2">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-4 py-2.5 text-left text-xs text-slate-300 hover:bg-white/[0.04] transition-colors flex items-center gap-2">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
                                                         Reenviar
                                                     </button>
                                                     {isMine && (
                                                         <>
-                                                            <button onClick={() => handleEditMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500/15 hover:text-white transition-colors flex items-center gap-2">
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                            <button onClick={() => handleEditMessage(m)} className="w-full px-4 py-2.5 text-left text-xs text-slate-300 hover:bg-white/[0.04] transition-colors flex items-center gap-2">
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                                 Editar
                                                             </button>
-                                                            <button onClick={() => handleDeleteMessage(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-red-400 hover:bg-red-500/20 hover:text-red-200 transition-colors flex items-center gap-2">
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                            <button onClick={() => handleDeleteMessage(m)} className="w-full px-4 py-2.5 text-left text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2">
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                                 Eliminar para todos
                                                             </button>
                                                         </>
                                                     )}
-                                                    <button onClick={() => handleDeleteMessageForMe(m)} className="w-full px-4 py-3 text-left text-xs font-bold text-slate-300 hover:bg-white/5 transition-colors flex items-center gap-2">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                        Eliminar para mí
+                                                    <button onClick={() => handleDeleteMessageForMe(m)} className="w-full px-4 py-2.5 text-left text-xs text-slate-300 hover:bg-white/[0.04] transition-colors flex items-center gap-2">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        Eliminar para mi
                                                     </button>
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* Burbuja de mensaje */}
-                                        <div className={`
-                                            px-4 py-3 rounded-[22px] shadow-xl ring-1 ring-inset
-                                            ${isMine 
-                                                ? 'bg-gradient-to-br from-sky-500 to-indigo-600 text-white rounded-tr-md ring-white/5 shadow-sky-950/20' 
-                                                : 'bg-slate-800/85 backdrop-blur-sm text-slate-100 rounded-tl-md ring-white/5 border border-white/5'}
-                                        `}>
-                                            {/* Respuesta */}
+                                        <div className={`px-3.5 py-2.5 rounded-2xl ${isMine 
+                                            ? 'rounded-tr-md bg-sky-600 text-white' 
+                                            : 'rounded-tl-md bg-[#1a2235] text-slate-200 border border-white/[0.04]'}`}>
                                             {m.ReplyToMessage && (
-                                                <div className={`mb-2 p-2.5 rounded-2xl border-l-4 ${isMine ? 'bg-black/10 border-white/35' : 'bg-slate-900/50 border-cyan-400'} text-[11px] opacity-85 line-clamp-2`}>
-                                                    <div className="font-black uppercase tracking-widest text-[9px] mb-1">Respondiendo a:</div>
+                                                <div className={`mb-2 p-2 rounded-xl border-l-2 ${isMine ? 'bg-black/10 border-white/20' : 'bg-slate-900/50 border-sky-500/30'} text-[11px] opacity-80 line-clamp-2`}>
+                                                    <div className="font-medium text-[10px] mb-0.5 opacity-70">Respondiendo a:</div>
                                                     {m.ReplyToMessage}
                                                 </div>
                                             )}
 
-                                            {/* Media */}
                                             {renderMedia(m, isMine)}
 
-                                            {/* Texto del mensaje - Ocultar si es una URL de media */}
                                             {m.Message && !isMediaUrl(m) && (
-                                                <div className="text-[14px] leading-relaxed break-words font-medium tracking-[0.01em]">
+                                                <div className="text-[14px] leading-relaxed break-words">
                                                     {editingMessageId === m.MessageID ? (
                                                         <div className="flex min-w-0 flex-col gap-2 sm:min-w-[200px]">
                                                             <textarea 
                                                                 autoFocus
                                                                 value={editingMessageText}
                                                                 onChange={handleEditMessageChange}
-                                                                className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-white/30"
+                                                                className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-white/20"
                                                                 rows={2}
                                                             />
                                                             <div className="flex justify-end gap-2">
-                                                                <button onClick={handleEditMessageCancel} className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest">Cancelar</button>
-                                                                <button onClick={handleEditMessageSave} className="px-2 py-1 bg-white/20 rounded-md text-[10px] font-bold uppercase tracking-widest">Guardar</button>
+                                                                <button onClick={handleEditMessageCancel} className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider opacity-70 hover:opacity-100">Cancelar</button>
+                                                                <button onClick={handleEditMessageSave} className="px-2 py-1 bg-white/20 rounded-md text-[10px] font-medium uppercase tracking-wider hover:bg-white/30">Guardar</button>
                                                             </div>
                                                         </div>
                                                     ) : m.Message}
                                                 </div>
                                             )}
 
-                                            {/* Info de pie de burbuja */}
-                                            <div className={`mt-2 flex items-center justify-end gap-1.5`}>
-                                                <span className={`text-[10px] font-bold uppercase tracking-widest ${isMine ? 'text-sky-100/70' : 'text-slate-400'}`}>
-                                                    {m.Edited && 'Editado • '}{time}
+                                            <div className={`mt-1.5 flex items-center justify-end gap-1`}>
+                                                <span className={`text-[10px] font-medium ${isMine ? 'text-sky-100/60' : 'text-slate-500'}`}>
+                                                    {m.Edited && 'Editado · '}{time}
                                                 </span>
                                                 {isMine && getStatusIcon(m.Status)}
                                             </div>
@@ -411,17 +336,12 @@ const MessageList = () => {
             {showJumpToBottom && (
                 <button
                     type="button"
-                    onClick={() => {
-                        shouldStickToBottomRef.current = true;
-                        setShowJumpToBottom(false);
-                        scrollToBottom('smooth');
-                    }}
-                    className="absolute bottom-4 right-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-200 shadow-xl backdrop-blur-md transition-all hover:scale-105 hover:bg-slate-800"
-                    aria-label="Ir al final del chat"
-                    title="Ir al final"
+                    onClick={jump}
+                    className="absolute bottom-4 right-4 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#1a2235] text-slate-300 shadow-lg border border-white/[0.06] transition-all hover:bg-[#232d42] hover:scale-105"
+                    aria-label="Ir al final"
                 >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                     </svg>
                 </button>
             )}

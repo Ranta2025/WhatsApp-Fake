@@ -11,20 +11,17 @@ type HandlerMedia struct {
 	service services.MediaServicer
 }
 
-// InitHandlerMedia crea el handler de subida de archivos multimedia.
 func InitHandlerMedia(service services.MediaServicer) *HandlerMedia {
 	return &HandlerMedia{service: service}
 }
 
-// HandlerUploadMedia sube un archivo multimedia (imagen/audio/video/documento)
-// a MinIO y devuelve la URL pública junto con metadatos del archivo.
 func (hm *HandlerMedia) HandlerUploadMedia() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		// Parsear multipart form (límite 110 MB = máximo video + overhead)
 		if err := ctx.Request.ParseMultipartForm(110 << 20); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "error al parsear el formulario: " + err.Error(),
 			})
+			ctx.Abort()
 			return
 		}
 
@@ -33,6 +30,7 @@ func (hm *HandlerMedia) HandlerUploadMedia() gin.HandlerFunc {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "campo 'file' requerido",
 			})
+			ctx.Abort()
 			return
 		}
 		defer file.Close()
@@ -42,6 +40,7 @@ func (hm *HandlerMedia) HandlerUploadMedia() gin.HandlerFunc {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
+			ctx.Abort()
 			return
 		}
 

@@ -92,7 +92,6 @@ export default function AudioPlayer({ src, isMine = false }) {
 
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-    // Colores basados en el diseño senior
     const accentColor = isMine ? 'bg-white' : 'bg-indigo-400';
     const textColor = isMine ? 'text-indigo-100/80' : 'text-slate-400';
     const btnBg = isMine ? 'bg-white/20 hover:bg-white/30' : 'bg-indigo-500/20 hover:bg-indigo-500/30';
@@ -101,9 +100,8 @@ export default function AudioPlayer({ src, isMine = false }) {
     return (
         <div className="flex max-w-full min-w-0 items-center gap-3 py-1">
             <audio ref={audioRef} src={src} preload="metadata" />
-            
-            {/* Botón Play/Pause */}
-            <button 
+
+            <button
                 onClick={togglePlay}
                 className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 ${btnBg}`}
                 aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
@@ -119,31 +117,28 @@ export default function AudioPlayer({ src, isMine = false }) {
                 )}
             </button>
 
-            {/* Visualizador y Progreso */}
             <div className="flex-1 space-y-1.5">
-                <div 
+                <div
                     ref={progressRef}
                     onClick={handleSeek}
                     className="relative h-1.5 bg-black/20 rounded-full cursor-pointer group"
                 >
-                    <div 
+                    <div
                         className={`absolute top-0 left-0 h-full rounded-full transition-all duration-100 ${accentColor}`}
                         style={{ width: `${progress}%` }}
                     />
-                    {/* Handle del progreso */}
-                    <div 
+                    <div
                         className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity ${accentColor}`}
                         style={{ left: `${progress}%`, marginLeft: '-6px' }}
                     />
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                     <span className={`text-[10px] font-black tracking-widest uppercase ${textColor}`}>
                         {formatTime(currentTime)} / {formatTime(duration)}
                     </span>
-                    
-                    {/* Selector de velocidad */}
-                    <button 
+
+                    <button
                         onClick={cycleSpeed}
                         className={`px-2 py-0.5 rounded-md text-[9px] font-black tracking-tighter transition-all active:scale-95 ${isMine ? 'bg-white/10 text-white' : 'bg-slate-700/50 text-indigo-300'}`}
                     >
@@ -152,13 +147,12 @@ export default function AudioPlayer({ src, isMine = false }) {
                 </div>
             </div>
 
-            {/* Waveform visual estática simplificada */}
             <div className="hidden h-6 items-end gap-0.5 opacity-30 sm:flex">
                 {[3, 5, 2, 6, 4, 7, 3, 5, 8, 4, 6, 2].map((h, i) => (
-                    <div 
-                        key={i} 
-                        className={`w-0.5 rounded-full ${accentColor}`} 
-                        style={{ height: `${h * 12.5}%` }} 
+                    <div
+                        key={i}
+                        className={`w-0.5 rounded-full ${accentColor}`}
+                        style={{ height: `${h * 12.5}%` }}
                     />
                 ))}
             </div>

@@ -1,682 +1,12 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
-import MediaUploadMenu from '../../../components/MediaUploadMenu';
-import AudioPlayer from '../../../components/AudioPlayer';
-
-// ── Small helpers ─────────────────────────────────────────────────────────────
-
-const formatTime = (iso) => {
-    if (!iso) return '';
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
-
-const isNearBottom = (element, threshold = 120) => {
-    if (!element) return true;
-    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-    return distanceFromBottom <= threshold;
-};
-
-// ── GroupMessageBubble ────────────────────────────────────────────────────────
-
-const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen }) => {
-    const menuRef = useRef(null);
-
-    // Close context menu when clicking outside
-    useEffect(() => {
-        const handler = (e) => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(null);
-        };
-        if (menuOpen) document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [menuOpen, setMenuOpen]);
-
-    const renderMedia = () => {
-        let mediaType = msg.MediaType;
-        let mediaUrl  = msg.MediaUrl;
-        const text    = msg.Message || '';
-
-        // Fallback: infer type from URL path if MediaType is missing
-        if (!mediaType && text.includes('/media/')) {
-            mediaUrl = text;
-            if (text.includes('/audio/'))  mediaType = 'audio';
-            else if (text.includes('/images/')) mediaType = 'image';
-            else if (text.includes('/videos/')) mediaType = 'video';
-            else if (text.includes('/docs/'))   mediaType = 'document';
-        }
-
-        if (!mediaType || !mediaUrl) return null;
-
-        switch (mediaType) {
-            case 'image':
-                return (
-                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
-                        <img
-                            src={mediaUrl}
-                            alt="Imagen adjunta"
-                            loading="lazy"
-                            className="w-full h-auto object-cover max-h-80 cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => window.open(mediaUrl, '_blank')}
-                        />
-                    </div>
-                );
-            case 'video':
-                return (
-                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
-                        <video src={mediaUrl} controls className="w-full max-h-80 bg-black/20" />
-                    </div>
-                );
-            case 'audio':
-                return (
-                    <div className="mb-1 w-full max-w-full min-w-0">
-                        <AudioPlayer src={mediaUrl} isMine={isMine} />
-                    </div>
-                );
-            case 'document':
-                return (
-                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer"
-                       className="mb-2 flex items-center gap-3 p-3 bg-black/20 hover:bg-black/30 rounded-xl transition-all border border-white/5 group">
-                        <div className="w-11 h-11 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-white truncate">Documento</div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300/60">Clic para descargar</div>
-                        </div>
-                    </a>
-                );
-            default:
-                return null;
-        }
-    };
-
-    const isMenuOpen = menuOpen === msg.MessageID;
-
-    return (
-        <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} group px-2 py-0.5`}>
-            <div className={`relative max-w-[75%] min-w-[80px] ${isMine ? 'items-end' : 'items-start'} flex flex-col`}>
-                {/* Reply preview */}
-                {msg.ReplyToMessage && (
-                    <div className={`text-xs px-2 py-1 rounded-lg mb-1 border-l-2 ${isMine ? 'bg-indigo-800/40 border-indigo-400 self-end' : 'bg-slate-700/60 border-slate-500 self-start'}`}>
-                        <span className="font-medium text-slate-300 truncate block max-w-[200px]">
-                            {msg.ReplyToSender}
-                        </span>
-                        <span className="text-slate-400 truncate block max-w-[200px]">{msg.ReplyToMessage}</span>
-                    </div>
-                )}
-
-                {/* Bubble */}
-                <div className={`relative px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed break-words
-                    ${isMine
-                        ? 'bg-indigo-600 text-white rounded-tr-sm'
-                        : 'bg-slate-800 text-slate-100 rounded-tl-sm'}`
-                }>
-                    {/* Sender name for non-mine messages */}
-                    {!isMine && (
-                        <div className="text-xs font-semibold text-indigo-400 mb-0.5 truncate">
-                            {msg.SenderUsername || msg.SenderTelephon}
-                        </div>
-                    )}
-
-                    {renderMedia()}
-
-                    {/* Text (always show unless it's a pure media URL) */}
-                    {msg.Message && !(msg.MediaType && (msg.Message === msg.MediaUrl || msg.Message.startsWith('http'))) && (
-                        <span>{msg.Message}</span>
-                    )}
-
-                    {/* Footer: time + edited */}
-                    <div className={`text-[10px] mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-200/70 justify-end' : 'text-slate-500'}`}>
-                        {msg.Edited && <span>editado</span>}
-                        <span>{formatTime(msg.Time)}</span>
-                    </div>
-
-                    {/* Context menu button (hover) */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : msg.MessageID); }}
-                        className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'}
-                            px-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-white`}
-                        aria-label="Opciones"
-                    >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                        </svg>
-                    </button>
-                </div>
-
-                {/* Context menu */}
-                {isMenuOpen && (
-                    <div
-                        ref={menuRef}
-                        className={`absolute z-50 mt-1 ${isMine ? 'right-0' : 'left-0'} top-full bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]`}
-                    >
-                        {/* Reply — always available */}
-                        <button onClick={() => { onReply(msg); setMenuOpen(null); }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                            </svg>
-                            Responder
-                        </button>
-
-                        {/* Edit — only my messages */}
-                        {isMine && (
-                            <button onClick={() => { onEdit(msg); setMenuOpen(null); }}
-                                    className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                Editar
-                            </button>
-                        )}
-
-                        {/* Delete for everyone — only my messages */}
-                        {isMine && (
-                            <button onClick={() => { onDelete(msg); setMenuOpen(null); }}
-                                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                Eliminar para todos
-                            </button>
-                        )}
-
-                        {/* Delete for me — always available */}
-                        <button onClick={() => { onDeleteForMe(msg); }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-white/5 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                            </svg>
-                            Eliminar para mí
-                        </button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-// ── GroupMessageInput ─────────────────────────────────────────────────────────
-
-const GroupMessageInput = () => {
-    const [text, setText]                     = useState('');
-    const [showAttachMenu, setShowAttachMenu] = useState(false);
-    const [isRecording, setIsRecording]       = useState(false);
-    const [recordingTime, setRecordingTime]   = useState(0);
-    const inputRef          = useRef(null);
-    const mediaRecorderRef  = useRef(null);
-    const audioChunksRef    = useRef([]);
-    const recordingTimerRef = useRef(null);
-
-    const {
-        handleSend, handleTyping,
-        editingMessageId, editingMessageText, handleEditMessageChange,
-        handleEditMessageSave, handleEditMessageCancel,
-        replyingTo, cancelReply,
-        handleMediaUploadSuccess,
-    } = useGroupMessaging();
-
-    const { isConnected, selectedGroup, addToast } = useDashboard();
-
-    // If the user has left the group, show a read-only banner
-    if (selectedGroup?.UserRole === 'left') {
-        return (
-            <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
-                Ya no eres miembro de este grupo
-            </div>
-        );
-    }
-
-    // ── Voice recording ───────────────────────────────────────────────────────
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunksRef.current.push(e.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const formData = new FormData();
-                formData.append('file', audioBlob, 'voice_note.webm');
-                try {
-                    const response = await api.post('/api/v1/upload', formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                    });
-                    if (response.data && response.data.url) {
-                        handleMediaUploadSuccess(response.data.url, 'audio');
-                    }
-                } catch (error) {
-                    console.error('Error uploading voice note:', error);
-                    addToast({ type: 'error', message: 'Error al enviar nota de voz' });
-                }
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorder.start();
-            setIsRecording(true);
-            setRecordingTime(0);
-            recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-        } catch (err) {
-            console.error('Error accessing microphone:', err);
-            addToast({ type: 'error', message: 'No se pudo acceder al micrófono.' });
-        }
-    };
-
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.onstop = mediaRecorderRef.current.onstop; // keep upload handler
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            clearInterval(recordingTimerRef.current);
-            setRecordingTime(0);
-        }
-    };
-
-    const cancelRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            // Overwrite onstop so no upload happens
-            mediaRecorderRef.current.onstop = () => {
-                mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
-            };
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            clearInterval(recordingTimerRef.current);
-            setRecordingTime(0);
-        }
-    };
-
-    const formatRecordingTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    // ── Text send ─────────────────────────────────────────────────────────────
-    const onSend = () => {
-        if (!text.trim()) return;
-        handleSend(text.trim());
-        setText('');
-    };
-
-    const onKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            if (editingMessageId) {
-                handleEditMessageSave();
-            } else {
-                onSend();
-            }
-        }
-        if (e.key === 'Escape') {
-            if (editingMessageId) handleEditMessageCancel();
-            if (replyingTo) cancelReply();
-        }
-    };
-
-    const inputValue    = editingMessageId ? editingMessageText : text;
-    const inputOnChange = editingMessageId
-        ? handleEditMessageChange
-        : (e) => { setText(e.target.value); handleTyping(); };
-
-    const hasText = editingMessageId ? editingMessageText.trim() : text.trim();
-
-    return (
-        <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md">
-            {/* Reply banner */}
-            {replyingTo && !editingMessageId && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-900/30 border-b border-indigo-500/20">
-                    <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-indigo-400">
-                            Respondiendo a {replyingTo.SenderUsername || replyingTo.SenderTelephon}
-                        </div>
-                        <div className="text-xs text-slate-400 truncate">{replyingTo.Message}</div>
-                    </div>
-                    <button onClick={cancelReply} className="text-slate-500 hover:text-white transition-colors">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-            )}
-
-            {/* Edit banner */}
-            {editingMessageId && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-amber-900/20 border-b border-amber-500/20">
-                    <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    <span className="text-xs text-amber-300 flex-1">Editando mensaje</span>
-                    <button onClick={handleEditMessageCancel} className="text-slate-500 hover:text-white transition-colors">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-            )}
-
-            {/* Input row */}
-            <div className="flex items-end gap-2 px-3 py-3">
-                {/* Attach button */}
-                <div className="relative flex-shrink-0">
-                    <button
-                        onClick={() => setShowAttachMenu(v => !v)}
-                        disabled={!isConnected || isRecording}
-                        className="p-2.5 text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        aria-label="Adjuntar archivo"
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                    </button>
-                    {showAttachMenu && (
-                        <MediaUploadMenu
-                            onUploadSuccess={(url, type) => { handleMediaUploadSuccess(url, type); setShowAttachMenu(false); }}
-                            onUploadError={(err) => { addToast({ type: 'error', message: err }); setShowAttachMenu(false); }}
-                            onClose={() => setShowAttachMenu(false)}
-                        />
-                    )}
-                </div>
-
-                {/* Text area / recording indicator */}
-                <div className="flex-1 relative bg-slate-800 rounded-2xl border border-white/10 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all overflow-hidden">
-                    {isRecording ? (
-                        <div className="flex items-center justify-between px-4 h-[42px] text-red-400">
-                            <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                                <span className="font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
-                            </div>
-                            <button onClick={cancelRecording} className="text-red-400 hover:text-red-300 text-sm font-medium">
-                                Cancelar
-                            </button>
-                        </div>
-                    ) : (
-                        <textarea
-                            ref={inputRef}
-                            rows={1}
-                            value={inputValue}
-                            onChange={inputOnChange}
-                            onKeyDown={onKeyDown}
-                            disabled={!isConnected}
-                            placeholder={isConnected ? 'Escribe un mensaje en el grupo...' : 'Sin conexión...'}
-                            className="w-full resize-none bg-transparent px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto"
-                            style={{ minHeight: '42px' }}
-                            onInput={e => {
-                                e.target.style.height = 'auto';
-                                e.target.style.height = Math.min(e.target.scrollHeight, 144) + 'px';
-                            }}
-                        />
-                    )}
-                </div>
-
-                {/* Send / confirm-edit / mic button */}
-                {hasText || editingMessageId ? (
-                    <button
-                        onClick={editingMessageId ? handleEditMessageSave : onSend}
-                        disabled={!isConnected || !hasText}
-                        className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg"
-                        aria-label={editingMessageId ? 'Confirmar edición' : 'Enviar'}
-                    >
-                        {editingMessageId ? (
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                            </svg>
-                        ) : (
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                            </svg>
-                        )}
-                    </button>
-                ) : (
-                    <button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        disabled={!isConnected}
-                        className={`p-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg ${isRecording ? 'bg-red-500 hover:bg-red-400' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500'}`}
-                        aria-label={isRecording ? 'Detener grabación' : 'Grabar audio'}
-                    >
-                        {isRecording ? (
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path fillRule="evenodd" d="M4.5 7.5a3 3 0 013-3h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9z" clipRule="evenodd" />
-                            </svg>
-                        ) : (
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                                <path d="M19 10v2a7 7 0 0 1-14 0v-2a1 1 0 0 0-2 0v2a9 9 0 0 0 8 8.94V21H8a1 1 0 0 0 0 2h8a1 1 0 0 0 0-2h-3v-2.06A9 9 0 0 0 21 12v-2a1 1 0 0 0-2 0z" />
-                            </svg>
-                        )}
-                    </button>
-                )}
-            </div>
-        </div>
-    );
-};
-
-// ── GroupMessageList ──────────────────────────────────────────────────────────
-
-const GroupMessageList = ({ groupID, messages, myTelephon, activeWallpaper }) => {
-    const containerRef = useRef(null);
-    const bottomRef = useRef(null);
-    const previousMessageCountRef = useRef(0);
-    const shouldStickToBottomRef = useRef(true);
-    const [showJumpToBottom, setShowJumpToBottom] = useState(false);
-    const {
-        handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
-        handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
-    } = useGroupMessaging();
-
-    const scrollToBottom = useCallback((behavior = 'smooth') => {
-        if (!bottomRef.current) return;
-        bottomRef.current.scrollIntoView({ behavior, block: 'end' });
-    }, []);
-
-    useEffect(() => {
-        previousMessageCountRef.current = messages?.length || 0;
-        shouldStickToBottomRef.current = true;
-        setShowJumpToBottom(false);
-        requestAnimationFrame(() => {
-            scrollToBottom('auto');
-        });
-    }, [groupID, scrollToBottom]);
-
-    useEffect(() => {
-        const messageCount = messages?.length || 0;
-        const previousCount = previousMessageCountRef.current;
-        previousMessageCountRef.current = messageCount;
-
-        if (messageCount === 0) {
-            return;
-        }
-
-        if (previousCount === 0) {
-            requestAnimationFrame(() => {
-                scrollToBottom('auto');
-            });
-            return;
-        }
-
-        if (shouldStickToBottomRef.current) {
-            requestAnimationFrame(() => {
-                scrollToBottom('smooth');
-            });
-        } else {
-            setShowJumpToBottom(true);
-        }
-    }, [messages?.length, scrollToBottom]);
-
-    const handleScroll = useCallback(() => {
-        const container = containerRef.current;
-        const nearBottom = isNearBottom(container);
-        shouldStickToBottomRef.current = nearBottom;
-        setShowJumpToBottom(!nearBottom);
-    }, []);
-
-    const containerStyle = activeWallpaper
-        ? { backgroundImage: `url(${activeWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
-        : { backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23334155' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` };
-
-    if (!messages || messages.length === 0) {
-        return (
-            <div className="flex-1 flex items-center justify-center text-slate-500 text-sm" style={containerStyle}>
-                No hay mensajes aún. ¡Sé el primero en escribir!
-            </div>
-        );
-    }
-
-    return (
-        <div className="relative flex-1 min-h-0">
-            <div
-                ref={containerRef}
-                onScroll={handleScroll}
-                className="h-full overflow-y-auto py-3 space-y-0.5"
-                style={containerStyle}
-            >
-                {messages.map((msg) => {
-                    if (msg.IsSystem) {
-                        return (
-                            <div key={msg.MessageID} className="flex justify-center py-1 px-4">
-                                <span className="bg-black/40 backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
-                                    {msg.Message}
-                                </span>
-                            </div>
-                        );
-                    }
-                    return (
-                        <GroupMessageBubble
-                            key={msg.MessageID}
-                            msg={msg}
-                            isMine={msg.SenderTelephon === myTelephon}
-                            onEdit={handleEditMessage}
-                            onDelete={handleDeleteMessage}
-                            onReply={handleReplyToMessage}
-                            onDeleteForMe={handleDeleteMessageForMe}
-                            menuOpen={messageMenuOpen}
-                            setMenuOpen={setMessageMenuOpen}
-                        />
-                    );
-                })}
-                <div ref={bottomRef} />
-            </div>
-
-            {showJumpToBottom && (
-                <button
-                    type="button"
-                    onClick={() => {
-                        shouldStickToBottomRef.current = true;
-                        setShowJumpToBottom(false);
-                        scrollToBottom('smooth');
-                    }}
-                    className="absolute bottom-4 right-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-200 shadow-xl backdrop-blur-md transition-all hover:scale-105 hover:bg-slate-800"
-                    aria-label="Ir al final del chat"
-                    title="Ir al final"
-                >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                </button>
-            )}
-        </div>
-    );
-};
-
-// ── AddMembersModal ────────────────────────────────────────────────────────────
-
-const AddMembersModal = ({ isOpen, onClose, group }) => {
-    const { contacts, addToast, fetchUserGroups } = useDashboard();
-    const [selected, setSelected] = useState(new Set());
-    const [search, setSearch]     = useState('');
-    const [loading, setLoading]   = useState(false);
-
-    const existingMembers = new Set((group?.Members || []).map(m => m.Telephon));
-    const candidates = contacts.filter(c =>
-        c.Status === 'accepted' &&
-        !existingMembers.has(c.Number) &&
-        ((c.ContactName||'').toLowerCase().includes(search.toLowerCase()) ||
-         (c.Username||'').toLowerCase().includes(search.toLowerCase()) ||
-         c.Number.includes(search))
-    );
-
-    const toggle = (num) => setSelected(prev => {
-        const next = new Set(prev);
-        next.has(num) ? next.delete(num) : next.add(num);
-        return next;
-    });
-
-    const submit = async () => {
-        if (!selected.size) return;
-        setLoading(true);
-        try {
-            const { addGroupMembers } = await import('../../../api/groupApi');
-            await addGroupMembers(group.ID, Array.from(selected));
-            addToast({ type: 'success', message: 'Miembros añadidos' });
-            await fetchUserGroups();
-            onClose();
-        } catch (err) {
-            addToast({ type: 'error', message: err?.response?.data?.error || 'Error al añadir miembros' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-             onClick={onClose}>
-            <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col"
-                 onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-4 border-b border-white/5">
-                    <h3 className="font-semibold text-white">Añadir miembros</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-                <div className="p-4 border-b border-white/5">
-                    <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-                           placeholder="Buscar contacto..."
-                           className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm" />
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-1">
-                    {candidates.map(c => (
-                        <button key={c.Number} type="button" onClick={() => toggle(c.Number)}
-                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left ${selected.has(c.Number) ? 'bg-indigo-600/20' : 'hover:bg-white/5'}`}>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${selected.has(c.Number) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-600'}`}>
-                                {selected.has(c.Number) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                            </div>
-                            <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center text-sm font-semibold text-white overflow-hidden flex-shrink-0">
-                                {(c.ContactName || c.Username)?.charAt(0)?.toUpperCase()}
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                                <div className="font-medium text-slate-100 truncate text-sm">{c.ContactName || c.Username}</div>
-                                <div className="text-xs text-slate-500 truncate">{c.Number}</div>
-                            </div>
-                        </button>
-                    ))}
-                    {candidates.length === 0 && <p className="text-center text-slate-500 py-6 text-sm">No hay contactos disponibles</p>}
-                </div>
-                <div className="p-4 border-t border-white/5 flex gap-3">
-                    <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">Cancelar</button>
-                    <button onClick={submit} disabled={loading || !selected.size}
-                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
-                        {loading ? 'Añadiendo...' : `Añadir (${selected.size})`}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
+import GroupMessageList from './group/GroupMessageList';
+import GroupMessageInput from './group/GroupMessageInput';
+import AddMembersModal from './group/AddMembersModal';
+import ConfirmDialog from '../../../components/ui/ConfirmDialog';
 
 // ── GroupChatWindow (inner — needs GroupMessagingProvider) ────────────────────
 
@@ -705,21 +35,20 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
     const [showAvatarMenu, setShowAvatarMenu]     = useState(false);
     const [viewAvatarOpen, setViewAvatarOpen]     = useState(false);
     const [memberMenuOpen, setMemberMenuOpen]     = useState(null);
-    const [roleLoading, setRoleLoading]           = useState(null); // telephon currently being role-updated
+    const [roleLoading, setRoleLoading]           = useState(null);
     const [editingDesc, setEditingDesc]           = useState(false);
     const [descInput, setDescInput]               = useState('');
     const [savingDesc, setSavingDesc]             = useState(false);
     const [descError, setDescError]               = useState('');
     const [addContactOpen, setAddContactOpen]     = useState(false);
     const [addContactTarget, setAddContactTarget] = useState({ number: '', username: '' });
-    const [confirmRemove, setConfirmRemove]       = useState(null); // { telephon, username }
+    const [confirmRemove, setConfirmRemove]       = useState(null);
     const [removeLoading, setRemoveLoading]       = useState(false);
     const optionsRef                               = useRef(null);
     const memberMenuRef                            = useRef(null);
     const avatarInputRef                           = useRef(null);
     const avatarMenuRef                            = useRef(null);
 
-    // Close avatar menu on outside click
     useEffect(() => {
         if (!showAvatarMenu) return;
         const handler = (e) => {
@@ -729,7 +58,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         return () => document.removeEventListener('mousedown', handler);
     }, [showAvatarMenu]);
 
-    // Per-group wallpapers from localStorage
     const [groupWallpapers, setGroupWallpapers] = useState(() => {
         try { return JSON.parse(localStorage.getItem('group_wallpapers') || '{}'); } catch { return {}; }
     });
@@ -773,7 +101,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         window.dispatchEvent(new CustomEvent('group-wallpaper-changed', { detail: newWps }));
     };
 
-    // Close member popup when clicking outside
     useEffect(() => {
         if (!memberMenuOpen) return;
         const handler = (e) => {
@@ -783,7 +110,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         return () => document.removeEventListener('mousedown', handler);
     }, [memberMenuOpen]);
 
-    // Close options dropdown when clicking outside
     useEffect(() => {
         const handler = (e) => {
             if (optionsRef.current && !optionsRef.current.contains(e.target)) setShowOptions(false);
@@ -803,7 +129,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         try {
             const { leaveGroup } = await import('../../../api/groupApi');
             await leaveGroup(selectedGroup.ID);
-            // Mark as left: keep visible but read-only
             const gid = selectedGroup.ID;
             setGroups(prev => prev.map(g => g.ID === gid ? { ...g, UserRole: 'left' } : g));
             setSelectedGroup(prev => prev ? { ...prev, UserRole: 'left' } : prev);
@@ -824,7 +149,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
             await updateGroupDescription(selectedGroup.ID, descInput.trim());
             const gid     = selectedGroup.ID;
             const newDesc = descInput.trim();
-            // Optimistic update — WS broadcast arrives shortly for other members
             setGroups(prev => prev.map(g => g.ID === gid ? { ...g, Description: newDesc } : g));
             setSelectedGroup(prev => prev ? { ...prev, Description: newDesc } : prev);
             setEditingDesc(false);
@@ -842,7 +166,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         try {
             const { removeMember } = await import('../../../api/groupApi');
             await removeMember(selectedGroup.ID, confirmRemove.telephon);
-            // Optimistic update — WS broadcast will confirm to all
             setSelectedGroup(prev => {
                 if (!prev) return prev;
                 return {
@@ -866,7 +189,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         try {
             const { setMemberRole } = await import('../../../api/groupApi');
             await setMemberRole(selectedGroup.ID, targetTelephon, newRole);
-            // Optimistic local update — WS broadcast will arrive shortly too
             setSelectedGroup(prev => {
                 if (!prev) return prev;
                 return {
@@ -888,20 +210,19 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
     const handleDeleteGroup = async () => {
         setLoadingLeave(true);
         const gid = selectedGroup.ID;
-        // Remove from local state immediately — UI closes right away
-        setGroups(prev => prev.filter(g => g.ID !== gid));
-        setGroupMessages(prev => { const n = { ...prev }; delete n[gid]; return n; });
-        setSelectedGroup(null);
         setConfirmDelete(false);
-        setLoadingLeave(false);
-        // Fire API best-effort (user may have already left; either way they're gone from list)
         try {
             const { leaveGroup } = await import('../../../api/groupApi');
             await leaveGroup(gid);
-        } catch (_) {
-            // Ignore — local state already cleaned up
+            setGroups(prev => prev.filter(g => g.ID !== gid));
+            setGroupMessages(prev => { const n = { ...prev }; delete n[gid]; return n; });
+            setSelectedGroup(null);
+            addToast({ type: 'success', message: 'Has salido del grupo' });
+        } catch (err) {
+            addToast({ type: 'error', message: 'Error al salir del grupo. Intenta de nuevo.' });
+        } finally {
+            setLoadingLeave(false);
         }
-        addToast({ type: 'success', message: 'Grupo eliminado de tu lista' });
     };
 
     const handleGroupAvatarChange = async (e) => {
@@ -909,7 +230,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
         if (!file || !selectedGroup?.ID) return;
         setUploadingAvatar(true);
         try {
-            // 1. Upload image to MinIO
             const formData = new FormData();
             formData.append('file', file);
             const uploadRes = await api.post('/api/v1/upload', formData, {
@@ -917,12 +237,8 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
             });
             const avatarUrl = uploadRes.data?.url;
             if (!avatarUrl) throw new Error('No se obtuvo URL del archivo');
-
-            // 2. Update group avatar in DB + broadcast WS to all members
             const { updateGroupAvatar } = await import('../../../api/groupApi');
             await updateGroupAvatar(selectedGroup.ID, avatarUrl);
-
-            // 3. Update local state immediately (the requester won't get the WS event)
             const gid = selectedGroup.ID;
             setGroups(prev => prev.map(g => g.ID === gid ? { ...g, AvatarUrl: avatarUrl } : g));
             setSelectedGroup(prev => prev ? { ...prev, AvatarUrl: avatarUrl } : prev);
@@ -938,25 +254,20 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
     const myTelephon = profile?.Telephon;
     const messages   = groupMessages[selectedGroup?.ID] || [];
 
-    // Derive the current user's role from the loaded members list
     const myRole = useMemo(() => {
         if (!selectedGroup?.Members || !myTelephon) return selectedGroup?.UserRole || 'member';
         return selectedGroup.Members.find(m => m.Telephon === myTelephon)?.Role || 'member';
     }, [selectedGroup, myTelephon]);
 
-    // Group-specific typing keys: "group:<groupID>:<telephon>"
     const typingInGroup = selectedGroup
         ? Array.from(typingUsers).filter(k => k.startsWith(`group:${selectedGroup.ID}:`))
         : [];
 
-    // Load full detail (members + messages) if not yet loaded or if Members are missing
     useEffect(() => {
         if (!selectedGroup?.ID) return;
         if (!selectedGroup.Members) {
-            // selectedGroup is a lightweight GroupResponse — load the full GroupDetail
             fetchGroupDetail(selectedGroup.ID);
         } else if (!groupMessages[selectedGroup.ID]) {
-            // Detail already loaded but no cached messages yet
             fetchGroupMessages(selectedGroup.ID);
         }
     }, [selectedGroup?.ID, selectedGroup?.Members, fetchGroupDetail, fetchGroupMessages]);
@@ -964,10 +275,9 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
     if (!selectedGroup) return null;
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden bg-slate-950 relative">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden bg-[#0B1120] relative">
             {/* ── Header ── */}
-            <div className="flex-shrink-0 px-4 py-3 border-b border-white/5 bg-slate-900/95 backdrop-blur-md flex items-center gap-3 z-10 shadow-sm">
-                {/* Back (mobile) */}
+            <div className="flex-shrink-0 px-4 py-3 border-b border-white/[0.04] bg-[#0B1120]/95 backdrop-blur-md flex items-center gap-3 z-10">
                 <button onClick={() => setSelectedGroup(null)}
                         className="lg:hidden p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-400"
                         aria-label="Volver">
@@ -976,7 +286,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                     </svg>
                 </button>
 
-                {/* Avatar */}
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-full flex items-center justify-center font-bold text-white text-lg flex-shrink-0 shadow overflow-hidden">
                     {selectedGroup.AvatarUrl
                         ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
@@ -984,7 +293,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                     }
                 </div>
 
-                {/* Info — click opens side panel */}
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setShowMembers(!showMembers)}>
                     <div className="font-semibold text-slate-100 truncate">{selectedGroup.Name}</div>
                     <div className="text-xs text-slate-400 truncate">
@@ -996,9 +304,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                     </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* Voice call */}
                     {selectedGroup?.UserRole !== 'left' && (
                         <>
                             <button
@@ -1023,7 +329,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                             </button>
                         </>
                     )}
-                    {/* More options kebab */}
                     <div className="relative" ref={optionsRef}>
                         <button onClick={() => setShowOptions(v => !v)}
                             className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-400 hover:text-white"
@@ -1064,19 +369,14 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                 </div>
             </div>
 
-            {/* ── Group info side panel (WhatsApp-style) ── */}
+            {/* ── Group info side panel ── */}
             {showMembers && (
                 <>
-                    {/* Backdrop */}
                     <div className="absolute inset-0 z-[100] bg-black/40"
                          onClick={() => setShowMembers(false)} />
-
-                    {/* Panel */}
-                    <div className="absolute top-0 right-0 h-full w-full sm:w-96 z-[101] bg-slate-900 flex flex-col shadow-2xl"
+                    <div className="absolute top-0 right-0 h-full w-full sm:w-96 z-[101] bg-[#0B1120] flex flex-col shadow-2xl border-l border-white/[0.04]"
                          style={{ animation: 'slideInRight 0.22s ease' }}>
-
-                        {/* Panel header */}
-                        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-slate-900 flex-shrink-0">
+                        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] bg-[#0B1120] flex-shrink-0">
                             <button onClick={() => setShowMembers(false)}
                                     className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400">
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1087,9 +387,7 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                         </div>
 
                         <div className="flex-1 overflow-y-auto">
-                            {/* Group avatar + name */}
-                            <div className="flex flex-col items-center py-7 px-4 bg-slate-900">
-                                {/* Clickable avatar — tap to open menu */}
+                            <div className="flex flex-col items-center py-7 px-4 bg-[#0B1120]">
                                 <div className="relative group/avatar mb-4" ref={avatarMenuRef}>
                                     <button
                                         onClick={() => setShowAvatarMenu(v => !v)}
@@ -1112,7 +410,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                                         </div>
                                     </button>
 
-                                    {/* Avatar action menu */}
                                     {showAvatarMenu && (
                                         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-44 bg-slate-800 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-fade-in">
                                             {selectedGroup.AvatarUrl && (
@@ -1139,7 +436,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                                         </div>
                                     )}
 
-                                    {/* Hidden file input (kept for ref compatibility) */}
                                     <input
                                         ref={avatarInputRef}
                                         type="file"
@@ -1150,7 +446,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                                 </div>
                                 <h2 className="text-xl font-bold text-white text-center">{selectedGroup.Name}</h2>
 
-                                {/* ── Description (WhatsApp-style inline edit) ── */}
                                 {editingDesc ? (
                                     <div className="w-full max-w-xs mt-3">
                                         <textarea
@@ -1289,7 +584,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                                                 <div
                                                     onClick={() => !isSelf && setMemberMenuOpen(isOpen ? null : m.Telephon)}
                                                     className={`flex items-center gap-3 px-4 py-3 transition-colors ${!isSelf ? 'hover:bg-white/5 cursor-pointer' : ''}`}>
-                                                    {/* Avatar */}
                                                     <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-slate-600 to-slate-500 flex items-center justify-center text-base font-bold text-white flex-shrink-0 overflow-hidden">
                                                         {(isSelf ? myAvatar : avatarMap[m.Telephon]) ? (
                                                             <img src={isSelf ? myAvatar : avatarMap[m.Telephon]} alt="" className="w-full h-full object-cover" />
@@ -1297,7 +591,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                                                             (m.Username || m.Telephon)?.charAt(0)?.toUpperCase()
                                                         )}
                                                     </div>
-                                                    {/* Info */}
                                                     <div className="flex-1 min-w-0 border-b border-white/5 pb-3">
                                                         <div className="flex items-center gap-2">
                                                             <span className={`font-medium truncate text-sm ${isSelf ? 'text-indigo-300' : 'text-slate-100'}`}>
@@ -1377,7 +670,6 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
 
                             <div className="h-2 bg-slate-950/60" />
 
-                            {/* Actions section */}
                             <div className="py-2">
                                 {selectedGroup?.UserRole !== 'left' && (
                                     <button onClick={() => { setShowMembers(false); setConfirmLeave(true); }}
@@ -1409,23 +701,17 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                 </>
             )}
 
-            {/* slideInRight animation */}
             <style>{`@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
 
-            {/* ── Message list ── */}
             <GroupMessageList groupID={selectedGroup.ID} messages={messages} myTelephon={myTelephon} activeWallpaper={activeWallpaper} />
-
-            {/* ── Input ── */}
             <GroupMessageInput />
 
-            {/* ── Add members modal ── */}
             <AddMembersModal
                 isOpen={showAddMembers}
                 onClose={() => setShowAddMembers(false)}
                 group={selectedGroup}
             />
 
-            {/* ── Add contact modal (from member tap) ── */}
             <AddContactModal
                 isOpen={addContactOpen}
                 onClose={() => setAddContactOpen(false)}
@@ -1433,101 +719,51 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                 initialName={addContactTarget.username}
             />
 
-            {/* ── Confirm leave group dialog ── */}
-            {confirmLeave && (
-                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-                     onClick={() => setConfirmLeave(false)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
-                         onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-                                <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                                </svg>
-                            </div>
-                            <div>
-                                <p className="font-semibold text-white">¿Salir del grupo?</p>
-                                <p className="text-xs text-slate-400 mt-0.5">Dejarás de poder enviar mensajes, pero podrás seguir leyendo el historial.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmLeave(false)} disabled={loadingLeave}
-                                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors disabled:opacity-50">
-                                Cancelar
-                            </button>
-                            <button onClick={handleLeaveGroup} disabled={loadingLeave}
-                                    className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
-                                {loadingLeave ? 'Saliendo...' : 'Salir'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ConfirmDialog
+                isOpen={confirmLeave}
+                onClose={() => setConfirmLeave(false)}
+                onConfirm={handleLeaveGroup}
+                title="¿Salir del grupo?"
+                description="Dejarás de poder enviar mensajes, pero podrás seguir leyendo el historial."
+                confirmText="Salir"
+                variant="warning"
+                loading={loadingLeave}
+            />
 
-            {/* ── Confirm delete group dialog ── */}
-            {confirmDelete && (
-                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-                     onClick={() => setConfirmDelete(false)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
-                         onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
-                                </svg>
-                            </div>
-                            <div>
-                                <p className="font-semibold text-white">¿Eliminar de tu lista?</p>
-                                <p className="text-xs text-slate-400 mt-0.5">Saldrás del grupo y desaparecerá de tu lista. Esta acción no se puede deshacer.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmDelete(false)} disabled={loadingLeave}
-                                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors disabled:opacity-50">
-                                Cancelar
-                            </button>
-                            <button onClick={handleDeleteGroup} disabled={loadingLeave}
-                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
-                                {loadingLeave ? 'Eliminando...' : 'Eliminar'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ConfirmDialog
+                isOpen={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                onConfirm={handleDeleteGroup}
+                title="¿Eliminar de tu lista?"
+                description="Saldrás del grupo y desaparecerá de tu lista. Esta acción no se puede deshacer."
+                confirmText="Eliminar"
+                variant="danger"
+                loading={loadingLeave}
+            />
 
-            {/* ── Confirm remove member dialog ── */}
-            {confirmRemove && (
-                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-                     onClick={() => !removeLoading && setConfirmRemove(null)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
-                         onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
-                                </svg>
-                            </div>
-                            <div>
-                                <p className="font-semibold text-white">¿Eliminar a {confirmRemove.username || confirmRemove.telephon}?</p>
-                                <p className="text-xs text-slate-400 mt-0.5">Esta persona será eliminada del grupo y ya no podrá ver los mensajes futuros.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmRemove(null)} disabled={removeLoading}
-                                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors disabled:opacity-50">
-                                Cancelar
-                            </button>
-                            <button onClick={handleRemoveMember} disabled={removeLoading}
-                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
-                                {removeLoading ? 'Eliminando...' : 'Eliminar'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ConfirmDialog
+                isOpen={!!confirmRemove}
+                onClose={() => setConfirmRemove(null)}
+                onConfirm={handleRemoveMember}
+                title={`¿Eliminar a ${confirmRemove?.username || confirmRemove?.telephon}?`}
+                description="Esta persona será eliminada del grupo y ya no podrá ver los mensajes futuros."
+                confirmText="Eliminar"
+                variant="danger"
+                loading={removeLoading}
+            />
 
-            {/* ── Avatar full-screen lightbox ── */}
-            {viewAvatarOpen && selectedGroup.AvatarUrl && (                <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
+            <ConfirmDialog
+                isOpen={confirmClear}
+                onClose={() => setConfirmClear(false)}
+                onConfirm={handleClearChat}
+                title="¿Vaciar chat?"
+                description="Solo se borrará en tu dispositivo. Los demás miembros seguirán viendo los mensajes."
+                confirmText="Vaciar"
+                variant="danger"
+            />
+
+            {viewAvatarOpen && selectedGroup.AvatarUrl && (
+                <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
                      onClick={() => setViewAvatarOpen(false)}>
                     <button onClick={() => setViewAvatarOpen(false)}
                             className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
@@ -1544,42 +780,9 @@ const GroupChatWindowInner = ({ onStartGroupCall }) => {
                     <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/70 text-sm font-medium">{selectedGroup.Name}</p>
                 </div>
             )}
-
-            {/* ── Confirm clear chat dialog ── */}
-            {confirmClear && (
-                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-                     onClick={() => setConfirmClear(false)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
-                         onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </div>
-                            <div>
-                                <p className="font-semibold text-white">¿Vaciar chat?</p>
-                                <p className="text-xs text-slate-400 mt-0.5">Solo se borrará en tu dispositivo. Los demás miembros seguirán viendo los mensajes.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmClear(false)}
-                                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">
-                                Cancelar
-                            </button>
-                            <button onClick={handleClearChat}
-                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-colors">
-                                Vaciar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
-
-// ── Public export: wrap with providers ───────────────────────────────────────
 
 const GroupChatWindow = ({ onStartGroupCall }) => {
     return (

@@ -159,7 +159,7 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
                             className="mb-3 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
                         />
 
-                        <div className="flex-1 space-y-1 overflow-y-auto rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-2 pr-1">
+                        <div className="flex-1 space-y-1 overflow-y-auto rounded-2xl border border-white/[0.06] bg-white/[0.02] p-2 pr-1">
                             {filteredContacts.length === 0 && (
                                 <p className="text-center text-slate-500 py-8 text-sm">
                                     {acceptedContacts.length === 0

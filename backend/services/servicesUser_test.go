@@ -48,7 +48,7 @@ func TestServicesUser_CreateUser_Success(t *testing.T) {
 	user := models.UserDataBase{
 		User: models.User{
 			Username: "newuser",
-			Gmail:    "newuser@gmail.com",
+			Email:    "newuser@gmail.com",
 			Telephon: "12345678",
 		},
 		Password: "password123",
@@ -56,7 +56,7 @@ func TestServicesUser_CreateUser_Success(t *testing.T) {
 	ctx := context.Background()
 
 	mockRepo.On("UsernameExist", user.Username, ctx).Return(false)
-	mockRepo.On("EmailExist", user.Gmail, ctx).Return("", false)
+	mockRepo.On("EmailExist", user.Email, ctx).Return("", false)
 	mockRepo.On("TelephonExist", user.Telephon, ctx).Return(false)
 
 	// Saltamos el resto del test por la complejidad de mockear Tx

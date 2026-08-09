@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -42,35 +43,38 @@ func InitRateLimiter(rd *redis.Client) {
 // ─── Core: atomic fixed-window increment ─────────────────────────────────────
 
 // luaIncr increments a counter and sets expiry only on first creation.
-// Returns the count after increment.
+// Returns {current, ttl} as a Lua table.
 var luaIncr = redis.NewScript(`
 local current = redis.call("INCR", KEYS[1])
 if current == 1 then
     redis.call("EXPIRE", KEYS[1], ARGV[1])
 end
-return current
+local ttl = redis.call("TTL", KEYS[1])
+return {current, ttl}
 `)
 
 func (r *RateLimiter) allow(key string, limit int, window time.Duration) (allowed bool, remaining int, resetIn time.Duration) {
 	ctx := context.Background()
 	windowSecs := int(window.Seconds())
 
-	count, err := luaIncr.Run(ctx, r.rd, []string{key}, windowSecs).Int()
+	vals, err := luaIncr.Run(ctx, r.rd, []string{key}, windowSecs).Slice()
 	if err != nil {
-		// Redis unavailable → fail open (don't block legitimate traffic)
+		slog.Error("rate limiter: Redis no disponible, permitiendo (fail-open)", "error", err)
 		return true, limit, window
 	}
 
-	ttl, err := r.rd.TTL(ctx, key).Result()
-	if err != nil || ttl < 0 {
-		ttl = window
+	count, _ := vals[0].(int64)
+	ttlSecs, _ := vals[1].(int64)
+
+	if ttlSecs <= 0 {
+		ttlSecs = int64(window.Seconds())
 	}
 
-	remaining = limit - count
+	remaining = limit - int(count)
 	if remaining < 0 {
 		remaining = 0
 	}
-	return count <= limit, remaining, ttl
+	return int(count) <= limit, remaining, time.Duration(ttlSecs) * time.Second
 }
 
 // ─── Public factory functions ─────────────────────────────────────────────────

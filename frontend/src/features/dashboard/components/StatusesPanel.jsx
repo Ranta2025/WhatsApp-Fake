@@ -196,7 +196,7 @@ export default function StatusesPanel({ onCreateStatus }) {
 
     const handleDelete = async () => {
         if (!activeStatus || !isMyThread) return;
-        if (!window.confirm('¿Quieres eliminar este estado?')) return;
+        if (!window.confirm('Quieres eliminar este estado?')) return;
         try {
             await deleteStatus(activeStatus.id);
         } catch (error) {
@@ -207,32 +207,32 @@ export default function StatusesPanel({ onCreateStatus }) {
 
     if (!threads.length) {
         return (
-            <div className="flex flex-1 flex-col items-center justify-center bg-slate-950 px-8 text-center">
-                <div className="max-w-xl rounded-[2rem] border border-white/5 bg-slate-900/70 px-8 py-10 shadow-xl shadow-black/20">
+            <div className="flex flex-1 flex-col items-center justify-center bg-[#0B1120] px-8 text-center">
+                <div className="max-w-xl rounded-2xl border border-white/[0.06] bg-[#0B1120] px-8 py-10 shadow-xl">
                     <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-sky-500/10 text-sky-300">
                         <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 8h10M7 12h6m-8 8l3.154-3.154A4 4 0 0011.982 16H18a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h1z" /></svg>
                     </div>
-                    <h2 className="text-3xl font-semibold text-white">Todavía no hay estados</h2>
-                    <p className="mt-3 text-slate-400">Cuando publiques uno, aparecerá aquí y tus contactos podrán verlo durante 24 horas.</p>
-                    <button onClick={onCreateStatus} className="mt-8 rounded-3xl bg-gradient-to-r from-sky-500 to-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:from-sky-400 hover:to-indigo-500">Publicar mi primer estado</button>
+                    <h2 className="text-3xl font-semibold text-white">Todavia no hay estados</h2>
+                    <p className="mt-3 text-slate-400">Cuando publiques uno, aparecera aqui y tus contactos podran verlo durante 24 horas.</p>
+                    <button onClick={onCreateStatus} className="mt-8 rounded-2xl gradient-brand px-5 py-2.5 font-semibold text-white shadow-glow">Publicar mi primer estado</button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-1 min-h-0 min-w-0 bg-slate-950">
-            <div className="hidden lg:flex lg:w-72 xl:w-80 flex-col border-r border-white/5 bg-slate-900/75 p-4">
+        <div className="flex flex-1 min-h-0 min-w-0 bg-[#0B1120]">
+            <div className="hidden lg:flex lg:w-72 xl:w-80 flex-col border-r border-white/[0.04] bg-[#0B1120] p-4">
                 <div className="mb-4 flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-semibold text-white">Estados</h2>
-                        <p className="text-sm text-slate-400">Historias activas de las últimas 24 horas.</p>
+                        <p className="text-sm text-slate-400">Historias activas de las ultimas 24 horas.</p>
                     </div>
                     <button onClick={onCreateStatus} className="rounded-2xl bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-300 transition hover:bg-sky-500/20">Crear</button>
                 </div>
-                <div className="space-y-2 overflow-y-auto pr-1">
+                <div className="flex-1 min-h-0 space-y-2 overflow-y-auto pr-1">
                     {threads.map((thread) => (
-                        <button key={thread.ownerTelephon} onClick={() => setSelectedStatusOwner(thread.ownerTelephon)} className={`flex w-full items-center gap-3 rounded-3xl border px-3 py-3 text-left transition ${thread.ownerTelephon === activeThread?.ownerTelephon ? 'border-cyan-500/25 bg-slate-800/90' : 'border-transparent bg-slate-900/60 hover:border-white/5 hover:bg-slate-800/75'}`}>
+                        <button key={thread.ownerTelephon} onClick={() => setSelectedStatusOwner(thread.ownerTelephon)} className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${thread.ownerTelephon === activeThread?.ownerTelephon ? 'bg-white/[0.05] border-l-2 border-sky-500' : 'hover:bg-white/[0.03]'}`}>
                             <div className={`relative h-12 w-12 rounded-full p-[2px] ${thread.hasUnviewed ? 'bg-gradient-to-br from-emerald-400 via-sky-400 to-indigo-500' : 'bg-white/10'}`}>
                                 <div className="h-full w-full overflow-hidden rounded-full bg-slate-900">
                                     {thread.ownerAvatar ? <img src={thread.ownerAvatar} alt="avatar" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center bg-slate-800 text-sm font-semibold text-white">{(thread.ownerName || thread.ownerUsername || thread.ownerTelephon)?.charAt(0)?.toUpperCase()}</div>}
@@ -242,7 +242,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                                 <div className="truncate font-medium text-slate-100">{thread.ownerTelephon === profile?.Telephon ? 'Mi estado' : thread.ownerName}</div>
                                 <div className="flex items-center gap-2 truncate text-sm text-slate-400">
                                     <span className={`inline-flex h-2.5 w-2.5 rounded-full ${thread.hasUnviewed ? 'bg-emerald-400 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]' : 'bg-slate-600'}`} />
-                                    <span className="truncate">{thread.hasUnviewed ? 'Nuevo · ' : 'Visto · '}{formatStatusTimestamp(thread.lastStatusAt)}</span>
+                                    <span className="truncate">{thread.hasUnviewed ? 'Nuevo * ' : 'Visto * '}{formatStatusTimestamp(thread.lastStatusAt)}</span>
                                 </div>
                             </div>
                             <div className="text-xs text-slate-500">{thread.statuses.length}</div>
@@ -251,7 +251,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                 </div>
             </div>
             <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex items-center justify-between border-b border-white/5 bg-slate-900/95 px-4 py-4 backdrop-blur-md sm:px-6">
+                <div className="flex items-center justify-between border-b border-white/[0.04] bg-[#0B1120]/95 px-4 py-4 backdrop-blur-md sm:px-6">
                     <div className="flex min-w-0 items-center gap-3">
                         <button
                             onClick={() => setSelectedStatusOwner(null)}
@@ -264,7 +264,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                         </button>
                         <div className="min-w-0">
                         <div className="truncate text-lg font-semibold text-white">{isMyThread ? 'Mi estado' : activeThread?.ownerName}</div>
-                        <div className="truncate text-sm text-slate-400">{formatStatusTimestamp(activeStatus?.createdAt)}{activeThread?.statuses?.length > 1 ? ` · ${activeIndex + 1}/${activeThread?.statuses?.length}` : ''}</div>
+                        <div className="truncate text-sm text-slate-400">{formatStatusTimestamp(activeStatus?.createdAt)}{activeThread?.statuses?.length > 1 ? ` * ${activeIndex + 1}/${activeThread?.statuses?.length}` : ''}</div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -276,7 +276,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                     <div className="flex flex-1 flex-col overflow-hidden p-4 sm:p-6">
                         <div className="mb-4 flex gap-2">
                             {activeThread.statuses.map((status, index) => (
-                                <button key={status.id} onClick={() => setActiveIndex(index)} className={`relative h-1.5 flex-1 overflow-hidden rounded-full transition ${status.viewed || isMyThread || index < activeIndex ? 'bg-white/20' : 'bg-white/10'}`} aria-label={`Ver estado ${index + 1}`}>
+                                <button key={status.id} onClick={() => setActiveIndex(index)} className={`relative h-0.5 flex-1 overflow-hidden rounded-full transition ${status.viewed || isMyThread || index < activeIndex ? 'bg-white/20' : 'bg-white/10'}`} aria-label={`Ver estado ${index + 1}`}>
                                     <span
                                         className={`absolute inset-y-0 left-0 rounded-full transition-all duration-300 ${index < activeIndex ? 'w-full bg-white' : index === activeIndex ? 'bg-sky-400' : 'w-0 bg-transparent'}`}
                                         style={index === activeIndex ? { width: activeStatus?.mediaType === 'video' ? '100%' : isPaused || showViewers ? '35%' : '100%' } : undefined}
@@ -284,7 +284,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                                 </button>
                             ))}
                         </div>
-                        <div className="relative flex flex-1 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900 shadow-xl shadow-black/20">
+                        <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0B1120] shadow-xl">
                             <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
                                 <div>
                                     <div className="text-sm font-semibold text-slate-100">{isMyThread ? 'Publicado por ti' : activeThread.ownerName}</div>
@@ -293,7 +293,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                                 {isMyThread && activeStatus && <div className="text-xs font-medium text-slate-400">{activeStatus.viewCount} vista{activeStatus.viewCount === 1 ? '' : 's'}</div>}
                             </div>
                             <div
-                                className="relative flex flex-1 items-center justify-center overflow-hidden bg-slate-950 p-4 sm:p-8 select-none"
+                                className="relative flex flex-1 items-center justify-center overflow-hidden bg-[#0B1120] p-4 sm:p-8 select-none"
                                 onPointerDown={handlePointerDown}
                                 onPointerUp={handlePointerUp}
                                 onPointerCancel={() => {
@@ -307,17 +307,17 @@ export default function StatusesPanel({ onCreateStatus }) {
                             >
                                 <div className="absolute inset-y-0 left-0 z-[1] w-1/2" aria-hidden="true" />
                                 <div className="absolute inset-y-0 right-0 z-[1] w-1/2" aria-hidden="true" />
-                                <button onClick={goToPreviousStatus} disabled={activeIndex === 0} className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/30 p-3 text-white transition hover:bg-black/50 disabled:opacity-30" aria-label="Ver estado anterior"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button>
+                                <button onClick={goToPreviousStatus} disabled={activeIndex === 0} className="absolute left-3 top-1/2 z-10 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 disabled:opacity-30 flex items-center justify-center" aria-label="Ver estado anterior"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button>
                                 <div className={`flex h-full w-full max-w-4xl items-center justify-center transform transition-all duration-150 ease-out ${transitionClass}`}>
                                     {activeStatus?.mediaUrl ? (
                                         activeStatus.mediaType === 'video' ? (
-                                            <video ref={videoRef} key={activeStatus.id} src={activeStatus.mediaUrl} controls autoPlay className="max-h-full max-w-full rounded-[1.5rem] bg-black object-contain" onEnded={goToNextStatus} />
+                                            <video ref={videoRef} key={activeStatus.id} src={activeStatus.mediaUrl} controls autoPlay className="max-h-full max-w-full rounded-2xl shadow-2xl bg-black object-contain" onEnded={goToNextStatus} />
                                         ) : (
-                                            <img src={activeStatus.mediaUrl} alt="Estado" className="max-h-full max-w-full rounded-[1.5rem] object-contain" />
+                                            <img src={activeStatus.mediaUrl} alt="Estado" className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain" />
                                         )
                                     ) : (
                                         <div className="flex min-h-[300px] w-full items-center justify-center rounded-[1.75rem] px-6 py-10 shadow-inner sm:min-h-[420px] sm:px-10 sm:py-16" style={{ background: activeStatus?.background || defaultBackground }}>
-                                            <p className="max-w-2xl whitespace-pre-wrap text-center text-3xl font-semibold leading-tight text-white sm:text-4xl">{activeStatus?.text}</p>
+                                            <p className="max-w-2xl whitespace-pre-wrap text-center text-lg font-medium text-white">{activeStatus?.text}</p>
                                         </div>
                                     )}
                                 </div>
@@ -326,7 +326,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                                         Pausado
                                     </div>
                                 )}
-                                <button onClick={goToNextStatus} disabled={activeIndex >= activeThread.statuses.length - 1} className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/30 p-3 text-white transition hover:bg-black/50 disabled:opacity-30" aria-label="Ver siguiente estado"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg></button>
+                                <button onClick={goToNextStatus} disabled={activeIndex >= activeThread.statuses.length - 1} className="absolute right-3 top-1/2 z-10 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 disabled:opacity-30 flex items-center justify-center" aria-label="Ver siguiente estado"><svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg></button>
                             </div>
                             {activeStatus?.text && activeStatus?.mediaUrl && <div className="border-t border-white/5 px-5 py-4 text-sm leading-relaxed text-slate-200">{activeStatus.text}</div>}
                             {isMyThread && activeStatus && (
@@ -347,7 +347,7 @@ export default function StatusesPanel({ onCreateStatus }) {
                                     </svg>
                                 </button>
                                 {showViewers && (
-                                <div className="border-t border-white/5 bg-slate-950/92 px-5 py-4">
+                                <div className="bg-[#0B1120]/95 border-t border-white/[0.04] px-5 py-4">
                                     <div className="mb-3 flex items-center justify-between">
                                         <div>
                                             <div className="text-sm font-semibold text-slate-100">Visto por</div>
@@ -359,13 +359,13 @@ export default function StatusesPanel({ onCreateStatus }) {
                                     </div>
                                     {viewers.length === 0 ? (
                                         <div className="rounded-2xl border border-dashed border-white/10 px-4 py-4 text-sm text-slate-500">
-                                            Aún no hay visualizaciones para este estado.
+                                            Aun no hay visualizaciones para este estado.
                                         </div>
                                     ) : (
                                         <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
                                             {viewers.map((viewer) => (
                                                 <div key={`${activeStatus.id}-${viewer.viewerTelephon}-${viewer.viewedAt}`} className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2.5">
-                                                    <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-800">
+                                                    <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-800">
                                                         {viewer.viewerAvatar ? (
                                                             <img src={viewer.viewerAvatar} alt={viewer.viewerName} className="h-full w-full object-cover" />
                                                         ) : (

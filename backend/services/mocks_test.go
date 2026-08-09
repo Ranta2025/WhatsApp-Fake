@@ -112,9 +112,9 @@ func (m *MockUserCache) GetIntentosFallidos(username string, ctx context.Context
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockUserCache) SetIntentosFallidos(username string, intentos int, ctx context.Context) error {
-	args := m.Called(username, intentos, ctx)
-	return args.Error(0)
+func (m *MockUserCache) IncrementFailedAttempts(username string, ctx context.Context) (int, error) {
+	args := m.Called(username, ctx)
+	return args.Int(0), args.Error(1)
 }
 
 func (m *MockUserRepo) BlockUser(username string, ctx context.Context) error {

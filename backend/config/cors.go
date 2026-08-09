@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -16,13 +17,27 @@ var localOrigins = []string{
 	"http://127.0.0.1:8080",
 	"http://localhost:5173",
 	"http://127.0.0.1:5173",
-	"https://cereous-dewayne-sunshiny.ngrok-free.dev",
+}
+
+// allowedOrigins adicionales leídos de la variable de entorno ALLOWED_ORIGINS
+var allowedOrigins []string
+
+func init() {
+	raw := os.Getenv("ALLOWED_ORIGINS")
+	if raw != "" {
+		for _, origin := range strings.Split(raw, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				allowedOrigins = append(allowedOrigins, origin)
+			}
+		}
+	}
 }
 
 // IsAllowedOrigin verifica si un origin está en la lista de orígenes permitidos
 func IsAllowedOrigin(origin string) bool {
 	if origin == "" {
-		return false
+		return true
 	}
 
 	parsed, err := url.Parse(origin)
@@ -45,20 +60,12 @@ func IsAllowedOrigin(origin string) bool {
 		}
 	}
 
-	parsed, err = url.Parse(origin)
-	if err != nil {
-		return false
+	for _, allowed := range allowedOrigins {
+		if origin == allowed {
+			return true
+		}
 	}
-	host := parsed.Hostname()
 
-	if strings.HasSuffix(host, ".ngrok-free.app") ||
-		strings.HasSuffix(host, ".ngrok.io") ||
-		strings.HasSuffix(host, ".ngrok.app") ||
-		host == "ngrok-free.dev" ||
-		strings.HasSuffix(host, "ngrok-free.dev") ||
-		strings.HasSuffix(host, ".trycloudflare.com") {
-		return true
-	}
 	log.Printf("[CORS] Origin RECHAZADO: %s", origin)
 	return false
 }

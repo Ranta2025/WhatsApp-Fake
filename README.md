@@ -57,7 +57,7 @@ Una plataforma de mensajería instantánea completa construida con **Go (Gin)** 
 - ⚡ **Alto rendimiento** — Backend en Go (Gin) con caché Redis
 - 🗄️ **PostgreSQL 16 + GORM** — Persistencia con migraciones automáticas
 - 📦 **MinIO** — Object storage S3-compatible para todos los archivos multimedia
-- 🐳 **Docker Compose** — 7 servicios (app, postgres, redis, frontend, nginx, minio, cloudflared)
+- 🐳 **Docker Compose** — Redis y MinIO en Docker; PostgreSQL local
 - 🌐 **Nginx** — Reverse proxy con routing inteligente (API, WebSocket, storage, frontend)
 - 🐛 **Bug reporting** — Los usuarios pueden reportar bugs que se crean como GitHub Issues automáticamente
 - ☁️ **Cloudflare Tunnel** — Acceso público integrado en Docker sin configuración extra
@@ -71,7 +71,7 @@ Una plataforma de mensajería instantánea completa construida con **Go (Gin)** 
 - [Node.js 20+](https://nodejs.org/)
 - [Docker & Docker Compose](https://www.docker.com/)
 
-> Con Docker no necesitas instalar PostgreSQL, Redis ni MinIO localmente.
+> Docker levanta Redis y MinIO. PostgreSQL debe estar instalado localmente.
 
 ---
 
@@ -88,14 +88,14 @@ cd <nombre-proyecto>
 
 Crea un archivo `.env` en la raíz con las variables listadas en la sección [Variables de Entorno](#-variables-de-entorno).
 
-### 3. Opción A: Docker (Recomendado)
+### 3. Opción A: Docker (Servicios auxiliares)
+
+Levanta Redis y MinIO (PostgreSQL corre localmente):
 
 ```bash
 cd docker
 docker-compose up -d
 ```
-
-Esto levanta **7 servicios**: PostgreSQL, Redis, MinIO, Backend (Go), Frontend (Vite), Nginx (reverse proxy) y Cloudflared en un solo comando.
 
 ### 3. Opción B: Manual
 
@@ -122,7 +122,7 @@ npm run dev
 2. Iniciar el frontend (puerto `5173`): `cd frontend && npm run dev`
 3. Abrir `http://localhost:5173`
 
-### Con Docker
+### Con Docker (Redis + MinIO)
 
 ```bash
 cd docker
@@ -134,6 +134,8 @@ docker-compose logs -f
 # Detener
 docker-compose down
 ```
+
+> **Nota:** PostgreSQL corre localmente, no en Docker. Asegúrate de tenerlo iniciado antes de levantar el backend.
 
 ### Compartir con Cloudflare Tunnel
 

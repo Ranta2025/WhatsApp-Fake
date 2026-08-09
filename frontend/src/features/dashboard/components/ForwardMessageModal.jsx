@@ -53,7 +53,7 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }) => {
 
     return (
         <div
-            className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-[#0B1120]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div className="bg-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-700/50 flex flex-col max-h-[80vh]">
