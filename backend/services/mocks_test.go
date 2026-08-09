@@ -148,6 +148,11 @@ func (m *MockUserCache) DeleteActivationCode(username string, ctx context.Contex
 	return args.Error(0)
 }
 
+func (m *MockUserCache) ResetFailedAttempts(username string, ctx context.Context) error {
+	args := m.Called(username, ctx)
+	return args.Error(0)
+}
+
 type MockChatRepo struct {
 	mock.Mock
 }
