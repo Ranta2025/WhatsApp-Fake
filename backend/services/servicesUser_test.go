@@ -28,6 +28,7 @@ func TestServicesUser_LogIn_Success(t *testing.T) {
 	mockCache.On("CachePassword", "testuser", ctx).Return(hashed, nil)
 
 	mockRepo.On("GetTelephonByUsername", "testuser", ctx).Return("12345678", true)
+	mockCache.On("ResetFailedAttempts", "testuser", ctx).Return(nil)
 
 	// Necesitamos configurar SECRETKEY para GenerateToken
 	os.Setenv("SECRETKEY", "super-secret-key-32-characters-long")
