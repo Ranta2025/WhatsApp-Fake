@@ -12,15 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func respondJSON(c *gin.Context, status int, data interface{}) {
-	c.JSON(status, gin.H{"success": status < 400, "data": data})
-}
-
-func respondError(c *gin.Context, status int, message string) {
-	c.JSON(status, gin.H{"error": message})
-	c.Abort()
-}
-
 func isSecureCookie() bool {
 	return os.Getenv("ENV") == "production"
 }
@@ -76,19 +67,19 @@ func (s *HandlerUser) HandlerRegister() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		user, exist := c.Get("logout")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener user")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener user")
 			return
 		}
 		err := s.service.CreateUser(user.(models.UserDataBase), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 
 		_, err = s.setTokenCookies(c, user.(models.UserDataBase).Username, user.(models.UserDataBase).Telephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando tokens en registro: %v", err)
-			respondError(c, http.StatusInternalServerError, "error interno del servidor")
+			respondErrorMsg(c, http.StatusInternalServerError, "error interno del servidor")
 			return
 		}
 		respondJSON(c, http.StatusCreated, gin.H{
@@ -103,7 +94,7 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 		username, exist := c.Get("username")
 		password, exist2 := c.Get("password")
 		if !(exist && exist2) {
-			respondError(c, http.StatusUnauthorized, "no se encuentran los datos")
+			respondErrorMsg(c, http.StatusUnauthorized, "no se encuentran los datos")
 			return
 		}
 		user := models.UserLogin{
@@ -113,21 +104,21 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 		token, err := s.service.LogIn(user, ctx)
 		if err != nil {
 			log.Println("[HANDLER] Error en LogIn:", err.Error())
-			respondError(c, http.StatusUnauthorized, err.Error())
+			respondError(c, http.StatusUnauthorized, models.NewAppError(http.StatusUnauthorized, err.Error(), err))
 			return
 		}
 		log.Printf("[HANDLER] Login exitoso para usuario: %s", username)
 
 		decodedUsername, decodedTelephon, err := utils.DecodeToken(token)
 		if err != nil {
-			respondError(c, http.StatusInternalServerError, "error interno del servidor")
+			respondErrorMsg(c, http.StatusInternalServerError, "error interno del servidor")
 			return
 		}
 
 		_, err = s.setTokenCookies(c, decodedUsername, decodedTelephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando tokens: %v", err)
-			respondError(c, http.StatusInternalServerError, "error interno del servidor")
+			respondErrorMsg(c, http.StatusInternalServerError, "error interno del servidor")
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -162,25 +153,25 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		userActivate, exist := c.Get("usernameActivate")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener el username")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener el username")
 			return
 		}
 		err := s.service.ActivateAccount(userActivate.(models.UserActivate), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 
 		telephon, exist := s.service.GetTelephonByUsername(userActivate.(models.UserActivate).Username, ctx)
 		if !exist {
-			respondError(c, http.StatusInternalServerError, "error al obtener telephon del usuario")
+			respondErrorMsg(c, http.StatusInternalServerError, "error al obtener telephon del usuario")
 			return
 		}
 
 		_, err = s.setTokenCookies(c, userActivate.(models.UserActivate).Username, telephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando tokens en activación: %v", err)
-			respondError(c, http.StatusInternalServerError, "error interno del servidor")
+			respondErrorMsg(c, http.StatusInternalServerError, "error interno del servidor")
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -194,12 +185,12 @@ func (s *HandlerUser) HandlerRecoverAccount() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		username, exist := c.Get("userRecover")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener el username")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener el username")
 			return
 		}
 		username, err := s.service.RecoverAccount(username.(string), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -214,12 +205,12 @@ func (s *HandlerUser) HandlerResendCode() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		userActivate, exist := c.Get("gmailResend")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener el gmail")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener el gmail")
 			return
 		}
 		err := s.service.ResendCode(userActivate.(string), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -233,12 +224,12 @@ func (s *HandlerUser) HandlerRecoverCuenta() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		userRecover, exist := c.Get("recoverCuenta")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener el gmail")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener el gmail")
 			return
 		}
 		err := s.service.RecoverCuenta(userRecover.(models.UserRecover), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -252,12 +243,12 @@ func (s *HandlerUser) HandlerChangePassword() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		userChange, exist := c.Get("changePassword")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener el usuario")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener el usuario")
 			return
 		}
 		err := s.service.ChangePassword(userChange.(models.UserChangePassword), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -270,13 +261,13 @@ func (s *HandlerUser) HandlerRecoverAndChangePassword() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		userRecover, exist := c.Get("recoverAndChange")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener los datos")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 		data := userRecover.(models.UserRecoverAndChange)
 		err := s.service.RecoverAndChangePassword(data.Email, data.Code, data.Password, ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -290,12 +281,12 @@ func (s *HandlerUser) HandlerSendForgotPasswordCode() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		email, exist := c.Get("emailForgot")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener el email")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener el email")
 			return
 		}
 		err := s.service.SendForgotPasswordCode(email.(string), ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -309,13 +300,13 @@ func (s *HandlerUser) HandlerForgotPasswordChange() gin.HandlerFunc {
 		ctx := c.Request.Context()
 		userForgot, exist := c.Get("forgotPassword")
 		if !exist {
-			respondError(c, http.StatusBadRequest, "error al obtener los datos")
+			respondErrorMsg(c, http.StatusBadRequest, "error al obtener los datos")
 			return
 		}
 		data := userForgot.(models.UserForgotPassword)
 		err := s.service.ForgotPasswordChange(data.Email, data.Code, data.Password, ctx)
 		if err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, err.Error(), err))
 			return
 		}
 		respondJSON(c, http.StatusOK, gin.H{
@@ -330,7 +321,7 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 
 		oldRefreshToken, err := c.Cookie("refresh_token")
 		if err != nil || oldRefreshToken == "" {
-			respondError(c, http.StatusUnauthorized, "refresh token no encontrado")
+			respondErrorMsg(c, http.StatusUnauthorized, "refresh token no encontrado")
 			return
 		}
 
@@ -338,26 +329,26 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 
 		username, telephon, err := decodeTokenIgnoreExpiry(accessToken)
 		if err != nil {
-			respondError(c, http.StatusUnauthorized, "token invalido")
+			respondErrorMsg(c, http.StatusUnauthorized, "token invalido")
 			return
 		}
 
 		if err := s.service.ValidateRefreshToken(username, oldRefreshToken, ctx); err != nil {
-			respondError(c, http.StatusUnauthorized, "refresh token invalido o expirado")
+			respondErrorMsg(c, http.StatusUnauthorized, "refresh token invalido o expirado")
 			return
 		}
 
 		newAccessToken, err := utils.GenerateToken(username, telephon)
 		if err != nil {
 			log.Printf("[HANDLER] Error generando access token en refresh: %v", err)
-			respondError(c, http.StatusInternalServerError, "error interno del servidor")
+			respondErrorMsg(c, http.StatusInternalServerError, "error interno del servidor")
 			return
 		}
 
 		newRefreshToken, err := utils.GenerateRefreshToken()
 		if err != nil {
 			log.Printf("[HANDLER] Error generando refresh token en refresh: %v", err)
-			respondError(c, http.StatusInternalServerError, "error interno del servidor")
+			respondErrorMsg(c, http.StatusInternalServerError, "error interno del servidor")
 			return
 		}
 
@@ -366,7 +357,7 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 		// viejo falla aquí y el cliente debe re-autenticarse.
 		if err := s.service.RotateRefreshToken(oldRefreshToken, newRefreshToken, username, ctx); err != nil {
 			log.Printf("[HANDLER] Error rotando refresh token: %v", err)
-			respondError(c, http.StatusUnauthorized, "refresh token invalido o expirado")
+			respondErrorMsg(c, http.StatusUnauthorized, "refresh token invalido o expirado")
 			return
 		}
 
