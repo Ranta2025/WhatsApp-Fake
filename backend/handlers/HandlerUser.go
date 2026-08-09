@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/utils"
@@ -11,7 +10,6 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func respondJSON(c *gin.Context, status int, data interface{}) {
@@ -357,31 +355,11 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 	}
 }
 
+// decodeTokenIgnoreExpiry extrae username y telephon de un access token
+// validando SIEMPRE la firma con la clave de la aplicación. El único margen
+// permitido es la expiración (leeway de 5 minutos) para cubrir el refresh flow
+// sin perder la validación de firma (C2: se eliminó el fallback ParseUnverified,
+// que aceptaba cualquier JWT sin verificar su firma).
 func decodeTokenIgnoreExpiry(tokenStr string) (string, string, error) {
-	username, telephon, err := utils.DecodeToken(tokenStr)
-	if err == nil {
-		return username, telephon, nil
-	}
-
-	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
-	token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
-	if err != nil {
-		return "", "", err
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return "", "", errors.New("claims invalidos")
-	}
-
-	username2, ok := claims["username"].(string)
-	if !ok {
-		return "", "", errors.New("username no encontrado en token")
-	}
-	telephon2, ok := claims["telephon"].(string)
-	if !ok {
-		return "", "", errors.New("telephon no encontrado en token")
-	}
-
-	return username2, telephon2, nil
+	return utils.DecodeTokenWithLeeway(tokenStr)
 }
