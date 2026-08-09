@@ -143,6 +143,11 @@ func (m *MockUserRepo) UnblockUserByEmailTx(tx *gorm.DB, email string, ctx conte
 	return args.Error(0)
 }
 
+func (m *MockUserCache) DeleteActivationCode(username string, ctx context.Context) error {
+	args := m.Called(username, ctx)
+	return args.Error(0)
+}
+
 type MockChatRepo struct {
 	mock.Mock
 }
