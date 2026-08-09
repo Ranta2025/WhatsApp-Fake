@@ -14,9 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGetHandlerUser test para la inicialización
-
-// TestHandlerLogoutSession test para logout
 func TestHandlerLogoutSessionHandler(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := &HandlerUser{service: mockService}
@@ -36,7 +33,6 @@ func TestHandlerLogoutSessionHandler(t *testing.T) {
 }
 
 func TestHandlerLogInSuccess(t *testing.T) {
-	// Configurar clave secreta para el test
 	os.Setenv("SECRETKEY", "super-secret-key-32-characters-long")
 	utils.ValidateJWTSecret()
 
@@ -45,7 +41,6 @@ func TestHandlerLogInSuccess(t *testing.T) {
 
 	userLogin := models.UserLogin{Username: "testuser", Password: "password123"}
 
-	// Generar un token real para que DecodeToken funcione
 	token, _ := utils.GenerateToken("testuser", "12345678")
 
 	mockService.On("LogIn", userLogin, mock.Anything).Return(token, nil)
@@ -64,7 +59,6 @@ func TestHandlerLogInSuccess(t *testing.T) {
 	mockService.AssertExpectations(t)
 }
 
-// TestHandlerLogInMissingCredentials test para login sin credenciales
 func TestHandlerLogInMissingCredentials(t *testing.T) {
 	handler := &HandlerUser{service: nil}
 
@@ -77,20 +71,18 @@ func TestHandlerLogInMissingCredentials(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-// TestHandlerLogOutMissingUser test para logout sin usuario
-func TestHandlerLogOutMissingUser(t *testing.T) {
+func TestHandlerRegisterMissingUser(t *testing.T) {
 	handler := &HandlerUser{service: nil}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("POST", "/register", nil)
 
-	handler.HandlerLogOut()(c)
+	handler.HandlerRegister()(c)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// TestHandlerActivateAccountMissing test para activar cuenta sin datos
 func TestHandlerActivateAccountMissing(t *testing.T) {
 	handler := &HandlerUser{service: nil}
 

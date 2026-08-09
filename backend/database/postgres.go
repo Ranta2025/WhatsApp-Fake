@@ -22,9 +22,14 @@ func Conection() (*gorm.DB, error) {
 	password := os.Getenv("POSTGRES_PASSWORD")
 	dbname := os.Getenv("POSTGRES_DB")
 
+	sslmode := os.Getenv("POSTGRES_SSLMODE")
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+
 	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-		host, user, password, dbname, port,
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
+		host, user, password, dbname, port, sslmode,
 	)
 
 	var data *gorm.DB
@@ -39,6 +44,15 @@ func Conection() (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("postgres: could not connect after retries: %w", err)
 	}
+
+	sqlDB, err := data.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(1 * time.Minute)
 
 	// ── 1. PRE-MIGRATE: rename legacy columns before AutoMigrate ─────────────
 	if err := RunPreMigrations(data); err != nil {

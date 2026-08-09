@@ -50,7 +50,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
             setGlobalWallpaper(data.url);
         } catch (err) {
             console.error('Error uploading wallpaper:', err);
-            alert('No pudimos actualizar tu fondo en este momento. Inténtalo nuevamente.');
+            alert('No pudimos actualizar tu fondo en este momento. Intentalo nuevamente.');
         } finally {
             setUploadingWallpaper(false);
         }
@@ -63,7 +63,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
             setGlobalWallpaper("");
         } catch (err) {
             console.error('Error removing wallpaper:', err);
-            alert('No pudimos quitar el fondo en este momento. Inténtalo nuevamente.');
+            alert('No pudimos quitar el fondo en este momento. Intentalo nuevamente.');
         } finally {
             setUploadingWallpaper(false);
         }
@@ -106,7 +106,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
 
             if (nameChanged) {
                 await api.put('/api/v1/user', { username: nu });
-                // El servidor ya actualizó la cookie HttpOnly con el nuevo JWT
+                // El servidor ya actualizo la cookie HttpOnly con el nuevo JWT
                 updateUsername(nu);
             }
 
@@ -125,14 +125,14 @@ const ProfileModal = ({ isOpen, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B1120]/80 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(15,23,42,0.94))] shadow-[0_32px_120px_-48px_rgba(15,23,42,0.95)]">
-                <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_40%),linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.01))] p-6">
+                <div className="glass-strong rounded-t-3xl border-b border-white/10 p-6">
                     <div className="mb-4 flex items-start justify-between gap-4">
                         <div>
                             <div className="inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-200">Perfil</div>
-                            <h2 className="mt-3 text-xl font-semibold text-slate-100">Editar perfil</h2>
-                            <p className="mt-1 text-sm text-slate-400">Personaliza cómo te ven y dale a tus conversaciones una presencia más tuya.</p>
+                            <h2 className="mt-3 text-xl font-bold text-white">Editar perfil</h2>
+                            <p className="mt-1 text-sm text-slate-400">Personaliza como te ven y dale a tus conversaciones una presencia mas tuya.</p>
                         </div>
                         <button
                             onClick={onClose}
@@ -151,11 +151,11 @@ const ProfileModal = ({ isOpen, onClose }) => {
                 </div>
                 <form onSubmit={submitEdit} className="p-6 space-y-6">
                     <div className="flex flex-col items-center mb-6">
-                        <label className="relative w-24 h-24 rounded-full cursor-pointer group mb-2 shadow-lg" title="Cambiar foto de perfil">
+                        <label className="relative w-24 h-24 rounded-full cursor-pointer group mb-2" title="Cambiar foto de perfil">
                             {newAvatarPreview || (myAvatar && !removeAvatar) ? (
-                                <img src={newAvatarPreview || myAvatar} alt="avatar" className="w-24 h-24 rounded-full object-cover border-2 border-sky-400/40" />
+                                <img src={newAvatarPreview || myAvatar} alt="avatar" className="w-24 h-24 rounded-full object-cover ring-4 ring-sky-500/20 ring-offset-4 ring-offset-slate-900" />
                             ) : (
-                                <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-sky-400/40 bg-[linear-gradient(135deg,rgba(56,189,248,0.75),rgba(14,116,144,0.65))] text-3xl font-bold text-white">
+                                <div className="flex h-24 w-24 items-center justify-center rounded-full ring-4 ring-sky-500/20 ring-offset-4 ring-offset-slate-900 bg-[linear-gradient(135deg,rgba(56,189,248,0.75),rgba(14,116,144,0.65))] text-3xl font-bold text-white">
                                     {user?.username?.charAt(0).toUpperCase()}
                                 </div>
                             )}
@@ -197,7 +197,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
                     <div>
                         <label className="block text-sm font-medium text-slate-300 mb-2">Fondo general de conversaciones</label>
                         {globalWallpaper ? (
-                            <div className="group relative mb-2 h-32 overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-900/50">
+                            <div className="group relative mb-2 h-32 overflow-hidden rounded-2xl border border-white/10 shadow-lg bg-slate-900/50">
                                 <img
                                     src={globalWallpaper.startsWith('/') ? window.location.origin + globalWallpaper : globalWallpaper}
                                     alt="Fondo actual"
@@ -232,7 +232,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
                                 )}
                             </div>
                         ) : (
-                            <label className={`group flex h-32 cursor-pointer flex-col items-center justify-center gap-3 rounded-[1.4rem] border-2 border-dashed border-slate-600 bg-slate-800/50 transition-all hover:border-sky-400/50 hover:bg-slate-700/30 ${uploadingWallpaper ? 'pointer-events-none opacity-50' : ''}`}>
+                            <label className={`group flex h-32 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-600 bg-slate-800/50 transition-all hover:border-sky-400/50 hover:bg-slate-700/30 ${uploadingWallpaper ? 'pointer-events-none opacity-50' : ''}`}>
                                 {uploadingWallpaper ? (
                                     <svg className="animate-spin h-8 w-8 text-sky-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -255,7 +255,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            Se mostrará en todas las conversaciones que no tengan una imagen personalizada
+                            Se mostrara en todas las conversaciones que no tengan una imagen personalizada
                         </p>
                     </div>
 
@@ -265,7 +265,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
                             type="text"
                             value={newUsername}
                             onChange={(e) => setNewUsername(e.target.value)}
-                            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 placeholder-slate-500 transition-all focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                            className="w-full rounded-xl border border-white/8 bg-slate-800/60 px-4 py-3 text-slate-100 placeholder-slate-500 transition-all focus:border-sky-500/50 focus:outline-none"
                             placeholder="Tu nombre visible"
                         />
                     </div>
@@ -280,13 +280,13 @@ const ProfileModal = ({ isOpen, onClose }) => {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 rounded-2xl bg-slate-800 px-4 py-3 font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+                            className="flex-1 rounded-xl bg-slate-800 px-6 py-2.5 font-medium text-slate-300 transition-colors hover:bg-slate-700"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 rounded-2xl bg-[linear-gradient(135deg,#0ea5e9,#0369a1)] px-4 py-3 font-medium text-white shadow-[0_18px_45px_-20px_rgba(14,165,233,0.9)] transition-all hover:brightness-110 active:scale-[0.98]"
+                            className="flex-1 rounded-xl gradient-brand px-6 py-2.5 font-semibold text-white shadow-glow transition-all hover:brightness-110"
                             disabled={uploadingAvatar || uploadingWallpaper}
                         >
                             {uploadingAvatar ? 'Guardando...' : 'Guardar cambios'}

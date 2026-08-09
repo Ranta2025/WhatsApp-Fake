@@ -174,6 +174,11 @@ func (m *MockUserService) DeleteRefreshToken(username string, ctx context.Contex
 	return args.Error(0)
 }
 
+func (m *MockUserService) RotateRefreshToken(oldToken string, newToken string, username string, ctx context.Context) error {
+	args := m.Called(oldToken, newToken, username, ctx)
+	return args.Error(0)
+}
+
 type MockChatService struct {
 	mock.Mock
 }
@@ -312,6 +317,14 @@ func (m *MockContactService) ServicePutContactByTelephon(contact models.ContactP
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.ContactChat), args.Error(1)
+}
+
+func (m *MockContactService) ServiceUpdateUsername(telephon string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, string, string, error) {
+	args := m.Called(telephon, usernameUpdate, ctx)
+	if args.Get(0) == nil {
+		return nil, args.String(1), args.String(2), args.Error(3)
+	}
+	return args.Get(0).(*schemas.UserGet), args.String(1), args.String(2), args.Error(3)
 }
 
 func (m *MockContactService) ServiceUpdateAvatar(telephon string, avatarUrl string, ctx context.Context) error {

@@ -3,8 +3,14 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"gorm/backend/utils"
+	"log"
+	"net/http"
+
+	"gorm.io/gorm"
 )
 
 type ContactServicer interface {
@@ -15,6 +21,7 @@ type ContactServicer interface {
 	ServiceGetContacts(username string, ctx context.Context) (*[]models.ContactChat, error)
 	ServicesGetUserByTelephon(telephon string, ctx context.Context) (*schemas.UserGet, error)
 	ServicePutUserByTelephon(telephon string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, string, error)
+	ServiceUpdateUsername(telephon string, newUsername string, ctx context.Context) (*schemas.UserGet, string, string, error)
 	AddContactByTelephon(telephon string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error)
 	ServiceGetContactsByTelephon(telephon string, ctx context.Context) (*[]models.ContactChat, error)
 	ServicePutContactByTelephon(contact models.ContactPut, ctx context.Context) (*models.ContactChat, error)
@@ -35,38 +42,38 @@ type ContactRepoInterface interface {
 	GetIdUsername(username string, ctx context.Context) (int, error)
 	GetNumberUsername(number string, ctx context.Context) (int, error)
 	ExistContactAdd(userID uint, contactID uint, ctx context.Context) (bool, error)
+	ExistContactAddTx(tx *gorm.DB, userID uint, contactID uint, ctx context.Context) (bool, error)
 	AddContact(contact models.ContactDataBase, ctx context.Context) error
+	AddContactTx(tx *gorm.DB, contact models.ContactDataBase, ctx context.Context) error
 	GetContactNumber(number string, ctx context.Context) (*models.ContactChat, error)
 	GetContactsNumber(userID uint, ctx context.Context) (*[]models.ContactChat, error)
 	GetUsernameByTelephon(telephon string, ctx context.Context) (string, error)
 	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
 	PutContactByTelephon(userID uint, contactID uint, contactName string, ctx context.Context) error
+	BeginTx() *gorm.DB
+	InvalidateUserIDCache(telephon string, ctx context.Context)
+	InvalidateContactsCache(telephon string, ctx context.Context)
 }
 
 type ServiceApiContact struct {
 	client ContactRepoInterface
 }
 
-// InitServiceContact crea el servicio de contactos con su repositorio, devolviendo la interfaz ContactServicer.
 func InitServiceContact(cliente ContactRepoInterface) ContactServicer {
 	return &ServiceApiContact{
 		client: cliente,
 	}
 }
 
-// GetTelephonByUsername helper para obtener el telephon de un username
-// GetTelephonByUsername obtiene el número de teléfono de un usuario por su username.
 func (sr *ServiceApiContact) GetTelephonByUsername(username string, ctx context.Context) (string, error) {
 	return sr.client.GetTelephonByUsername(username, ctx)
 }
 
-// ServicesGetUser obtiene los datos de perfil del usuario por username.
 func (sr *ServiceApiContact) ServicesGetUser(username string, ctx context.Context) (*schemas.UserGet, error) {
 	user, err := sr.client.GetUserDataBase(username, ctx)
 	return user, err
 }
 
-// ServicePutUser actualiza el username de un usuario (buscado por username actual).
 func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, error) {
 	if username == usernameUpdate {
 		return nil, errors.New("Proporciono el mismo usuario")
@@ -76,6 +83,13 @@ func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate stri
 	if err != nil {
 		return nil, err
 	}
+
+	// 2.5: el objeto cacheado en user:id:<telephon> contiene el username
+	// anterior; invalidar para que la próxima lectura re-popule con el nuevo.
+	if telephon, err := sr.client.GetTelephonByUsername(usernameUpdate, ctx); err == nil {
+		sr.client.InvalidateUserIDCache(telephon, ctx)
+	}
+
 	user, err := sr.ServicesGetUser(usernameUpdate, ctx)
 	if err != nil {
 		return nil, err
@@ -83,61 +97,77 @@ func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate stri
 	return user, nil
 }
 
-// AddContact agrega un contacto buscando al usuario por username.
-func (sr *ServiceApiContact) AddContact(username string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
-	// Obtener ID del usuario que agrega
-	id_user, err := sr.client.GetIdUsername(username, ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Obtener ID del contacto por número
-	id_contact, err := sr.client.GetNumberUsername(contactAdd.Number, ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Evitar que el usuario se agregue a sí mismo
-	if id_user == id_contact {
+func (sr *ServiceApiContact) addContactByUserIDs(userID uint, contactID uint, contactName string, contactNumber string, ctx context.Context) (*models.ContactChat, error) {
+	if userID == contactID {
 		return nil, errors.New("no puedes agregarte a ti mismo como contacto")
 	}
 
-	// Verificar si el contacto ya existe
-	exist, err := sr.client.ExistContactAdd(uint(id_user), uint(id_contact), ctx)
+	tx := sr.client.BeginTx()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	exist, err := sr.client.ExistContactAddTx(tx, userID, contactID, ctx)
 	if err != nil {
-		return nil, errors.New("error al verificar contacto")
+		tx.Rollback()
+		return nil, fmt.Errorf("error al verificar contacto: %w", err)
 	}
 	if exist {
-		return nil, errors.New("contacto ya existente")
+		tx.Rollback()
+		return nil, models.NewAppError(http.StatusConflict, "contacto ya existente", nil)
 	}
 
-	// Crear el contacto solo para el usuario que lo agrega (unidireccional)
 	contact := models.ContactDataBase{
-		IdUser:      uint(id_user),
-		IdContact:   uint(id_contact),
-		Status:      "accepted", // Directamente aceptado, no hay pending
-		ContactName: contactAdd.ContactName,
+		IdUser:      userID,
+		IdContact:   contactID,
+		Status:      "accepted",
+		ContactName: contactName,
 	}
 
-	// Guardar en la base de datos
-	if err := sr.client.AddContact(contact, ctx); err != nil {
-		return nil, errors.New("error al registrar contacto")
+	if err := sr.client.AddContactTx(tx, contact, ctx); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("error al registrar contacto: %w", err)
 	}
 
-	// Obtener información del contacto agregado
-	contactChat, err := sr.client.GetContactNumber(contactAdd.Number, ctx)
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("error al confirmar contacto: %w", err)
+	}
+
+	contactChat, err := sr.client.GetContactNumber(contactNumber, ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Establecer el nombre personalizado
-	contactChat.ContactName = contactAdd.ContactName
+	contactChat.ContactName = contactName
 	contactChat.Status = "accepted"
 
 	return contactChat, nil
 }
 
-// ServiceGetContacts obtiene los contactos del usuario buscando por username.
+func (sr *ServiceApiContact) AddContact(username string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
+	id_user, err := sr.client.GetIdUsername(username, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	id_contact, err := sr.client.GetNumberUsername(contactAdd.Number, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	contactChat, err := sr.addContactByUserIDs(uint(id_user), uint(id_contact), contactAdd.ContactName, contactAdd.Number, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sr.client.InvalidateContactsCache(username, ctx)
+	sr.client.InvalidateContactsCache(contactAdd.Number, ctx)
+
+	return contactChat, nil
+}
+
 func (sr *ServiceApiContact) ServiceGetContacts(username string, ctx context.Context) (*[]models.ContactChat, error) {
 	id, err := sr.client.GetIdUsername(username, ctx)
 	if err != nil {
@@ -154,21 +184,12 @@ func (sr *ServiceApiContact) ServiceGetContacts(username string, ctx context.Con
 	return contacts, nil
 }
 
-// ==================== Métodos basados en Telephon ====================
-
-// ServicesGetUserByTelephon obtiene los datos de un usuario buscando por telephon
-// ServicesGetUserByTelephon obtiene los datos de perfil del usuario buscando por número de teléfono.
 func (sr *ServiceApiContact) ServicesGetUserByTelephon(telephon string, ctx context.Context) (*schemas.UserGet, error) {
 	user, err := sr.client.GetUserDataBaseByTelephon(telephon, ctx)
 	return user, err
 }
 
-// ServicePutUserByTelephon actualiza el username de un usuario buscándolo por telephon.
-// Retorna los datos del usuario actualizado y el username anterior.
-// ServicePutUserByTelephon actualiza el username de un usuario buscado por su telephon
-// y devuelve los datos actualizados junto con el username anterior.
 func (sr *ServiceApiContact) ServicePutUserByTelephon(telephon string, usernameUpdate string, ctx context.Context) (*schemas.UserGet, string, error) {
-	// Obtener el username actual para validar y para notificar
 	oldUsername, err := sr.client.GetUsernameByTelephon(telephon, ctx)
 	if err != nil {
 		return nil, "", errors.New("usuario no encontrado")
@@ -182,6 +203,11 @@ func (sr *ServiceApiContact) ServicePutUserByTelephon(telephon string, usernameU
 	if err != nil {
 		return nil, "", err
 	}
+
+	// 2.5: invalidar user:id:<telephon> — el valor cacheado quedó obsoleto
+	// tras el cambio de username.
+	sr.client.InvalidateUserIDCache(telephon, ctx)
+
 	user, err := sr.ServicesGetUserByTelephon(telephon, ctx)
 	if err != nil {
 		return nil, "", err
@@ -189,63 +215,43 @@ func (sr *ServiceApiContact) ServicePutUserByTelephon(telephon string, usernameU
 	return user, oldUsername, nil
 }
 
-// AddContactByTelephon agrega un contacto usando el telephon del usuario autenticado
-// AddContactByTelephon agrega un contacto usando el telephon del usuario (flujo WebSocket).
+func (sr *ServiceApiContact) ServiceUpdateUsername(telephon string, newUsername string, ctx context.Context) (*schemas.UserGet, string, string, error) {
+	user, oldUsername, err := sr.ServicePutUserByTelephon(telephon, newUsername, ctx)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	token, err := utils.GenerateToken(user.Username, user.Telephon)
+	if err != nil {
+		log.Printf("[SERVICE] Error generando token en ServiceUpdateUsername: %v", err)
+		return nil, "", "", errors.New("error interno del servidor")
+	}
+
+	return user, oldUsername, token, nil
+}
+
 func (sr *ServiceApiContact) AddContactByTelephon(telephon string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
-	// Obtener ID del usuario que agrega por telephon
 	id_user, err := sr.client.GetIdByTelephon(telephon, ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Obtener ID del contacto por número
 	id_contact, err := sr.client.GetNumberUsername(contactAdd.Number, ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Evitar que el usuario se agregue a sí mismo
-	if id_user == id_contact {
-		return nil, errors.New("no puedes agregarte a ti mismo como contacto")
-	}
-
-	// Verificar si el contacto ya existe
-	exist, err := sr.client.ExistContactAdd(uint(id_user), uint(id_contact), ctx)
-	if err != nil {
-		return nil, errors.New("error al verificar contacto")
-	}
-	if exist {
-		return nil, errors.New("contacto ya existente")
-	}
-
-	// Crear el contacto solo para el usuario que lo agrega (unidireccional)
-	contact := models.ContactDataBase{
-		IdUser:      uint(id_user),
-		IdContact:   uint(id_contact),
-		Status:      "accepted",
-		ContactName: contactAdd.ContactName,
-	}
-
-	// Guardar en la base de datos
-	if err := sr.client.AddContact(contact, ctx); err != nil {
-		return nil, errors.New("error al registrar contacto")
-	}
-
-	// Obtener información del contacto agregado
-	contactChat, err := sr.client.GetContactNumber(contactAdd.Number, ctx)
+	contactChat, err := sr.addContactByUserIDs(uint(id_user), uint(id_contact), contactAdd.ContactName, contactAdd.Number, ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Establecer el nombre personalizado
-	contactChat.ContactName = contactAdd.ContactName
-	contactChat.Status = "accepted"
+	sr.client.InvalidateContactsCache(telephon, ctx)
+	sr.client.InvalidateContactsCache(contactAdd.Number, ctx)
 
 	return contactChat, nil
 }
 
-// ServiceGetContactsByTelephon obtiene los contactos del usuario usando su telephon
-// ServiceGetContactsByTelephon obtiene la lista de contactos del usuario buscando por telephon.
 func (sr *ServiceApiContact) ServiceGetContactsByTelephon(telephon string, ctx context.Context) (*[]models.ContactChat, error) {
 	id, err := sr.client.GetIdByTelephon(telephon, ctx)
 	if err != nil {
@@ -262,7 +268,6 @@ func (sr *ServiceApiContact) ServiceGetContactsByTelephon(telephon string, ctx c
 	return contacts, nil
 }
 
-// ServicePutContactByTelephon actualiza el nombre personalizado de un contacto del usuario.
 func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactPut, ctx context.Context) (*models.ContactChat, error) {
 	id_user, err := sr.client.GetIdByTelephon(contact.Number, ctx)
 	if err != nil {
@@ -275,7 +280,6 @@ func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactP
 	if id_user == id_contact {
 		return nil, errors.New("no puedes editar tu propio contacto")
 	}
-	// Verificar si el contacto existe
 	exist, err := sr.client.ExistContactAdd(uint(id_user), uint(id_contact), ctx)
 	if err != nil {
 		return nil, errors.New("error al verificar contacto")
@@ -287,6 +291,10 @@ func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactP
 	if err != nil {
 		return nil, errors.New("error al actualizar contacto")
 	}
+
+	sr.client.InvalidateContactsCache(contact.Number, ctx)
+	sr.client.InvalidateContactsCache(contact.GetContactPut.Number, ctx)
+
 	contactChat, err := sr.client.GetContactNumber(contact.GetContactPut.Number, ctx)
 	if err != nil {
 		return nil, errors.New("error al obtener contacto actualizado")
@@ -296,17 +304,14 @@ func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactP
 	return contactChat, nil
 }
 
-// ServiceUpdateAvatar actualiza la URL del avatar del usuario identificado por su telephon
 func (sr *ServiceApiContact) ServiceUpdateAvatar(telephon string, avatarUrl string, ctx context.Context) error {
 	return sr.client.UpdateAvatarByTelephon(telephon, avatarUrl, ctx)
 }
 
-// ServiceUpdateWallpaper actualiza el fondo de pantalla global del usuario
 func (sr *ServiceApiContact) ServiceUpdateWallpaper(telephon string, wallpaperUrl string, ctx context.Context) error {
 	return sr.client.UpdateWallpaperByTelephon(telephon, wallpaperUrl, ctx)
 }
 
-// ServiceUpdateContactWallpaper actualiza el fondo de pantalla de un chat específico
 func (sr *ServiceApiContact) ServiceUpdateContactWallpaper(myTelephon string, contactTelephon string, wallpaperUrl string, ctx context.Context) error {
 	myID, err := sr.client.GetIdByTelephon(myTelephon, ctx)
 	if err != nil {

@@ -82,9 +82,9 @@ export default function StatusComposerModal({ isOpen, onClose }) {
     };
 
     return (
-        <div className="fixed inset-0 z-[10010] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-2 backdrop-blur-md sm:items-center sm:p-4" onClick={onClose}>
-            <div className="my-0 flex w-full max-w-3xl flex-col overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-900 shadow-2xl shadow-black/30 sm:my-6 sm:max-h-[calc(100dvh-2rem)] sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
-                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-white/5 bg-slate-900/95 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4">
+        <div className="fixed inset-0 z-[10010] flex items-start justify-center overflow-y-auto bg-[#0B1120]/80 p-2 backdrop-blur-md sm:items-center sm:p-4" onClick={onClose}>
+            <div className="my-0 flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0B1120] shadow-2xl sm:my-6 sm:max-h-[calc(100dvh-2rem)]" onClick={(event) => event.stopPropagation()}>
+                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-white/[0.04] bg-[#0B1120]/95 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4">
                     <div>
                         <h2 className="text-lg font-semibold text-white sm:text-xl">Nuevo estado</h2>
                         <p className="text-xs text-slate-400 sm:text-sm">Comparte un texto, una foto o un video por 24 horas.</p>
@@ -113,9 +113,9 @@ export default function StatusComposerModal({ isOpen, onClose }) {
                             )}
                         </div>
                     </div>
-                    <div className="border-t border-white/5 bg-slate-950/60 p-4 lg:border-l lg:border-t-0 lg:p-6">
+                    <div className="border-t border-white/[0.04] bg-white/[0.02] p-4 lg:border-l lg:border-t-0 lg:p-6">
                         <label className="mb-2 block text-sm font-medium text-slate-200">Escribe algo</label>
-                        <textarea value={text} onChange={(event) => setText(event.target.value.slice(0, 700))} rows={4} className="w-full resize-none rounded-3xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-500/40 focus:ring-2 focus:ring-cyan-500/10 sm:rows-5 lg:rows-6" placeholder="Comparte una idea, una noticia o algo importante." />
+                        <textarea value={text} onChange={(event) => setText(event.target.value.slice(0, 700))} rows={4} className="w-full resize-none rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-sky-500/30 focus:ring-1 focus:ring-sky-500/10 sm:rows-5 lg:rows-6" placeholder="Comparte una idea, una noticia o algo importante." />
                         <div className="mt-2 text-right text-xs text-slate-500">{text.length}/700</div>
                         <div className="mt-5">
                             <div className="mb-2 text-sm font-medium text-slate-200">Color del estado</div>
@@ -126,10 +126,10 @@ export default function StatusComposerModal({ isOpen, onClose }) {
                             </div>
                         </div>
                         <div className="mt-5 space-y-3">
-                            <button type="button" onClick={() => handlePickFile('image/*')} className="flex w-full items-center justify-between rounded-3xl border border-white/10 bg-slate-900 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-sky-400/30 hover:bg-slate-800">
+                            <button type="button" onClick={() => handlePickFile('image/*')} className="flex w-full items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-slate-200 transition hover:border-sky-500/20 hover:bg-white/[0.04]">
                                 <span>Subir foto</span><span className="text-slate-500">JPG, PNG, WEBP</span>
                             </button>
-                            <button type="button" onClick={() => handlePickFile('video/*')} className="flex w-full items-center justify-between rounded-3xl border border-white/10 bg-slate-900 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-sky-400/30 hover:bg-slate-800">
+                            <button type="button" onClick={() => handlePickFile('video/*')} className="flex w-full items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-slate-200 transition hover:border-sky-500/20 hover:bg-white/[0.04]">
                                 <span>Subir video</span><span className="text-slate-500">MP4, WEBM, MOV</span>
                             </button>
                             {mediaUrl && (
@@ -139,7 +139,7 @@ export default function StatusComposerModal({ isOpen, onClose }) {
                             )}
                         </div>
                         <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
-                        <div className="sticky bottom-0 mt-6 flex gap-3 border-t border-white/5 bg-slate-950/95 pt-4 backdrop-blur-md">
+                        <div className="sticky bottom-0 mt-6 flex gap-3 border-t border-white/[0.04] bg-[#0B1120]/95 pt-4 backdrop-blur-md">
                             <button onClick={onClose} className="flex-1 rounded-3xl border border-white/10 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/5">Volver</button>
                             <button onClick={handleSubmit} disabled={uploading || saving} className="flex-1 rounded-3xl bg-gradient-to-r from-sky-500 to-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:from-sky-400 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
                                 {uploading ? 'Subiendo archivo...' : saving ? 'Publicando...' : 'Publicar estado'}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"gorm/backend/models"
 	"gorm/backend/services"
 	"net/http"
 
@@ -11,37 +12,31 @@ type HandlerMedia struct {
 	service services.MediaServicer
 }
 
-// InitHandlerMedia crea el handler de subida de archivos multimedia.
 func InitHandlerMedia(service services.MediaServicer) *HandlerMedia {
 	return &HandlerMedia{service: service}
 }
 
-// HandlerUploadMedia sube un archivo multimedia (imagen/audio/video/documento)
-// a MinIO y devuelve la URL pública junto con metadatos del archivo.
 func (hm *HandlerMedia) HandlerUploadMedia() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		// Parsear multipart form (límite 110 MB = máximo video + overhead)
 		if err := ctx.Request.ParseMultipartForm(110 << 20); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al parsear el formulario: " + err.Error(),
-			})
+			// C3: el detalle del error de parsing queda en logs; el cliente
+			// recibe un mensaje seguro.
+			respondError(ctx, http.StatusBadRequest, models.NewAppError(http.StatusBadRequest, "error al parsear el formulario", err))
 			return
 		}
 
 		file, header, err := ctx.Request.FormFile("file")
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "campo 'file' requerido",
-			})
+			respondErrorMsg(ctx, http.StatusBadRequest, "campo 'file' requerido")
 			return
 		}
 		defer file.Close()
 
 		result, err := hm.service.UploadMedia(file, header, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			// El mensaje del servicio puede incluir errores internos de
+			// almacenamiento (%w): se sanea, el detalle queda en logs.
+			respondError(ctx, http.StatusBadRequest, err)
 			return
 		}
 

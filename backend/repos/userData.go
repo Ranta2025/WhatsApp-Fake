@@ -39,27 +39,19 @@ func (db *RepositoriesUser) CreateUserTx(tx *gorm.DB, user models.UserDataBase, 
 }
 
 // UsernameExist comprueba si ya existe un usuario con ese username en la BD.
+// Si hay un error de BD, retorna true por seguridad (evita registros duplicados).
 func (db *RepositoriesUser) UsernameExist(username string, c context.Context) bool {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 	var usernameDB string
 	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("username").Where("username = ?", username).Scan(&usernameDB)
-	log.Println("[REPO] Buscando username:", username)
-	log.Println("[REPO] Resultado de búsqueda:", usernameDB)
-	log.Println("[REPO] Error:", result.Error)
 	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println("[REPO] Username NO existe")
-			return false
-		}
-		log.Println("[REPO] Error en query:", result.Error)
-		return false
+		log.Println("[REPO] Error en query UsernameExist:", result.Error)
+		return true
 	}
 	if usernameDB == "" {
-		log.Println("[REPO] Username NO existe (vacío)")
 		return false
 	}
-	log.Println("[REPO] Username EXISTE")
 	return true
 }
 
@@ -78,17 +70,16 @@ func (db *RepositoriesUser) GetGmail(username string, c context.Context) (string
 	return gmail, true
 }
 
-// EmailExist verifica si ya existe el email en la BD y devuelve el email si existe.
+// EmailExist verifica si ya existe el email en la BD.
+// Si hay un error de BD, retorna el email y true por seguridad (evita registros duplicados).
 func (db *RepositoriesUser) EmailExist(email string, c context.Context) (string, bool) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 	var gmail string
 	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("gmail").Where("gmail = ?", email).Scan(&gmail)
 	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return "", false
-		}
-		return "", false
+		log.Println("[REPO] Error en query EmailExist:", result.Error)
+		return email, true
 	}
 	if gmail == "" {
 		return "", false
@@ -189,27 +180,19 @@ func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) 
 }
 
 // TelephonExist comprueba si ya existe un usuario con ese número de teléfono.
+// Si hay un error de BD, retorna true por seguridad (evita registros duplicados).
 func (db *RepositoriesUser) TelephonExist(telephon string, c context.Context) bool {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 	var telephonDB string
 	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("telephon").Where("telephon = ?", telephon).Scan(&telephonDB)
-	log.Println("[REPO] Buscando telefono:", telephon)
-	log.Println("[REPO] Resultado de búsqueda:", telephonDB)
-	log.Println("[REPO] Error:", result.Error)
 	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println("[REPO] Telefono NO existe")
-			return false
-		}
-		log.Println("[REPO] Error en query:", result.Error)
-		return false
+		log.Println("[REPO] Error en query TelephonExist:", result.Error)
+		return true
 	}
 	if telephonDB == "" {
-		log.Println("[REPO] Telefono NO existe (vacío)")
 		return false
 	}
-	log.Println("[REPO] Telefono EXISTE")
 	return true
 }
 

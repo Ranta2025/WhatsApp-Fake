@@ -14,9 +14,18 @@ const UnblockAccount = lazy(() => import('./pages/UnblockAccount'));
 
 const PrivateRoute = ({ children }) => {
     const { user, loading } = useAuth();
-    
-    if (loading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Cargando...</div>;
-    
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-10 h-10 border-4 border-sky-500/20 border-t-sky-400 rounded-full animate-spin" />
+                    <span className="text-sm text-slate-400 font-medium">Cargando...</span>
+                </div>
+            </div>
+        );
+    }
+
     return user ? children : <Navigate to="/login" />;
 };
 
@@ -24,7 +33,14 @@ function App() {
   return (
     <AuthProvider>
         <BrowserRouter>
-            <Suspense fallback={<div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Cargando...</div>}>
+            <Suspense fallback={
+                <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-10 h-10 border-4 border-sky-500/20 border-t-sky-400 rounded-full animate-spin" />
+                        <span className="text-sm text-slate-400 font-medium">Cargando...</span>
+                    </div>
+                </div>
+            }>
                 <Routes>
                     <Route path="/" element={<Welcome />} />
                     <Route path="/login" element={<Login />} />

@@ -3,12 +3,22 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"gorm/backend/cache"
 	"gorm/backend/models"
 	"gorm/backend/utils"
 	"log"
 
 	"gorm.io/gorm"
 )
+
+var DefaultCodeConfig = utils.Config{
+	Longitud:                6,
+	IncluirMayuscula:        false,
+	IncluirMinuscula:        false,
+	IncluirNumero:           true,
+	IncluirCaracterEspecial: false,
+}
 
 type UserServicer interface {
 	CreateUser(user models.UserDataBase, ctx context.Context) error
@@ -25,6 +35,7 @@ type UserServicer interface {
 	SaveRefreshToken(username string, refreshToken string, ctx context.Context) error
 	ValidateRefreshToken(username string, refreshToken string, ctx context.Context) error
 	DeleteRefreshToken(username string, ctx context.Context) error
+	RotateRefreshToken(oldToken, newToken, username string, ctx context.Context) error
 }
 
 type UserRepoInterface interface {
@@ -55,29 +66,30 @@ type UserCacheInterface interface {
 	SetCodigo(tipoCodigo string, username string, codigo string, ctx context.Context) error
 	GetCodigo(tipoCodigo string, username string, ctx context.Context) (string, error)
 	GetIntentosFallidos(username string, ctx context.Context) (int, error)
-	SetIntentosFallidos(username string, intentos int, ctx context.Context) error
+	IncrementFailedAttempts(username string, ctx context.Context) (int, error)
+	ResetFailedAttempts(username string, ctx context.Context) error
+	DeleteActivationCode(username string, ctx context.Context) error
 }
 
 type ServicesUser struct {
-	repo  UserRepoInterface
-	cache UserCacheInterface
+	repo       UserRepoInterface
+	cache      UserCacheInterface
+	tokenStore cache.TokenStore
 }
 
-// InitServices crea el servicio de autenticación con repositorio y caché, devolviendo la interfaz UserServicer.
-func InitServices(repo UserRepoInterface, cache UserCacheInterface) UserServicer {
+func InitServices(repo UserRepoInterface, cache UserCacheInterface, tokenStore cache.TokenStore) UserServicer {
 	return &ServicesUser{
-		repo:  repo,
-		cache: cache,
+		repo:       repo,
+		cache:      cache,
+		tokenStore: tokenStore,
 	}
 }
 
-// CreateUser registra un nuevo usuario: valida unicidad, hashea la contraseña,
-// crea el registro en BD dentro de una transacción y envía el código de activación por email.
 func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context) error {
 	if exist := s.repo.UsernameExist(user.Username, ctx); exist {
 		return errors.New("Username ya existe")
 	}
-	if _, exist := s.repo.EmailExist(user.Gmail, ctx); exist {
+	if _, exist := s.repo.EmailExist(user.Email, ctx); exist {
 		return errors.New("Email ya existe")
 	}
 	if exist := s.repo.TelephonExist(user.Telephon, ctx); exist {
@@ -90,7 +102,6 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 	user.Password = hash_password
 	user.Activo = false
 
-	// Inicia transacción
 	tx := s.repo.BeginTx()
 	defer func() {
 		if r := recover(); r != nil {
@@ -98,47 +109,34 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 		}
 	}()
 
-	// Crear usuario dentro de transacción
 	err = s.repo.CreateUserTx(tx, user, ctx)
 	if err != nil {
 		tx.Rollback()
 		return errors.New("error al crear usuario")
 	}
 
-	// Generar código
-	codigo, err := utils.GenerarCodigo(utils.Config{
-		Longitud:                6,
-		IncluirMayuscula:        false,
-		IncluirMinuscula:        false,
-		IncluirNumero:           true,
-		IncluirCaracterEspecial: false,
-	})
+	codigo, err := utils.GenerarCodigo(DefaultCodeConfig)
 	if err != nil {
 		tx.Rollback()
 		return errors.New("error al generar codigo, acceda a opcion recuperar cuenta")
 	}
 
-	// Guardar código en cache
 	err = s.cache.SetCodigo("activacion", user.Username, codigo, ctx)
 	if err != nil {
 		tx.Rollback()
 		return errors.New("error al generar codigo, acceda a opcion recuperar cuenta")
 	}
 
-	// Enviar email
-	err = utils.SendEmail(user.Gmail, "Codigo de activacion", "Su codigo de activacion es: "+codigo)
+	err = utils.SendEmail(user.Email, "Codigo de activacion", "Su codigo de activacion es: "+codigo)
 	if err != nil {
 		log.Println("[SERVICE] Error enviando email:", err.Error())
 		tx.Rollback()
 		return errors.New("error al enviar codigo de activacion")
 	}
 
-	// Commit si todo fue exitoso
 	return tx.Commit().Error
 }
 
-// LogIn autentica al usuario: verifica estado activo/bloqueado, compara la
-// contraseña con bcrypt y genera un JWT con username + telephon.
 func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string, error) {
 	log.Println("[SERVICE] Iniciando LogIn para usuario:", user.Username)
 	exist := s.repo.UsernameExist(user.Username, ctx)
@@ -163,7 +161,7 @@ func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string
 
 	password, err := s.cache.CachePassword(user.Username, ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error obteniendo password: %w", err)
 	}
 	if !utils.ComparePassword(user.Password, password) {
 		err = s.chequearIntentosFallidos(user.Username, ctx)
@@ -173,7 +171,10 @@ func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string
 		return "", errors.New("Credenciales invalidas")
 	}
 
-	// Obtener el telephon del usuario para generar el token
+	if err := s.cache.ResetFailedAttempts(user.Username, ctx); err != nil {
+		log.Printf("[LogIn] error reseteando intentos fallidos: %v", err)
+	}
+
 	telephon, exist := s.repo.GetTelephonByUsername(user.Username, ctx)
 	if !exist {
 		return "", errors.New("error al obtener telephon del usuario")
@@ -181,13 +182,11 @@ func (s *ServicesUser) LogIn(user models.UserLogin, ctx context.Context) (string
 
 	token, err := utils.GenerateToken(user.Username, telephon)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error generando token: %w", err)
 	}
 	return token, nil
 }
 
-// ActivateAccount activa la cuenta del usuario verificando que el código de
-// activación en Redis coincida con el suministrado.
 func (s *ServicesUser) ActivateAccount(user models.UserActivate, ctx context.Context) error {
 	exist := s.repo.UsernameExist(user.Username, ctx)
 	if !exist {
@@ -196,7 +195,7 @@ func (s *ServicesUser) ActivateAccount(user models.UserActivate, ctx context.Con
 
 	codigoCache, err := s.cache.GetCodigo("activacion", user.Username, ctx)
 	if err != nil {
-		return errors.New("error al obtener el codigo")
+		return fmt.Errorf("error al obtener el codigo: %w", err)
 	}
 
 	if codigoCache != user.Code {
@@ -204,13 +203,16 @@ func (s *ServicesUser) ActivateAccount(user models.UserActivate, ctx context.Con
 	}
 	err = s.repo.ActivateAccount(user.Username, ctx)
 	if err != nil {
-		return errors.New("error al activar la cuenta")
+		return fmt.Errorf("error al activar la cuenta: %w", err)
 	}
+
+	if err := s.cache.DeleteActivationCode(user.Username, ctx); err != nil {
+		log.Printf("[ActivateAccount] error eliminando codigo de activacion: %v", err)
+	}
+
 	return nil
 }
 
-// RecoverAccount genera y envía un código de recuperación al email del usuario.
-// Verifica previamente que la cuenta no esté bloqueada.
 func (s *ServicesUser) RecoverAccount(username string, ctx context.Context) (string, error) {
 
 	bloqueado, exist := s.repo.GetBlocked(username, ctx)
@@ -221,13 +223,7 @@ func (s *ServicesUser) RecoverAccount(username string, ctx context.Context) (str
 		return "", errors.New("usuario bloqueado")
 	}
 
-	codigo, err := utils.GenerarCodigo(utils.Config{
-		Longitud:                6,
-		IncluirMayuscula:        false,
-		IncluirMinuscula:        false,
-		IncluirNumero:           true,
-		IncluirCaracterEspecial: false,
-	})
+	codigo, err := utils.GenerarCodigo(DefaultCodeConfig)
 	if err != nil {
 		return "", errors.New("error al generar codigo")
 	}
@@ -240,13 +236,14 @@ func (s *ServicesUser) RecoverAccount(username string, ctx context.Context) (str
 		return "", errors.New("error al obtener email")
 	}
 	err = utils.SendEmail(email, "Codigo de activacion", "Su codigo de activacion es: "+codigo)
+	if err != nil {
+		return "", fmt.Errorf("error enviando email de recuperacion: %w", err)
+	}
 	return username, nil
 }
 
-// chequearIntentosFallidos incrementa el contador de intentos fallidos del usuario
-// y lo bloquea automáticamente al alcanzar 5 intentos.
 func (s *ServicesUser) chequearIntentosFallidos(username string, ctx context.Context) error {
-	intentos, err := s.cache.GetIntentosFallidos(username, ctx)
+	intentos, err := s.cache.IncrementFailedAttempts(username, ctx)
 	if err != nil {
 		return err
 	}
@@ -255,32 +252,21 @@ func (s *ServicesUser) chequearIntentosFallidos(username string, ctx context.Con
 		if err != nil {
 			return err
 		}
-		err = s.cache.SetIntentosFallidos(username, 0, ctx)
+		err = s.cache.ResetFailedAttempts(username, ctx)
 		if err != nil {
 			return err
 		}
 		return errors.New("usuario bloqueado por demasiados intentos fallidos")
 	}
-	err = s.cache.SetIntentosFallidos(username, intentos+1, ctx)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
-// ResendCode genera y envía un nuevo código de desbloqueo al email del usuario.
 func (s *ServicesUser) ResendCode(gmail string, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(gmail, ctx)
 	if !exist {
 		return errors.New("email no existe")
 	}
-	codigo, err := utils.GenerarCodigo(utils.Config{
-		Longitud:                6,
-		IncluirMayuscula:        false,
-		IncluirMinuscula:        false,
-		IncluirNumero:           true,
-		IncluirCaracterEspecial: false,
-	})
+	codigo, err := utils.GenerarCodigo(DefaultCodeConfig)
 	if err != nil {
 		return errors.New("error al generar codigo")
 	}
@@ -296,7 +282,6 @@ func (s *ServicesUser) ResendCode(gmail string, ctx context.Context) error {
 	return nil
 }
 
-// RecoverCuenta desbloquea la cuenta del usuario verificando el código enviado al email.
 func (s *ServicesUser) RecoverCuenta(user models.UserRecover, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(user.Email, ctx)
 	if !exist {
@@ -316,7 +301,6 @@ func (s *ServicesUser) RecoverCuenta(user models.UserRecover, ctx context.Contex
 	return nil
 }
 
-// ChangePassword actualiza la contraseña del usuario buscando por email.
 func (s *ServicesUser) ChangePassword(user models.UserChangePassword, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(user.Gmail, ctx)
 	if !exist {
@@ -333,20 +317,13 @@ func (s *ServicesUser) ChangePassword(user models.UserChangePassword, ctx contex
 	return nil
 }
 
-// SendForgotPasswordCode envía código para recuperar contraseña
 func (s *ServicesUser) SendForgotPasswordCode(email string, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(email, ctx)
 	if !exist {
 		return errors.New("email no existe")
 	}
 
-	codigo, err := utils.GenerarCodigo(utils.Config{
-		Longitud:                6,
-		IncluirMayuscula:        false,
-		IncluirMinuscula:        false,
-		IncluirNumero:           true,
-		IncluirCaracterEspecial: false,
-	})
+	codigo, err := utils.GenerarCodigo(DefaultCodeConfig)
 	if err != nil {
 		return errors.New("error al generar codigo")
 	}
@@ -362,14 +339,12 @@ func (s *ServicesUser) SendForgotPasswordCode(email string, ctx context.Context)
 	return nil
 }
 
-// ForgotPasswordChange verifica código y cambia contraseña en una transacción
 func (s *ServicesUser) ForgotPasswordChange(email, code, newPassword string, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(email, ctx)
 	if !exist {
 		return errors.New("email no existe")
 	}
 
-	// Verificar código
 	codigoCache, err := s.cache.GetCodigo("forgot", email, ctx)
 	if err != nil {
 		return errors.New("error al obtener el codigo")
@@ -378,13 +353,11 @@ func (s *ServicesUser) ForgotPasswordChange(email, code, newPassword string, ctx
 		return errors.New("codigo incorrecto")
 	}
 
-	// Hashear nueva contraseña
 	hash_password, err := utils.Hash(newPassword)
 	if err != nil {
 		return errors.New("error al procesar la contraseña")
 	}
 
-	// Iniciar transacción
 	tx := s.repo.BeginTx()
 	defer func() {
 		if r := recover(); r != nil {
@@ -392,25 +365,21 @@ func (s *ServicesUser) ForgotPasswordChange(email, code, newPassword string, ctx
 		}
 	}()
 
-	// Cambiar contraseña
 	err = s.repo.ChangePasswordByEmailTx(tx, email, hash_password, ctx)
 	if err != nil {
 		tx.Rollback()
 		return errors.New("error al cambiar la contraseña")
 	}
 
-	// Commit si todo fue exitoso
 	return tx.Commit().Error
 }
 
-// Nueva función que combina desbloqueo + cambio de contraseña en 1 transacción
 func (s *ServicesUser) RecoverAndChangePassword(email, code, newPassword string, ctx context.Context) error {
 	_, exist := s.repo.EmailExist(email, ctx)
 	if !exist {
 		return errors.New("email no existe")
 	}
 
-	// Verificar código
 	codigoCache, err := s.cache.GetCodigo("bloqueado", email, ctx)
 	if err != nil {
 		return errors.New("error al obtener el codigo")
@@ -419,13 +388,11 @@ func (s *ServicesUser) RecoverAndChangePassword(email, code, newPassword string,
 		return errors.New("codigo incorrecto")
 	}
 
-	// Hashear nueva contraseña
 	hash_password, err := utils.Hash(newPassword)
 	if err != nil {
 		return errors.New("error al procesar la contraseña")
 	}
 
-	// Iniciar transacción
 	tx := s.repo.BeginTx()
 	defer func() {
 		if r := recover(); r != nil {
@@ -433,35 +400,29 @@ func (s *ServicesUser) RecoverAndChangePassword(email, code, newPassword string,
 		}
 	}()
 
-	// 1. Desbloquear usuario
 	err = s.repo.UnblockUserByEmailTx(tx, email, ctx)
 	if err != nil {
 		tx.Rollback()
 		return errors.New("error al desbloquear la cuenta")
 	}
 
-	// 2. Cambiar contraseña
 	err = s.repo.ChangePasswordByEmailTx(tx, email, hash_password, ctx)
 	if err != nil {
 		tx.Rollback()
 		return errors.New("error al cambiar la contraseña")
 	}
 
-	// Commit si todo fue exitoso
 	return tx.Commit().Error
 }
 
-// GetTelephonByUsername obtiene el telephon de un usuario dado su username
 func (s *ServicesUser) GetTelephonByUsername(username string, ctx context.Context) (string, bool) {
 	return s.repo.GetTelephonByUsername(username, ctx)
 }
 
-// SaveRefreshToken guarda un refresh token en Redis para el usuario
 func (s *ServicesUser) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
 	return s.cache.SaveRefreshToken(username, refreshToken, ctx)
 }
 
-// ValidateRefreshToken valida que el refresh token enviado coincida con el almacenado
 func (s *ServicesUser) ValidateRefreshToken(username string, refreshToken string, ctx context.Context) error {
 	stored, err := s.cache.GetRefreshToken(username, ctx)
 	if err != nil {
@@ -473,7 +434,13 @@ func (s *ServicesUser) ValidateRefreshToken(username string, refreshToken string
 	return nil
 }
 
-// DeleteRefreshToken elimina el refresh token (logout)
 func (s *ServicesUser) DeleteRefreshToken(username string, ctx context.Context) error {
 	return s.cache.DeleteRefreshToken(username, ctx)
+}
+
+// RotateRefreshToken rota el refresh token de forma atómica (DEL old + SET new)
+// delegando en el TokenStore. Garantiza que el token viejo queda invalidado en
+// la misma operación en la que se guarda el nuevo (C1).
+func (s *ServicesUser) RotateRefreshToken(oldToken, newToken, username string, ctx context.Context) error {
+	return s.tokenStore.RotateRefreshToken(oldToken, newToken, username, ctx)
 }

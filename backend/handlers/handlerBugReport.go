@@ -31,10 +31,9 @@ func (h *HandlerBugReport) HandleReportBug() gin.HandlerFunc {
 
 		report := reportInterface.(models.BugReport)
 		if err := h.service.CreateGitHubIssue(report); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Error al crear el issue en GitHub",
-				"message": err.Error(),
-			})
+			// C3: el detalle del error interno (respuesta de GitHub/HTTP) se
+			// registra en logs; el cliente recibe solo el mensaje seguro.
+			respondError(c, http.StatusInternalServerError, models.NewAppError(http.StatusInternalServerError, "Error al crear el issue en GitHub", err))
 			return
 		}
 
