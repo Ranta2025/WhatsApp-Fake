@@ -81,7 +81,7 @@ func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 
 		contact, err := hd.service.AddContactByTelephon(telephon.(string), contactAdd.(models.ContactAdd), ctx)
 		if err != nil {
-			respondError(ctx, http.StatusBadRequest, err)
+			respondError(ctx, statusFromError(err, http.StatusBadRequest), err)
 			return
 		}
 

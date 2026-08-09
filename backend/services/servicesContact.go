@@ -8,6 +8,7 @@ import (
 	"gorm/backend/schemas"
 	"gorm/backend/utils"
 	"log"
+	"net/http"
 
 	"gorm.io/gorm"
 )
@@ -108,7 +109,7 @@ func (sr *ServiceApiContact) addContactByUserIDs(userID uint, contactID uint, co
 	}
 	if exist {
 		tx.Rollback()
-		return nil, errors.New("contacto ya existente")
+		return nil, models.NewAppError(http.StatusConflict, "contacto ya existente", nil)
 	}
 
 	contact := models.ContactDataBase{

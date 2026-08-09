@@ -186,6 +186,121 @@ func (m *MockContactRepo) GetUserDataBaseByTelephon(telephon string, ctx context
 	return args.Get(0).(*schemas.UserGet), args.Error(1)
 }
 
+func (m *MockContactRepo) GetTelephonByUsername(username string, ctx context.Context) (string, error) {
+	args := m.Called(username, ctx)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockContactRepo) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
+	args := m.Called(username, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*schemas.UserGet), args.Error(1)
+}
+
+func (m *MockContactRepo) RepoPutUser(username string, usernameUpdate string, ctx context.Context) error {
+	args := m.Called(username, usernameUpdate, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) RepoPutUserByTelephon(telephon string, usernameUpdate string, ctx context.Context) error {
+	args := m.Called(telephon, usernameUpdate, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) UpdateAvatarByTelephon(telephon string, avatarUrl string, ctx context.Context) error {
+	args := m.Called(telephon, avatarUrl, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) UpdateWallpaperByTelephon(telephon string, wallpaperUrl string, ctx context.Context) error {
+	args := m.Called(telephon, wallpaperUrl, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) UpdateContactWallpaper(myID uint, contactID uint, wallpaperUrl string, ctx context.Context) error {
+	args := m.Called(myID, contactID, wallpaperUrl, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) GetIdUsername(username string, ctx context.Context) (int, error) {
+	args := m.Called(username, ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockContactRepo) GetNumberUsername(number string, ctx context.Context) (int, error) {
+	args := m.Called(number, ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockContactRepo) ExistContactAdd(userID uint, contactID uint, ctx context.Context) (bool, error) {
+	args := m.Called(userID, contactID, ctx)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockContactRepo) ExistContactAddTx(tx *gorm.DB, userID uint, contactID uint, ctx context.Context) (bool, error) {
+	args := m.Called(tx, userID, contactID, ctx)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockContactRepo) AddContact(contact models.ContactDataBase, ctx context.Context) error {
+	args := m.Called(contact, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) AddContactTx(tx *gorm.DB, contact models.ContactDataBase, ctx context.Context) error {
+	args := m.Called(tx, contact, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) GetContactNumber(number string, ctx context.Context) (*models.ContactChat, error) {
+	args := m.Called(number, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.ContactChat), args.Error(1)
+}
+
+func (m *MockContactRepo) GetContactsNumber(userID uint, ctx context.Context) (*[]models.ContactChat, error) {
+	args := m.Called(userID, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*[]models.ContactChat), args.Error(1)
+}
+
+func (m *MockContactRepo) GetUsernameByTelephon(telephon string, ctx context.Context) (string, error) {
+	args := m.Called(telephon, ctx)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockContactRepo) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	args := m.Called(telephon, ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockContactRepo) PutContactByTelephon(userID uint, contactID uint, contactName string, ctx context.Context) error {
+	args := m.Called(userID, contactID, contactName, ctx)
+	return args.Error(0)
+}
+
+func (m *MockContactRepo) BeginTx() *gorm.DB {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*gorm.DB)
+}
+
+func (m *MockContactRepo) InvalidateUserIDCache(telephon string, ctx context.Context) {
+	m.Called(telephon, ctx)
+}
+
+func (m *MockContactRepo) InvalidateContactsCache(telephon string, ctx context.Context) {
+	m.Called(telephon, ctx)
+}
+
 type MockTokenStore struct {
 	mock.Mock
 }

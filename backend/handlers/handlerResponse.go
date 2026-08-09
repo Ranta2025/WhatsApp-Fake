@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 
 	"gorm/backend/models"
@@ -48,4 +49,16 @@ func respondError(c *gin.Context, status int, err error) {
 	msg := models.SafeMessage(err)
 	slog.Error("error en handler", "status", status, "error", err, "request_id", requestIDFromCtx(c))
 	respondErrorMsg(c, status, msg)
+}
+
+// statusFromError devuelve el código HTTP declarado por un *models.AppError
+// (p.ej. 409 para duplicados); si err no es AppError, usa fallback. Permite
+// que el servicio transporte el status semántico sin acoplar el handler a
+// mensajes internos.
+func statusFromError(err error, fallback int) int {
+	var appErr *models.AppError
+	if errors.As(err, &appErr) && appErr.Code != 0 {
+		return appErr.Code
+	}
+	return fallback
 }
