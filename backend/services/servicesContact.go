@@ -83,6 +83,13 @@ func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate stri
 	if err != nil {
 		return nil, err
 	}
+
+	// 2.5: el objeto cacheado en user:id:<telephon> contiene el username
+	// anterior; invalidar para que la próxima lectura re-popule con el nuevo.
+	if telephon, err := sr.client.GetTelephonByUsername(usernameUpdate, ctx); err == nil {
+		sr.client.InvalidateUserIDCache(telephon, ctx)
+	}
+
 	user, err := sr.ServicesGetUser(usernameUpdate, ctx)
 	if err != nil {
 		return nil, err
@@ -196,6 +203,11 @@ func (sr *ServiceApiContact) ServicePutUserByTelephon(telephon string, usernameU
 	if err != nil {
 		return nil, "", err
 	}
+
+	// 2.5: invalidar user:id:<telephon> — el valor cacheado quedó obsoleto
+	// tras el cambio de username.
+	sr.client.InvalidateUserIDCache(telephon, ctx)
+
 	user, err := sr.ServicesGetUserByTelephon(telephon, ctx)
 	if err != nil {
 		return nil, "", err
