@@ -40,6 +40,7 @@ func main() {
 	app := GetApp()
 	app.app.Use(config.Cors())
 	app.app.Use(middleware.TimeMiddleware())
+	app.app.Use(middleware.SecurityHeaders())
 
 	repo := repos.InitRepoContact(db, rd)
 
