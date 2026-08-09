@@ -16,10 +16,12 @@ import (
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		slog.Debug("[WS] CheckOrigin", "origin", origin)
+		// A9: se eliminó el bypass que permitía conexiones sin Origin.
+		// Todo upgrade debe traer un Origin permitido (browsers siempre lo
+		// envían); las conexiones sin Origin se rechazan con 403.
 		if origin == "" {
-			slog.Debug("[WS] Origin empty, allowing direct connection")
-			return true // Conexiones directas sin Origin (ej: clientes nativos)
+			slog.Warn("[WS] Rechazando conexión sin Origin header")
+			return false
 		}
 		allowed := config.IsAllowedOrigin(origin)
 		slog.Debug("[WS] Origin allowed", "allowed", allowed)
