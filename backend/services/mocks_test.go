@@ -4,6 +4,7 @@ import (
 	"context"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
@@ -70,9 +71,7 @@ func (m *MockUserRepo) GetGmail(username string, ctx context.Context) (string, b
 
 type MockUserCache struct {
 	mock.Mock
-}
-
-func (m *MockUserCache) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
+}func (m *MockUserCache) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
 	args := m.Called(username, refreshToken, ctx)
 	return args.Error(0)
 }
@@ -173,4 +172,43 @@ func (m *MockContactRepo) GetUserDataBaseByTelephon(telephon string, ctx context
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*schemas.UserGet), args.Error(1)
+}
+
+type MockTokenStore struct {
+	mock.Mock
+}
+
+func (m *MockTokenStore) SaveRefreshToken(username string, token string, ctx context.Context) error {
+	args := m.Called(username, token, ctx)
+	return args.Error(0)
+}
+
+func (m *MockTokenStore) RotateRefreshToken(oldToken string, newToken string, username string, ctx context.Context) error {
+	args := m.Called(oldToken, newToken, username, ctx)
+	return args.Error(0)
+}
+
+func (m *MockTokenStore) ValidateRefreshToken(username string, token string, ctx context.Context) error {
+	args := m.Called(username, token, ctx)
+	return args.Error(0)
+}
+
+func (m *MockTokenStore) DeleteRefreshToken(username string, ctx context.Context) error {
+	args := m.Called(username, ctx)
+	return args.Error(0)
+}
+
+func (m *MockTokenStore) RevokeAllForUser(username string, ctx context.Context) error {
+	args := m.Called(username, ctx)
+	return args.Error(0)
+}
+
+func (m *MockTokenStore) IsBlacklisted(jti string, ctx context.Context) (bool, error) {
+	args := m.Called(jti, ctx)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockTokenStore) BlacklistToken(jti string, ttl time.Duration, ctx context.Context) error {
+	args := m.Called(jti, ttl, ctx)
+	return args.Error(0)
 }

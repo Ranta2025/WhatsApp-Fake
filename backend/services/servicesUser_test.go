@@ -13,7 +13,8 @@ import (
 func TestServicesUser_LogIn_Success(t *testing.T) {
 	mockRepo := new(MockUserRepo)
 	mockCache := new(MockUserCache)
-	service := InitServices(mockRepo, mockCache)
+	mockTokenStore := new(MockTokenStore)
+	service := InitServices(mockRepo, mockCache, mockTokenStore)
 
 	user := models.UserLogin{Username: "testuser", Password: "password123"}
 	ctx := context.Background()
@@ -43,7 +44,8 @@ func TestServicesUser_LogIn_Success(t *testing.T) {
 func TestServicesUser_CreateUser_Success(t *testing.T) {
 	mockRepo := new(MockUserRepo)
 	mockCache := new(MockUserCache)
-	service := InitServices(mockRepo, mockCache)
+	mockTokenStore := new(MockTokenStore)
+	service := InitServices(mockRepo, mockCache, mockTokenStore)
 
 	user := models.UserDataBase{
 		User: models.User{

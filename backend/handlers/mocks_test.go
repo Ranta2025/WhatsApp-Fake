@@ -174,6 +174,11 @@ func (m *MockUserService) DeleteRefreshToken(username string, ctx context.Contex
 	return args.Error(0)
 }
 
+func (m *MockUserService) RotateRefreshToken(oldToken string, newToken string, username string, ctx context.Context) error {
+	args := m.Called(oldToken, newToken, username, ctx)
+	return args.Error(0)
+}
+
 type MockChatService struct {
 	mock.Mock
 }

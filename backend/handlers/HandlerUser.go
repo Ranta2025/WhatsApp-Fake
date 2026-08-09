@@ -42,12 +42,17 @@ func (s *HandlerUser) setTokenCookies(c *gin.Context, username, telephon string)
 		return "", err
 	}
 
+	setTokenCookiePair(c, accessToken, refreshToken)
+
+	return accessToken, nil
+}
+
+// setTokenCookiePair escribe las cookies de acceso y refresh con HttpOnly y Secure.
+func setTokenCookiePair(c *gin.Context, accessToken, refreshToken string) {
 	secure := isSecureCookie()
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", accessToken, int(utils.AccessTokenDuration.Seconds()), "/", "", secure, true)
 	c.SetCookie("refresh_token", refreshToken, int(utils.RefreshTokenDuration.Seconds()), "/", "", secure, true)
-
-	return accessToken, nil
 }
 
 func clearTokenCookies(c *gin.Context) {
@@ -323,8 +328,8 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		refreshToken, err := c.Cookie("refresh_token")
-		if err != nil || refreshToken == "" {
+		oldRefreshToken, err := c.Cookie("refresh_token")
+		if err != nil || oldRefreshToken == "" {
 			respondError(c, http.StatusUnauthorized, "refresh token no encontrado")
 			return
 		}
@@ -337,17 +342,35 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 			return
 		}
 
-		if err := s.service.ValidateRefreshToken(username, refreshToken, ctx); err != nil {
+		if err := s.service.ValidateRefreshToken(username, oldRefreshToken, ctx); err != nil {
 			respondError(c, http.StatusUnauthorized, "refresh token invalido o expirado")
 			return
 		}
 
-		_, err = s.setTokenCookies(c, username, telephon)
+		newAccessToken, err := utils.GenerateToken(username, telephon)
 		if err != nil {
-			log.Printf("[HANDLER] Error renovando tokens: %v", err)
+			log.Printf("[HANDLER] Error generando access token en refresh: %v", err)
 			respondError(c, http.StatusInternalServerError, "error interno del servidor")
 			return
 		}
+
+		newRefreshToken, err := utils.GenerateRefreshToken()
+		if err != nil {
+			log.Printf("[HANDLER] Error generando refresh token en refresh: %v", err)
+			respondError(c, http.StatusInternalServerError, "error interno del servidor")
+			return
+		}
+
+		// Rotación atómica: el token viejo se invalida y el nuevo se guarda en
+		// la misma operación (C1). Un refresh concurrente con el mismo token
+		// viejo falla aquí y el cliente debe re-autenticarse.
+		if err := s.service.RotateRefreshToken(oldRefreshToken, newRefreshToken, username, ctx); err != nil {
+			log.Printf("[HANDLER] Error rotando refresh token: %v", err)
+			respondError(c, http.StatusUnauthorized, "refresh token invalido o expirado")
+			return
+		}
+
+		setTokenCookiePair(c, newAccessToken, newRefreshToken)
 
 		respondJSON(c, http.StatusOK, gin.H{
 			"message": "token renovado",

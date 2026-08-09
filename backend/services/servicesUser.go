@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gorm/backend/cache"
 	"gorm/backend/models"
 	"gorm/backend/utils"
 	"log"
@@ -34,6 +35,7 @@ type UserServicer interface {
 	SaveRefreshToken(username string, refreshToken string, ctx context.Context) error
 	ValidateRefreshToken(username string, refreshToken string, ctx context.Context) error
 	DeleteRefreshToken(username string, ctx context.Context) error
+	RotateRefreshToken(oldToken, newToken, username string, ctx context.Context) error
 }
 
 type UserRepoInterface interface {
@@ -70,14 +72,16 @@ type UserCacheInterface interface {
 }
 
 type ServicesUser struct {
-	repo  UserRepoInterface
-	cache UserCacheInterface
+	repo       UserRepoInterface
+	cache      UserCacheInterface
+	tokenStore cache.TokenStore
 }
 
-func InitServices(repo UserRepoInterface, cache UserCacheInterface) UserServicer {
+func InitServices(repo UserRepoInterface, cache UserCacheInterface, tokenStore cache.TokenStore) UserServicer {
 	return &ServicesUser{
-		repo:  repo,
-		cache: cache,
+		repo:       repo,
+		cache:      cache,
+		tokenStore: tokenStore,
 	}
 }
 
@@ -432,4 +436,11 @@ func (s *ServicesUser) ValidateRefreshToken(username string, refreshToken string
 
 func (s *ServicesUser) DeleteRefreshToken(username string, ctx context.Context) error {
 	return s.cache.DeleteRefreshToken(username, ctx)
+}
+
+// RotateRefreshToken rota el refresh token de forma atómica (DEL old + SET new)
+// delegando en el TokenStore. Garantiza que el token viejo queda invalidado en
+// la misma operación en la que se guarda el nuevo (C1).
+func (s *ServicesUser) RotateRefreshToken(oldToken, newToken, username string, ctx context.Context) error {
+	return s.tokenStore.RotateRefreshToken(oldToken, newToken, username, ctx)
 }

@@ -124,8 +124,9 @@ func GetApp() app {
 
 func GetHandlerLog(data *gorm.DB, rd *redis.Client, hub *websocket.Hub) *handlers.HandlerUser {
 	repo := repos.GetRespositorieUser(data)
-	cache := cache.InitChacheUser(rd, repo)
-	service := services.InitServices(repo, cache)
+	userCache := cache.InitChacheUser(rd, repo)
+	tokenStore := cache.NewRedisTokenStore(rd)
+	service := services.InitServices(repo, userCache, tokenStore)
 	handler := handlers.GetHandlerUser(service, hub)
 	return handler
 }
