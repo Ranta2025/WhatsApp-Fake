@@ -5,6 +5,9 @@ import (
 	"errors"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"gorm/backend/utils"
+	"strings"
+	"unicode/utf8"
 )
 
 type ContactServicer interface {
@@ -85,6 +88,9 @@ func (sr *ServiceApiContact) ServicePutUser(username string, usernameUpdate stri
 
 // AddContact agrega un contacto buscando al usuario por username.
 func (sr *ServiceApiContact) AddContact(username string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
+	if err := validateContactName(contactAdd.ContactName); err != nil {
+		return nil, err
+	}
 	// Obtener ID del usuario que agrega
 	id_user, err := sr.client.GetIdUsername(username, ctx)
 	if err != nil {
@@ -192,6 +198,9 @@ func (sr *ServiceApiContact) ServicePutUserByTelephon(telephon string, usernameU
 // AddContactByTelephon agrega un contacto usando el telephon del usuario autenticado
 // AddContactByTelephon agrega un contacto usando el telephon del usuario (flujo WebSocket).
 func (sr *ServiceApiContact) AddContactByTelephon(telephon string, contactAdd models.ContactAdd, ctx context.Context) (*models.ContactChat, error) {
+	if err := validateContactName(contactAdd.ContactName); err != nil {
+		return nil, err
+	}
 	// Obtener ID del usuario que agrega por telephon
 	id_user, err := sr.client.GetIdByTelephon(telephon, ctx)
 	if err != nil {
@@ -264,6 +273,9 @@ func (sr *ServiceApiContact) ServiceGetContactsByTelephon(telephon string, ctx c
 
 // ServicePutContactByTelephon actualiza el nombre personalizado de un contacto del usuario.
 func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactPut, ctx context.Context) (*models.ContactChat, error) {
+	if err := validateContactName(contact.GetContactPut.ContactName); err != nil {
+		return nil, err
+	}
 	id_user, err := sr.client.GetIdByTelephon(contact.Number, ctx)
 	if err != nil {
 		return nil, errors.New("usuario no encontrado")
@@ -296,18 +308,36 @@ func (sr *ServiceApiContact) ServicePutContactByTelephon(contact models.ContactP
 	return contactChat, nil
 }
 
-// ServiceUpdateAvatar actualiza la URL del avatar del usuario identificado por su telephon
+// validateOptionalURL permite cadena vacía (quitar la imagen) o una URL segura.
+func validateOptionalURL(u string) error {
+	if u != "" && !utils.IsSafeMediaURL(u) {
+		return errors.New("URL no válida")
+	}
+	return nil
+}
+
+// ServiceUpdateAvatar actualiza la URL del avatar del usuario identificado por su
+// telephon. Una URL vacía elimina la foto de perfil.
 func (sr *ServiceApiContact) ServiceUpdateAvatar(telephon string, avatarUrl string, ctx context.Context) error {
+	if err := validateOptionalURL(avatarUrl); err != nil {
+		return err
+	}
 	return sr.client.UpdateAvatarByTelephon(telephon, avatarUrl, ctx)
 }
 
 // ServiceUpdateWallpaper actualiza el fondo de pantalla global del usuario
 func (sr *ServiceApiContact) ServiceUpdateWallpaper(telephon string, wallpaperUrl string, ctx context.Context) error {
+	if err := validateOptionalURL(wallpaperUrl); err != nil {
+		return err
+	}
 	return sr.client.UpdateWallpaperByTelephon(telephon, wallpaperUrl, ctx)
 }
 
 // ServiceUpdateContactWallpaper actualiza el fondo de pantalla de un chat específico
 func (sr *ServiceApiContact) ServiceUpdateContactWallpaper(myTelephon string, contactTelephon string, wallpaperUrl string, ctx context.Context) error {
+	if err := validateOptionalURL(wallpaperUrl); err != nil {
+		return err
+	}
 	myID, err := sr.client.GetIdByTelephon(myTelephon, ctx)
 	if err != nil {
 		return err
@@ -317,4 +347,16 @@ func (sr *ServiceApiContact) ServiceUpdateContactWallpaper(myTelephon string, co
 		return err
 	}
 	return sr.client.UpdateContactWallpaper(uint(myID), uint(contactID), wallpaperUrl, ctx)
+}
+
+// validateContactName comprueba que el nombre personalizado no esté vacío y
+// quepa en la columna contact_name (size:100).
+func validateContactName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("el nombre del contacto no puede estar vacío")
+	}
+	if utf8.RuneCountInString(name) > 100 {
+		return errors.New("el nombre del contacto no puede superar los 100 caracteres")
+	}
+	return nil
 }

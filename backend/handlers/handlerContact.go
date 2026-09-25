@@ -7,7 +7,6 @@ import (
 	"gorm/backend/websocket"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -77,7 +76,7 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 
 		// Notificar a los contactos sobre el cambio de username
 		if hd.hub != nil {
-			hd.hub.NotifyUsernameChange(oldUsername, newUsername)
+			hd.hub.NotifyUsernameChange(userTelephon, oldUsername, newUsername)
 		}
 
 		// Regenerar cookie con nuevo username en el JWT
@@ -90,9 +89,8 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		secure := os.Getenv("ENV") == "production"
 		ctx.SetSameSite(http.SameSiteLaxMode)
-		ctx.SetCookie("token", token, int(utils.AccessTokenDuration.Seconds()), "/", "", secure, true)
+		ctx.SetCookie("token", token, int(utils.AccessTokenDuration.Seconds()), "/", "", utils.SecureCookies(), true)
 		ctx.JSON(200, gin.H{
 			"message": user,
 		})
@@ -199,7 +197,7 @@ func (hd *HandlerContact) HandlerUpdateAvatar() gin.HandlerFunc {
 
 		url := avatarUrl.(string)
 		if err := hd.service.ServiceUpdateAvatar(telephon.(string), url, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			ctx.Abort()
 			return
 		}
@@ -232,7 +230,7 @@ func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 		}
 
 		if err := hd.service.ServiceUpdateWallpaper(telephon.(string), body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			ctx.Abort()
 			return
 		}
@@ -262,7 +260,7 @@ func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
 		}
 
 		if err := hd.service.ServiceUpdateContactWallpaper(telephon.(string), body.ContactTelephon, body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			ctx.Abort()
 			return
 		}

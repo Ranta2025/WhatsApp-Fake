@@ -1,7 +1,7 @@
 // Service Worker para PWA + Notificaciones nativas
 // Este archivo DEBE estar en /public para que tenga scope sobre toda la app
 
-const CACHE_NAME = 'todos-chat-v2';
+const CACHE_NAME = 'todos-chat-v3';
 const STATIC_ASSETS = [
     '/',
     '/todos.svg',

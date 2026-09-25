@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import api from '../api/axios';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 
 export default function ActivateExisting() {
-    const [username, setUsername] = useState('');
+    const location = useLocation();
+    const [username, setUsername] = useState(location.state?.username || '');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
@@ -20,7 +21,7 @@ export default function ActivateExisting() {
 
         setLoading(true);
         try {
-            await api.post('/recover', {
+            await api.post('/api/v1/auth/resend-activation', {
                 username: username
             });
             navigate('/activate', { state: { username } });
@@ -67,7 +68,7 @@ export default function ActivateExisting() {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                    className="btn-primary w-full mt-6"
                 >
                     {loading ? 'Enviando...' : 'Enviar código'}
                 </button>

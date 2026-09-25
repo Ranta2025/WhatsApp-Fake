@@ -5,8 +5,8 @@
     "start_url": "/",
     "display": "standalone",
     "orientation": "any",
-    "background_color": "#0F172A",
-    "theme_color": "#4f46e5",
+    "background_color": "#0a1015",
+    "theme_color": "#0a1015",
     "categories": ["social", "communication"],
     "icons": [
         {

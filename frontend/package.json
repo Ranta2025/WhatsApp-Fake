@@ -1,7 +1,7 @@
 {
-  "name": "todos",
+  "name": "whatsapp-fake-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,21 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "^4.1.18",
     "@zegocloud/zego-uikit-prebuilt": "^2.17.2",
-    "autoprefixer": "^10.4.23",
     "axios": "^1.13.2",
     "libphonenumber-js": "^1.11.18",
-    "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-phone-input-2": "^2.15.1",
-    "react-phone-number-input": "^3.4.16",
-    "react-router-dom": "^6.30.3",
-    "tailwindcss": "^4.1.18"
+    "react-router-dom": "^6.30.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -32,6 +28,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
     "vite": "^7.2.4"
   }
 }

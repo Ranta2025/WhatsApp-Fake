@@ -4,6 +4,19 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Separar dependencias grandes en chunks cacheables por el navegador
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          phone: ['react-phone-input-2', 'libphonenumber-js'],
+        },
+      },
+    },
+    // El SDK de videollamadas (ZegoCloud) es grande pero se carga bajo demanda
+    chunkSizeWarningLimit: 6000,
+  },
   server: {
     host: '0.0.0.0', // Escuchar en todas las interfaces
     port: 5173,

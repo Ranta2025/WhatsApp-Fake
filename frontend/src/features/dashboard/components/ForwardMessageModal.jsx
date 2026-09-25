@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 
 const MAX_CONTACTS = 5;
@@ -7,14 +7,6 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }) => {
     const { contacts, avatarMap } = useDashboard();
     const [selected, setSelected] = useState([]);
     const [search, setSearch] = useState('');
-
-    // Reset state each time it opens
-    useEffect(() => {
-        if (isOpen) {
-            setSelected([]);
-            setSearch('');
-        }
-    }, [isOpen]);
 
     if (!isOpen) return null;
 

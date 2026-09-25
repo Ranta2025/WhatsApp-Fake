@@ -1,420 +1,343 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import CallHistory from '../../../components/CallHistory';
+import Avatar from '../../../components/ui/Avatar';
+import { formatChatTimestamp, formatLastSeen, previewMessage } from '../../../utils/format';
+
+const TABS = [
+    { id: 'chats', label: 'Chats', placeholder: 'Buscar chats' },
+    { id: 'groups', label: 'Grupos', placeholder: 'Buscar grupos' },
+    { id: 'contacts', label: 'Contactos', placeholder: 'Buscar contactos' },
+    { id: 'calls', label: 'Llamadas', placeholder: 'Buscar llamadas' },
+];
+
+const Icon = {
+    settings: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
+    logout: 'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1',
+    search: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+    close: 'M6 18L18 6M6 6l12 12',
+    userPlus: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z',
+    groupPlus: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
+    chat: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
+};
+
+const Svg = ({ d, className = 'h-5 w-5' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+    </svg>
+);
+
+const EmptyState = ({ icon, title, action, onAction }) => (
+    <div className="flex flex-col items-center justify-center text-center py-16 px-6 animate-fade-in">
+        <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-500 mb-4">
+            <Svg d={icon} className="h-7 w-7" />
+        </div>
+        <p className="text-sm text-slate-400">{title}</p>
+        {action && (
+            <button onClick={onAction} className="mt-4 text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+                {action}
+            </button>
+        )}
+    </div>
+);
+
+const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unread = 0 }) => (
+    <button
+        onClick={onClick}
+        className={`group w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+            active ? 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/20' : 'hover:bg-white/[0.04]'
+        }`}
+    >
+        {avatar}
+        <div className="flex-1 min-w-0">
+            <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold text-[15px] text-slate-100 truncate flex items-center gap-1.5">
+                    {title}
+                    {badge}
+                </span>
+                {meta && (
+                    <span className={`text-[11px] flex-shrink-0 ${unread > 0 ? 'text-indigo-400 font-semibold' : 'text-slate-500'}`}>
+                        {meta}
+                    </span>
+                )}
+            </div>
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+                <span className="text-[13px] text-slate-400 truncate">{subtitle}</span>
+                {unread > 0 && (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-indigo-500 text-slate-950 text-[11px] font-bold flex items-center justify-center flex-shrink-0">
+                        {unread > 99 ? '99+' : unread}
+                    </span>
+                )}
+            </div>
+        </div>
+    </button>
+);
 
 const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
-    const { 
-        contacts, onlineUsers, selected, setSelected, 
-        sidebarView, setSidebarView, sidebarOpen, setSidebarOpen,
+    const {
+        contacts, onlineUsers, selected, setSelected,
+        sidebarView, setSidebarView, setSidebarOpen,
         lastSeenMap, avatarMap, isConnected, myAvatar, profile,
         messagesByChat, allChatGroups, logout,
         groups, selectedGroup, setSelectedGroup,
     } = useDashboard();
     const { user } = useAuth();
-    // logout is proxied through DashboardContext from AuthContext
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+    const [query, setQuery] = useState('');
 
     useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+        const timer = setTimeout(() => setQuery(searchQuery.trim().toLowerCase()), 200);
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    const isContactOnline = (telephon) => onlineUsers.has(telephon);
+    const contactByNumber = useMemo(() => {
+        const map = new Map();
+        contacts.forEach(c => map.set(c.Number, c));
+        return map;
+    }, [contacts]);
 
-    const getUnreadCount = (contact) => {
-        const messages = messagesByChat[contact.Number] || [];
-        return messages.filter(m => m && m.SenderTelephon === contact.Number && m.Status !== 'visto').length;
-    };
+    // Conversaciones: contactos aceptados + cualquier chat con mensajes,
+    // ordenadas por la actividad más reciente.
+    const chats = useMemo(() => {
+        const numbers = new Set([
+            ...contacts.filter(c => c.Status === 'accepted').map(c => c.Number),
+            ...Object.keys(messagesByChat),
+        ]);
+        return Array.from(numbers)
+            .map(number => {
+                const contact = contactByNumber.get(number);
+                const group = allChatGroups[number];
+                const messages = messagesByChat[number] || [];
+                const last = messages[messages.length - 1] || null;
+                const unread = messages.filter(m => m?.SenderTelephon === number && m.Status !== 'visto').length;
+                return {
+                    number,
+                    contact,
+                    group,
+                    last,
+                    unread,
+                    name: contact?.ContactName || group?.ContactName || group?.ContactUsername || number,
+                    lastTime: last?.Time ? new Date(last.Time).getTime() : 0,
+                };
+            })
+            .filter(chat => !query || chat.name.toLowerCase().includes(query) || chat.number.includes(query))
+            .sort((a, b) => b.lastTime - a.lastTime);
+    }, [contacts, contactByNumber, allChatGroups, messagesByChat, query]);
 
-    const formatLastMessage = (msg) => {
-        if (!msg) return 'Sin mensajes';
-        let mediaType = msg.MediaType;
-        const text = msg.Message || '';
-        
-        if (!mediaType && text.includes('/media/')) {
-            if (text.includes('/audio/')) mediaType = 'audio';
-            else if (text.includes('/images/')) mediaType = 'image';
-            else if (text.includes('/videos/')) mediaType = 'video';
-            else if (text.includes('/docs/')) mediaType = 'document';
-        }
-        
-        if (mediaType === 'audio') return '🎵 Audio';
-        if (mediaType === 'image') return '📷 Foto';
-        if (mediaType === 'video') return '🎥 Video';
-        if (mediaType === 'document') return '📄 Documento';
-        
-        // Ocultar URLs de media que no fueron detectadas por MediaType
-        if (text.match(/^https?:\/\/.+\/media\/(images|audio|videos|docs)\//i)) {
-            if (text.includes('/audio/')) return '🎵 Audio';
-            if (text.includes('/images/')) return '📷 Foto';
-            if (text.includes('/videos/')) return '🎥 Video';
-            if (text.includes('/docs/')) return '📄 Documento';
-            return '📎 Archivo adjunto';
-        }
-        if (text.match(/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|mp4|webm|ogg|mp3|wav|pdf|doc|docx)(\?.*)?$/i)) {
-            return '📎 Archivo adjunto';
-        }
-        
-        return text;
+    const filteredContacts = useMemo(() => contacts
+        .filter(c => c.Status === 'accepted')
+        .filter(c => !query
+            || (c.ContactName || '').toLowerCase().includes(query)
+            || (c.Username || '').toLowerCase().includes(query)
+            || c.Number.includes(query))
+        .sort((a, b) => (a.ContactName || a.Username || '').localeCompare(b.ContactName || b.Username || '')),
+    [contacts, query]);
+
+    const filteredGroups = useMemo(() => (groups || [])
+        .filter(g => !query || (g.Name || '').toLowerCase().includes(query)),
+    [groups, query]);
+
+    const totalUnread = chats.reduce((sum, c) => sum + c.unread, 0);
+    const activeTab = TABS.find(t => t.id === sidebarView) || TABS[0];
+
+    const openChat = (chat) => {
+        setSelected(chat.contact || {
+            Number: chat.number,
+            Username: chat.group?.ContactUsername || chat.number,
+            ContactName: chat.group?.ContactName || null,
+            Status: 'unknown',
+        });
     };
 
     return (
         <aside className={`
-            bg-slate-900 border-r border-white/5 flex flex-col
-            ${(selected || selectedGroup) ? 'hidden lg:flex lg:w-80' : 'w-full lg:w-80'}
+            bg-slate-900 border-r border-white/[0.06] flex flex-col min-h-0
+            ${(selected || selectedGroup) ? 'hidden lg:flex lg:w-[380px]' : 'w-full lg:w-[380px]'}
         `}>
-            {/* Header del Sidebar (Perfil y Ajustes) */}
-            <div className="p-4 bg-slate-900 flex items-center justify-between border-b border-white/5">
-                <div className="flex items-center gap-3">
-                    <div 
-                        className="relative w-10 h-10 rounded-full cursor-pointer group flex-shrink-0" 
-                        title="Ver foto de perfil"
-                        onClick={onOpenProfile}
-                    >
-                        {myAvatar ? (
-                            <img src={myAvatar} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
-                        ) : (
-                            <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-white">
-                                {user?.username?.charAt(0).toUpperCase()}
-                            </div>
-                        )}
-                        <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-900 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            {/* Cabecera: perfil y acciones */}
+            <header className="px-4 pt-4 pb-3 flex items-center justify-between gap-3">
+                <button
+                    onClick={onOpenProfile}
+                    className="flex items-center gap-3 min-w-0 rounded-xl p-1 -m-1 hover:bg-white/[0.04] transition-colors text-left"
+                    title="Ver perfil"
+                >
+                    <Avatar src={myAvatar} name={user?.username} size="md" online={isConnected} />
+                    <div className="min-w-0">
+                        <div className="font-semibold text-slate-100 truncate">{user?.username}</div>
+                        <div className="text-xs text-slate-500 truncate flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-indigo-400' : 'bg-amber-400 animate-pulse'}`} />
+                            {isConnected ? (profile?.Telephon || 'Conectado') : 'Conectando…'}
+                        </div>
                     </div>
-                    <div className="overflow-hidden">
-                        <div className="font-semibold text-white truncate">{user?.username}</div>
-                        <div className="text-xs text-slate-400 truncate">{profile?.Telephon || 'Cargando...'}</div>
-                    </div>
-                </div>
-                <div className="flex gap-1">
-                    <button 
-                        onClick={onOpenProfile} 
-                        className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-colors" 
-                        title="Ajustes"
-                        aria-label="Abrir ajustes de perfil"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                </button>
+                <div className="flex items-center gap-0.5">
+                    <button onClick={onOpenProfile} className="icon-btn" title="Ajustes" aria-label="Abrir ajustes de perfil">
+                        <Svg d={Icon.settings} />
                     </button>
-                    <button 
-                        onClick={logout} 
-                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/5 rounded-full transition-colors" 
-                        title="Cerrar Sesión"
-                        aria-label="Cerrar sesión de la aplicación"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <button onClick={logout} className="icon-btn hover:!text-rose-400" title="Cerrar sesión" aria-label="Cerrar sesión">
+                        <Svg d={Icon.logout} />
                     </button>
                 </div>
-            </div>
+            </header>
 
-            {/* Barra de Búsqueda */}
-            <div className="p-3 bg-slate-900">
+            {/* Búsqueda */}
+            <div className="px-4 pb-3">
                 <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    </div>
+                    <span className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-slate-500">
+                        <Svg d={Icon.search} className="h-4 w-4" />
+                    </span>
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-full leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:bg-slate-800 focus:border-slate-700 focus:ring-0 sm:text-sm transition-colors"
-                        placeholder={
-                            sidebarView === 'chats' ? "Buscar chats..." :
-                            sidebarView === 'calls' ? "Buscar llamadas..." :
-                            sidebarView === 'groups' ? "Buscar grupos..." :
-                            "Buscar contactos..."
-                        }
-                        aria-label={
-                            sidebarView === 'chats' ? "Buscar en tus chats activos" :
-                            sidebarView === 'calls' ? "Buscar en tu historial de llamadas" :
-                            sidebarView === 'groups' ? "Buscar en tus grupos" :
-                            "Buscar en tu lista de contactos"
-                        }
+                        className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-800/70 border border-transparent text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500/40 focus:bg-slate-800 transition-colors"
+                        placeholder={`${activeTab.placeholder}…`}
+                        aria-label={activeTab.placeholder}
                     />
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery('')}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300"
+                            className="absolute inset-y-0 right-2.5 flex items-center text-slate-500 hover:text-slate-300"
                             aria-label="Limpiar búsqueda"
                         >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            <Svg d={Icon.close} className="h-4 w-4" />
                         </button>
                     )}
                 </div>
             </div>
-            
-            {/* Navegación (Tabs) */}
-            <nav className="flex px-2 bg-slate-900 border-b border-white/5" role="tablist">
-                <button
-                    role="tab"
-                    aria-selected={sidebarView === 'chats'}
-                    onClick={() => { setSidebarView('chats'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'chats' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
-                >
-                    Chats
-                </button>
-                <button
-                    role="tab"
-                    aria-selected={sidebarView === 'calls'}
-                    onClick={() => { setSidebarView('calls'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'calls' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
-                >
-                    Llamadas
-                </button>
-                <button
-                    role="tab"
-                    aria-selected={sidebarView === 'contacts'}
-                    onClick={() => { setSidebarView('contacts'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'contacts' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
-                >
-                    Contactos
-                </button>
-                <button
-                    role="tab"
-                    aria-selected={sidebarView === 'groups'}
-                    onClick={() => { setSidebarView('groups'); }}
-                    className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${sidebarView === 'groups' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
-                >
-                    Grupos
-                </button>
+
+            {/* Pestañas (control segmentado) */}
+            <nav className="px-4 pb-2" role="tablist">
+                <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-950/60 border border-white/[0.04]">
+                    {TABS.map(tab => (
+                        <button
+                            key={tab.id}
+                            role="tab"
+                            aria-selected={sidebarView === tab.id}
+                            onClick={() => setSidebarView(tab.id)}
+                            className={`relative py-1.5 rounded-lg text-[13px] font-medium transition-all ${
+                                sidebarView === tab.id
+                                    ? 'bg-slate-800 text-slate-100 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                        >
+                            {tab.label}
+                            {tab.id === 'chats' && totalUnread > 0 && (
+                                <span className="absolute -top-1 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-indigo-500 text-slate-950 text-[10px] font-bold flex items-center justify-center">
+                                    {totalUnread > 99 ? '99+' : totalUnread}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
             </nav>
 
-            <div className="flex-1 overflow-y-auto p-4">
-                {/* Vista de Chats Activos */}
+            <div className="flex-1 overflow-y-auto px-2 pb-4">
                 {sidebarView === 'chats' && (
-                    <>
-                        <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3 px-2">
-                            {debouncedSearchQuery ? 'Resultados de búsqueda' : 'Chats Activos'}
+                    chats.length === 0 ? (
+                        <EmptyState
+                            icon={Icon.chat}
+                            title={query ? 'No se encontraron chats' : 'Aún no tienes conversaciones'}
+                            action={!query ? 'Agregar un contacto' : null}
+                            onAction={onAddContact}
+                        />
+                    ) : (
+                        <div className="space-y-0.5 pt-1">
+                            {chats.map(chat => (
+                                <ListItem
+                                    key={chat.number}
+                                    active={selected?.Number === chat.number}
+                                    onClick={() => openChat(chat)}
+                                    avatar={<Avatar src={avatarMap[chat.number]} name={chat.name} size="lg" online={onlineUsers.has(chat.number)} />}
+                                    title={chat.name}
+                                    badge={chat.group && !chat.group.IsContact && !chat.contact && (
+                                        <span className="text-[10px] font-medium bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded-md">nuevo</span>
+                                    )}
+                                    subtitle={chat.last ? previewMessage(chat.last) : 'Toca para empezar a chatear'}
+                                    meta={chat.last ? formatChatTimestamp(chat.last.Time) : ''}
+                                    unread={chat.unread}
+                                />
+                            ))}
                         </div>
-                        <div className="space-y-1">
-                            {(() => {
-                                const shownNumbers = new Set();
-                                const acceptedContacts = contacts.filter(c => c.Status === 'accepted').map(c => c.Number);
-                                const allNumbers = Array.from(new Set([
-                                    ...acceptedContacts,
-                                    ...Object.keys(messagesByChat)
-                                ]));
-
-                                const filteredNumbers = allNumbers.filter(contactNumber => {
-                                    if (!debouncedSearchQuery) return true;
-                                    const contact = contacts.find(c => c.Number === contactNumber);
-                                    const group = allChatGroups[contactNumber];
-                                    const displayName = contact?.ContactName || group?.ContactName || group?.ContactUsername || '';
-                                    return displayName.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) || contactNumber.includes(debouncedSearchQuery);
-                                });
-
-                                if (filteredNumbers.length === 0 && debouncedSearchQuery) {
-                                    return <div className="text-center text-slate-500 py-10">No se encontraron chats</div>;
-                                }
-
-                                return filteredNumbers.map((contactNumber) => {
-                                    if (shownNumbers.has(contactNumber)) return null;
-                                    shownNumbers.add(contactNumber);
-                                    
-                                    const messages = messagesByChat[contactNumber] || [];
-                                    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-                                    const contact = contacts.find(c => c.Number === contactNumber);
-                                    const group = allChatGroups[contactNumber];
-                                    const displayName = contact?.ContactName || group?.ContactName || group?.ContactUsername || contactNumber;
-                                    const isUnknown = group && !group.IsContact;
-
-                                    return (
-                                        <button
-                                            key={contactNumber}
-                                            onClick={() => {
-                                                const contactToSelect = contact || {
-                                                    Number: contactNumber,
-                                                    Username: group?.ContactUsername || contactNumber,
-                                                    ContactName: group?.ContactName || null,
-                                                    Status: 'unknown'
-                                                };
-                                                setSelected(contactToSelect);
-                                            }}
-                                            className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === contactNumber ? 'bg-slate-800' : ''}`}
-                                        >
-                                            <div className="relative w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0">
-                                                {avatarMap[contactNumber] ? (
-                                                    <img src={avatarMap[contactNumber]} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    displayName?.charAt(0)?.toUpperCase()
-                                                )}
-                                                {isContactOnline(contactNumber) && (
-                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
-                                                )}
-                                            </div>
-                                            <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
-                                                <div className="flex justify-between items-baseline mb-0.5">
-                                                    <div className="font-semibold text-slate-100 truncate flex items-center gap-1">
-                                                        {displayName}
-                                                        {isUnknown && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1 rounded">?</span>}
-                                                    </div>
-                                                    {lastMessage?.Time && (
-                                                        <div className="text-xs text-slate-500 flex-shrink-0 ml-2">
-                                                            {new Date(lastMessage.Time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="text-sm text-slate-400 truncate">
-                                                    {formatLastMessage(lastMessage)}
-                                                </div>
-                                            </div>
-                                            {getUnreadCount(contact || {Number: contactNumber}) > 0 && (
-                                                <span className="absolute top-1/2 -translate-y-1/2 right-4 bg-indigo-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                                                    {getUnreadCount(contact || {Number: contactNumber})}
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                });
-                            })()}
-                        </div>
-                    </>
+                    )
                 )}
 
-                {/* Vista de Llamadas */}
                 {sidebarView === 'calls' && (
                     <CallHistory
                         contacts={contacts}
-                        searchQuery={debouncedSearchQuery}
-                        onSelectContact={(contact) => {
-                            setSelected(contact);
-                        }}
+                        searchQuery={query}
+                        onSelectContact={(contact) => setSelected(contact)}
                     />
                 )}
 
-                {/* Vista de Contactos */}
                 {sidebarView === 'contacts' && (
                     <>
-                        <div className="flex justify-between items-center mb-3 px-2">
-                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                                {debouncedSearchQuery ? 'Resultados de búsqueda' : 'Mis Contactos'}
+                        <button
+                            onClick={onAddContact}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors text-left mt-1"
+                        >
+                            <span className="w-12 h-12 rounded-full bg-indigo-500/15 text-indigo-400 flex items-center justify-center">
+                                <Svg d={Icon.userPlus} />
+                            </span>
+                            <span className="font-medium text-slate-100">Nuevo contacto</span>
+                        </button>
+                        {filteredContacts.length === 0 ? (
+                            <EmptyState icon={Icon.userPlus} title={query ? 'No se encontraron contactos' : 'Todavía no tienes contactos'} />
+                        ) : (
+                            <div className="space-y-0.5">
+                                <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                    {filteredContacts.length} contacto{filteredContacts.length !== 1 ? 's' : ''}
+                                </div>
+                                {filteredContacts.map(c => {
+                                    const online = onlineUsers.has(c.Number);
+                                    return (
+                                        <ListItem
+                                            key={c.Number}
+                                            active={selected?.Number === c.Number}
+                                            onClick={() => setSelected(c)}
+                                            avatar={<Avatar src={avatarMap[c.Number]} name={c.ContactName || c.Username} size="lg" online={online} />}
+                                            title={c.ContactName || c.Username}
+                                            subtitle={online ? <span className="text-indigo-400">en línea</span> : (formatLastSeen(lastSeenMap[c.Number]) || c.Number)}
+                                        />
+                                    );
+                                })}
                             </div>
-                            <button
-                                onClick={onAddContact}
-                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
-                            >
-                                + Agregar
-                            </button>
-                        </div>
-                        <div className="space-y-1">
-                            {(() => {
-                                const filteredContacts = contacts.filter(c => {
-                                    if (c.Status !== 'accepted') return false;
-                                    if (!debouncedSearchQuery) return true;
-                                    const query = debouncedSearchQuery.toLowerCase();
-                                    return (c.ContactName || '').toLowerCase().includes(query) || 
-                                           (c.Username || '').toLowerCase().includes(query) || 
-                                           c.Number.includes(query);
-                                });
-
-                                if (filteredContacts.length === 0) return <div className="text-center text-slate-500 py-10">No se encontraron contactos</div>;
-
-                                return filteredContacts.map((c) => (
-                                    <button
-                                        key={c.Number}
-                                        onClick={() => {
-                                            setSelected(c);
-                                        }}
-                                        className={`w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${selected?.Number === c.Number ? 'bg-slate-800' : ''}`}
-                                    >
-                                        <div className="relative w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-lg font-medium text-white overflow-hidden flex-shrink-0">
-                                            {avatarMap[c.Number] ? (
-                                                <img src={avatarMap[c.Number]} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                (c.ContactName || c.Username)?.charAt(0)?.toUpperCase()
-                                            )}
-                                            {isContactOnline(c.Number) && (
-                                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
-                                            <div className="font-semibold text-slate-100 truncate">{c.ContactName || c.Username}</div>
-                                            <div className="text-sm text-slate-400 truncate">
-                                                {isContactOnline(c.Number) ? 'En línea' : (lastSeenMap[c.Number] ? `Últ. vez: ${new Date(lastSeenMap[c.Number]).toLocaleTimeString()}` : c.Number)}
-                                            </div>
-                                        </div>
-                                    </button>
-                                ));
-                            })()}
-                        </div>
+                        )}
                     </>
                 )}
-                {/* Vista de Grupos */}
+
                 {sidebarView === 'groups' && (
                     <>
-                        <div className="flex justify-between items-center mb-3 px-2">
-                            <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                                {debouncedSearchQuery ? 'Resultados de búsqueda' : 'Mis Grupos'}
-                            </div>
-                            <button
-                                onClick={onCreateGroup}
-                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors font-medium"
-                            >
-                                + Nuevo
-                            </button>
-                        </div>
-                        <div className="space-y-1">
-                            {(() => {
-                                const filtered = (groups || []).filter(g => {
-                                    if (!debouncedSearchQuery) return true;
-                                    return (g.Name || '').toLowerCase().includes(debouncedSearchQuery.toLowerCase());
-                                });
-
-                                if (filtered.length === 0) {
-                                    return (
-                                        <div className="text-center text-slate-500 py-10 text-sm">
-                                            {debouncedSearchQuery ? 'No se encontraron grupos' : 'No perteneces a ningún grupo'}
-                                            {!debouncedSearchQuery && (
-                                                <div className="mt-3">
-                                                    <button
-                                                        onClick={onCreateGroup}
-                                                        className="text-indigo-400 hover:text-indigo-300 text-xs underline"
-                                                    >
-                                                        Crear tu primer grupo
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                }
-
-                                return filtered.map(g => (
-                                    <button
+                        <button
+                            onClick={onCreateGroup}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors text-left mt-1"
+                        >
+                            <span className="w-12 h-12 rounded-full bg-indigo-500/15 text-indigo-400 flex items-center justify-center">
+                                <Svg d={Icon.groupPlus} />
+                            </span>
+                            <span className="font-medium text-slate-100">Nuevo grupo</span>
+                        </button>
+                        {filteredGroups.length === 0 ? (
+                            <EmptyState icon={Icon.groupPlus} title={query ? 'No se encontraron grupos' : 'No perteneces a ningún grupo'} />
+                        ) : (
+                            <div className="space-y-0.5 pt-1">
+                                {filteredGroups.map(g => (
+                                    <ListItem
                                         key={g.ID}
-                                        onClick={() => {
-                                            setSelectedGroup(g);
-                                            setSidebarOpen(false);
-                                        }}
-                                        className={`relative w-full text-left px-3 py-2 hover:bg-slate-800 transition-colors flex items-center gap-3 ${
-                                            selectedGroup?.ID === g.ID ? 'bg-slate-800' : ''
-                                        }`}
-                                    >
-                                        {/* Group avatar */}
-                                        <div className="w-12 h-12 bg-gradient-to-tr from-purple-700 to-indigo-600 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0 overflow-hidden">
-                                            {g.AvatarUrl
-                                                ? <img src={g.AvatarUrl} alt={g.Name} className="w-full h-full object-cover" />
-                                                : g.Name?.charAt(0)?.toUpperCase()
-                                            }
-                                        </div>
-
-                                        <div className="flex-1 overflow-hidden border-b border-white/5 pb-3 pt-1">
-                                            <div className="flex justify-between items-baseline mb-0.5">
-                                                <div className="font-semibold text-slate-100 truncate">{g.Name}</div>
-                                                {g.UserRole === 'admin' && (
-                                                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">admin</span>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-slate-400 truncate">
-                                                {g.MemberCount} miembros{g.Description ? ` · ${g.Description}` : ''}
-                                            </div>
-                                        </div>
-                                    </button>
-                                ));
-                            })()}
-                        </div>
+                                        active={selectedGroup?.ID === g.ID}
+                                        onClick={() => { setSelectedGroup(g); setSidebarOpen(false); }}
+                                        avatar={<Avatar src={g.AvatarUrl} name={g.Name} size="lg" />}
+                                        title={g.Name}
+                                        badge={g.UserRole === 'admin' && (
+                                            <span className="text-[10px] font-medium bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded-md">admin</span>
+                                        )}
+                                        subtitle={`${g.MemberCount} miembro${g.MemberCount !== 1 ? 's' : ''}${g.Description ? ` · ${g.Description}` : ''}`}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </>
                 )}
             </div>

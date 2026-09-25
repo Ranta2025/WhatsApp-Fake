@@ -5,7 +5,17 @@ import (
 	"errors"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"gorm/backend/utils"
+	"strings"
 	"time"
+	"unicode/utf8"
+)
+
+const (
+	maxGroupNameLen        = 100 // columna groups.name (size:100)
+	maxGroupDescriptionLen = 300 // columna groups.description (size:300)
+	maxGroupMessagesPage   = 100 // máximo de mensajes por página en el historial
+	maxMembersPerRequest   = 256 // máximo de miembros por petición de creación/alta
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,20 +40,18 @@ type GroupServicer interface {
 
 // GroupRepoInterface define las operaciones de persistencia que necesita el servicio.
 type GroupRepoInterface interface {
-	CreateGroupWithCreator(group *models.Group, creatorID uint) error
+	CreateGroupWithMembers(group *models.Group, creatorID uint, memberIDs []uint, ctx context.Context) error
 	AddMembers(groupID uint, members []models.GroupMember, ctx context.Context) error
 	GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error)
 	GetGroupMembers(groupID uint, ctx context.Context) ([]models.GroupMember, error)
-	GetUserGroups(userID uint, ctx context.Context) ([]models.Group, error)
+	GetUserGroups(userID uint, ctx context.Context) ([]models.UserGroupRow, error)
 	IsMember(groupID, userID uint, ctx context.Context) (bool, error)
-	GetMemberRole(groupID, userID uint, ctx context.Context) (string, error)
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
-	GetMemberCount(groupID uint, ctx context.Context) (int, error)
 	CreateGroupMessage(msg *models.GroupMessage, ctx context.Context) error
 	GetGroupMessages(groupID uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, error)
 	GetGroupMessageByID(messageID uint, ctx context.Context) (*models.GroupMessage, error)
-	EditGroupMessage(messageID, senderID uint, newContent string, ctx context.Context) error
-	DeleteGroupMessage(messageID, senderID uint, ctx context.Context) error
+	EditGroupMessage(groupID, messageID, senderID uint, newContent string, ctx context.Context) error
+	DeleteGroupMessage(groupID, messageID, senderID uint, ctx context.Context) error
 	LeaveGroup(groupID, userID uint, ctx context.Context) error
 	UpdateGroupAvatar(groupID uint, avatarUrl string, ctx context.Context) error
 }
@@ -77,9 +85,20 @@ func InitServiceGroup(repo GroupRepoInterface, contactRepo GroupContactRepoInter
 // Grupos
 // ─────────────────────────────────────────────────────────────────────────────
 
-// CreateGroup crea un nuevo grupo: valida miembros, persiste con transacción y
-// retorna el detalle completo.
+// CreateGroup crea un nuevo grupo: valida miembros, persiste grupo + creador +
+// miembros en una única transacción y retorna el detalle completo.
 func (s *ServiceGroup) CreateGroup(telephonCreator string, data models.GroupCreate, ctx context.Context) (*schemas.GroupDetail, error) {
+	name := strings.TrimSpace(data.Name)
+	if name == "" {
+		return nil, errors.New("el nombre del grupo no puede estar vacío")
+	}
+	if utf8.RuneCountInString(name) > maxGroupNameLen {
+		return nil, errors.New("el nombre del grupo no puede superar los 100 caracteres")
+	}
+	if utf8.RuneCountInString(data.Description) > maxGroupDescriptionLen {
+		return nil, errors.New("la descripción no puede superar los 300 caracteres")
+	}
+
 	creatorID, err := s.contactRepo.GetIdByTelephon(telephonCreator, ctx)
 	if err != nil {
 		return nil, errors.New("creador no encontrado")
@@ -91,34 +110,14 @@ func (s *ServiceGroup) CreateGroup(telephonCreator string, data models.GroupCrea
 		return nil, err
 	}
 
-	// Construir el modelo del grupo
 	group := &models.Group{
-		Name:        data.Name,
+		Name:        name,
 		Description: data.Description,
 		CreatorID:   uint(creatorID),
 	}
 
-	// Persistir grupo + creador como admin en una sola transacción
-	if err := s.repo.CreateGroupWithCreator(group, uint(creatorID)); err != nil {
+	if err := s.repo.CreateGroupWithMembers(group, uint(creatorID), memberIDs, ctx); err != nil {
 		return nil, errors.New("error al crear el grupo")
-	}
-
-	// Añadir los miembros iniciales (si los hay)
-	if len(memberIDs) > 0 {
-		members := make([]models.GroupMember, 0, len(memberIDs))
-		for _, memberID := range memberIDs {
-			members = append(members, models.GroupMember{
-				GroupID:   group.ID,
-				UserID:    memberID,
-				Role:      "member",
-				AddedByID: uint(creatorID),
-			})
-		}
-		if err := s.repo.AddMembers(group.ID, members, ctx); err != nil {
-			// El grupo ya fue creado; loguear el error pero no fallar
-			// (el creador puede volver a añadir miembros después)
-			return nil, errors.New("grupo creado pero falló al añadir algunos miembros")
-		}
 	}
 
 	return s.GetGroupDetail(telephonCreator, group.ID, ctx)
@@ -174,17 +173,14 @@ func (s *ServiceGroup) GetUserGroups(telephon string, ctx context.Context) ([]sc
 
 	responses := make([]schemas.GroupResponse, 0, len(groups))
 	for _, g := range groups {
-		count, _ := s.repo.GetMemberCount(g.ID, ctx)
-		creatorTel, _ := s.contactRepo.GetTelephonByID(g.CreatorID, ctx)
-		role, _ := s.repo.GetMemberRole(g.ID, uint(userID), ctx)
 		responses = append(responses, schemas.GroupResponse{
 			ID:              g.ID,
 			Name:            g.Name,
 			Description:     g.Description,
 			AvatarUrl:       g.AvatarUrl,
-			CreatorTelephon: creatorTel,
-			MemberCount:     count,
-			UserRole:        role,
+			CreatorTelephon: g.CreatorTelephon,
+			MemberCount:     g.MemberCount,
+			UserRole:        g.UserRole,
 			CreatedAt:       g.CreatedAt,
 		})
 	}
@@ -221,7 +217,15 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 	}
 
 	creatorTel, _ := s.contactRepo.GetTelephonByID(group.CreatorID, ctx)
-	memberCount := len(members)
+
+	// Rol del usuario que consulta (antes no se devolvía en el detalle)
+	userRole := ""
+	for _, m := range members {
+		if m.UserID == uint(userID) {
+			userRole = m.Role
+			break
+		}
+	}
 
 	detail := &schemas.GroupDetail{
 		GroupResponse: schemas.GroupResponse{
@@ -230,7 +234,8 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 			Description:     group.Description,
 			AvatarUrl:       group.AvatarUrl,
 			CreatorTelephon: creatorTel,
-			MemberCount:     memberCount,
+			MemberCount:     len(members),
+			UserRole:        userRole,
 			CreatedAt:       group.CreatedAt,
 		},
 		Members:  convertGroupMembers(members),
@@ -245,6 +250,21 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 
 // SendGroupMessage persiste un mensaje de grupo y retorna el schema listo para broadcast.
 func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.GroupMessageSend, ctx context.Context) (*schemas.GroupMessageResponse, error) {
+	if data.GroupID == 0 {
+		return nil, errors.New("el ID del grupo es obligatorio")
+	}
+	content := messageContent{
+		Message:         data.Message,
+		MediaUrl:        data.MediaUrl,
+		MediaType:       data.MediaType,
+		ReplyToTelephon: data.ReplyToTelephon,
+		ReplyToMessage:  data.ReplyToMessage,
+	}
+	if err := validateMessageContent(&content); err != nil {
+		return nil, err
+	}
+	data.ReplyToMessage = content.ReplyToMessage
+
 	senderID, err := s.contactRepo.GetIdByTelephon(telephonSender, ctx)
 	if err != nil {
 		return nil, errors.New("remitente no encontrado")
@@ -305,6 +325,12 @@ func (s *ServiceGroup) GetGroupMessages(telephon string, groupID uint, limit, of
 	if limit <= 0 {
 		limit = 50
 	}
+	if limit > maxGroupMessagesPage {
+		limit = maxGroupMessagesPage
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	messages, err := s.repo.GetGroupMessages(groupID, limit, offset, ctx)
 	if err != nil {
@@ -316,6 +342,9 @@ func (s *ServiceGroup) GetGroupMessages(telephon string, groupID uint, limit, of
 // EditGroupMessage edita el contenido de un mensaje de grupo.
 // Solo el remitente original puede editar sus mensajes.
 func (s *ServiceGroup) EditGroupMessage(telephon string, groupID uint, data models.GroupMessageEdit, ctx context.Context) (*schemas.GroupMessageResponse, error) {
+	if err := validateEditedContent(data.Message); err != nil {
+		return nil, err
+	}
 	senderID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
 		return nil, errors.New("usuario no encontrado")
@@ -326,7 +355,7 @@ func (s *ServiceGroup) EditGroupMessage(telephon string, groupID uint, data mode
 		return nil, errors.New("no eres miembro de este grupo")
 	}
 
-	if err := s.repo.EditGroupMessage(data.MessageID, uint(senderID), data.Message, ctx); err != nil {
+	if err := s.repo.EditGroupMessage(groupID, data.MessageID, uint(senderID), data.Message, ctx); err != nil {
 		return nil, err
 	}
 
@@ -353,7 +382,7 @@ func (s *ServiceGroup) DeleteGroupMessage(telephon string, groupID uint, data mo
 		return errors.New("no eres miembro de este grupo")
 	}
 
-	return s.repo.DeleteGroupMessage(data.MessageID, uint(senderID), ctx)
+	return s.repo.DeleteGroupMessage(groupID, data.MessageID, uint(senderID), ctx)
 }
 
 // GetMemberTelephons retorna los teléfonos de los miembros activos de un grupo.
@@ -366,21 +395,34 @@ func (s *ServiceGroup) GetMemberTelephons(groupID uint, ctx context.Context) ([]
 // Helpers internos
 // ─────────────────────────────────────────────────────────────────────────────
 
-// resolveMemberTelephons convierte una lista de teléfonos a IDs, validando que
-// cada uno sea contacto aceptado del usuario solicitante.
+// resolveMemberTelephons convierte una lista de teléfonos a IDs (sin duplicados
+// y excluyendo al propio solicitante), validando que cada uno sea contacto
+// aceptado del usuario solicitante.
 func (s *ServiceGroup) resolveMemberTelephons(requesterID uint, telephons []string, ctx context.Context) ([]uint, error) {
+	if len(telephons) > maxMembersPerRequest {
+		return nil, errors.New("demasiados miembros en una sola petición")
+	}
 	ids := make([]uint, 0, len(telephons))
+	seen := make(map[uint]struct{}, len(telephons))
 	for _, tel := range telephons {
 		memberID, err := s.contactRepo.GetIdByTelephon(tel, ctx)
 		if err != nil {
 			return nil, errors.New("el número " + tel + " no está registrado")
 		}
+		id := uint(memberID)
+		if id == requesterID {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
 		// Verificar que es contacto aceptado del requester
-		isContact, err := s.contactRepo.IsAcceptedContact(requesterID, uint(memberID), ctx)
+		isContact, err := s.contactRepo.IsAcceptedContact(requesterID, id, ctx)
 		if err != nil || !isContact {
 			return nil, errors.New("el número " + tel + " no es un contacto aceptado tuyo")
 		}
-		ids = append(ids, uint(memberID))
+		seen[id] = struct{}{}
+		ids = append(ids, id)
 	}
 	return ids, nil
 }
@@ -445,6 +487,9 @@ func (s *ServiceGroup) LeaveGroup(telephon string, groupID uint, ctx context.Con
 
 // UpdateGroupAvatar actualiza el avatar del grupo verificando que el usuario sea miembro.
 func (s *ServiceGroup) UpdateGroupAvatar(telephon string, groupID uint, avatarUrl string, ctx context.Context) error {
+	if avatarUrl != "" && !utils.IsSafeMediaURL(avatarUrl) {
+		return errors.New("URL de avatar no válida")
+	}
 	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
 		return errors.New("usuario no encontrado")

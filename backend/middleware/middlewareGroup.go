@@ -60,11 +60,6 @@ func MiddlewareGroupMessage() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if body.GroupID == 0 {
-			c.JSON(400, gin.H{"error": "El ID del grupo es obligatorio"})
-			c.Abort()
-			return
-		}
 		if len(body.Message) == 0 && len(body.MediaUrl) == 0 {
 			c.JSON(400, gin.H{"error": "El mensaje no puede estar vacío"})
 			c.Abort()

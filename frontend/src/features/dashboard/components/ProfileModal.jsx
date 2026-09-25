@@ -4,7 +4,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 
 const ProfileModal = ({ isOpen, onClose }) => {
-    const { profile, setProfile, myAvatar, setMyAvatar, globalWallpaper, setGlobalWallpaper, fetchProfile } = useDashboard();
+    const { myAvatar, setMyAvatar, globalWallpaper, setGlobalWallpaper, fetchProfile } = useDashboard();
     const { user, updateUsername } = useAuth();
 
     const [newUsername, setNewUsername] = useState(user?.username || '');

@@ -8,22 +8,18 @@ import (
 )
 
 // MiddlewareUpdateAvatar valida el JSON de actualización de foto de perfil.
+// avatar_url vacío es válido: significa eliminar la foto de perfil.
 func MiddlewareUpdateAvatar() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var body struct {
-			AvatarUrl string `json:"avatar_url" binding:"required"`
+			AvatarUrl *string `json:"avatar_url"`
 		}
-		if err := ctx.ShouldBindJSON(&body); err != nil {
+		if err := ctx.ShouldBindJSON(&body); err != nil || body.AvatarUrl == nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "avatar_url es requerido"})
 			ctx.Abort()
 			return
 		}
-		if len(body.AvatarUrl) == 0 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "avatar_url no puede estar vacío"})
-			ctx.Abort()
-			return
-		}
-		ctx.Set("avatarUrl", body.AvatarUrl)
+		ctx.Set("avatarUrl", *body.AvatarUrl)
 		ctx.Next()
 	}
 }

@@ -22,11 +22,11 @@ if (-not $BOT_TOKEN -or -not $CHAT_ID) {
 }
 
 # 1. Verificar que cloudflared esta corriendo
-$cfRunning = docker ps --filter "name=cloudflared" --format "{{.Names}}"
+$cfRunning = docker compose ps -q cloudflared 2>$null
 
 if (-not $cfRunning) {
     Write-Host "cloudflared no esta corriendo." -ForegroundColor Red
-    Write-Host "Inicia con: docker compose -f docker/compose.yml up -d" -ForegroundColor Yellow
+    Write-Host "Inicia con: docker compose --profile tunnel up -d" -ForegroundColor Yellow
     exit 1
 }
 
@@ -38,7 +38,7 @@ $intentos  = 0
 
 while (-not $publicUrl -and $intentos -lt 10) {
     Start-Sleep -Seconds 3
-    $logs  = docker logs cloudflared 2>&1
+    $logs  = docker compose logs cloudflared 2>&1
     $match = ($logs | Select-String -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com') | Select-Object -Last 1
     if ($match) {
         $publicUrl = $match.Matches[0].Value
@@ -47,7 +47,7 @@ while (-not $publicUrl -and $intentos -lt 10) {
 }
 
 if (-not $publicUrl) {
-    Write-Host "No se encontro la URL. Revisa: docker logs cloudflared" -ForegroundColor Red
+    Write-Host "No se encontro la URL. Revisa: docker compose logs cloudflared" -ForegroundColor Red
     exit 1
 }
 

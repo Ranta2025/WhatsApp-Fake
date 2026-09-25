@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { DashboardProvider, useDashboard } from './context/DashboardContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
@@ -8,18 +8,19 @@ import ContactDetails from './components/ContactDetails';
 import NotificationBanner from './components/NotificationBanner';
 import AddContactModal from './components/AddContactModal';
 import CreateGroupModal from './components/CreateGroupModal';
-import PermissionsDialog from '../../components/PermissionsDialog';
 import IncomingCall from '../../components/IncomingCall';
-import CallRoom from '../../components/CallRoom';
+import FullScreenLoader from '../../components/ui/FullScreenLoader';
 import { usePresence } from './hooks/usePresence';
 import { useCalls } from './hooks/useCalls';
+
+// El SDK de videollamadas (ZegoCloud) pesa varios MB: se carga solo al iniciar una llamada.
+const CallRoom = lazy(() => import('../../components/CallRoom'));
 
 /**
  * CallingOverlay - Muestra el estado "Llamando..." mientras espera que el receptor conteste.
  * Reproduce un tono de llamada saliente y muestra el nombre/número del contacto.
  */
 const CallingOverlay = ({ callState, onEndCall }) => {
-    const audioRef = useRef(null);
     const [elapsed, setElapsed] = useState(0);
 
     // Reproducir tono de llamada saliente (beep sintetizado)
@@ -68,7 +69,7 @@ const CallingOverlay = ({ callState, onEndCall }) => {
             if (intervalId) clearInterval(intervalId);
             if (elapsedTimer) clearInterval(elapsedTimer);
             if (audioCtx) {
-                try { audioCtx.close(); } catch (e) { /* ignore */ }
+                try { audioCtx.close(); } catch { /* ignore */ }
             }
         };
     }, []);
@@ -129,37 +130,22 @@ const DashboardContent = () => {
         handleRejectIncomingCall, handleEndCall, handleStartCall 
     } = useCalls();
 
-    const { 
-        profile, user, isConnected, notifPermission, setNotifPermission, 
-        requestNotificationPermission,
-        selectedGroup,
-    } = useDashboard();
+    const { profile, user, selectedGroup } = useDashboard();
 
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [showContactDetails, setShowContactDetails] = useState(false);
     const [showAddContactModal, setShowAddContactModal] = useState(false);
     const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
-    const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
     const [viewImage, setViewImage] = useState(null);
 
     // Loading Screen logic (optional, can be integrated in DashboardProvider or here)
     const isInitialLoading = !profile;
 
     return (
-        <div className="flex h-screen bg-slate-950 text-white overflow-hidden relative" style={{height: '100dvh'}}>
-            {/* Pantalla de carga estilo WhatsApp Web */}
+        <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden relative" style={{height: '100dvh'}}>
             {isInitialLoading && (
-                <div className="absolute inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950">
-                    <div className="flex flex-col items-center gap-6 animate-fade-in">
-                        <div className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center shadow-2xl shadow-indigo-500/30">
-                            <img src="/todos.svg" alt="todos" className="w-14 h-14" />
-                        </div>
-                        <h1 className="text-3xl font-bold text-white tracking-wide">todos</h1>
-                        <div className="w-56 h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
-                            <div className="h-full bg-indigo-500 rounded-full animate-loading-bar"></div>
-                        </div>
-                        <p className="text-slate-400 text-sm mt-1">Cargando aplicación...</p>
-                    </div>
+                <div className="absolute inset-0 z-[99999]">
+                    <FullScreenLoader label="Cargando tus chats…" />
                 </div>
             )}
 
@@ -208,7 +194,7 @@ const DashboardContent = () => {
             {/* Modal para ver imagen en grande */}
             {viewImage && (
                 <div 
-                    className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300"
+                    className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center z-[100] p-4 animate-fade-in"
                     onClick={() => setViewImage(null)}
                 >
                     <div className="relative max-w-5xl max-h-[90vh] w-full h-full flex items-center justify-center p-4">
@@ -227,19 +213,11 @@ const DashboardContent = () => {
                         <img 
                             src={viewImage} 
                             alt="Vista previa" 
-                            className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in duration-300"
+                            className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-fade-in"
                             onClick={(e) => e.stopPropagation()}
                         />
                     </div>
                 </div>
-            )}
-
-            {/* ========== Diálogo de Permisos ========== */}
-            {showPermissionsDialog && (
-                <PermissionsDialog onDone={() => {
-                    setShowPermissionsDialog(false);
-                    // Actualizar permisos de notificación si es necesario
-                }} />
             )}
 
             {/* Sistema de llamadas */}
@@ -254,13 +232,15 @@ const DashboardContent = () => {
             )}
 
             {callState && callState.status === 'active' && (
-                <CallRoom 
-                    roomID={callState.roomID}
-                    userID={user?.telephon || profile?.Telephon}
-                    userName={user?.username || profile?.Username}
-                    callType={callState.callType}
-                    onCallEnd={handleEndCall}
-                />
+                <Suspense fallback={<div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center text-white">Conectando llamada...</div>}>
+                    <CallRoom
+                        roomID={callState.roomID}
+                        userID={user?.telephon || profile?.Telephon}
+                        userName={user?.username || profile?.Username}
+                        callType={callState.callType}
+                        onCallEnd={handleEndCall}
+                    />
+                </Suspense>
             )}
 
             {callState && callState.status === 'ringing' && callState.role === 'caller' && (

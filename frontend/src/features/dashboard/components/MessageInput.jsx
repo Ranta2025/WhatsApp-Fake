@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import MediaUploadMenu from '../../../components/MediaUploadMenu';
@@ -7,7 +7,7 @@ import api from '../../../api/axios';
 const MessageInput = () => {
     const { 
         selected, isConnected, profile, drafts, setDrafts, 
-        sendTypingIndicator, sendMessage 
+        sendTypingIndicator, addToast
     } = useDashboard();
     
     const { 
@@ -60,7 +60,7 @@ const MessageInput = () => {
                     }
                 } catch (error) {
                     console.error('Error uploading voice note:', error);
-                    alert('Error al enviar nota de voz');
+                    addToast({ type: 'error', message: 'No se pudo enviar la nota de voz' });
                 }
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -104,7 +104,7 @@ const MessageInput = () => {
     if (!selected) return null;
 
     return (
-        <div className="flex-shrink-0 bg-slate-900 border-t border-white/5">
+        <div className="flex-shrink-0 bg-slate-900/80 backdrop-blur-xl border-t border-white/[0.06]">
             {replyingTo && (
                 <div className="px-4 py-2 bg-slate-800/50 border-b border-white/5 flex items-center gap-3">
                     <div className="w-1 h-8 bg-indigo-500 rounded-full"></div>
@@ -122,11 +122,12 @@ const MessageInput = () => {
                 </div>
             )}
             
-            <div className="p-3 sm:p-4 flex gap-2 sm:gap-3 items-end bg-slate-900 relative">
+            <div className="px-3 py-2.5 sm:px-4 sm:py-3 flex gap-2 items-end relative">
                 <div className="relative">
                     <button
                         onClick={() => setShowAttachMenu(!showAttachMenu)}
-                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] transition-all"
+                        aria-label="Adjuntar archivo"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 transform -rotate-45">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
@@ -135,13 +136,13 @@ const MessageInput = () => {
                     {showAttachMenu && (
                         <MediaUploadMenu 
                             onUploadSuccess={(url, type) => { handleMediaUploadSuccess(url, type); setShowAttachMenu(false); }}
-                            onUploadError={(err) => { alert(err); setShowAttachMenu(false); }}
+                            onUploadError={(err) => { addToast({ type: 'error', message: String(err) }); setShowAttachMenu(false); }}
                             onClose={() => setShowAttachMenu(false)}
                         />
                     )}
                 </div>
 
-                <div className="flex-1 relative bg-slate-800 rounded-3xl flex items-end border border-transparent focus-within:border-slate-700 transition-colors">
+                <div className="flex-1 relative bg-slate-800/80 rounded-2xl flex items-end border border-white/[0.04] focus-within:border-indigo-500/40 transition-colors">
                     {isRecording ? (
                         <div className="w-full h-[44px] flex items-center justify-between px-4 text-red-400">
                             <div className="flex items-center gap-3">
@@ -169,7 +170,8 @@ const MessageInput = () => {
                 
                 {currentDraft.trim() ? (
                     <button
-                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full bg-indigo-600 text-white"
+                        className="h-[44px] w-[44px] flex-shrink-0 flex items-center justify-center rounded-full bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-lg shadow-indigo-500/25 transition-all active:scale-95"
+                        aria-label="Enviar mensaje"
                         onClick={handleSend}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 ml-1">
@@ -178,7 +180,8 @@ const MessageInput = () => {
                     </button>
                 ) : (
                     <button
-                        className={`h-[44px] w-[44px] flex items-center justify-center rounded-full text-white ${isRecording ? 'bg-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}
+                        className={`h-[44px] w-[44px] flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95 ${isRecording ? 'bg-rose-500 text-white animate-pulse' : 'bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-lg shadow-indigo-500/25'}`}
+                        aria-label={isRecording ? 'Detener y enviar nota de voz' : 'Grabar nota de voz'}
                         onClick={isRecording ? stopRecording : startRecording}
                     >
                         {isRecording ? (

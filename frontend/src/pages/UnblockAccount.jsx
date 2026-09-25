@@ -37,7 +37,7 @@ export default function UnblockAccount() {
 
         setLoading(true);
         try {
-            const response = await api.post('/resend-code', {
+            await api.post('/api/v1/auth/resend-unlock-code', {
                 gmail: gmail
             });
             setStep(2);
@@ -103,7 +103,7 @@ export default function UnblockAccount() {
         setLoading(true);
         try {
             // Operación atómica: desbloquear + cambiar contraseña en una sola llamada
-            await api.post('/unlock-account', {
+            await api.post('/api/v1/auth/unlock-and-reset', {
                 email: gmail,
                 code: code,
                 password: newPassword
@@ -172,7 +172,7 @@ export default function UnblockAccount() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         {loading ? 'Enviando...' : 'Enviar código'}
                     </button>
@@ -205,7 +205,7 @@ export default function UnblockAccount() {
                     </div>
                     <button
                         type="submit"
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         Verificar código
                     </button>
@@ -276,7 +276,7 @@ export default function UnblockAccount() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         {loading ? 'Procesando...' : 'Desbloquear cuenta'}
                     </button>

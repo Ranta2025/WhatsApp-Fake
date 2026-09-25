@@ -15,13 +15,13 @@ function createLogoSVG(size) {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#7c3aed"/>
-      <stop offset="100%" style="stop-color:#4f46e5"/>
+      <stop offset="0%" style="stop-color:#13b584"/>
+      <stop offset="100%" style="stop-color:#08aecb"/>
     </linearGradient>
   </defs>
   <rect width="${size}" height="${size}" rx="${rx}" fill="url(#bg)"/>
   <text x="${x1}" y="${y1}" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${fontSize1}" fill="white">T</text>
-  <text x="${x2}" y="${y2}" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${fontSize2}" fill="#c4b5fd">2</text>
+  <text x="${x2}" y="${y2}" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${fontSize2}" fill="#d1faea">2</text>
 </svg>`;
 }
 
@@ -52,14 +52,14 @@ function createMaskableSVG(size) {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#7c3aed"/>
-      <stop offset="100%" style="stop-color:#4f46e5"/>
+      <stop offset="0%" style="stop-color:#13b584"/>
+      <stop offset="100%" style="stop-color:#08aecb"/>
     </linearGradient>
   </defs>
-  <rect width="${size}" height="${size}" fill="#4f46e5"/>
+  <rect width="${size}" height="${size}" fill="#08aecb"/>
   <rect x="${padding}" y="${padding}" width="${innerSize}" height="${innerSize}" rx="${rx}" fill="url(#bg)"/>
   <text x="${x1}" y="${y1}" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${fontSize1}" fill="white">T</text>
-  <text x="${x2}" y="${y2}" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${fontSize2}" fill="#c4b5fd">2</text>
+  <text x="${x2}" y="${y2}" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${fontSize2}" fill="#d1faea">2</text>
 </svg>`;
 }
 

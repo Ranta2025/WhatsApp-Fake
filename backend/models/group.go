@@ -56,3 +56,12 @@ type GroupMessage struct {
 	Group  Group        `gorm:"foreignKey:GroupID;references:ID"`
 	Sender UserDataBase `gorm:"foreignKey:SenderID;references:ID"`
 }
+
+// UserGroupRow es un grupo del usuario con los datos agregados para el listado
+// (rol del usuario, número de miembros y teléfono del creador).
+type UserGroupRow struct {
+	Group
+	UserRole        string
+	MemberCount     int
+	CreatorTelephon string
+}

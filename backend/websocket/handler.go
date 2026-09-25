@@ -16,14 +16,10 @@ import (
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		log.Printf("[WS] CheckOrigin called. Origin: %s", origin)
 		if origin == "" {
-			log.Println("[WS] Origin empty, allowing direct connection")
 			return true // Conexiones directas sin Origin (ej: clientes nativos)
 		}
-		allowed := config.IsAllowedOrigin(origin)
-		log.Printf("[WS] Origin allowed: %v", allowed)
-		return allowed
+		return config.IsAllowedOrigin(origin)
 	},
 }
 
@@ -45,64 +41,61 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 			return
 		}
 
-		client := &Client{
-			Username:       username.(string),
-			Telephon:       telephon.(string),
-			Conn:           conn,
-			Send:           make(chan []byte, 256),
-			ServiceChat:    chatService,
-			ServiceContact: contactService,
-			ServiceCall:    callService,
-			ServiceGroup:   groupService,
-		}
-		hub.Register <- client
-
-		// Goroutine de inicialización: enviar estado inicial y unirse a rooms de grupos
-		go func() {
-			time.Sleep(100 * time.Millisecond)
-
-			ctx := context.Background()
-
-			// 1. Enviar lista de contactos online
-			onlineContacts := hub.GetOnlineContacts(telephon.(string))
-			initialMsg, _ := json.Marshal(map[string]interface{}{
-				"type": "contacts_online",
-				"payload": map[string]interface{}{
-					"contacts": onlineContacts,
-				},
-			})
-			client.Send <- initialMsg
-
-			// 2. Marcar mensajes 1:1 pendientes como "entregado" y notificar remitentes
-			senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon.(string), ctx)
-			if err != nil {
-				log.Printf("[WS] Error marcando mensajes como entregados al conectar: %v", err)
-			} else if len(senders) > 0 {
-				deliveredMsg, _ := json.Marshal(map[string]interface{}{
-					"type": "message_delivered",
-					"payload": map[string]interface{}{
-						"receiver": telephon.(string),
-					},
-				})
-				for _, senderTel := range senders {
-					hub.SendTo(senderTel, deliveredMsg)
-				}
-				log.Printf("[WS] Notificados %d remitentes de entrega para %s", len(senders), telephon.(string))
-			}
-
-			// 3. Unirse a las rooms de todos los grupos del usuario
-			if groupService != nil {
-				groups, err := groupService.GetUserGroups(telephon.(string), ctx)
-				if err == nil {
-					for _, g := range groups {
-						hub.JoinRoom(g.ID, client)
-					}
-					log.Printf("[WS] %s unido a %d rooms de grupos", telephon.(string), len(groups))
-				}
-			}
-		}()
+		client := NewClient(username.(string), telephon.(string), conn)
+		client.ServiceChat = chatService
+		client.ServiceContact = contactService
+		client.ServiceCall = callService
+		client.ServiceGroup = groupService
+		// Registro síncrono: al volver, el cliente ya es la conexión activa del
+		// usuario, así initClient puede unirlo a sus rooms sin carreras.
+		hub.RegisterClient(client)
 
 		go client.writePump()
+		go initClient(hub, client, chatService, groupService)
 		client.readPump(hub)
+	}
+}
+
+// initClient envía el estado inicial al cliente recién conectado: contactos
+// online, notificaciones de entrega pendientes y alta en las rooms de sus grupos.
+func initClient(hub *Hub, client *Client, chatService services.ChatServicer, groupService services.GroupServicer) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	telephon := client.Telephon
+
+	// 1. Enviar lista de contactos online
+	onlineContacts := hub.GetOnlineContacts(telephon)
+	initialMsg, _ := json.Marshal(map[string]interface{}{
+		"type": "contacts_online",
+		"payload": map[string]interface{}{
+			"contacts": onlineContacts,
+		},
+	})
+	hub.SendToClient(client, initialMsg)
+
+	// 2. Marcar mensajes 1:1 pendientes como "entregado" y notificar remitentes
+	senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon, ctx)
+	if err != nil {
+		log.Printf("[WS] Error marcando mensajes como entregados al conectar: %v", err)
+	} else if len(senders) > 0 {
+		deliveredMsg, _ := json.Marshal(map[string]interface{}{
+			"type": "message_delivered",
+			"payload": map[string]interface{}{
+				"receiver": telephon,
+			},
+		})
+		hub.sendToMany(senders, deliveredMsg)
+	}
+
+	// 3. Unirse a las rooms de todos los grupos del usuario
+	if groupService != nil {
+		groups, err := groupService.GetUserGroups(telephon, ctx)
+		if err != nil {
+			log.Printf("[WS] Error obteniendo grupos de %s: %v", telephon, err)
+			return
+		}
+		for _, g := range groups {
+			hub.JoinRoom(g.ID, client)
+		}
 	}
 }

@@ -40,27 +40,55 @@ func (db *RepositoriesUser) CreateUserTx(tx *gorm.DB, user models.UserDataBase, 
 
 // UsernameExist comprueba si ya existe un usuario con ese username en la BD.
 func (db *RepositoriesUser) UsernameExist(username string, c context.Context) bool {
+	return db.exists("username", username, c)
+}
+
+// exists indica si hay algún usuario cuya columna coincide con el valor dado.
+func (db *RepositoriesUser) exists(column, value string, c context.Context) bool {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
-	var usernameDB string
-	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("username").Where("username = ?", username).Scan(&usernameDB)
-	log.Println("[REPO] Buscando username:", username)
-	log.Println("[REPO] Resultado de búsqueda:", usernameDB)
-	log.Println("[REPO] Error:", result.Error)
+	var count int64
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Where(column+" = ?", value).Limit(1).Count(&count)
 	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println("[REPO] Username NO existe")
-			return false
-		}
-		log.Println("[REPO] Error en query:", result.Error)
+		log.Printf("[REPO] Error comprobando %s: %v", column, result.Error)
 		return false
 	}
-	if usernameDB == "" {
-		log.Println("[REPO] Username NO existe (vacío)")
-		return false
+	return count > 0
+}
+
+// getAuth obtiene en una sola consulta los datos de autenticación del usuario
+// cuya columna coincide con el valor dado.
+func (db *RepositoriesUser) getAuth(column, value string, c context.Context) (*models.UserAuth, error) {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+	var auth models.UserAuth
+	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).
+		Select("username", "telephon", "gmail", "password", "activo", "bloqueado").
+		Where(column+" = ?", value).
+		Limit(1).
+		Scan(&auth)
+	if result.Error != nil {
+		return nil, result.Error
 	}
-	log.Println("[REPO] Username EXISTE")
-	return true
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &auth, nil
+}
+
+// GetAuthByUsername devuelve los datos de autenticación del usuario por username.
+func (db *RepositoriesUser) GetAuthByUsername(username string, c context.Context) (*models.UserAuth, error) {
+	return db.getAuth("username", username, c)
+}
+
+// GetAuthByTelephon devuelve los datos de autenticación del usuario por teléfono.
+func (db *RepositoriesUser) GetAuthByTelephon(telephon string, c context.Context) (*models.UserAuth, error) {
+	return db.getAuth("telephon", telephon, c)
+}
+
+// GetAuthByEmail devuelve los datos de autenticación del usuario por email.
+func (db *RepositoriesUser) GetAuthByEmail(email string, c context.Context) (*models.UserAuth, error) {
+	return db.getAuth("gmail", email, c)
 }
 
 // GetGmail devuelve el email registrado para el username; segundo valor indica si fue encontrado.
@@ -190,27 +218,7 @@ func (db *RepositoriesUser) GetUsernameByEmail(email string, c context.Context) 
 
 // TelephonExist comprueba si ya existe un usuario con ese número de teléfono.
 func (db *RepositoriesUser) TelephonExist(telephon string, c context.Context) bool {
-	ctx, cancel := context.WithTimeout(c, 10*time.Second)
-	defer cancel()
-	var telephonDB string
-	result := db.db.Model(&models.UserDataBase{}).WithContext(ctx).Select("telephon").Where("telephon = ?", telephon).Scan(&telephonDB)
-	log.Println("[REPO] Buscando telefono:", telephon)
-	log.Println("[REPO] Resultado de búsqueda:", telephonDB)
-	log.Println("[REPO] Error:", result.Error)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println("[REPO] Telefono NO existe")
-			return false
-		}
-		log.Println("[REPO] Error en query:", result.Error)
-		return false
-	}
-	if telephonDB == "" {
-		log.Println("[REPO] Telefono NO existe (vacío)")
-		return false
-	}
-	log.Println("[REPO] Telefono EXISTE")
-	return true
+	return db.exists("telephon", telephon, c)
 }
 
 // BlockUser establece 'bloqueado=true' para el usuario indicado.

@@ -15,11 +15,22 @@ func (ap *ApiContact) CreateCallLog(callLog *models.CallLog, ctx context.Context
 	return ap.data.WithContext(c).Create(callLog).Error
 }
 
-// UpdateCallLog actualiza un registro de llamada existente (por RoomID)
-func (ap *ApiContact) UpdateCallLogByRoomID(roomID string, updates map[string]interface{}, ctx context.Context) error {
+// UpdateCallLogByRoomID actualiza el registro de llamada de la sala indicada,
+// solo si userID participa en ella (caller o receiver). Así un usuario no puede
+// alterar el estado de llamadas ajenas conociendo el roomID.
+func (ap *ApiContact) UpdateCallLogByRoomID(roomID string, userID uint, updates map[string]interface{}, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ap.data.Model(&models.CallLog{}).WithContext(c).Where("room_id = ?", roomID).Updates(updates).Error
+	result := ap.data.Model(&models.CallLog{}).WithContext(c).
+		Where("room_id = ? AND (caller_id = ? OR receiver_id = ?)", roomID, userID, userID).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // GetCallLogsByUser obtiene el historial de llamadas de un usuario (como caller o receiver)
@@ -40,17 +51,20 @@ func (ap *ApiContact) DeleteCallLogForUser(callID uint, userID uint, ctx context
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// Determinar si el usuario es caller o receiver
+	// Determinar si el usuario es caller o receiver (solo columnas necesarias)
 	var callLog models.CallLog
-	if err := ap.data.WithContext(c).First(&callLog, callID).Error; err != nil {
+	if err := ap.data.WithContext(c).Select("id", "caller_id", "receiver_id").
+		Where("caller_id = ? OR receiver_id = ?", userID, userID).
+		First(&callLog, callID).Error; err != nil {
 		return err
 	}
 
+	updates := map[string]interface{}{}
 	if callLog.CallerID == userID {
-		return ap.data.Model(&models.CallLog{}).WithContext(c).Where("id = ?", callID).Update("deleted_by_caller", true).Error
-	} else if callLog.ReceiverID == userID {
-		return ap.data.Model(&models.CallLog{}).WithContext(c).Where("id = ?", callID).Update("deleted_by_receiver", true).Error
+		updates["deleted_by_caller"] = true
 	}
-
-	return gorm.ErrRecordNotFound
+	if callLog.ReceiverID == userID {
+		updates["deleted_by_receiver"] = true
+	}
+	return ap.data.Model(&models.CallLog{}).WithContext(c).Where("id = ?", callID).Updates(updates).Error
 }

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import FullScreenLoader from './components/ui/FullScreenLoader';
 
 // lazy-loaded pages (improves initial bundle and follows good practices)
 const Welcome = lazy(() => import('./pages/Welcome'));
@@ -15,16 +16,16 @@ const UnblockAccount = lazy(() => import('./pages/UnblockAccount'));
 const PrivateRoute = ({ children }) => {
     const { user, loading } = useAuth();
     
-    if (loading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Cargando...</div>;
-    
-    return user ? children : <Navigate to="/login" />;
+    if (loading) return <FullScreenLoader />;
+
+    return user ? children : <Navigate to="/login" replace />;
 };
 
 function App() {
   return (
     <AuthProvider>
         <BrowserRouter>
-            <Suspense fallback={<div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Cargando...</div>}>
+            <Suspense fallback={<FullScreenLoader />}>
                 <Routes>
                     <Route path="/" element={<Welcome />} />
                     <Route path="/login" element={<Login />} />
@@ -41,6 +42,7 @@ function App() {
                             </PrivateRoute>
                         } 
                     />
+                    <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </Suspense>
         </BrowserRouter>

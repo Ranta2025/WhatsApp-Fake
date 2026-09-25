@@ -1,3 +1,8 @@
+import api from './axios';
+import { WS_URL } from '../config';
+
+const debug = import.meta.env.DEV ? (...args) => console.log(...args) : () => {};
+
 // WebSocket Manager para el chat
 class WebSocketManager {
     constructor() {
@@ -10,6 +15,8 @@ class WebSocketManager {
         this.connectionStateHandlers = [];
         this.heartbeatInterval = null;
         this.lastContactsOnline = null;
+        this.reconnectTimer = null;
+        this.connecting = false;
         this.setupBrowserEventListeners();
     }
 
@@ -28,14 +35,12 @@ class WebSocketManager {
 
         // Manejar cuando el tab se oculta/muestra (crítico en móvil)
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                console.log('Tab oculto - WebSocket activo en background');
-            } else {
+            if (!document.hidden) {
                 // Tab visible - resetear contador y reconectar si se desconectó
                 if (!this.isIntentionallyClosed) {
                     this.reconnectAttempts = 0; // Resetear para que vuelva a intentar
                     if (!this.isConnected()) {
-                        console.log('Tab visible - reconectando WebSocket');
+                        debug('Tab visible - reconectando WebSocket');
                         this.connect();
                     }
                 }
@@ -44,58 +49,54 @@ class WebSocketManager {
 
         // Detectar cuando el navegador pierde/recupera conexión
         window.addEventListener('online', () => {
-            console.log('Conexión a internet recuperada');
+            debug('Conexión a internet recuperada');
             if (!this.isConnected() && !this.isIntentionallyClosed) {
                 this.connect();
             }
         });
 
-        window.addEventListener('offline', () => {
-            console.log('Conexión a internet perdida');
-        });
     }
 
-    connect() {
+    // Abre la conexión. Primero pide un ticket de un solo uso a la API: la
+    // petición pasa por axios, que renueva la sesión si el access token expiró
+    // (antes el handshake fallaba con 401 y se reintentaba indefinidamente), y
+    // el ticket permite conectar aunque el backend esté en otro dominio.
+    async connect() {
+        // Marcar la intención de estar conectados antes de cualquier early-return:
+        // si ya hay una petición de ticket en curso (p. ej. montar → desmontar →
+        // montar en StrictMode), esa petición continuará y abrirá la conexión.
+        this.isIntentionallyClosed = false;
+        if (this.connecting) return;
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
         if (this.ws) {
-            if (this.ws.readyState === WebSocket.OPEN) {
-                console.log('WebSocket ya está conectado');
-                return;
-            }
-            if (this.ws.readyState === WebSocket.CONNECTING) {
-                console.log('WebSocket ya está conectándose, esperando...');
-                return;
-            }
-            // Si está en CLOSING o CLOSED, limpiar antes de reconectar
-            try { this.ws.close(); } catch(e) { /* ignorar */ }
+            try { this.ws.close(); } catch { /* ignorar */ }
             this.ws = null;
         }
+        this.clearReconnectTimer();
+        this.connecting = true;
 
-        this.isIntentionallyClosed = false;
-        
-        // Construir URL del WebSocket
-        let wsUrl;
-        if (import.meta.env.VITE_BACKEND_URL) {
-            // Si hay una URL del backend configurada (para ngrok)
-            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-            const protocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
-            const host = backendUrl.replace(/^https?:\/\//, '');
-            wsUrl = `${protocol}//${host}/api/v1/ws`;
-        } else if (window.location.hostname.includes('ngrok') ||
-                window.location.hostname.includes('trycloudflare')) {
-            // Si estamos en túnel público (ngrok o Cloudflare), usar el mismo dominio (nginx maneja el routing)
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            wsUrl = `${protocol}//${window.location.host}/api/v1/ws`;
-        } else {
-            // Fallback: desarrollo local - usar el mismo hostname para mantener same-site cookies
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            wsUrl = `${protocol}//${window.location.hostname}:8080/api/v1/ws`;
+        let ticket;
+        try {
+            const { data } = await api.get('/api/v1/ws-ticket');
+            ticket = data.ticket;
+        } catch (error) {
+            this.connecting = false;
+            if (error.response?.status === 401) {
+                // Sesión caducada definitivamente: no reintentar
+                this.isIntentionallyClosed = true;
+                this.notifyConnectionState('unauthorized');
+                return;
+            }
+            this.handleReconnect();
+            return;
         }
-        
-        // Las cookies HttpOnly se envían automáticamente en el handshake del WebSocket (same-origin)
-        console.log('[WS] Conectando a:', wsUrl);
+        this.connecting = false;
+        if (this.isIntentionallyClosed) return; // se desconectó mientras esperábamos
 
         try {
-            this.ws = new WebSocket(wsUrl);
+            this.ws = new WebSocket(`${WS_URL}?ticket=${encodeURIComponent(ticket)}`);
             this.setupEventHandlers();
         } catch (error) {
             console.error('Error creando WebSocket:', error);
@@ -103,16 +104,23 @@ class WebSocketManager {
         }
     }
 
+    clearReconnectTimer() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+    }
+
     setupEventHandlers() {
         this.ws.onopen = () => {
-            console.log('WebSocket conectado');
+            debug('WebSocket conectado');
             this.reconnectAttempts = 0;
             this.notifyConnectionState('connected');
             this.startHeartbeat();
         };
 
         this.ws.onclose = (event) => {
-            console.log('WebSocket desconectado:', event.code, event.reason);
+            debug('WebSocket desconectado:', event.code, event.reason);
             this.stopHeartbeat();
             this.lastContactsOnline = null; // Limpiar estado al desconectar
             this.notifyConnectionState('disconnected');
@@ -139,11 +147,11 @@ class WebSocketManager {
 
     handleMessage(data) {
         const { type, payload } = data;
-        console.log('[WS] Mensaje recibido:', { type, payload });
+        debug('[WS] Mensaje recibido:', { type, payload });
 
         // Casos especiales que necesitan transformación antes de notificar
         if (type === 'pong') {
-            console.log('Pong recibido del servidor');
+            debug('Pong recibido del servidor');
             return;
         }
 
@@ -193,11 +201,15 @@ class WebSocketManager {
     }
 
     handleReconnect() {
+        if (this.isIntentionallyClosed || this.reconnectTimer) return;
         this.reconnectAttempts++;
         // Backoff suave: 1.5s, 2.2s, 3.4s... hasta 20s máximo
         const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), 20000);
-        console.log(`Reintentando conexión (intento ${this.reconnectAttempts}) en ${delay / 1000}s...`);
-        setTimeout(() => this.connect(), delay);
+        debug(`[WS] Reintentando conexión (intento ${this.reconnectAttempts}) en ${delay / 1000}s`);
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.connect();
+        }, delay);
     }
 
     on(event, handler) {
@@ -208,7 +220,7 @@ class WebSocketManager {
         
         // Si alguien se registra para 'contacts_online' y ya tenemos datos, enviárselos inmediatamente
         if (event === 'contacts_online' && this.lastContactsOnline !== null) {
-            console.log('[WS] Enviando contactos online guardados a listener tardío:', this.lastContactsOnline);
+            debug('[WS] Enviando contactos online guardados a listener tardío:', this.lastContactsOnline);
             // Usar setTimeout para evitar ejecución síncrona durante el registro
             setTimeout(() => handler(this.lastContactsOnline), 0);
         }
@@ -333,7 +345,7 @@ class WebSocketManager {
     // Helper genérico para enviar mensajes al WebSocket
     _send(type, payload) {
         if (!this.isConnected()) {
-            console.error('WebSocket no conectado');
+            debug('[WS] No conectado, mensaje no enviado:', type);
             return false;
         }
         this.ws.send(JSON.stringify({ type, payload }));
@@ -342,6 +354,7 @@ class WebSocketManager {
 
     disconnect() {
         this.isIntentionallyClosed = true; // Evitar reconexión automática
+        this.clearReconnectTimer();
         this.stopHeartbeat();
         if (this.ws) {
             this.ws.close(1000, 'Cliente desconectado intencionalmente');

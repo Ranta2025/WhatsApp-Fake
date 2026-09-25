@@ -99,3 +99,5 @@ desktop.ini
 
 *.trae
 *.github
+# Volcados locales de Redis
+dump.rdb

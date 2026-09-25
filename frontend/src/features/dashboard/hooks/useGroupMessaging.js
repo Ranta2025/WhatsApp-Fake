@@ -21,7 +21,7 @@ const useGroupMessagingInternal = () => {
     const {
         isConnected,
         selectedGroup,
-        groupMessages, setGroupMessages,
+        setGroupMessages,
         addToast,
         sendGroupMessage,
         sendGroupTyping,

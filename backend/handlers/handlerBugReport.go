@@ -3,6 +3,7 @@ package handlers
 import (
 	"gorm/backend/models"
 	"gorm/backend/services"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,9 +32,10 @@ func (h *HandlerBugReport) HandleReportBug() gin.HandlerFunc {
 
 		report := reportInterface.(models.BugReport)
 		if err := h.service.CreateGitHubIssue(report); err != nil {
+			// El detalle puede incluir respuestas de la API de GitHub: solo al log
+			log.Printf("[BUG-REPORT] Error creando issue: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Error al crear el issue en GitHub",
-				"message": err.Error(),
+				"error": "Error al crear el issue en GitHub",
 			})
 			return
 		}

@@ -134,11 +134,6 @@ func (m *MockUserService) RecoverCuenta(user models.UserRecover, ctx context.Con
 	return args.Error(0)
 }
 
-func (m *MockUserService) ChangePassword(user models.UserChangePassword, ctx context.Context) error {
-	args := m.Called(user, ctx)
-	return args.Error(0)
-}
-
 func (m *MockUserService) SendForgotPasswordCode(email string, ctx context.Context) error {
 	args := m.Called(email, ctx)
 	return args.Error(0)
@@ -164,9 +159,9 @@ func (m *MockUserService) SaveRefreshToken(username string, refreshToken string,
 	return args.Error(0)
 }
 
-func (m *MockUserService) ValidateRefreshToken(username string, refreshToken string, ctx context.Context) error {
-	args := m.Called(username, refreshToken, ctx)
-	return args.Error(0)
+func (m *MockUserService) RefreshSession(refreshToken string, ctx context.Context) (string, string, error) {
+	args := m.Called(refreshToken, ctx)
+	return args.String(0), args.String(1), args.Error(2)
 }
 
 func (m *MockUserService) DeleteRefreshToken(username string, ctx context.Context) error {
@@ -347,23 +342,23 @@ func (m *MockCallService) CreateCallLog(callerTelephon, receiverTelephon, roomID
 	return args.Error(0)
 }
 
-func (m *MockCallService) MarkCallAnswered(roomID string, ctx context.Context) error {
-	args := m.Called(roomID, ctx)
+func (m *MockCallService) MarkCallAnswered(roomID string, telephon string, ctx context.Context) error {
+	args := m.Called(roomID, telephon, ctx)
 	return args.Error(0)
 }
 
-func (m *MockCallService) MarkCallRejected(roomID string, ctx context.Context) error {
-	args := m.Called(roomID, ctx)
+func (m *MockCallService) MarkCallRejected(roomID string, telephon string, ctx context.Context) error {
+	args := m.Called(roomID, telephon, ctx)
 	return args.Error(0)
 }
 
-func (m *MockCallService) MarkCallUnavailable(roomID string, ctx context.Context) error {
-	args := m.Called(roomID, ctx)
+func (m *MockCallService) MarkCallUnavailable(roomID string, telephon string, ctx context.Context) error {
+	args := m.Called(roomID, telephon, ctx)
 	return args.Error(0)
 }
 
-func (m *MockCallService) MarkCallEnded(roomID string, ctx context.Context) error {
-	args := m.Called(roomID, ctx)
+func (m *MockCallService) MarkCallEnded(roomID string, telephon string, ctx context.Context) error {
+	args := m.Called(roomID, telephon, ctx)
 	return args.Error(0)
 }
 

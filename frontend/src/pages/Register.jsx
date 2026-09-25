@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import api from '../api/axios';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import AuthLayout from '../components/AuthLayout';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
@@ -23,7 +22,6 @@ export default function Register() {
     const [phoneCountryIso, setPhoneCountryIso] = useState('cu');
     const [phoneDialCode, setPhoneDialCode] = useState('53');
     const navigate = useNavigate();
-    const { login } = useAuth();
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -54,7 +52,7 @@ export default function Register() {
             return;
         }
         try {
-            await api.post('/register', cleanFormData);
+            await api.post('/api/v1/auth/register', cleanFormData);
             // La cookie HttpOnly se setió automáticamente por el servidor
             navigate('/activate', { state: { username: formData.username, gmail: formData.email } });
         } catch (err) {
@@ -105,7 +103,7 @@ export default function Register() {
                             type="text"
                             name="username"
                             onChange={handleChange}
-                            className="w-full pl-10 p-3 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm"
+                            className="w-full pl-10 p-3 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors text-sm"
                             placeholder="Mínimo 5 caracteres"
                         />
                     </div>
@@ -122,7 +120,7 @@ export default function Register() {
                             type="email"
                             name="email"
                             onChange={handleChange}
-                            className="w-full pl-10 p-3 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm"
+                            className="w-full pl-10 p-3 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors text-sm"
                             placeholder="ejemplo@gmail.com"
                         />
                     </div>
@@ -182,7 +180,7 @@ export default function Register() {
                                     setPhoneError('');
                                 }
                             }}
-                            className="w-full h-[46px] bg-slate-800 border border-transparent rounded-xl px-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            className="w-full h-[46px] bg-slate-800/80 border border-white/[0.06] rounded-xl px-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                             placeholder="Número de teléfono"
                         />
                     </div>
@@ -202,7 +200,7 @@ export default function Register() {
                             type={showPassword ? 'text' : 'password'}
                             name="password"
                             onChange={handleChange}
-                            className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm tracking-wide"
+                            className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors text-sm tracking-wide"
                             placeholder="Min. 8 caracteres, número, mayúscula"
                         />
                         <button
@@ -228,7 +226,7 @@ export default function Register() {
                             name="confirm"
                             value={confirm}
                             onChange={(e) => setConfirm(e.target.value)}
-                            className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm tracking-wide"
+                            className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors text-sm tracking-wide"
                             placeholder="Repite tu contraseña"
                         />
                         <button
@@ -243,7 +241,7 @@ export default function Register() {
                 </div>
                 <button
                     type="submit"
-                    className="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                    className="btn-primary w-full mt-4"
                 >
                     Registrarse
                 </button>

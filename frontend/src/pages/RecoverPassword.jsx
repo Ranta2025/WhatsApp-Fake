@@ -26,7 +26,7 @@ export default function RecoverPassword() {
 
         setLoading(true);
         try {
-            const response = await api.post('/forgot-password-send', {
+            await api.post('/api/v1/auth/forgot-password', {
                 email: email
             });
             setStep(2);
@@ -89,7 +89,7 @@ export default function RecoverPassword() {
 
         setLoading(true);
         try {
-            await api.post('/forgot-password-change', {
+            await api.post('/api/v1/auth/reset-password', {
                 email: email,
                 code: code,
                 password: newPassword
@@ -154,7 +154,7 @@ export default function RecoverPassword() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         {loading ? 'Enviando...' : 'Enviar código'}
                     </button>
@@ -187,7 +187,7 @@ export default function RecoverPassword() {
                     </div>
                     <button
                         type="submit"
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         Verificar código
                     </button>
@@ -255,7 +255,7 @@ export default function RecoverPassword() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         {loading ? 'Cambiando...' : 'Cambiar contraseña'}
                     </button>

@@ -55,6 +55,12 @@ export function useWebSocket() {
 
     const off = useCallback((event, handler) => {
         wsManager.off(event, handler);
+        // Olvidar también el handler local (si no, la lista crece en cada re-suscripción)
+        const handlers = handlersRef.current.get(event);
+        if (handlers) {
+            const idx = handlers.indexOf(handler);
+            if (idx > -1) handlers.splice(idx, 1);
+        }
     }, []);
 
     const sendMessage = useCallback((to, message, replyTo = null, mediaType = null) => {
@@ -116,8 +122,9 @@ export function useWebSocket() {
 
     // Cleanup de handlers al desmontar
     useEffect(() => {
+        const registered = handlersRef.current;
         return () => {
-            handlersRef.current.forEach((handlers, event) => {
+            registered.forEach((handlers, event) => {
                 handlers.forEach(handler => {
                     wsManager.off(event, handler);
                 });

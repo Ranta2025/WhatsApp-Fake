@@ -12,10 +12,9 @@ export default function ActivateAccount() {
     const [resendSuccess, setResendSuccess] = useState(false);
     const [isBloqueado, setIsBloqueado] = useState(false);
     const navigate = useNavigate();
-    const { setUser } = useAuth();
+    const { refreshUser } = useAuth();
     const location = useLocation();
     const username = location.state?.username || '';
-    const gmail = location.state?.gmail || '';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -38,13 +37,12 @@ export default function ActivateAccount() {
 
         setLoading(true);
         try {
-            const response = await api.post('/activate', {
+            await api.post('/api/v1/auth/activate', {
                 username: username,
                 code: code
             });
-            // Establecer el usuario en el contexto ANTES de navegar
-            setUser({ username: username });
-            alert("Cuenta activada exitosamente");
+            // La activación abre la sesión (cookies): cargar el perfil antes de navegar
+            await refreshUser();
             // Navegar al dashboard
             navigate('/dashboard', { replace: true });
         } catch (err) {
@@ -75,7 +73,7 @@ export default function ActivateAccount() {
 
         setResendLoading(true);
         try {
-            await api.post('/recover', {
+            await api.post('/api/v1/auth/resend-activation', {
                 username: username
             });
             setResendSuccess(true);
@@ -142,7 +140,7 @@ export default function ActivateAccount() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         {loading ? 'Verificando...' : 'Activar cuenta'}
                     </button>

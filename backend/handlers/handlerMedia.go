@@ -7,6 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// maxUploadBody es el tamaño máximo del cuerpo de una subida.
+const maxUploadBody = 110 << 20
+
 type HandlerMedia struct {
 	service services.MediaServicer
 }
@@ -20,10 +23,13 @@ func InitHandlerMedia(service services.MediaServicer) *HandlerMedia {
 // a MinIO y devuelve la URL pública junto con metadatos del archivo.
 func (hm *HandlerMedia) HandlerUploadMedia() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		// Parsear multipart form (límite 110 MB = máximo video + overhead)
-		if err := ctx.Request.ParseMultipartForm(110 << 20); err != nil {
+		// Limitar el tamaño TOTAL del cuerpo (110 MB = máximo video + overhead).
+		// ParseMultipartForm solo limita lo que se guarda en memoria; sin
+		// MaxBytesReader un cliente podría enviar un cuerpo arbitrariamente grande.
+		ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, maxUploadBody)
+		if err := ctx.Request.ParseMultipartForm(32 << 20); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": "error al parsear el formulario: " + err.Error(),
+				"error": "archivo demasiado grande o formulario inválido",
 			})
 			return
 		}
@@ -37,7 +43,7 @@ func (hm *HandlerMedia) HandlerUploadMedia() gin.HandlerFunc {
 		}
 		defer file.Close()
 
-		result, err := hm.service.UploadMedia(file, header, ctx)
+		result, err := hm.service.UploadMedia(file, header, ctx.Request.Context())
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),

@@ -1,74 +1,70 @@
-import { createContext, useState, useContext, useEffect } from 'react';
-import api from '../api/axios';
+import { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
+import api, { SESSION_EXPIRED_EVENT } from '../api/axios';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
+
+// El backend devuelve el perfil con claves Username / Telephon / avatar_url.
+const toUser = (data) => ({
+    username: data?.Username || '',
+    telephon: data?.Telephon || '',
+    avatar: data?.avatar_url || '',
+});
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Intentar restaurar sesión desde cookie HttpOnly al cargar
+    // Restaurar la sesión desde la cookie HttpOnly al cargar
     useEffect(() => {
-        const init = async () => {
+        let cancelled = false;
+        api.get('/api/v1/user')
+            .then(({ data }) => { if (!cancelled) setUser(toUser(data)); })
+            .catch(() => { if (!cancelled) setUser(null); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, []);
 
-            try {
-                const { data } = await api.get('/api/v1/user');
-                setUser({ 
-                    username: data.username || data.Telephon || '',
-                    telephon: data.Telephon,
-                    avatar: data.avatar_url
-                });
-            } catch {
-                // No hay sesión válida — usuario no autenticado
-                setUser(null);
-            } finally {
-                setLoading(false);
-            }
-        };
-        init();
-    }, []); // Run once on mount
+    // Si la sesión no se puede renovar (refresh token caducado o revocado),
+    // se cierra la sesión local para que PrivateRoute redirija al login.
+    useEffect(() => {
+        const onExpired = () => setUser(null);
+        window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+        return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    }, []);
 
-    const login = async (username, password) => {
+    // Recarga el perfil del usuario autenticado (tras login o activación)
+    const refreshUser = useCallback(async () => {
+        const { data } = await api.get('/api/v1/user');
+        setUser(toUser(data));
+    }, []);
+
+    const login = useCallback(async (username, password) => {
+        await api.post('/api/v1/auth/login', { username, password });
+        // Las cookies HttpOnly las establece el servidor
+        await refreshUser();
+        return true;
+    }, [refreshUser]);
+
+    const logout = useCallback(async () => {
         try {
-            await api.post('/LogIn', { username, password });
-            // La cookie HttpOnly se setió automáticamente por el servidor
-            const { data } = await api.get('/api/v1/user');
-            setUser({ 
-                username: data.username || username,
-                telephon: data.Telephon,
-                avatar: data.avatar_url
-            });
-            return true;
-        } catch (error) {
-            console.error("Login error:", error);
-            throw error;
-        }
-    };
-
-    const logout = async () => {
-        try {
-            await api.post('/logout');
-        } catch (error) {
-            console.error("Logout error:", error);
+            await api.post('/api/v1/auth/logout');
+        } catch {
+            // Aunque falle la petición, se limpia la sesión local
         } finally {
-            // El servidor ya limpió las cookies HttpOnly
             setUser(null);
         }
-    };
+    }, []);
 
-    const updateUsername = (username) => {
-        setUser((prev) => (prev ? { ...prev, username } : { username }));
-    };
+    const updateUsername = useCallback((username) => {
+        setUser((prev) => (prev ? { ...prev, username } : prev));
+    }, []);
 
-
-    // updateUsername moved above
-
-    return (
-        <AuthContext.Provider value={{ user, login, logout, loading, updateUsername, setUser }}>
-            {children}
-        </AuthContext.Provider>
+    const value = useMemo(
+        () => ({ user, login, logout, loading, updateUsername, setUser, refreshUser }),
+        [user, login, logout, loading, updateUsername, refreshUser]
     );
+
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

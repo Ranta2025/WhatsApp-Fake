@@ -83,11 +83,6 @@ func (rt *RouterApiMessage) ApiCall() {
 	rt.app.DELETE("call/:id", middleware.MiddlewareDeleteCallLog(), rt.handlerCall.DeleteCallLog())
 }
 
-// ApiWebSocket registra la ruta del WebSocket para comunicación en tiempo real.
-func (rt *RouterApiMessage) ApiWebSocket() {
-	rt.app.GET("ws", websocket.HandleWebSocket(rt.hub, rt.chatService, rt.contactService, rt.callService, rt.groupService))
-}
-
 // ApiGroup registra todas las rutas del dominio de grupos de chat.
 //
 //	POST   /api/v1/group                           → crear grupo

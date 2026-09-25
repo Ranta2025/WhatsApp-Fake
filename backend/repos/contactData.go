@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"gorm/backend/models"
@@ -32,18 +33,18 @@ func InitRepoContact(data *gorm.DB, rd *redis.Client) *ApiContact {
 func (ap *ApiContact) GetUserDataBase(username string, ctx context.Context) (*schemas.UserGet, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	log.Println("Buscando usuario:", username)
 	var user schemas.UserGet
 	result := ap.data.WithContext(c).
 		Table("user_data_bases").
-		Where("username = ?", strings.TrimSpace(username)).
+		Where("username = ? AND deleted_at IS NULL", strings.TrimSpace(username)).
 		Select("username", "telephon", "gmail", "avatar_url", "wallpaper_url").
 		Scan(&user)
 	if result.Error != nil {
-		log.Println("Error en query:", result.Error)
 		return nil, result.Error
 	}
-	log.Println("Usuario encontrado:", user)
+	if result.RowsAffected == 0 {
+		return nil, errors.New("usuario no encontrado")
+	}
 	return &user, nil
 }
 
@@ -65,11 +66,14 @@ func (ap *ApiContact) GetUserDataBaseByTelephon(telephon string, ctx context.Con
 	var user schemas.UserGet
 	result := ap.data.WithContext(c).
 		Table("user_data_bases").
-		Where("telephon = ?", strings.TrimSpace(telephon)).
+		Where("telephon = ? AND deleted_at IS NULL", strings.TrimSpace(telephon)).
 		Select("username", "telephon", "gmail", "avatar_url", "wallpaper_url").
 		Scan(&user)
 	if result.Error != nil {
 		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, errors.New("usuario no encontrado")
 	}
 	return &user, nil
 }
@@ -98,11 +102,38 @@ func (ap *ApiContact) UpdateAvatarByTelephon(telephon string, avatarUrl string, 
 	return nil
 }
 
-// AddContact persiste una nueva relación de contacto en la BD.
+// AddContact persiste una nueva relación de contacto en la BD e invalida la
+// caché de contactos (presencia online/offline) de ambos usuarios.
 func (ap *ApiContact) AddContact(contact models.ContactDataBase, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ap.data.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error
+	if err := ap.data.Model(&models.ContactDataBase{}).WithContext(c).Create(&contact).Error; err != nil {
+		return err
+	}
+	ap.invalidateContactsCache(c, contact.IdUser, contact.IdContact)
+	return nil
+}
+
+// invalidateContactsCache borra la lista cacheada de contactos de los usuarios
+// indicados para que las notificaciones de presencia incluyan los cambios.
+func (ap *ApiContact) invalidateContactsCache(ctx context.Context, userIDs ...uint) {
+	if ap.rd == nil || len(userIDs) == 0 {
+		return
+	}
+	var telephons []string
+	if err := ap.data.WithContext(ctx).Model(&models.UserDataBase{}).
+		Where("id IN ?", userIDs).
+		Pluck("telephon", &telephons).Error; err != nil {
+		log.Printf("[REPO] Error invalidando caché de contactos: %v", err)
+		return
+	}
+	keys := make([]string, 0, len(telephons))
+	for _, t := range telephons {
+		keys = append(keys, fmt.Sprintf("user:contacts:%s", t))
+	}
+	if len(keys) > 0 {
+		ap.rd.Del(ctx, keys...)
+	}
 }
 
 // ExistContactAdd verifica si ya existe la relación de contacto entre dos usuarios.
@@ -267,15 +298,28 @@ func (app *ApiContact) PutStatusMessageSeenByContact(id_sender uint, id_receptor
 		Update("status", "visto").Error
 }
 
-// GetAllMessagesForUser obtiene todos los mensajes donde el usuario es remitente o receptor
-// y que no han sido borrados por él (Clear Chat)
-func (app *ApiContact) GetAllMessagesForUser(id_user uint, ctx context.Context) ([]models.Message, error) {
+// GetRecentMessagesForUser obtiene, para cada conversación del usuario, los
+// últimos perChat mensajes que no ha borrado (Clear Chat / borrar para mí),
+// en orden cronológico. Usa una función de ventana para no cargar el
+// historial completo de todas las conversaciones en memoria.
+func (app *ApiContact) GetRecentMessagesForUser(id_user uint, perChat int, ctx context.Context) ([]models.Message, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var messages []models.Message
-	result := app.data.Model(&models.Message{}).WithContext(c).
-		Where("(id_user = ? AND deleted_by_sender = ?) OR (id_receptor = ? AND deleted_by_receiver = ?)", id_user, false, id_user, false).
-		Order("time ASC").
+	result := app.data.WithContext(c).Raw(`
+		SELECT * FROM (
+			SELECT m.*, ROW_NUMBER() OVER (
+				PARTITION BY CASE WHEN m.id_user = @user THEN m.id_receptor ELSE m.id_user END
+				ORDER BY m.time DESC, m.id DESC
+			) AS rn
+			FROM messages m
+			WHERE m.deleted_at IS NULL
+			  AND ((m.id_user = @user AND m.deleted_by_sender = false)
+			    OR (m.id_receptor = @user AND m.deleted_by_receiver = false))
+		) recent
+		WHERE recent.rn <= @limit
+		ORDER BY recent.time ASC, recent.id ASC`,
+		sql.Named("user", id_user), sql.Named("limit", perChat)).
 		Scan(&messages)
 	if result.Error != nil {
 		return nil, result.Error
@@ -283,25 +327,24 @@ func (app *ApiContact) GetAllMessagesForUser(id_user uint, ctx context.Context) 
 	return messages, nil
 }
 
-// ClearChatForUser marca todos los mensajes entre id_user y id_contact como borrados para id_user
+// ClearChatForUser marca todos los mensajes entre id_user y id_contact como
+// borrados para id_user (ambas actualizaciones en una sola transacción).
 func (app *ApiContact) ClearChatForUser(id_user uint, id_contact uint, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// 1. Mensajes donde el usuario es el remitente
-	err1 := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id_user = ? AND id_receptor = ?", id_user, id_contact).
-		Update("deleted_by_sender", true).Error
-
-	// 2. Mensajes donde el usuario es el receptor
-	err2 := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id_user = ? AND id_receptor = ?", id_contact, id_user).
-		Update("deleted_by_receiver", true).Error
-
-	if err1 != nil {
-		return err1
-	}
-	return err2
+	return app.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		// 1. Mensajes donde el usuario es el remitente
+		if err := tx.Model(&models.Message{}).
+			Where("id_user = ? AND id_receptor = ?", id_user, id_contact).
+			Update("deleted_by_sender", true).Error; err != nil {
+			return err
+		}
+		// 2. Mensajes donde el usuario es el receptor
+		return tx.Model(&models.Message{}).
+			Where("id_user = ? AND id_receptor = ?", id_contact, id_user).
+			Update("deleted_by_receiver", true).Error
+	})
 }
 
 // GetAddedContactIDs devuelve el conjunto de IDs de contactos que el usuario tiene agregados
@@ -327,18 +370,26 @@ func (app *ApiContact) GetAddedContactIDs(id_user uint, ctx context.Context) (ma
 	return m, nil
 }
 
-// GetUserByID obtiene un usuario por su ID primario
-func (app *ApiContact) GetUserByID(id uint, ctx context.Context) (*models.UserDataBase, error) {
+// GetUsersBasicByIDs obtiene en una sola consulta los datos públicos de varios
+// usuarios, indexados por ID (evita el patrón N+1 en listados).
+func (app *ApiContact) GetUsersBasicByIDs(ids []uint, ctx context.Context) (map[uint]models.UserBasic, error) {
+	result := make(map[uint]models.UserBasic, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	var user models.UserDataBase
-	result := app.data.Model(&models.UserDataBase{}).WithContext(c).
-		Where("id = ?", id).
-		First(&user)
-	if result.Error != nil {
-		return nil, result.Error
+	var users []models.UserBasic
+	if err := app.data.WithContext(c).Model(&models.UserDataBase{}).
+		Select("id", "telephon", "username", "avatar_url").
+		Where("id IN ?", ids).
+		Scan(&users).Error; err != nil {
+		return nil, err
 	}
-	return &user, nil
+	for _, u := range users {
+		result[u.ID] = u
+	}
+	return result, nil
 }
 
 // GetUsernameByTelephon obtiene el username por número de teléfono

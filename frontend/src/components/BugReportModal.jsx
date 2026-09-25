@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 
 export default function BugReportModal({ isOpen, onClose }) {
     const [formData, setFormData] = useState({
@@ -55,10 +55,7 @@ export default function BugReportModal({ isOpen, onClose }) {
                 ...systemInfo
             };
 
-            // Cambiar esta URL según tu configuración
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-            
-            await axios.post(`${API_URL}/api/v1/bug-report`, reportData);
+            await api.post('/api/v1/bug-report', reportData);
             
             setSubmitStatus('success');
             

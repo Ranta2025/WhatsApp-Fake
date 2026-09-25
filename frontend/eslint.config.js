@@ -23,7 +23,18 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^[A-Z_]',
+        argsIgnorePattern: '^_',
+        caughtErrors: 'none',
+      }],
+      // Los contextos exportan su hook junto al Provider (patrón habitual).
+      'react-refresh/only-export-components': ['error', { allowExportNames: ['useAuth', 'useDashboard', 'useMessaging', 'useGroupMessaging'] }],
     },
+  },
+  {
+    // Archivos de configuración que se ejecutan en Node
+    files: ['vite.config.js', 'scripts/**/*.{js,mjs}', 'eslint.config.js'],
+    languageOptions: { globals: globals.node },
   },
 ])
