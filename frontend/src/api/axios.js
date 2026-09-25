@@ -1,34 +1,16 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
-// Usar variable de entorno para ngrok, o fallback a hostname actual
-const getBaseURL = () => {
-    // Si hay una URL del backend configurada (para ngrok), usarla
-    if (import.meta.env.VITE_BACKEND_URL) {
-        return import.meta.env.VITE_BACKEND_URL;
-    }
-    
-    // Si estamos en producción/túnel público (ngrok o Cloudflare Tunnel)
-    // usar rutas relativas — nginx maneja el routing
-    if (window.location.hostname.includes('ngrok') ||
-        window.location.hostname.includes('trycloudflare')) {
-        return window.location.origin;
-    }
-    
-    // Fallback: desarrollo local - usar el mismo hostname del navegador para mantener same-site cookies
-    const apiPort = '8080';
-    const protocol = window.location.protocol;
-    return `${protocol}//${window.location.hostname}:${apiPort}`;
-};
+const baseURL = API_BASE_URL;
 
-const baseURL = getBaseURL();
-console.log('API BaseURL:', baseURL);
+// Evento global que se emite cuando la sesión no se puede renovar.
+export const SESSION_EXPIRED_EVENT = 'auth:session-expired';
 
+// Sin Content-Type fijo: axios usa JSON para objetos y multipart (con su
+// boundary) para FormData automáticamente.
 const api = axios.create({
-    baseURL: baseURL,
+    baseURL,
     withCredentials: true,
-    headers: {
-        'Content-Type': 'application/json',
-    },
 });
 
 // --- Response interceptor: auto-refresh en 401 (cookie-only) ---
@@ -56,7 +38,8 @@ api.interceptors.response.use(
             error.response?.status === 401 &&
             !originalRequest._retry &&
             !originalRequest.url?.includes('/refresh') &&
-            !originalRequest.url?.includes('/LogIn')
+            !originalRequest.url?.includes('/LogIn') &&
+            !originalRequest.url?.includes('/logout')
         ) {
             if (isRefreshing) {
                 // Si ya se está refrescando, encolar la petición
@@ -79,7 +62,8 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError);
-                // Refresh falló: dejar que el código llamante maneje el error
+                // La sesión expiró: avisar a la app (AuthContext cierra la sesión)
+                window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

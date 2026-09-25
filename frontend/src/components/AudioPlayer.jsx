@@ -4,12 +4,13 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
  * AudioPlayer Component
  * Reproductor de audio con feedback visual y controles de velocidad.
  */
+const PLAYBACK_SPEEDS = [1, 1.5, 2, 0.5];
+
 export default function AudioPlayer({ src, isMine = false }) {
     const audioRef = useRef(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
-    const [isLoaded, setIsLoaded] = useState(false);
     const [playbackRate, setPlaybackRate] = useState(1);
     const progressRef = useRef(null);
 
@@ -19,7 +20,6 @@ export default function AudioPlayer({ src, isMine = false }) {
 
         const onLoadedMetadata = () => {
             setDuration(audio.duration);
-            setIsLoaded(true);
         };
         const onTimeUpdate = () => setCurrentTime(audio.currentTime);
         const onEnded = () => {
@@ -37,7 +37,6 @@ export default function AudioPlayer({ src, isMine = false }) {
 
         if (audio.readyState >= 1) {
             setDuration(audio.duration);
-            setIsLoaded(true);
         }
 
         return () => {
@@ -73,12 +72,11 @@ export default function AudioPlayer({ src, isMine = false }) {
         setCurrentTime(audio.currentTime);
     }, [duration]);
 
-    const speeds = [1, 1.5, 2, 0.5];
     const cycleSpeed = useCallback(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        const idx = speeds.indexOf(playbackRate);
-        const next = speeds[(idx + 1) % speeds.length];
+        const idx = PLAYBACK_SPEEDS.indexOf(playbackRate);
+        const next = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
         audio.playbackRate = next;
         setPlaybackRate(next);
     }, [playbackRate]);

@@ -7,23 +7,28 @@ import AudioPlayer from '../../../components/AudioPlayer';
  * MessageList Component
  * Renderiza la lista de mensajes de un chat con optimizaciones de UI/UX.
  */
+// Lee los fondos por chat guardados en localStorage (puede fallar en modo privado)
+const readChatWallpapers = () => {
+    try {
+        return JSON.parse(localStorage.getItem('chat_wallpapers') || '{}') || {};
+    } catch {
+        return {};
+    }
+};
+
 const MessageList = () => {
     const { 
         selected, messagesByChat, profile, avatarMap, globalWallpaper 
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
-    const [chatWallpapers, setChatWallpapers] = useState({});
+    const [chatWallpapers, setChatWallpapers] = useState(readChatWallpapers);
 
     useEffect(() => {
-        const saved = localStorage.getItem('chat_wallpapers');
-        if (saved) {
-            try { setChatWallpapers(JSON.parse(saved)); } catch (e) { /* ignore */ }
-        }
         // Listen for storage changes (cross-tab)
         const onStorage = (e) => {
             if (e.key === 'chat_wallpapers') {
-                try { setChatWallpapers(e.newValue ? JSON.parse(e.newValue) : {}); } catch (e2) { /* ignore */ }
+                try { setChatWallpapers(e.newValue ? JSON.parse(e.newValue) : {}); } catch { /* ignore */ }
             }
         };
         // Listen for same-tab wallpaper changes (dispatched by ContactDetails)
@@ -38,13 +43,6 @@ const MessageList = () => {
         };
     }, []);
 
-    // Also refresh when selected contact changes (in case ContactDetails updated in same tab)
-    useEffect(() => {
-        const saved = localStorage.getItem('chat_wallpapers');
-        if (saved) {
-            try { setChatWallpapers(JSON.parse(saved)); } catch (e) { /* ignore */ }
-        }
-    }, [selected?.Number]);
     
     const { 
         editingMessageId, editingMessageText, handleEditMessageChange, 
@@ -74,7 +72,7 @@ const MessageList = () => {
         let currentGroup = null;
 
         messages.forEach((m) => {
-            const date = new Date(m.Time || m.Timestamp || Date.now());
+            const date = new Date(m.Time || m.Timestamp);
             const dateStr = date.toLocaleDateString(undefined, { 
                 weekday: 'long', 
                 year: 'numeric', 

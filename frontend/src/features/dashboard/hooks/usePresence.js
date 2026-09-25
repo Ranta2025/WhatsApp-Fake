@@ -13,6 +13,7 @@ export const usePresence = () => {
     const offlineTimers = useRef(new Map());
 
     useEffect(() => {
+        const timers = offlineTimers.current;
         const handleContactsOnline = (contacts) => {
             if (Array.isArray(contacts)) {
                 // Cancelar cualquier timer de offline pendiente para contactos que están online
@@ -82,8 +83,8 @@ export const usePresence = () => {
             off('offline', handleUserOffline);
             off('typing', handleTyping);
             // Limpiar todos los timers pendientes al desmontar
-            offlineTimers.current.forEach(timer => clearTimeout(timer));
-            offlineTimers.current.clear();
+            timers.forEach(timer => clearTimeout(timer));
+            timers.clear();
         };
     }, [on, off, setOnlineUsers, setLastSeenMap, setTypingUsers]);
 };

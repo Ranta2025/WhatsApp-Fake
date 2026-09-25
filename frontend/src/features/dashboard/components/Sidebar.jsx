@@ -6,7 +6,7 @@ import CallHistory from '../../../components/CallHistory';
 const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
     const { 
         contacts, onlineUsers, selected, setSelected, 
-        sidebarView, setSidebarView, sidebarOpen, setSidebarOpen,
+        sidebarView, setSidebarView, setSidebarOpen,
         lastSeenMap, avatarMap, isConnected, myAvatar, profile,
         messagesByChat, allChatGroups, logout,
         groups, selectedGroup, setSelectedGroup,

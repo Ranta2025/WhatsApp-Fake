@@ -26,7 +26,7 @@ export default function RecoverPassword() {
 
         setLoading(true);
         try {
-            const response = await api.post('/forgot-password-send', {
+            await api.post('/forgot-password-send', {
                 email: email
             });
             setStep(2);

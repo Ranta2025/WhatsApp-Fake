@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import MediaUploadMenu from '../../../components/MediaUploadMenu';
@@ -7,7 +7,7 @@ import api from '../../../api/axios';
 const MessageInput = () => {
     const { 
         selected, isConnected, profile, drafts, setDrafts, 
-        sendTypingIndicator, sendMessage 
+        sendTypingIndicator
     } = useDashboard();
     
     const { 

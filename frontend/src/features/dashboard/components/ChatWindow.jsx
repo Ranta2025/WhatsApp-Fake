@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { MessagingProvider, useMessaging } from '../hooks/useMessaging';
 import MessageList from './MessageList';
@@ -11,7 +11,9 @@ import api from '../../../api/axios';
 const ForwardMessageModalWrapper = () => {
     const { forwardingMessage, setForwardingMessage, executeForward } = useMessaging();
     return (
+        // key: el estado interno del modal se reinicia con cada mensaje a reenviar
         <ForwardMessageModal
+            key={forwardingMessage?.MessageID ?? 'closed'}
             isOpen={!!forwardingMessage}
             onClose={() => setForwardingMessage(null)}
             message={forwardingMessage}
@@ -28,9 +30,12 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
     } = useDashboard();
     const [showAddContactModal, setShowAddContactModal] = useState(false);
 
-    // Cargar mensajes al seleccionar un contacto si aún no están en cache
+    // Cargar mensajes al seleccionar un contacto si aún no están en cache.
+    // Se lee la caché por ref: el efecto solo debe dispararse al cambiar de chat.
+    const messagesByChatRef = useRef(messagesByChat);
+    useEffect(() => { messagesByChatRef.current = messagesByChat; }, [messagesByChat]);
     useEffect(() => {
-        if (selected?.Number && !messagesByChat[selected.Number]) {
+        if (selected?.Number && !messagesByChatRef.current[selected.Number]) {
             fetchChatMessages(selected.Number);
         }
     }, [selected?.Number, fetchChatMessages]);

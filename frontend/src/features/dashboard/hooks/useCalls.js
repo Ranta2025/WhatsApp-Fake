@@ -27,9 +27,8 @@ export const useCalls = () => {
 
     useEffect(() => {
         const handleIncomingCall = (payload) => {
-            console.log('[CALL] Incoming call from:', payload.from);
-            if (callState) {
-                console.log('[CALL] Busy, rejecting incoming call');
+            // Ocupado (en llamada o con otra llamada entrante sonando): rechazar
+            if (callState || incomingCall) {
                 sendCallReject(payload.from, payload.roomID);
                 return;
             }
@@ -37,33 +36,30 @@ export const useCalls = () => {
         };
 
         const handleCallAccepted = () => {
-            console.log('[CALL] Call accepted');
             clearCallTimeout();
             retryCountRef.current = 0;
             setCallState(prev => prev ? { ...prev, status: 'active' } : prev);
         };
 
         const handleCallRejected = () => {
-            console.log('[CALL] Call rejected');
             clearCallTimeout();
             setCallState(null);
             addToast({ type: 'info', message: 'Llamada rechazada' });
         };
 
-        const handleCallEnded = () => {
-            console.log('[CALL] Call ended by remote');
+        const handleCallEnded = (payload) => {
             clearCallTimeout();
             setCallState(null);
+            // Si el que llamaba colgó mientras aún sonaba, dejar de mostrar la llamada entrante
+            setIncomingCall(prev => (!prev || !payload?.roomID || prev.roomID === payload.roomID) ? null : prev);
         };
 
         const handleCallUnavailable = () => {
-            console.log('[CALL] Remote unavailable');
             clearCallTimeout();
             
             if (retryCountRef.current < MAX_RETRIES && callState?.role === 'caller') {
                 const delay = Math.pow(2, retryCountRef.current) * 1000;
                 retryCountRef.current++;
-                console.log(`[CALL] Retrying in ${delay}ms (Attempt ${retryCountRef.current}/${MAX_RETRIES})`);
                 
                 setTimeout(() => {
                     if (callState) {
@@ -90,7 +86,7 @@ export const useCalls = () => {
             off('call_unavailable', handleCallUnavailable);
             clearCallTimeout();
         };
-    }, [on, off, callState, sendCallReject, sendCallOffer, setCallState, setIncomingCall, clearCallTimeout, addToast]);
+    }, [on, off, callState, incomingCall, sendCallReject, sendCallOffer, setCallState, setIncomingCall, clearCallTimeout, addToast]);
 
     /**
      * Inicia una nueva llamada.
@@ -103,8 +99,8 @@ export const useCalls = () => {
             return;
         }
 
-        const roomID = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        console.log(`[CALL] Starting ${callType} call. Room: ${roomID}`);
+        const roomID = `call_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+        retryCountRef.current = 0;
         
         setCallState({
             roomID,
@@ -120,19 +116,19 @@ export const useCalls = () => {
         // Timeout de 30 segundos para la señalización
         clearCallTimeout();
         callTimeoutRef.current = setTimeout(() => {
-            console.log('[CALL] Call signaling timeout');
+            // Avisar al receptor para que deje de sonar
+            sendCallEnd(selected.Number, roomID);
             setCallState(null);
             addToast({ type: 'error', message: 'La llamada no pudo establecerse (Timeout)' });
         }, 30000);
         
-    }, [selected, isConnected, sendCallOffer, setCallState, addToast, clearCallTimeout]);
+    }, [selected, isConnected, sendCallOffer, sendCallEnd, setCallState, addToast, clearCallTimeout]);
 
     /**
      * Acepta una llamada entrante.
      */
     const handleAcceptIncomingCall = useCallback(() => {
         if (!incomingCall) return;
-        console.log('[CALL] Accepting incoming call');
         sendCallAccept(incomingCall.from, incomingCall.roomID);
         setCallState({
             roomID: incomingCall.roomID,
@@ -150,7 +146,6 @@ export const useCalls = () => {
      */
     const handleRejectIncomingCall = useCallback(() => {
         if (!incomingCall) return;
-        console.log('[CALL] Rejecting incoming call');
         sendCallReject(incomingCall.from, incomingCall.roomID);
         setIncomingCall(null);
     }, [incomingCall, sendCallReject, setIncomingCall]);
@@ -160,7 +155,6 @@ export const useCalls = () => {
      */
     const handleEndCall = useCallback(() => {
         if (callState) {
-            console.log('[CALL] Ending call manually');
             sendCallEnd(callState.remoteTelephon, callState.roomID);
         }
         clearCallTimeout();

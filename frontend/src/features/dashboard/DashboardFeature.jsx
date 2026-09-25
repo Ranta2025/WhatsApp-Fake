@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { DashboardProvider, useDashboard } from './context/DashboardContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
@@ -8,18 +8,18 @@ import ContactDetails from './components/ContactDetails';
 import NotificationBanner from './components/NotificationBanner';
 import AddContactModal from './components/AddContactModal';
 import CreateGroupModal from './components/CreateGroupModal';
-import PermissionsDialog from '../../components/PermissionsDialog';
 import IncomingCall from '../../components/IncomingCall';
-import CallRoom from '../../components/CallRoom';
 import { usePresence } from './hooks/usePresence';
 import { useCalls } from './hooks/useCalls';
+
+// El SDK de videollamadas (ZegoCloud) pesa varios MB: se carga solo al iniciar una llamada.
+const CallRoom = lazy(() => import('../../components/CallRoom'));
 
 /**
  * CallingOverlay - Muestra el estado "Llamando..." mientras espera que el receptor conteste.
  * Reproduce un tono de llamada saliente y muestra el nombre/número del contacto.
  */
 const CallingOverlay = ({ callState, onEndCall }) => {
-    const audioRef = useRef(null);
     const [elapsed, setElapsed] = useState(0);
 
     // Reproducir tono de llamada saliente (beep sintetizado)
@@ -68,7 +68,7 @@ const CallingOverlay = ({ callState, onEndCall }) => {
             if (intervalId) clearInterval(intervalId);
             if (elapsedTimer) clearInterval(elapsedTimer);
             if (audioCtx) {
-                try { audioCtx.close(); } catch (e) { /* ignore */ }
+                try { audioCtx.close(); } catch { /* ignore */ }
             }
         };
     }, []);
@@ -129,17 +129,12 @@ const DashboardContent = () => {
         handleRejectIncomingCall, handleEndCall, handleStartCall 
     } = useCalls();
 
-    const { 
-        profile, user, isConnected, notifPermission, setNotifPermission, 
-        requestNotificationPermission,
-        selectedGroup,
-    } = useDashboard();
+    const { profile, user, selectedGroup } = useDashboard();
 
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [showContactDetails, setShowContactDetails] = useState(false);
     const [showAddContactModal, setShowAddContactModal] = useState(false);
     const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
-    const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
     const [viewImage, setViewImage] = useState(null);
 
     // Loading Screen logic (optional, can be integrated in DashboardProvider or here)
@@ -234,14 +229,6 @@ const DashboardContent = () => {
                 </div>
             )}
 
-            {/* ========== Diálogo de Permisos ========== */}
-            {showPermissionsDialog && (
-                <PermissionsDialog onDone={() => {
-                    setShowPermissionsDialog(false);
-                    // Actualizar permisos de notificación si es necesario
-                }} />
-            )}
-
             {/* Sistema de llamadas */}
             {incomingCall && (
                 <IncomingCall 
@@ -254,13 +241,15 @@ const DashboardContent = () => {
             )}
 
             {callState && callState.status === 'active' && (
-                <CallRoom 
-                    roomID={callState.roomID}
-                    userID={user?.telephon || profile?.Telephon}
-                    userName={user?.username || profile?.Username}
-                    callType={callState.callType}
-                    onCallEnd={handleEndCall}
-                />
+                <Suspense fallback={<div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center text-white">Conectando llamada...</div>}>
+                    <CallRoom
+                        roomID={callState.roomID}
+                        userID={user?.telephon || profile?.Telephon}
+                        userName={user?.username || profile?.Username}
+                        callType={callState.callType}
+                        onCallEnd={handleEndCall}
+                    />
+                </Suspense>
             )}
 
             {callState && callState.status === 'ringing' && callState.role === 'caller' && (

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
 import api from '../../../api/axios';
@@ -442,7 +442,6 @@ const GroupChatWindowInner = () => {
         selectedGroup, setSelectedGroup,
         groupMessages, setGroupMessages, fetchGroupMessages, fetchGroupDetail,
         typingUsers, profile,
-        isConnected,
         contacts,
         setSelected,
         avatarMap, myAvatar,
@@ -619,24 +618,21 @@ const GroupChatWindowInner = () => {
     const myTelephon = profile?.Telephon;
     const messages   = groupMessages[selectedGroup?.ID] || [];
 
-    // Derive the current user's role from the loaded members list
-    const myRole = useMemo(() => {
-        if (!selectedGroup?.Members || !myTelephon) return selectedGroup?.UserRole || 'member';
-        return selectedGroup.Members.find(m => m.Telephon === myTelephon)?.Role || 'member';
-    }, [selectedGroup, myTelephon]);
-
     // Group-specific typing keys: "group:<groupID>:<telephon>"
     const typingInGroup = selectedGroup
         ? Array.from(typingUsers).filter(k => k.startsWith(`group:${selectedGroup.ID}:`))
         : [];
 
-    // Load full detail (members + messages) if not yet loaded or if Members are missing
+    // Load full detail (members + messages) if not yet loaded or if Members are missing.
+    // La caché de mensajes se lee por ref: el efecto solo debe dispararse al cambiar de grupo.
+    const groupMessagesRef = useRef(groupMessages);
+    useEffect(() => { groupMessagesRef.current = groupMessages; }, [groupMessages]);
     useEffect(() => {
         if (!selectedGroup?.ID) return;
         if (!selectedGroup.Members) {
             // selectedGroup is a lightweight GroupResponse — load the full GroupDetail
             fetchGroupDetail(selectedGroup.ID);
-        } else if (!groupMessages[selectedGroup.ID]) {
+        } else if (!groupMessagesRef.current[selectedGroup.ID]) {
             // Detail already loaded but no cached messages yet
             fetchGroupMessages(selectedGroup.ID);
         }

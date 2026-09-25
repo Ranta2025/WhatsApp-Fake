@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import api from '../api/axios';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import AuthLayout from '../components/AuthLayout';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
@@ -23,7 +22,6 @@ export default function Register() {
     const [phoneCountryIso, setPhoneCountryIso] = useState('cu');
     const [phoneDialCode, setPhoneDialCode] = useState('53');
     const navigate = useNavigate();
-    const { login } = useAuth();
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });

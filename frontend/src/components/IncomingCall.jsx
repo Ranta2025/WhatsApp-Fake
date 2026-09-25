@@ -128,7 +128,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                         <button
                             onClick={() => {
                                 if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
-                                if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch(e) {} }
+                                if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch { /* ya cerrado */ } }
                                 onReject();
                             }}
                             className="w-20 h-20 bg-red-500 hover:bg-red-600 active:scale-90 rounded-full flex items-center justify-center transition-all shadow-xl shadow-red-500/20 group"
@@ -146,7 +146,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                         <button
                             onClick={() => {
                                 if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
-                                if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch(e) {} }
+                                if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch { /* ya cerrado */ } }
                                 onAccept();
                             }}
                             className="w-20 h-20 bg-emerald-500 hover:bg-emerald-600 active:scale-90 rounded-full flex items-center justify-center transition-all shadow-xl shadow-emerald-500/20 group"

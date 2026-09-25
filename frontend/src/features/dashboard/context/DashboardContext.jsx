@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../../api/axios';
 import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/groupApi';
 import { useAuth } from '../../../context/AuthContext';
@@ -19,8 +19,7 @@ export const DashboardProvider = ({ children }) => {
     const { user, logout } = useAuth();
     const {
         isConnected, on, off,
-        sendMessage, sendReadConfirmation, sendTypingIndicator, sendEditMessage, sendDeleteMessage,
-        sendCallOffer, sendCallAccept, sendCallReject, sendCallEnd,
+        sendMessage, sendReadConfirmation, sendTypingIndicator,
         sendGroupMessage, sendGroupTyping, sendGroupEditMessage, sendGroupDeleteMessage,
         sendGroupJoin,
     } = useWebSocket();
@@ -48,16 +47,27 @@ export const DashboardProvider = ({ children }) => {
     const [groupMessages, setGroupMessages] = useState({}); // { [groupID]: GroupMessageResponse[] }
     const [selectedGroup, setSelectedGroupState] = useState(null);
 
-    /** Set selected group and clear 1-to-1 selection (mutual exclusivity). */
-    const setSelectedGroup = useCallback((group) => {
-        setSelectedGroupState(group);
-        if (group) setSelected(null);
+    /**
+     * Selecciona un grupo y limpia la selección 1:1 (son excluyentes).
+     * Acepta también una función updater, que solo modifica el grupo actual.
+     */
+    const setSelectedGroup = useCallback((groupOrUpdater) => {
+        if (typeof groupOrUpdater === 'function') {
+            setSelectedGroupState(groupOrUpdater);
+            return;
+        }
+        setSelectedGroupState(groupOrUpdater);
+        if (groupOrUpdater) setSelected(null);
     }, []);
 
-    /** Override setSelected to also clear selectedGroup. */
-    const setSelectedContact = useCallback((contact) => {
-        setSelected(contact);
-        if (contact) setSelectedGroupState(null);
+    /** Selecciona un chat 1:1 y limpia el grupo seleccionado (acepta updater). */
+    const setSelectedContact = useCallback((contactOrUpdater) => {
+        if (typeof contactOrUpdater === 'function') {
+            setSelected(contactOrUpdater);
+            return;
+        }
+        setSelected(contactOrUpdater);
+        if (contactOrUpdater) setSelectedGroupState(null);
     }, []);
     
     // Notifications & Toasts
@@ -244,14 +254,30 @@ export const DashboardProvider = ({ children }) => {
         }
     }, []);
 
+    // Carga inicial y re-sincronización tras cada reconexión del WebSocket:
+    // los mensajes que llegaron mientras estábamos desconectados no se
+    // recibieron por WS, así que se recargan chats y grupos desde la API.
+    const wasConnectedRef = useRef(false);
     useEffect(() => {
-        if (user) {
-            fetchProfile();
-            fetchContacts();
+        if (!user) return;
+        /* eslint-disable react-hooks/set-state-in-effect -- carga de datos asíncrona */
+        fetchProfile();
+        fetchContacts();
+        fetchAllChats();
+        fetchUserGroups();
+        /* eslint-enable react-hooks/set-state-in-effect */
+    }, [user, fetchProfile, fetchContacts, fetchAllChats, fetchUserGroups]);
+
+    useEffect(() => {
+        if (!isConnected) return;
+        if (wasConnectedRef.current) {
+            /* eslint-disable react-hooks/set-state-in-effect -- carga de datos asíncrona */
             fetchAllChats();
             fetchUserGroups();
+            /* eslint-enable react-hooks/set-state-in-effect */
         }
-    }, [user, fetchProfile, fetchContacts, fetchAllChats, fetchUserGroups]);
+        wasConnectedRef.current = true;
+    }, [isConnected, fetchAllChats, fetchUserGroups]);
 
     // WebSocket Handlers (Extracted from Dashboard.jsx)
     useEffect(() => {
@@ -266,10 +292,23 @@ export const DashboardProvider = ({ children }) => {
             
             setMessagesByChat(prev => {
                 const existing = prev[contactNumber] || [];
-                // logic for updating/replacing messages...
                 const alreadyExists = existing.some(m => m.MessageID === MessageID);
                 if (alreadyExists) return prev;
                 return { ...prev, [contactNumber]: [...existing, messageData] };
+            });
+            // Primer mensaje de alguien que aún no tenemos en la lista de chats
+            setAllChatGroups(prev => {
+                if (prev[contactNumber]) return prev;
+                const isContact = contactsRef.current.some(c => c.Number === contactNumber);
+                return {
+                    ...prev,
+                    [contactNumber]: {
+                        ContactTelephon: contactNumber,
+                        ContactUsername: contactNumber,
+                        ContactName: '',
+                        IsContact: isContact,
+                    },
+                };
             });
 
             // si recibimos un mensaje de otro contacto y no lo tenemos abierto, notificar
@@ -467,17 +506,22 @@ export const DashboardProvider = ({ children }) => {
          * Another user added us to a group (or member was added).
          * We just refresh the full groups list so our role/count are always accurate.
          */
-        const handleGroupAdded = (_payload) => {
+        const handleGroupAdded = () => {
             fetchUserGroups();
         };
 
+        // Nota: dentro de los handlers se usa setSelectedGroupState (setter
+        // directo). El wrapper setSelectedGroup deselecciona el chat 1:1 cuando
+        // recibe un valor "truthy", y una función updater lo es: cualquier cambio
+        // de avatar o de miembros de un grupo cerraba el chat abierto.
+
         /** A group avatar was updated — update it in the groups list and selectedGroup. */
         const handleGroupAvatarUpdate = (payload) => {
-            if (!payload?.groupID || !payload?.avatarUrl) return;
+            if (!payload?.groupID || payload.avatarUrl === undefined) return;
             setGroups(prev => prev.map(g =>
                 g.ID === payload.groupID ? { ...g, AvatarUrl: payload.avatarUrl } : g
             ));
-            setSelectedGroup(prev =>
+            setSelectedGroupState(prev =>
                 prev?.ID === payload.groupID ? { ...prev, AvatarUrl: payload.avatarUrl } : prev
             );
         };
@@ -503,7 +547,7 @@ export const DashboardProvider = ({ children }) => {
                     ? { ...g, MemberCount: payload.newMemberCount ?? g.MemberCount }
                     : g
             ));
-            setSelectedGroup(prev => {
+            setSelectedGroupState(prev => {
                 if (!prev || prev.ID !== payload.groupID) return prev;
                 const newMembers = (payload.addedMembers || []).map(m => ({
                     Telephon: m.telephon,
@@ -541,7 +585,7 @@ export const DashboardProvider = ({ children }) => {
                     ? { ...g, MemberCount: Math.max((g.MemberCount || 1) - 1, 0) }
                     : g
             ));
-            setSelectedGroup(prev => {
+            setSelectedGroupState(prev => {
                 if (!prev || prev.ID !== payload.groupID) return prev;
                 return {
                     ...prev,

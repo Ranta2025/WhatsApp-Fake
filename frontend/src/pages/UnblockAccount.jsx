@@ -37,7 +37,7 @@ export default function UnblockAccount() {
 
         setLoading(true);
         try {
-            const response = await api.post('/resend-code', {
+            await api.post('/resend-code', {
                 gmail: gmail
             });
             setStep(2);

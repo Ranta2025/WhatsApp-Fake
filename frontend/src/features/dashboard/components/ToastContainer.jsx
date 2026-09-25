@@ -29,11 +29,10 @@ function hashStr(str) {
 // ─── Notificación individual ───────────────────────────────────
 const InAppNotification = ({ notif, onDismiss, onOpen }) => {
     const [phase, setPhase] = useState('enter'); // enter | visible | exit
-    const timerRef = useRef(null);
     const progressRef = useRef(null);
     // Track elapsed time to pause/resume when visibility changes
     const elapsedRef = useRef(0);
-    const lastTickRef = useRef(Date.now());
+    const lastTickRef = useRef(0);
     const [progress, setProgress] = useState(100);
     const dismissed = useRef(false);
 
@@ -41,7 +40,6 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
         if (dismissed.current) return;
         dismissed.current = true;
         if (progressRef.current) cancelAnimationFrame(progressRef.current);
-        clearTimeout(timerRef.current);
         setPhase('exit');
         setTimeout(() => onDismiss(notif.id), 350);
     }, [notif.id, onDismiss]);
@@ -76,7 +74,6 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
         startTimer();
 
         return () => {
-            clearTimeout(timerRef.current);
             if (progressRef.current) cancelAnimationFrame(progressRef.current);
         };
     }, [dismiss]);
@@ -85,7 +82,6 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
         if (dismissed.current) return;
         dismissed.current = true;
         if (progressRef.current) cancelAnimationFrame(progressRef.current);
-        clearTimeout(timerRef.current);
         onOpen(notif);
     };
 

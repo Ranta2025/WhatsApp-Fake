@@ -12,10 +12,9 @@ export default function ActivateAccount() {
     const [resendSuccess, setResendSuccess] = useState(false);
     const [isBloqueado, setIsBloqueado] = useState(false);
     const navigate = useNavigate();
-    const { setUser } = useAuth();
+    const { refreshUser } = useAuth();
     const location = useLocation();
     const username = location.state?.username || '';
-    const gmail = location.state?.gmail || '';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -38,13 +37,12 @@ export default function ActivateAccount() {
 
         setLoading(true);
         try {
-            const response = await api.post('/activate', {
+            await api.post('/activate', {
                 username: username,
                 code: code
             });
-            // Establecer el usuario en el contexto ANTES de navegar
-            setUser({ username: username });
-            alert("Cuenta activada exitosamente");
+            // La activación abre la sesión (cookies): cargar el perfil antes de navegar
+            await refreshUser();
             // Navegar al dashboard
             navigate('/dashboard', { replace: true });
         } catch (err) {
