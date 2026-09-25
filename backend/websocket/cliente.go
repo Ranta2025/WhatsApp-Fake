@@ -5,6 +5,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -25,7 +26,6 @@ const (
 )
 
 type Client struct {
-	Username       string // Para mostrar en la UI
 	Telephon       string // Identificador único (inmutable)
 	Conn           *websocket.Conn
 	Send           chan []byte
@@ -33,6 +33,35 @@ type Client struct {
 	ServiceContact services.ContactServicer
 	ServiceCall    services.CallServicer
 	ServiceGroup   services.GroupServicer
+
+	// username puede cambiar mientras la conexión está abierta (cambio de
+	// nombre de usuario), por eso se accede de forma atómica.
+	username atomic.Value
+
+	// closed indica que Send fue cerrado. Protegido por Hub.mu.
+	closed bool
+}
+
+// NewClient crea un cliente WebSocket para el usuario indicado.
+func NewClient(username, telephon string, conn *websocket.Conn) *Client {
+	c := &Client{
+		Telephon: telephon,
+		Conn:     conn,
+		Send:     make(chan []byte, 256),
+	}
+	c.username.Store(username)
+	return c
+}
+
+// Username devuelve el nombre de usuario actual (para mostrar en la UI).
+func (c *Client) Username() string {
+	name, _ := c.username.Load().(string)
+	return name
+}
+
+// SetUsername actualiza el nombre de usuario mostrado.
+func (c *Client) SetUsername(name string) {
+	c.username.Store(name)
 }
 
 // messageRouter es un mapa de tipo de mensaje → función handler.
@@ -63,7 +92,7 @@ func (c *Client) buildRouter() map[string]func(*MessageHandler) {
 // correspondiente y cierra la conexión al terminar.
 func (c *Client) readPump(hub *Hub) {
 	defer func() {
-		hub.Remove <- c
+		hub.UnregisterClient(c)
 		c.Conn.Close()
 	}()
 
@@ -82,7 +111,7 @@ func (c *Client) readPump(hub *Hub) {
 		_, messageBytes, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Error de conexión WebSocket: %v", err)
+				log.Printf("[WS] Error de conexión (tel: %s): %v", c.Telephon, err)
 			}
 			break
 		}
@@ -90,13 +119,13 @@ func (c *Client) readPump(hub *Hub) {
 		// 2. Decodificar encabezado (Type)
 		var baseMsg models.BaseMessage
 		if err := json.Unmarshal(messageBytes, &baseMsg); err != nil {
-			log.Println("Error formato JSON:", err)
+			log.Println("[WS] Error formato JSON:", err)
 			continue
 		}
 
 		// 3. Ping tiene respuesta directa, no necesita handler
 		if baseMsg.Type == "ping" {
-			c.Send <- []byte(`{"type":"pong"}`)
+			hub.SendToClient(c, []byte(`{"type":"pong"}`))
 			continue
 		}
 
@@ -105,7 +134,7 @@ func (c *Client) readPump(hub *Hub) {
 			handler := NewMessageHandler(c, hub, baseMsg.Payload)
 			handlerFunc(handler)
 		} else {
-			log.Printf("Tipo de mensaje desconocido: %s", baseMsg.Type)
+			log.Printf("[WS] Tipo de mensaje desconocido: %q", baseMsg.Type)
 		}
 	}
 }

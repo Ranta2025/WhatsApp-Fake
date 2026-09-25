@@ -21,11 +21,12 @@ func TestHandlerLogoutSessionHandler(t *testing.T) {
 	mockService := new(MockUserService)
 	handler := &HandlerUser{service: mockService}
 
-	mockService.On("DeleteRefreshToken", "testuser", mock.Anything).Return(nil)
+	mockService.On("DeleteRefreshToken", "refresh-token", mock.Anything).Return(nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("POST", "/logout", nil)
+	c.Request.AddCookie(&http.Cookie{Name: "refresh_token", Value: "refresh-token"})
 	c.Set("username", "testuser")
 	c.Set("telephon", "12345678")
 
@@ -49,7 +50,7 @@ func TestHandlerLogInSuccess(t *testing.T) {
 	token, _ := utils.GenerateToken("testuser", "12345678")
 
 	mockService.On("LogIn", userLogin, mock.Anything).Return(token, nil)
-	mockService.On("SaveRefreshToken", "testuser", mock.Anything, mock.Anything).Return(nil)
+	mockService.On("SaveRefreshToken", "12345678", mock.Anything, mock.Anything).Return(nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -102,4 +103,47 @@ func TestHandlerActivateAccountMissing(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	require.NotNil(t, handler)
+}
+
+// TestHandlerRefreshTokenWithoutAccessToken verifica que el refresh funciona
+// aunque el access token ya haya expirado y el navegador lo haya descartado.
+func TestHandlerRefreshTokenWithoutAccessToken(t *testing.T) {
+	os.Setenv("SECRETKEY", "super-secret-key-32-characters-long")
+	utils.ValidateJWTSecret()
+
+	mockService := new(MockUserService)
+	handler := &HandlerUser{service: mockService}
+
+	mockService.On("RefreshSession", "refresh-token", mock.Anything).Return("testuser", "12345678", nil)
+	mockService.On("SaveRefreshToken", "12345678", mock.Anything, mock.Anything).Return(nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/refresh", nil)
+	c.Request.AddCookie(&http.Cookie{Name: "refresh_token", Value: "refresh-token"})
+
+	handler.HandlerRefreshToken()(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockService.AssertExpectations(t)
+}
+
+// TestHandlerRegisterDoesNotIssueTokens verifica que el registro no abre sesión
+// (la cuenta está inactiva hasta verificar el código del email).
+func TestHandlerRegisterDoesNotIssueTokens(t *testing.T) {
+	mockService := new(MockUserService)
+	handler := &HandlerUser{service: mockService}
+
+	user := models.UserDataBase{User: models.User{Username: "newuser", Telephon: "+50212345678"}}
+	mockService.On("CreateUser", user, mock.Anything).Return(nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/register", nil)
+	c.Set("logout", user)
+
+	handler.HandlerLogOut()(c)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.Empty(t, w.Result().Cookies())
 }

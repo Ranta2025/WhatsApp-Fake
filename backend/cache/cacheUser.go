@@ -2,145 +2,161 @@ package cache
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
-	"gorm/backend/repos"
 	"gorm/backend/utils"
-	"log"
-	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
+const (
+	codigoTTL           = 10 * time.Minute
+	intentosFallidosTTL = 30 * time.Minute
+)
+
 type CacheUser struct {
-	rd   *redis.Client
-	repo *repos.RepositoriesUser
+	rd *redis.Client
 }
 
-// InitChacheUser crea el CacheUser con su cliente Redis y repositorio de usuarios.
-func InitChacheUser(rd *redis.Client, repo *repos.RepositoriesUser) *CacheUser {
-	return &CacheUser{rd, repo}
+// InitChacheUser crea el CacheUser con su cliente Redis.
+func InitChacheUser(rd *redis.Client) *CacheUser {
+	return &CacheUser{rd: rd}
 }
 
-// --- Refresh Token en Redis ---
+// --- Refresh Tokens en Redis ---
+//
+// Cada refresh token se guarda indexado por su hash SHA-256 (nunca en claro) y
+// apunta al teléfono del usuario (identificador inmutable). Además se mantiene
+// un set por usuario con todos sus tokens activos para poder revocarlos todos
+// (cambio de contraseña, bloqueo). Así se admiten varias sesiones/dispositivos
+// y el refresh no depende del access token expirado.
 
-// SaveRefreshToken guarda un refresh token en Redis asociado al username
-func (ch *CacheUser) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
+func refreshTokenKey(refreshToken string) string {
+	sum := sha256.Sum256([]byte(refreshToken))
+	return "refresh:token:" + hex.EncodeToString(sum[:])
+}
+
+func refreshUserKey(telephon string) string {
+	return "refresh:user:" + telephon
+}
+
+// SaveRefreshToken guarda un refresh token asociado al teléfono del usuario.
+func (ch *CacheUser) SaveRefreshToken(telephon string, refreshToken string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Set(c, "refresh:"+username, refreshToken, utils.RefreshTokenDuration).Err()
+	tokenKey := refreshTokenKey(refreshToken)
+	userKey := refreshUserKey(telephon)
+	pipe := ch.rd.TxPipeline()
+	pipe.Set(c, tokenKey, telephon, utils.RefreshTokenDuration)
+	pipe.SAdd(c, userKey, tokenKey)
+	pipe.Expire(c, userKey, utils.RefreshTokenDuration)
+	_, err := pipe.Exec(c)
+	return err
 }
 
-// GetRefreshToken obtiene el refresh token almacenado para un username
-func (ch *CacheUser) GetRefreshToken(username string, ctx context.Context) (string, error) {
+// GetRefreshTokenOwner devuelve el teléfono del usuario dueño del refresh token.
+func (ch *CacheUser) GetRefreshTokenOwner(refreshToken string, ctx context.Context) (string, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Get(c, "refresh:"+username).Result()
+	return ch.rd.Get(c, refreshTokenKey(refreshToken)).Result()
 }
 
-// DeleteRefreshToken elimina el refresh token de un username (logout)
-func (ch *CacheUser) DeleteRefreshToken(username string, ctx context.Context) error {
+// DeleteRefreshToken invalida un refresh token concreto (logout / rotación).
+func (ch *CacheUser) DeleteRefreshToken(refreshToken string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Del(c, "refresh:"+username).Err()
-}
-
-// CachePassword obtiene el hash de contraseña del usuario directamente desde la BD.
-// No se guarda en Redis para no exponer hashes sensibles en caché.
-func (ch *CacheUser) CachePassword(username string, ctx context.Context) (string, error) {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	// Consulta directa a BD — no cacheamos hashes de password en Redis por seguridad
-	passwordDB, exist := ch.repo.GetPassword(username, c)
-	if !exist {
-		return "", errors.New("contraseña inexistente")
+	tokenKey := refreshTokenKey(refreshToken)
+	telephon, err := ch.rd.GetDel(c, tokenKey).Result()
+	if errors.Is(err, redis.Nil) {
+		return nil
 	}
-	return passwordDB, nil
-}
-
-// CacheActivo revisa en Redis si el usuario está activo; si no está cacheado lo
-// consulta en la BD y lo guarda con TTL de 2 min.
-func (ch *CacheUser) CacheActivo(username string, ctx context.Context) (bool, error) {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	log.Println("[CACHE] Buscando activo para:", username)
-	activo, err := ch.rd.Get(c, "activo:"+username).Result()
 	if err != nil {
-		log.Println("[CACHE] No encontrado en Redis, buscando en BD")
-		activoDB, exist := ch.repo.GetActivo(username, c)
-		if !exist {
-			log.Println("[CACHE] activo no existe en BD para:", username)
-			return false, errors.New("activo inexistente")
-		}
-		log.Println("[CACHE] activo encontrada en BD:", activoDB)
-		err := ch.rd.Set(c, "activo:"+username, activoDB, 2*time.Minute)
-		if err.Err() != nil {
-			return false, err.Err()
-		}
-		return activoDB, nil
+		return err
 	}
-	log.Println("[CACHE] activo encontrada en Redis:", activo)
-	activoReturn, _ := strconv.ParseBool(activo)
-	return activoReturn, nil
+	return ch.rd.SRem(c, refreshUserKey(telephon), tokenKey).Err()
 }
 
-// SetCodigo guarda un código temporal en Redis con TTL de 10 min.
-// tipoCodigo diferencia el tipo de código ("activacion", "recuperacion", etc.).
-func (ch *CacheUser) SetCodigo(tipoCodigo string, username string, codigo string, ctx context.Context) error {
+// RevokeAllRefreshTokens invalida todas las sesiones del usuario.
+func (ch *CacheUser) RevokeAllRefreshTokens(telephon string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return ch.rd.Set(c, "codigo"+tipoCodigo+":"+username, codigo, 10*time.Minute).Err()
-}
-
-// GetCodigo recupera el código temporal guardado en Redis para el usuario.
-func (ch *CacheUser) GetCodigo(tipoCodigo string, username string, ctx context.Context) (string, error) {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	codigo, err := ch.rd.Get(c, "codigo"+tipoCodigo+":"+username).Result()
-	return codigo, err
-}
-
-// CacheBloqueado revisa en Redis si el usuario está bloqueado; si no está cacheado lo
-// consulta en la BD y lo almacena con TTL de 2 min.
-func (ch *CacheUser) CacheBloqueado(username string, ctx context.Context) (bool, error) {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	bloqueado, err := ch.rd.Get(c, "bloqueado:"+username).Result()
-	if err != nil {
-		bloqueadoDB, exist := ch.repo.GetBlocked(username, c)
-		if !exist {
-			log.Println("[CACHE] bloqueado no existe en BD para:", username)
-			return false, errors.New("bloqueado inexistente")
-		}
-		err := ch.rd.Set(c, "bloqueado:"+username, bloqueadoDB, 2*time.Minute)
-		if err.Err() != nil {
-			return false, err.Err()
-		}
-		return bloqueadoDB, nil
+	userKey := refreshUserKey(telephon)
+	tokenKeys, err := ch.rd.SMembers(c, userKey).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return err
 	}
-	bloqueadoReturn, _ := strconv.ParseBool(bloqueado)
-	return bloqueadoReturn, nil
+	return ch.rd.Del(c, append(tokenKeys, userKey)...).Err()
 }
 
-// GetIntentosFallidos devuelve el contador de intentos fallidos de login
-// almacenado en Redis; retorna 0 si no existe clave.
-func (ch *CacheUser) GetIntentosFallidos(username string, ctx context.Context) (int, error) {
+// --- Códigos de verificación ---
+
+func codigoKey(tipoCodigo, key string) string {
+	return "codigo" + tipoCodigo + ":" + key
+}
+
+func codigoIntentosKey(tipoCodigo, key string) string {
+	return "codigo_intentos" + tipoCodigo + ":" + key
+}
+
+// SetCodigo guarda un código temporal en Redis con TTL de 10 min y reinicia
+// el contador de intentos fallidos de ese código.
+// tipoCodigo diferencia el tipo de código ("activacion", "bloqueado", "forgot").
+func (ch *CacheUser) SetCodigo(tipoCodigo string, key string, codigo string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	intentos, err := ch.rd.Get(c, "intentos:"+username).Result()
-	if err == redis.Nil {
-		return 0, nil
-	}
-	intentosInt, err := strconv.Atoi(intentos)
+	pipe := ch.rd.TxPipeline()
+	pipe.Set(c, codigoKey(tipoCodigo, key), codigo, codigoTTL)
+	pipe.Del(c, codigoIntentosKey(tipoCodigo, key))
+	_, err := pipe.Exec(c)
+	return err
+}
+
+// GetCodigo recupera el código temporal guardado en Redis.
+func (ch *CacheUser) GetCodigo(tipoCodigo string, key string, ctx context.Context) (string, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Get(c, codigoKey(tipoCodigo, key)).Result()
+}
+
+// DeleteCodigo elimina el código (y su contador de intentos) para que no pueda reutilizarse.
+func (ch *CacheUser) DeleteCodigo(tipoCodigo string, key string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Del(c, codigoKey(tipoCodigo, key), codigoIntentosKey(tipoCodigo, key)).Err()
+}
+
+// IncrCodigoIntentos incrementa y devuelve el número de intentos fallidos del código.
+func (ch *CacheUser) IncrCodigoIntentos(tipoCodigo string, key string, ctx context.Context) (int, error) {
+	return ch.incrWithTTL(codigoIntentosKey(tipoCodigo, key), codigoTTL, ctx)
+}
+
+// --- Intentos fallidos de login ---
+
+// IncrIntentosFallidos incrementa de forma atómica el contador de intentos
+// fallidos de login (TTL de 30 min desde el primer fallo) y devuelve el nuevo valor.
+func (ch *CacheUser) IncrIntentosFallidos(username string, ctx context.Context) (int, error) {
+	return ch.incrWithTTL("intentos:"+username, intentosFallidosTTL, ctx)
+}
+
+// ResetIntentosFallidos borra el contador de intentos fallidos de login.
+func (ch *CacheUser) ResetIntentosFallidos(username string, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ch.rd.Del(c, "intentos:"+username).Err()
+}
+
+// incrWithTTL incrementa un contador y le asigna TTL solo al crearse.
+func (ch *CacheUser) incrWithTTL(key string, ttl time.Duration, ctx context.Context) (int, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	n, err := ch.rd.Incr(c, key).Result()
 	if err != nil {
 		return 0, err
 	}
-	return intentosInt, nil
-}
-
-// SetIntentosFallidos actualiza el contador de intentos fallidos en Redis con TTL de 30 min.
-func (ch *CacheUser) SetIntentosFallidos(username string, intentos int, ctx context.Context) error {
-	c, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	return ch.rd.Set(c, "intentos:"+username, strconv.Itoa(intentos), 30*time.Minute).Err()
+	if n == 1 {
+		ch.rd.Expire(c, key, ttl)
+	}
+	return int(n), nil
 }

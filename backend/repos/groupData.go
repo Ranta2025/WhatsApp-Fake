@@ -8,6 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // RepoGroup implementa todas las operaciones de base de datos relacionadas con grupos.
@@ -25,40 +26,54 @@ func InitRepoGroup(data *gorm.DB, rd *redis.Client) *RepoGroup {
 // Grupos
 // ─────────────────────────────────────────────────────────────────────────────
 
-// CreateGroupWithCreator persiste un grupo nuevo y registra al creador como admin,
-// todo dentro de una única transacción para garantizar consistencia.
-func (r *RepoGroup) CreateGroupWithCreator(group *models.Group, creatorID uint) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+// CreateGroupWithMembers persiste un grupo nuevo, registra al creador como
+// admin y añade los miembros iniciales, todo dentro de una única transacción:
+// o se crea el grupo completo o no se crea nada.
+func (r *RepoGroup) CreateGroupWithMembers(group *models.Group, creatorID uint, memberIDs []uint, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	return r.data.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
 		// 1. Insertar el grupo
 		if err := tx.Create(group).Error; err != nil {
 			return err
 		}
-		// 2. Insertar al creador como miembro administrador
-		creator := models.GroupMember{
+		// 2. Insertar al creador como administrador y a los miembros iniciales
+		members := make([]models.GroupMember, 0, len(memberIDs)+1)
+		members = append(members, models.GroupMember{
 			GroupID:   group.ID,
 			UserID:    creatorID,
 			Role:      "admin",
 			AddedByID: creatorID,
+		})
+		for _, id := range memberIDs {
+			members = append(members, models.GroupMember{
+				GroupID:   group.ID,
+				UserID:    id,
+				Role:      "member",
+				AddedByID: creatorID,
+			})
 		}
-		return tx.Create(&creator).Error
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&members).Error
 	})
 }
 
 // AddMembers inserta una lista de nuevos miembros en un grupo.
 // En caso de conflicto (miembro ya existente activo), ignora el duplicado.
 func (r *RepoGroup) AddMembers(groupID uint, members []models.GroupMember, ctx context.Context) error {
+	if len(members) == 0 {
+		return nil
+	}
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	for i := range members {
 		members[i].GroupID = groupID
 	}
-	// ON CONFLICT DO NOTHING: si el miembro ya existe activo, no falla.
+	// ON CONFLICT DO NOTHING: si el miembro ya existe activo (índice único
+	// parcial idx_group_member_active), no falla toda la inserción.
 	return r.data.WithContext(c).
-		Clauses().
+		Clauses(clause.OnConflict{DoNothing: true}).
 		Create(&members).Error
 }
 
@@ -78,6 +93,12 @@ func (r *RepoGroup) GetGroupByID(groupID uint, ctx context.Context) (*models.Gro
 	return &group, nil
 }
 
+// selectUserBasic limita las columnas cargadas al precargar usuarios
+// (evita traer password, email, etc. a memoria).
+func selectUserBasic(db *gorm.DB) *gorm.DB {
+	return db.Select("id", "telephon", "username", "avatar_url")
+}
+
 // GetGroupMembers devuelve todos los miembros activos de un grupo con sus datos de usuario.
 func (r *RepoGroup) GetGroupMembers(groupID uint, ctx context.Context) ([]models.GroupMember, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -85,22 +106,33 @@ func (r *RepoGroup) GetGroupMembers(groupID uint, ctx context.Context) ([]models
 
 	var members []models.GroupMember
 	err := r.data.WithContext(c).
-		Preload("User").
+		Preload("User", selectUserBasic).
 		Where("group_id = ?", groupID).
+		Order("created_at ASC").
 		Find(&members).Error
 	return members, err
 }
 
-// GetUserGroups devuelve todos los grupos en los que el usuario es miembro activo.
-func (r *RepoGroup) GetUserGroups(userID uint, ctx context.Context) ([]models.Group, error) {
+// GetUserGroups devuelve todos los grupos en los que el usuario es miembro activo,
+// junto con su rol, el número de miembros y el teléfono del creador, en una sola
+// consulta (antes: 3 consultas extra por grupo).
+func (r *RepoGroup) GetUserGroups(userID uint, ctx context.Context) ([]models.UserGroupRow, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	var groups []models.Group
+	var groups []models.UserGroupRow
 	err := r.data.WithContext(c).
-		Joins("JOIN group_members ON group_members.group_id = groups.id AND group_members.deleted_at IS NULL").
-		Where("group_members.user_id = ? AND groups.deleted_at IS NULL", userID).
-		Find(&groups).Error
+		Table("groups").
+		Select(`groups.*,
+			me.role AS user_role,
+			(SELECT COUNT(*) FROM group_members gm
+				WHERE gm.group_id = groups.id AND gm.deleted_at IS NULL) AS member_count,
+			creator.telephon AS creator_telephon`).
+		Joins("JOIN group_members me ON me.group_id = groups.id AND me.user_id = ? AND me.deleted_at IS NULL", userID).
+		Joins("LEFT JOIN user_data_bases creator ON creator.id = groups.creator_id").
+		Where("groups.deleted_at IS NULL").
+		Order("groups.created_at DESC").
+		Scan(&groups).Error
 	return groups, err
 }
 
@@ -184,7 +216,7 @@ func (r *RepoGroup) GetGroupMessages(groupID uint, limit, offset int, ctx contex
 
 	var messages []models.GroupMessage
 	err := r.data.WithContext(c).
-		Preload("Sender").
+		Preload("Sender", selectUserBasic).
 		Where("group_id = ?", groupID).
 		Order("created_at DESC").
 		Limit(limit).
@@ -199,7 +231,7 @@ func (r *RepoGroup) GetGroupMessageByID(messageID uint, ctx context.Context) (*m
 	defer cancel()
 
 	var msg models.GroupMessage
-	result := r.data.WithContext(c).Preload("Sender").First(&msg, messageID)
+	result := r.data.WithContext(c).Preload("Sender", selectUserBasic).First(&msg, messageID)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, errors.New("mensaje no encontrado")
@@ -209,14 +241,15 @@ func (r *RepoGroup) GetGroupMessageByID(messageID uint, ctx context.Context) (*m
 	return &msg, nil
 }
 
-// EditGroupMessage actualiza el contenido de un mensaje, verificando que el senderID coincida.
-func (r *RepoGroup) EditGroupMessage(messageID, senderID uint, newContent string, ctx context.Context) error {
+// EditGroupMessage actualiza el contenido de un mensaje del grupo, verificando
+// que pertenezca a ese grupo y que senderID sea su autor.
+func (r *RepoGroup) EditGroupMessage(groupID, messageID, senderID uint, newContent string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	result := r.data.WithContext(c).
 		Model(&models.GroupMessage{}).
-		Where("id = ? AND sender_id = ?", messageID, senderID).
+		Where("id = ? AND group_id = ? AND sender_id = ?", messageID, groupID, senderID).
 		Updates(map[string]interface{}{
 			"message": newContent,
 			"edited":  true,
@@ -230,13 +263,14 @@ func (r *RepoGroup) EditGroupMessage(messageID, senderID uint, newContent string
 	return nil
 }
 
-// DeleteGroupMessage realiza un soft-delete del mensaje, verificando que el senderID coincida.
-func (r *RepoGroup) DeleteGroupMessage(messageID, senderID uint, ctx context.Context) error {
+// DeleteGroupMessage realiza un soft-delete del mensaje, verificando que
+// pertenezca al grupo y que senderID sea su autor.
+func (r *RepoGroup) DeleteGroupMessage(groupID, messageID, senderID uint, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	result := r.data.WithContext(c).
-		Where("id = ? AND sender_id = ?", messageID, senderID).
+		Where("id = ? AND group_id = ? AND sender_id = ?", messageID, groupID, senderID).
 		Delete(&models.GroupMessage{})
 	if result.Error != nil {
 		return result.Error
@@ -247,21 +281,43 @@ func (r *RepoGroup) DeleteGroupMessage(messageID, senderID uint, ctx context.Con
 	return nil
 }
 
-// LeaveGroup elimina (soft-delete) la membresía del usuario en el grupo.
+// LeaveGroup elimina (soft-delete) la membresía del usuario en el grupo. Si era
+// el último administrador y quedan miembros, promueve a administrador al miembro
+// más antiguo para que el grupo no quede sin admin. Todo en una transacción.
 func (r *RepoGroup) LeaveGroup(groupID, userID uint, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	result := r.data.WithContext(c).
-		Where("group_id = ? AND user_id = ?", groupID, userID).
-		Delete(&models.GroupMember{})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return errors.New("no eres miembro de este grupo")
-	}
-	return nil
+	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("group_id = ? AND user_id = ?", groupID, userID).
+			Delete(&models.GroupMember{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("no eres miembro de este grupo")
+		}
+
+		var admins int64
+		if err := tx.Model(&models.GroupMember{}).
+			Where("group_id = ? AND role = ?", groupID, "admin").
+			Count(&admins).Error; err != nil {
+			return err
+		}
+		if admins > 0 {
+			return nil
+		}
+
+		var oldest models.GroupMember
+		err := tx.Where("group_id = ?", groupID).Order("created_at ASC").First(&oldest).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil // el grupo quedó vacío
+		}
+		if err != nil {
+			return err
+		}
+		return tx.Model(&oldest).Update("role", "admin").Error
+	})
 }
 
 // UpdateGroupAvatar actualiza la URL del avatar del grupo.

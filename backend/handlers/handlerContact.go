@@ -77,7 +77,7 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 
 		// Notificar a los contactos sobre el cambio de username
 		if hd.hub != nil {
-			hd.hub.NotifyUsernameChange(oldUsername, newUsername)
+			hd.hub.NotifyUsernameChange(userTelephon, oldUsername, newUsername)
 		}
 
 		// Regenerar cookie con nuevo username en el JWT
@@ -199,7 +199,7 @@ func (hd *HandlerContact) HandlerUpdateAvatar() gin.HandlerFunc {
 
 		url := avatarUrl.(string)
 		if err := hd.service.ServiceUpdateAvatar(telephon.(string), url, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			ctx.Abort()
 			return
 		}
@@ -232,7 +232,7 @@ func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 		}
 
 		if err := hd.service.ServiceUpdateWallpaper(telephon.(string), body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			ctx.Abort()
 			return
 		}
@@ -262,7 +262,7 @@ func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
 		}
 
 		if err := hd.service.ServiceUpdateContactWallpaper(telephon.(string), body.ContactTelephon, body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			ctx.Abort()
 			return
 		}

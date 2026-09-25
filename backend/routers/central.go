@@ -7,26 +7,42 @@ import (
 	"gorm/backend/routers/log"
 	"gorm/backend/services"
 	"gorm/backend/websocket"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
+// Deps agrupa los handlers y servicios que necesitan las rutas.
+type Deps struct {
+	HandlerUser      *handlers.HandlerUser
+	HandlerContact   *handlers.HandlerContact
+	HandlerChat      *handlers.HandlerChat
+	HandlerCall      *handlers.HandlerCall
+	HandlerMedia     *handlers.HandlerMedia
+	HandlerGroup     *handlers.HandlerGroup
+	HandlerBugReport *handlers.HandlerBugReport
+	Hub              *websocket.Hub
+	ChatService      services.ChatServicer
+	ContactService   services.ContactServicer
+	CallService      services.CallServicer
+	GroupService     services.GroupServicer
+}
+
 // Router registra todas las rutas de la aplicación: autenticación (log), bug-report
 // público y el subgrupo /api/v1/ con usuario, contactos, chat, media, llamadas,
 // grupos y WebSocket.
-func Router(handlerLog handlers.HandlerUser, app *gin.Engine, handlerApi handlers.HandlerContact, handlerChat handlers.HandlerChat, handlerCall *handlers.HandlerCall, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, handlerBugReport *handlers.HandlerBugReport, callService services.CallServicer, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, groupService services.GroupServicer) {
-	// Middleware de recuperación de panics
-	app.Use(gin.Recovery())
-
+func Router(app *gin.Engine, d Deps) {
 	// Rutas de autenticación
-	router := log.Log{Router: app, Handler: handlerLog}
+	router := log.Log{Router: app, Handler: *d.HandlerUser}
 	router.Logs()
 
-	// Ruta pública para reportes de bugs (no requiere autenticación)
-	app.POST("/api/v1/bug-report", middleware.MiddlewareBugReport(), handlerBugReport.HandleReportBug())
+	// Ruta pública para reportes de bugs (no requiere autenticación, con límite
+	// por IP porque cada reporte crea un issue en GitHub)
+	bugLimit := middleware.NewRateLimiter(5, time.Hour).Middleware()
+	app.POST("/api/v1/bug-report", bugLimit, middleware.MiddlewareBugReport(), d.HandlerBugReport.HandleReportBug())
 
 	subrouter := app.Group("/api/v1/")
-	apiMessage := api.InitRouterApiMessage(subrouter, &handlerApi, &handlerChat, handlerCall, handlerMedia, handlerGroup, hub, chatService, contactService, callService, groupService)
+	apiMessage := api.InitRouterApiMessage(subrouter, d.HandlerContact, d.HandlerChat, d.HandlerCall, d.HandlerMedia, d.HandlerGroup, d.Hub, d.ChatService, d.ContactService, d.CallService, d.GroupService)
 	apiMessage.ApiUser()
 	apiMessage.ApiContact()
 	apiMessage.ApiChat()

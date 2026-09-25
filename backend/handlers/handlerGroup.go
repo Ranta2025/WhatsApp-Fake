@@ -15,6 +15,8 @@ import (
 type GroupHubNotifier interface {
 	SendTo(telephon string, msg []byte)
 	JoinRoomByTelephon(groupID uint, telephon string)
+	LeaveRoomByTelephon(groupID uint, telephon string)
+	SendToGroup(groupID uint, senderTelephon string, msg []byte)
 }
 
 // HandlerGroup gestiona los endpoints REST del dominio de grupos.
@@ -173,40 +175,47 @@ func (h *HandlerGroup) HandleAddMembers() gin.HandlerFunc {
 			return
 		}
 
-		members := data.(models.GroupAddMembers).Members
-
 		err := h.service.AddMembers(telephon.(string), groupID.(uint), data.(models.GroupAddMembers), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		// 1. Notificar a los nuevos miembros con el detalle completo del grupo (sidebar)
-		if len(members) > 0 {
-			if detail, detailErr := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx); detailErr == nil {
-				h.notifyGroupMembers(groupID.(uint), members, telephon.(string), detail.GroupResponse)
+		detail, detailErr := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx)
+		if detailErr == nil {
+			// Miembros realmente añadidos: los que están en el grupo y venían en la petición
+			requested := make(map[string]struct{}, len(data.(models.GroupAddMembers).Members))
+			for _, tel := range data.(models.GroupAddMembers).Members {
+				requested[tel] = struct{}{}
 			}
-		}
+			type addedEntry struct {
+				Telephon string `json:"telephon"`
+				Username string `json:"username"`
+			}
+			added := make([]addedEntry, 0, len(requested))
+			addedTelephons := make([]string, 0, len(requested))
+			allTelephons := make([]string, 0, len(detail.Members))
+			adderUsername := ""
+			for _, m := range detail.Members {
+				allTelephons = append(allTelephons, m.Telephon)
+				if m.Telephon == telephon.(string) {
+					adderUsername = m.Username
+					continue
+				}
+				if _, ok := requested[m.Telephon]; ok {
+					added = append(added, addedEntry{Telephon: m.Telephon, Username: m.Username})
+					addedTelephons = append(addedTelephons, m.Telephon)
+				}
+			}
 
-		// 2. Broadcast "group_member_added" a TODOS los miembros actuales
-		adderUsername, _ := h.service.GetUsernameByTelephon(telephon.(string), ctx)
+			// 1. Notificar a los nuevos miembros con el detalle del grupo (sidebar)
+			h.notifyGroupMembers(groupID.(uint), addedTelephons, telephon.(string), detail.GroupResponse)
 
-		type addedEntry struct {
-			Telephon string `json:"telephon"`
-			Username string `json:"username"`
-		}
-		addedList := make([]addedEntry, 0, len(members))
-		for _, tel := range members {
-			username, _ := h.service.GetUsernameByTelephon(tel, ctx)
-			addedList = append(addedList, addedEntry{Telephon: tel, Username: username})
-		}
-
-		allTelephons, err2 := h.service.GetMemberTelephons(groupID.(uint), ctx)
-		if err2 == nil && len(allTelephons) > 0 {
+			// 2. Broadcast "group_member_added" a TODOS los miembros actuales
 			h.notifyAllGroupMembers(allTelephons, "group_member_added", map[string]interface{}{
 				"groupID":         groupID.(uint),
 				"addedByUsername": adderUsername,
-				"addedMembers":    addedList,
+				"addedMembers":    added,
 				"newMemberCount":  len(allTelephons),
 			})
 		}
@@ -239,6 +248,12 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		// Difundir en tiempo real al resto de miembros conectados (igual que por WS)
+		if h.notifier != nil {
+			if payload, err := json.Marshal(map[string]interface{}{"type": "group_chat", "payload": msg}); err == nil {
+				h.notifier.SendToGroup(msgData.GroupID, telephon.(string), payload)
+			}
+		}
 		ctx.JSON(http.StatusCreated, gin.H{"message": msg})
 	}
 }
@@ -261,7 +276,7 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 		limit := 50
 		offset := 0
 		if l, err := strconv.Atoi(ctx.DefaultQuery("limit", "50")); err == nil && l > 0 {
-			limit = l
+			limit = l // el servicio aplica el máximo permitido
 		}
 		if o, err := strconv.Atoi(ctx.DefaultQuery("offset", "0")); err == nil && o >= 0 {
 			offset = o
@@ -395,6 +410,11 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// Dejar de recibir los mensajes del grupo en tiempo real
+		if h.notifier != nil {
+			h.notifier.LeaveRoomByTelephon(groupID.(uint), telephon.(string))
 		}
 
 		// Notificar a los miembros restantes (el usuario ya no está en la lista)

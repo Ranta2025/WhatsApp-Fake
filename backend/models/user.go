@@ -28,3 +28,23 @@ type UserDataBase struct {
 	MessageAdd           []Message `gorm:"foreignKey:IdUser"`
 	MessageWhereIAmAdded []Message `gorm:"foreignKey:IdReceptor"`
 }
+
+// UserAuth agrupa los datos necesarios para autenticar/autorizar a un usuario
+// (se obtienen en una sola consulta en vez de una por campo).
+type UserAuth struct {
+	Username  string
+	Telephon  string
+	Gmail     string
+	Password  string
+	Activo    bool
+	Bloqueado bool
+}
+
+// UserBasic son los datos públicos mínimos de un usuario (sin password ni email),
+// usados para resolver remitentes/receptores en listados.
+type UserBasic struct {
+	ID        uint
+	Telephon  string
+	Username  string
+	AvatarUrl string
+}

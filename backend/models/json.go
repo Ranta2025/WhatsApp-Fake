@@ -57,11 +57,6 @@ type UserRecover struct {
 	Code  string `json:"code" binding:"required"`
 }
 
-type UserChangePassword struct {
-	Gmail    string `json:"gmail" binding:"required"`
-	Password string `json:"password" binding:"required"`
-}
-
 type UserRecoverAndChange struct {
 	Email    string `json:"email" binding:"required"`
 	Code     string `json:"code" binding:"required"`
@@ -97,8 +92,9 @@ type GroupAddMembers struct {
 }
 
 // GroupMessageSend es el payload de un nuevo mensaje de grupo (HTTP y WebSocket).
+// En la ruta REST el groupID se toma de la URL; en WebSocket va en el payload.
 type GroupMessageSend struct {
-	GroupID   uint   `json:"groupID" binding:"required"`
+	GroupID   uint   `json:"groupID"`
 	Message   string `json:"message"`
 	MediaUrl  string `json:"mediaUrl,omitempty"`
 	MediaType string `json:"mediaType,omitempty"`

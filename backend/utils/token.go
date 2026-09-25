@@ -57,11 +57,8 @@ func GenerateRefreshToken() (string, error) {
 // DecodeToken decodifica el token y devuelve username y telephon
 func DecodeToken(token string) (string, string, error) {
 	tokenDecode, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
-			return nil, errors.New("token invalido")
-		}
 		return jwtSecret, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 
 	if err != nil || !tokenDecode.Valid {
 		return "", "", errors.New("token invalido")

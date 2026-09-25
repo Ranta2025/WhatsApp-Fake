@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/minio/minio-go/v7"
@@ -48,7 +49,7 @@ func GetMinio() (*minio.Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error creando bucket '%s': %w", bucket, err)
 		}
-		fmt.Printf("MinIO: bucket '%s' creado\n", bucket)
+		log.Printf("[DB] MinIO: bucket '%s' creado", bucket)
 	}
 
 	// Establecer política de lectura pública para que las URLs sean accesibles directamente
@@ -67,6 +68,6 @@ func GetMinio() (*minio.Client, error) {
 		return nil, fmt.Errorf("error configurando política del bucket: %w", err)
 	}
 
-	fmt.Printf("MinIO conexion establecida (endpoint: %s, bucket: %s)\n", endpoint, bucket)
+	log.Printf("[DB] Conexión con MinIO establecida (endpoint: %s, bucket: %s)", endpoint, bucket)
 	return client, nil
 }

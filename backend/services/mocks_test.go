@@ -68,53 +68,71 @@ func (m *MockUserRepo) GetGmail(username string, ctx context.Context) (string, b
 	return args.String(0), args.Bool(1)
 }
 
+func (m *MockUserRepo) authResult(args mock.Arguments) (*models.UserAuth, error) {
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.UserAuth), args.Error(1)
+}
+
+func (m *MockUserRepo) GetAuthByUsername(username string, ctx context.Context) (*models.UserAuth, error) {
+	return m.authResult(m.Called(username, ctx))
+}
+
+func (m *MockUserRepo) GetAuthByTelephon(telephon string, ctx context.Context) (*models.UserAuth, error) {
+	return m.authResult(m.Called(telephon, ctx))
+}
+
+func (m *MockUserRepo) GetAuthByEmail(email string, ctx context.Context) (*models.UserAuth, error) {
+	return m.authResult(m.Called(email, ctx))
+}
+
 type MockUserCache struct {
 	mock.Mock
 }
 
-func (m *MockUserCache) SaveRefreshToken(username string, refreshToken string, ctx context.Context) error {
-	args := m.Called(username, refreshToken, ctx)
-	return args.Error(0)
+func (m *MockUserCache) SaveRefreshToken(telephon string, refreshToken string, ctx context.Context) error {
+	return m.Called(telephon, refreshToken, ctx).Error(0)
 }
 
-func (m *MockUserCache) GetRefreshToken(username string, ctx context.Context) (string, error) {
-	args := m.Called(username, ctx)
+func (m *MockUserCache) GetRefreshTokenOwner(refreshToken string, ctx context.Context) (string, error) {
+	args := m.Called(refreshToken, ctx)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockUserCache) DeleteRefreshToken(username string, ctx context.Context) error {
-	args := m.Called(username, ctx)
-	return args.Error(0)
+func (m *MockUserCache) DeleteRefreshToken(refreshToken string, ctx context.Context) error {
+	return m.Called(refreshToken, ctx).Error(0)
 }
 
-func (m *MockUserCache) CachePassword(username string, ctx context.Context) (string, error) {
-	args := m.Called(username, ctx)
+func (m *MockUserCache) RevokeAllRefreshTokens(telephon string, ctx context.Context) error {
+	return m.Called(telephon, ctx).Error(0)
+}
+
+func (m *MockUserCache) SetCodigo(tipoCodigo string, key string, codigo string, ctx context.Context) error {
+	return m.Called(tipoCodigo, key, codigo, ctx).Error(0)
+}
+
+func (m *MockUserCache) GetCodigo(tipoCodigo string, key string, ctx context.Context) (string, error) {
+	args := m.Called(tipoCodigo, key, ctx)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockUserCache) CacheActivo(username string, ctx context.Context) (bool, error) {
-	args := m.Called(username, ctx)
-	return args.Bool(0), args.Error(1)
+func (m *MockUserCache) DeleteCodigo(tipoCodigo string, key string, ctx context.Context) error {
+	return m.Called(tipoCodigo, key, ctx).Error(0)
 }
 
-func (m *MockUserCache) SetCodigo(tipoCodigo string, username string, codigo string, ctx context.Context) error {
-	args := m.Called(tipoCodigo, username, codigo, ctx)
-	return args.Error(0)
+func (m *MockUserCache) IncrCodigoIntentos(tipoCodigo string, key string, ctx context.Context) (int, error) {
+	args := m.Called(tipoCodigo, key, ctx)
+	return args.Int(0), args.Error(1)
 }
 
-func (m *MockUserCache) GetCodigo(tipoCodigo string, username string, ctx context.Context) (string, error) {
-	args := m.Called(tipoCodigo, username, ctx)
-	return args.String(0), args.Error(1)
-}
-
-func (m *MockUserCache) GetIntentosFallidos(username string, ctx context.Context) (int, error) {
+func (m *MockUserCache) IncrIntentosFallidos(username string, ctx context.Context) (int, error) {
 	args := m.Called(username, ctx)
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockUserCache) SetIntentosFallidos(username string, intentos int, ctx context.Context) error {
-	args := m.Called(username, intentos, ctx)
-	return args.Error(0)
+func (m *MockUserCache) ResetIntentosFallidos(username string, ctx context.Context) error {
+	return m.Called(username, ctx).Error(0)
 }
 
 func (m *MockUserRepo) BlockUser(username string, ctx context.Context) error {

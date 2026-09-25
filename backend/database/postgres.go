@@ -3,14 +3,43 @@ package database
 import (
 	"fmt"
 	"gorm/backend/models"
+	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-var db *gorm.DB
+// execMigration ejecuta una sentencia idempotente de migración y registra el
+// error si falla (antes los errores se ignoraban en silencio).
+func execMigration(db *gorm.DB, sql string) {
+	if err := db.Exec(sql).Error; err != nil {
+		log.Printf("[DB] Error en migración: %v\n%s", err, sql)
+	}
+}
+
+// configurePool ajusta el pool de conexiones de database/sql.
+func configurePool(data *gorm.DB) error {
+	sqlDB, err := data.DB()
+	if err != nil {
+		return err
+	}
+	sqlDB.SetMaxOpenConns(envInt("POSTGRES_MAX_OPEN_CONNS", 25))
+	sqlDB.SetMaxIdleConns(envInt("POSTGRES_MAX_IDLE_CONNS", 10))
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	return nil
+}
+
+func envInt(key string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(key)); err == nil && v > 0 {
+		return v
+	}
+	return def
+}
 
 // Conection abre la conexión a PostgreSQL, ejecuta AutoMigrate para sincronizar el
 // esquema y aplica índices/constraints adicionales. Reintenta hasta 10 veces antes
@@ -22,23 +51,32 @@ func Conection() (*gorm.DB, error) {
 	password := os.Getenv("POSTGRES_PASSWORD")
 	dbname := os.Getenv("POSTGRES_DB")
 
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+	sslmode := os.Getenv("POSTGRES_SSLMODE")
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
 		host,
 		user,
 		password,
 		dbname,
-		port)
+		port,
+		sslmode)
 	var data *gorm.DB
 	var err error
 	for i := 0; i < 10; i++ {
-		data, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		data, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Warn),
+		})
 		if err == nil {
 			break
 		}
 		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
-		fmt.Println("Error al conectar con base de datos")
+		return nil, fmt.Errorf("error al conectar con la base de datos: %w", err)
+	}
+	if err := configurePool(data); err != nil {
 		return nil, err
 	}
 	// ─────────────────────────────────────────────────────────────────────────
@@ -48,7 +86,7 @@ func Conection() (*gorm.DB, error) {
 
 	// reply_to_username → reply_to_telephon
 	// (el campo almacena un número de teléfono, nombre anterior era incorrecto)
-	data.Exec(`DO $$ BEGIN
+	execMigration(data, `DO $$ BEGIN
 		IF EXISTS (
 			SELECT 1 FROM information_schema.columns
 			WHERE table_name = 'messages' AND column_name = 'reply_to_username'
@@ -73,8 +111,7 @@ func Conection() (*gorm.DB, error) {
 		&models.GroupMember{},
 		&models.GroupMessage{},
 	); err != nil {
-		fmt.Println("Error al migrar base de datos")
-		return nil, err
+		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}
 
 	// ─────────────────────────────────────────────────────────────────────────
@@ -83,17 +120,17 @@ func Conection() (*gorm.DB, error) {
 	// ─────────────────────────────────────────────────────────────────────────
 
 	// Asegurar tamaño correcto de columnas
-	data.Exec(`ALTER TABLE contact_data_bases ALTER COLUMN status TYPE VARCHAR(25)`)
-	data.Exec(`ALTER TABLE user_data_bases ALTER COLUMN password TYPE VARCHAR(100)`)
+	execMigration(data, `ALTER TABLE contact_data_bases ALTER COLUMN status TYPE VARCHAR(25)`)
+	execMigration(data, `ALTER TABLE user_data_bases ALTER COLUMN password TYPE VARCHAR(100)`)
 
 	// Índice único parcial en contactos: evita duplicados activos, permite soft-deletes
-	data.Exec(`DROP INDEX IF EXISTS idx_user_contact`)
-	data.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_contact_active
+	execMigration(data, `DROP INDEX IF EXISTS idx_user_contact`)
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_contact_active
 		ON contact_data_bases (id_user, id_contact)
 		WHERE deleted_at IS NULL`)
 
 	// Eliminar FKs auto-generadas por GORM (reemplazadas por referencia lógica)
-	data.Exec(`DO $$ BEGIN
+	execMigration(data, `DO $$ BEGIN
 		IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_contact_data_bases_user') THEN
 			ALTER TABLE contact_data_bases DROP CONSTRAINT fk_contact_data_bases_user;
 		END IF;
@@ -103,7 +140,7 @@ func Conection() (*gorm.DB, error) {
 	END $$;`)
 
 	// Eliminar tabla 'users' legacy si aún existe
-	data.Exec(`DO $$ BEGIN
+	execMigration(data, `DO $$ BEGIN
 		IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users') THEN
 			DROP TABLE users;
 		END IF;
@@ -116,30 +153,33 @@ func Conection() (*gorm.DB, error) {
 
 	// Índice compuesto para la query principal de conversación:
 	// WHERE (id_user=A AND id_receptor=B) OR (id_user=B AND id_receptor=A) ORDER BY time ASC
-	data.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_conv
 		ON messages (id_user, id_receptor, time)
 		WHERE deleted_at IS NULL`)
-	data.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_conv_rev
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_conv_rev
 		ON messages (id_receptor, id_user, time)
 		WHERE deleted_at IS NULL`)
 
 	// Índice parcial para consulta de mensajes pendientes de entrega
 	// (usado al reconectarse para marcar como "entregado")
-	data.Exec(`CREATE INDEX IF NOT EXISTS idx_messages_pending
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_pending
 		ON messages (id_receptor, status)
 		WHERE status = 'enviado' AND deleted_at IS NULL`)
+
+	// Búsqueda de llamadas por sala (actualizar estado al aceptar/rechazar/colgar)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_call_logs_room_id ON call_logs (room_id)`)
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// MIGRACIÓN DE DATOS: normalizar valores de status legacy
 	// ─────────────────────────────────────────────────────────────────────────
-	data.Exec(`UPDATE contact_data_bases SET status = 'rejected' WHERE status = 'rechazed'`)
-	data.Exec(`UPDATE contact_data_bases SET status = 'pending'  WHERE status = 'pendiente'`)
+	execMigration(data, `UPDATE contact_data_bases SET status = 'rejected' WHERE status = 'rechazed'`)
+	execMigration(data, `UPDATE contact_data_bases SET status = 'pending'  WHERE status = 'pendiente'`)
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// CHECK CONSTRAINTS: garantizar integridad de datos a nivel de base de datos
 	// Se usan DO blocks para hacerlos idempotentes.
 	// ─────────────────────────────────────────────────────────────────────────
-	data.Exec(`DO $$ BEGIN
+	execMigration(data, `DO $$ BEGIN
 		-- messages.status
 		IF NOT EXISTS (
 			SELECT 1 FROM information_schema.constraint_column_usage
@@ -195,22 +235,22 @@ func Conection() (*gorm.DB, error) {
 
 	// Índice único parcial: evita que un mismo usuario sea miembro duplicado
 	// de un grupo al mismo tiempo (pero permite soft-delete + re-unirse).
-	data.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_group_member_active
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_group_member_active
 		ON group_members (group_id, user_id)
 		WHERE deleted_at IS NULL`)
 
 	// Índice compuesto para cargar el historial de mensajes de un grupo ordenado.
-	data.Exec(`CREATE INDEX IF NOT EXISTS idx_group_messages_history
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_messages_history
 		ON group_messages (group_id, created_at)
 		WHERE deleted_at IS NULL`)
 
 	// Índice para lookup de miembros por grupo
-	data.Exec(`CREATE INDEX IF NOT EXISTS idx_group_members_group
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_members_group
 		ON group_members (group_id)
 		WHERE deleted_at IS NULL`)
 
 	// CHECK constraints para garantizar integridad en las tablas nuevas
-	data.Exec(`DO $$ BEGIN
+	execMigration(data, `DO $$ BEGIN
 		-- group_members.role
 		IF NOT EXISTS (
 			SELECT 1 FROM information_schema.constraint_column_usage
@@ -231,7 +271,6 @@ func Conection() (*gorm.DB, error) {
 		END IF;
 	END $$;`)
 
-	fmt.Println("Postgres, Coneccion establecida")
-	db = data
-	return db, nil
+	log.Println("[DB] Conexión con PostgreSQL establecida")
+	return data, nil
 }

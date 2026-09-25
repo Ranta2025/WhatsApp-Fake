@@ -3,7 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
+	"mime"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,8 +86,12 @@ func InitServiceMedia(client *minio.Client) MediaServicer {
 // UploadMedia valida el tipo MIME, sube el archivo a MinIO con un nombre único
 // y devuelve la URL relativa pública junto con metadatos del archivo.
 func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHeader, ctx context.Context) (MediaUploadResult, error) {
-	// 1. Detectar MIME type
+	// 1. Detectar MIME type. Se descartan los parámetros ("audio/webm;codecs=opus"
+	// es lo que envían los navegadores al grabar notas de voz).
 	mimeType := header.Header.Get("Content-Type")
+	if parsed, _, err := mime.ParseMediaType(mimeType); err == nil {
+		mimeType = strings.ToLower(parsed)
+	}
 	if mimeType == "" || mimeType == "application/octet-stream" {
 		mimeType = mimeByExtension(filepath.Ext(header.Filename))
 	}
@@ -102,6 +109,13 @@ func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHe
 			float64(header.Size)/1024/1024,
 			cfg.maxBytes/1024/1024,
 		)
+	}
+
+	// 3b. Verificar el contenido real: el Content-Type lo decide el cliente, así
+	// que se comprueba la firma del archivo para imágenes y se rechaza HTML/SVG
+	// camuflado (se serviría desde nuestro dominio de almacenamiento).
+	if err := verifyContent(file, cfg.folder); err != nil {
+		return MediaUploadResult{}, err
 	}
 
 	// 4. Generar nombre único: carpeta/año-mes/id-único.ext
@@ -143,6 +157,26 @@ func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHe
 		Size:      header.Size,
 		Filename:  objectName,
 	}, nil
+}
+
+// verifyContent inspecciona los primeros bytes del archivo y deja el cursor al inicio.
+func verifyContent(file multipart.File, folder string) error {
+	head := make([]byte, 512)
+	n, err := io.ReadFull(file, head)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return fmt.Errorf("error leyendo el archivo: %w", err)
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("error leyendo el archivo: %w", err)
+	}
+	detected := http.DetectContentType(head[:n])
+	if strings.HasPrefix(detected, "text/html") || strings.Contains(detected, "xml") {
+		return fmt.Errorf("contenido de archivo no permitido")
+	}
+	if folder == "images" && !strings.HasPrefix(detected, "image/") {
+		return fmt.Errorf("el archivo no es una imagen válida")
+	}
+	return nil
 }
 
 // mimeByExtension infiere el MIME type por extensión de archivo

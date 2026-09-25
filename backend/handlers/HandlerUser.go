@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/utils"
@@ -11,7 +10,6 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // isSecureCookie devuelve true si la cookie debe tener flag Secure (HTTPS only)
@@ -34,9 +32,9 @@ func (s *HandlerUser) setTokenCookies(c *gin.Context, username, telephon string)
 		return "", err
 	}
 
-	// Guardar refresh token en Redis
+	// Guardar refresh token en Redis (asociado al teléfono, identificador inmutable)
 	ctx := c.Request.Context()
-	if err := s.service.SaveRefreshToken(username, refreshToken, ctx); err != nil {
+	if err := s.service.SaveRefreshToken(telephon, refreshToken, ctx); err != nil {
 		log.Printf("[HANDLER] Error guardando refresh token: %v", err)
 		return "", err
 	}
@@ -67,8 +65,9 @@ func GetHandlerUser(service services.UserServicer, hub *websocket.Hub) *HandlerU
 	return &HandlerUser{service: service, hub: hub}
 }
 
-// HandlerLogOut maneja el registro de nuevos usuarios. Crea el usuario en BD,
-// genera access + refresh token y los establece en cookies.
+// HandlerLogOut maneja el registro de nuevos usuarios. Crea el usuario en BD
+// (inactivo) y envía el código de activación por email. No emite tokens: la
+// sesión se abre al activar la cuenta (HandlerActivateAccount).
 // (El nombre es histórico; en realidad es HandlerRegister.)
 func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -84,16 +83,6 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
-			})
-			return
-		}
-
-		// Generar access + refresh token para el usuario registrado
-		_, err = s.setTokenCookies(c, user.(models.UserDataBase).Username, user.(models.UserDataBase).Telephon)
-		if err != nil {
-			log.Printf("[HANDLER] Error generando tokens en registro: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "error interno del servidor",
 			})
 			return
 		}
@@ -128,8 +117,6 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 			})
 			return
 		}
-		log.Printf("[HANDLER] Login exitoso para usuario: %s", username)
-
 		// Decodificar el token para obtener datos y generar refresh
 		decodedUsername, decodedTelephon, err := utils.DecodeToken(token)
 		if err != nil {
@@ -153,22 +140,20 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 	}
 }
 
-// HandlerLogoutSession cierra la sesión del usuario: elimina el refresh token de
-// Redis, limpia las cookies y notifica a los contactos que el usuario se desconectó.
+// HandlerLogoutSession cierra la sesión del usuario: invalida el refresh token de
+// la cookie, limpia las cookies y notifica a los contactos que el usuario se desconectó.
 func (s *HandlerUser) HandlerLogoutSession() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Obtener el telephon antes de eliminar el token
-		username, exist := c.Get("username")
 		telephon, existTel := c.Get("telephon")
-
 		if existTel && telephon != nil && s.hub != nil {
 			s.hub.NotifyContactsOffline(telephon.(string))
 		}
 
-		// Eliminar refresh token de Redis
-		if exist && username != nil {
-			ctx := c.Request.Context()
-			_ = s.service.DeleteRefreshToken(username.(string), ctx)
+		// Invalidar el refresh token de esta sesión
+		if refreshToken, err := c.Cookie("refresh_token"); err == nil && refreshToken != "" {
+			if err := s.service.DeleteRefreshToken(refreshToken, c.Request.Context()); err != nil {
+				log.Printf("[HANDLER] Error eliminando refresh token: %v", err)
+			}
 		}
 
 		clearTokenCookies(c)
@@ -293,28 +278,6 @@ func (s *HandlerUser) HandlerRecoverCuenta() gin.HandlerFunc {
 	}
 }
 
-func (s *HandlerUser) HandlerChangePassword() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		userChange, exist := c.Get("changePassword")
-		if !exist {
-			c.JSON(400, gin.H{
-				"message": "error al obtener el usuario",
-			})
-			return
-		}
-		err := s.service.ChangePassword(userChange.(models.UserChangePassword), ctx)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(200, gin.H{
-			"message": "contraseña cambiada",
-		})
-	}
-}
 func (s *HandlerUser) HandlerRecoverAndChangePassword() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -386,12 +349,13 @@ func (s *HandlerUser) HandlerForgotPasswordChange() gin.HandlerFunc {
 	}
 }
 
-// HandlerRefreshToken renueva el access token usando el refresh token
+// HandlerRefreshToken renueva el access token usando el refresh token de la
+// cookie. El refresh token se rota (el anterior queda invalidado) y no depende
+// del access token, que puede haber expirado y desaparecido del navegador.
 func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		// Obtener refresh token de la cookie
 		refreshToken, err := c.Cookie("refresh_token")
 		if err != nil || refreshToken == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -400,29 +364,16 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 			return
 		}
 
-		// Obtener el access token expirado de la cookie para extraer username/telephon
-		accessToken, _ := c.Cookie("token")
-
-		// Parsear el token expirado SIN validar expiración para obtener username
-		username, telephon, err := decodeTokenIgnoreExpiry(accessToken)
+		username, telephon, err := s.service.RefreshSession(refreshToken, ctx)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "token invalido",
-			})
-			return
-		}
-
-		// Validar refresh token en Redis
-		if err := s.service.ValidateRefreshToken(username, refreshToken, ctx); err != nil {
+			clearTokenCookies(c)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "refresh token invalido o expirado",
 			})
 			return
 		}
 
-		// Generar nuevos tokens
-		_, err = s.setTokenCookies(c, username, telephon)
-		if err != nil {
+		if _, err := s.setTokenCookies(c, username, telephon); err != nil {
 			log.Printf("[HANDLER] Error renovando tokens: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "error interno del servidor",
@@ -434,36 +385,4 @@ func (s *HandlerUser) HandlerRefreshToken() gin.HandlerFunc {
 			"message": "token renovado",
 		})
 	}
-}
-
-// decodeTokenIgnoreExpiry parsea un JWT ignorando la expiración (para refresh flow)
-func decodeTokenIgnoreExpiry(tokenStr string) (string, string, error) {
-	// Primero intentar decodificación normal (si no ha expirado)
-	username, telephon, err := utils.DecodeToken(tokenStr)
-	if err == nil {
-		return username, telephon, nil
-	}
-
-	// Si falló (probablemente por expiración), parsear sin validar expiración
-	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
-	token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
-	if err != nil {
-		return "", "", err
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return "", "", errors.New("claims invalidos")
-	}
-
-	username2, ok := claims["username"].(string)
-	if !ok {
-		return "", "", errors.New("username no encontrado en token")
-	}
-	telephon2, ok := claims["telephon"].(string)
-	if !ok {
-		return "", "", errors.New("telephon no encontrado en token")
-	}
-
-	return username2, telephon2, nil
 }

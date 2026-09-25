@@ -21,6 +21,12 @@ func ValidationPasswordLen(password string) bool {
 	return len(password) > 7
 }
 
+// ValidationPasswordMaxLen verifica que la contraseña no supere los 72 bytes,
+// el máximo que bcrypt procesa (más allá devuelve error).
+func ValidationPasswordMaxLen(password string) bool {
+	return len(password) <= 72
+}
+
 // ValidationPasswordNumber verifica que la contraseña contenga al menos un dígito.
 func ValidationPasswordNumber(password string) bool {
 	for _, i := range password {
