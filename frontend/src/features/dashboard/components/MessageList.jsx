@@ -1,6 +1,7 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
+import { formatDaySeparator, formatTime } from '../../../utils/format';
 import AudioPlayer from '../../../components/AudioPlayer';
 
 /**
@@ -18,7 +19,7 @@ const readChatWallpapers = () => {
 
 const MessageList = () => {
     const { 
-        selected, messagesByChat, profile, avatarMap, globalWallpaper 
+        selected, messagesByChat, profile, globalWallpaper 
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
@@ -54,15 +55,16 @@ const MessageList = () => {
 
     const messagesContainerRef = useRef(null);
 
-    // Scroll automático al final cuando cambian los mensajes
+    // Scroll al final al abrir un chat o cuando llega un mensaje nuevo a ESTE
+    // chat (antes saltaba con cualquier cambio en cualquier conversación).
+    const messageCount = selected ? (messagesByChat[selected.Number]?.length || 0) : 0;
     useEffect(() => {
-        if (messagesContainerRef.current && selected) {
-            const container = messagesContainerRef.current;
-            requestAnimationFrame(() => {
-                container.scrollTop = container.scrollHeight;
-            });
-        }
-    }, [messagesByChat, selected]);
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+    }, [selected?.Number, messageCount]);
 
     // Agrupación de mensajes por fecha
     const groupedMessages = useMemo(() => {
@@ -73,15 +75,10 @@ const MessageList = () => {
 
         messages.forEach((m) => {
             const date = new Date(m.Time || m.Timestamp);
-            const dateStr = date.toLocaleDateString(undefined, { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            });
+            const dayKey = date.toDateString();
 
-            if (!currentGroup || currentGroup.date !== dateStr) {
-                currentGroup = { date: dateStr, messages: [] };
+            if (!currentGroup || currentGroup.date !== dayKey) {
+                currentGroup = { date: dayKey, label: formatDaySeparator(date), messages: [] };
                 groups.push(currentGroup);
             }
             currentGroup.messages.push(m);
@@ -215,14 +212,12 @@ const MessageList = () => {
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
         }
-        : {
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23334155' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-          };
+        : undefined;
 
     return (
         <div 
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto px-4 py-6 space-y-8 relative"
+            className={`flex-1 overflow-y-auto px-3 sm:px-6 lg:px-10 py-4 space-y-4 relative ${activeWallpaper ? '' : 'chat-surface'}`}
             style={containerStyle}
         >
             {/* Overlay oscuro sobre wallpaper para legibilidad */}
@@ -230,43 +225,31 @@ const MessageList = () => {
                 <div className="absolute inset-0 bg-slate-950/40 pointer-events-none" style={{ zIndex: 0 }} />
             )}
             {groupedMessages.map((group) => (
-                <div key={group.date} className="space-y-6 relative z-[1]">
+                <div key={group.date} className="space-y-3 relative z-[1]">
                     {/* Separador de fecha */}
-                    <div className="flex justify-center sticky top-0 z-10 py-2">
-                        <span className="px-4 py-1 bg-slate-900/80 backdrop-blur-md border border-white/5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 shadow-xl">
-                            {group.date}
+                    <div className="flex justify-center sticky top-0 z-10 py-1.5">
+                        <span className="px-3 py-1 glass rounded-lg text-[11px] font-medium text-slate-300 shadow-lg first-letter:uppercase">
+                            {group.label}
                         </span>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-1.5">
                         {group.messages.map((m) => {
                             const isMine = m.SenderTelephon === profile?.Telephon;
                             const isMenuOpen = messageMenuOpen === m.MessageID;
-                            const time = new Date(m.Time || m.Timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const time = formatTime(m.Time || m.Timestamp);
 
                             return (
                                 <div 
                                     key={m.MessageID} 
-                                    className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                                    className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 animate-slide-up`}
                                 >
-                                    {!isMine && (
-                                        <div className="w-8 h-8 rounded-full bg-slate-800 overflow-hidden flex-shrink-0 border border-white/5 shadow-lg">
-                                            {avatarMap[m.SenderTelephon] ? (
-                                                <img src={avatarMap[m.SenderTelephon]} alt="Avatar" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-indigo-400">
-                                                    {m.SenderTelephon.slice(-2)}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
                                     <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`}>
                                         {/* Menú de opciones contextual */}
                                         <div className={`absolute top-0 ${isMine ? '-left-10' : '-right-10'} opacity-0 group-hover/bubble:opacity-100 transition-opacity z-20`}>
                                             <button 
                                                 onClick={() => setMessageMenuOpen(isMenuOpen ? null : m.MessageID)}
-                                                className="p-1.5 bg-slate-800/80 backdrop-blur-md border border-white/10 rounded-full text-slate-400 hover:text-white transition-all shadow-xl"
+                                                className="p-1.5 glass rounded-full text-slate-400 hover:text-white transition-all shadow-lg"
                                                 aria-label="Opciones"
                                             >
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -275,28 +258,28 @@ const MessageList = () => {
                                             </button>
                                             
                                             {isMenuOpen && (
-                                                <div className={`absolute ${isMine ? 'left-0' : 'right-0'} mt-2 w-44 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 origin-top-left`}>
-                                                    <button onClick={() => handleReplyToMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
+                                                <div className={`absolute ${isMine ? 'left-0' : 'right-0'} mt-2 w-48 p-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in origin-top-left`}>
+                                                    <button onClick={() => handleReplyToMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                         Responder
                                                     </button>
-                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
+                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
                                                         Reenviar
                                                     </button>
                                                     {isMine && (
                                                         <>
-                                                            <button onClick={() => handleEditMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-2">
+                                                            <button onClick={() => handleEditMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
                                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                                 Editar
                                                             </button>
-                                                            <button onClick={() => handleDeleteMessage(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
+                                                            <button onClick={() => handleDeleteMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-2.5">
                                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                                 Eliminar para todos
                                                             </button>
                                                         </>
                                                     )}
-                                                    <button onClick={() => handleDeleteMessageForMe(m)} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors flex items-center gap-2">
+                                                    <button onClick={() => handleDeleteMessageForMe(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                         Eliminar para mí
                                                     </button>
@@ -306,15 +289,15 @@ const MessageList = () => {
 
                                         {/* Burbuja de mensaje */}
                                         <div className={`
-                                            px-4 py-2.5 rounded-2xl shadow-xl
-                                            ${isMine 
-                                                ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-tr-none' 
-                                                : 'bg-slate-800/80 backdrop-blur-sm text-slate-100 border border-white/5 rounded-tl-none'}
+                                            px-3.5 py-2 rounded-2xl shadow-md
+                                            ${isMine
+                                                ? 'bg-indigo-700 text-white rounded-br-md'
+                                                : 'bg-slate-800 text-slate-100 rounded-bl-md'}
                                         `}>
                                             {/* Respuesta */}
                                             {m.ReplyToMessage && (
-                                                <div className={`mb-2 p-2 rounded-lg border-l-4 ${isMine ? 'bg-black/10 border-white/30' : 'bg-slate-900/50 border-indigo-500'} text-[11px] opacity-80 line-clamp-2`}>
-                                                    <div className="font-black uppercase tracking-widest text-[9px] mb-0.5">Respondiendo a:</div>
+                                                <div className={`mb-1.5 px-2.5 py-1.5 rounded-lg border-l-[3px] ${isMine ? 'bg-black/15 border-white/40' : 'bg-black/20 border-indigo-400'} text-[12px] text-white/80 line-clamp-2`}>
+                                                    <div className={`font-semibold text-[11px] mb-0.5 ${isMine ? 'text-white/90' : 'text-indigo-300'}`}>Respuesta</div>
                                                     {m.ReplyToMessage}
                                                 </div>
                                             )}
@@ -324,7 +307,7 @@ const MessageList = () => {
 
                                             {/* Texto del mensaje - Ocultar si es una URL de media */}
                                             {m.Message && !isMediaUrl(m) && (
-                                                <div className="text-[14px] leading-relaxed break-words font-medium">
+                                                <div className="text-[14.5px] leading-snug break-words whitespace-pre-wrap">
                                                     {editingMessageId === m.MessageID ? (
                                                         <div className="flex flex-col gap-2 min-w-[200px]">
                                                             <textarea 
@@ -344,9 +327,9 @@ const MessageList = () => {
                                             )}
 
                                             {/* Info de pie de burbuja */}
-                                            <div className={`mt-1.5 flex items-center justify-end gap-1.5`}>
-                                                <span className={`text-[10px] font-bold uppercase tracking-widest ${isMine ? 'text-indigo-200/70' : 'text-slate-400'}`}>
-                                                    {m.Edited && 'Editado • '}{time}
+                                            <div className="mt-0.5 -mb-0.5 flex items-center justify-end gap-1">
+                                                <span className={`text-[11px] ${isMine ? 'text-white/60' : 'text-slate-400'}`}>
+                                                    {m.Edited && 'editado · '}{time}
                                                 </span>
                                                 {isMine && getStatusIcon(m.Status)}
                                             </div>

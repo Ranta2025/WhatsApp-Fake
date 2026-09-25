@@ -86,7 +86,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
 
     return (
         <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-sm text-center shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-sm text-center shadow-2xl animate-fade-in">
                 {/* Avatar animado */}
                 <div className="relative mx-auto w-32 h-32 mb-8">
                     <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping duration-1000"></div>

@@ -140,7 +140,7 @@ export default function ActivateAccount() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                        className="btn-primary w-full mt-6"
                     >
                         {loading ? 'Verificando...' : 'Activar cuenta'}
                     </button>

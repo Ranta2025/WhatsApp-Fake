@@ -62,6 +62,10 @@ class WebSocketManager {
     // (antes el handshake fallaba con 401 y se reintentaba indefinidamente), y
     // el ticket permite conectar aunque el backend esté en otro dominio.
     async connect() {
+        // Marcar la intención de estar conectados antes de cualquier early-return:
+        // si ya hay una petición de ticket en curso (p. ej. montar → desmontar →
+        // montar en StrictMode), esa petición continuará y abrirá la conexión.
+        this.isIntentionallyClosed = false;
         if (this.connecting) return;
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
@@ -71,7 +75,6 @@ class WebSocketManager {
             this.ws = null;
         }
         this.clearReconnectTimer();
-        this.isIntentionallyClosed = false;
         this.connecting = true;
 
         let ticket;

@@ -1,47 +1,177 @@
 @import "tailwindcss";
 
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
+/* ──────────────────────────────────────────────────────────────────────────
+   Sistema de diseño
+   Las paletas "indigo", "purple" y "slate" que usan los componentes se
+   redefinen aquí: indigo = color de marca (esmeralda), purple = acento (cian)
+   y slate = neutros "tinta" oscuros. Así todo el UI queda coherente sin tocar
+   cada clase, y el tema se ajusta desde un único sitio.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Marca */
+  --color-indigo-50: #ecfdf6;
+  --color-indigo-100: #d1faea;
+  --color-indigo-200: #a6f2d5;
+  --color-indigo-300: #6de4bb;
+  --color-indigo-400: #36cf9d;
+  --color-indigo-500: #13b584;
+  --color-indigo-600: #09936c;
+  --color-indigo-700: #0a7559;
+  --color-indigo-800: #0c5d48;
+  --color-indigo-900: #0c4d3d;
+  --color-indigo-950: #032b22;
+
+  /* Acento */
+  --color-purple-50: #ecfeff;
+  --color-purple-100: #cffafe;
+  --color-purple-200: #a5f0fb;
+  --color-purple-300: #67e2f5;
+  --color-purple-400: #22cbe6;
+  --color-purple-500: #08aecb;
+  --color-purple-600: #0a8ba9;
+  --color-purple-700: #106f89;
+  --color-purple-800: #155b70;
+  --color-purple-900: #164c5f;
+  --color-purple-950: #083241;
+
+  /* Neutros */
+  --color-slate-50: #f5f7f8;
+  --color-slate-100: #e9edef;
+  --color-slate-200: #d2d9dd;
+  --color-slate-300: #aeb9bf;
+  --color-slate-400: #8796a0;
+  --color-slate-500: #647480;
+  --color-slate-600: #4a5864;
+  --color-slate-700: #323f49;
+  --color-slate-800: #1e2a33;
+  --color-slate-900: #121b22;
+  --color-slate-950: #0a1015;
+
+  --shadow-glow: 0 0 0 1px rgb(19 181 132 / 0.25), 0 10px 40px -10px rgb(19 181 132 / 0.45);
+  --radius-bubble: 1.125rem;
+
+  --animate-fade-in: fade-in 0.35s ease-out;
+  --animate-slide-up: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-loading-bar: loading-bar 1.5s ease-in-out infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes loading-bar {
+    0%   { width: 0%; margin-left: 0%; }
+    50%  { width: 60%; margin-left: 20%; }
+    100% { width: 0%; margin-left: 100%; }
+  }
 }
 
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(100%); }
-  to   { opacity: 1; transform: translateX(0); }
+@layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  ::selection {
+    background: rgb(19 181 132 / 0.35);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-indigo-400);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbars finos y discretos */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(135 150 160 / 0.25) transparent;
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(135 150 160 / 0.25);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: rgb(135 150 160 / 0.4); }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
-@keyframes loading-bar {
-  0%   { width: 0%; margin-left: 0%; }
-  50%  { width: 60%; margin-left: 20%; }
-  100% { width: 0%; margin-left: 100%; }
+@layer components {
+  /* Superficie translúcida (tarjetas, cabeceras) */
+  .glass {
+    @apply bg-slate-900/70 backdrop-blur-xl border border-white/[0.06];
+  }
+
+  /* Fondo de la zona de conversación: degradado suave + patrón de puntos */
+  .chat-surface {
+    background-color: var(--color-slate-950);
+    background-image:
+      radial-gradient(ellipse 80% 60% at 100% 0%, rgb(19 181 132 / 0.07), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 0% 100%, rgb(8 174 203 / 0.06), transparent 60%),
+      radial-gradient(rgb(135 150 160 / 0.09) 1px, transparent 1px);
+    background-size: auto, auto, 22px 22px;
+  }
+
+  /* Fondo de las pantallas públicas (bienvenida / autenticación) */
+  .hero-surface {
+    background-color: var(--color-slate-950);
+    background-image:
+      radial-gradient(ellipse 60% 50% at 20% 10%, rgb(19 181 132 / 0.18), transparent 60%),
+      radial-gradient(ellipse 50% 45% at 85% 20%, rgb(8 174 203 / 0.16), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 50% 100%, rgb(19 181 132 / 0.08), transparent 60%);
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-indigo-300 via-indigo-400 to-purple-400 bg-clip-text text-transparent;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 px-5 py-3 font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:brightness-110 hover:shadow-indigo-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-semibold text-slate-100 transition-all hover:bg-white/10 active:scale-[0.98];
+  }
+
+  .icon-btn {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40;
+  }
 }
 
-@keyframes fade-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-.animate-loading-bar {
-  animation: loading-bar 1.5s ease-in-out infinite;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out;
-}
-
+/* ──────────────────────────────────────────────────────────────────────────
+   react-phone-input-2 (selector de país) adaptado al tema oscuro
+   ────────────────────────────────────────────────────────────────────────── */
 .react-tel-input {
   position: relative;
 }
 
 .react-tel-input .flag-dropdown {
-  background-color: #1e293b !important;
+  background-color: var(--color-slate-800) !important;
+  border-color: rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.75rem 0 0 0.75rem !important;
 }
 
 .react-tel-input .flag-dropdown.open {
-  background-color: #1e293b !important;
-  border-color: #6366f1 !important;
+  background-color: var(--color-slate-800) !important;
+  border-color: var(--color-indigo-500) !important;
   z-index: 10001 !important;
 }
 
@@ -50,47 +180,49 @@ html, body, #root {
 .react-tel-input .selected-flag:focus,
 .react-tel-input .selected-flag.open {
   background-color: transparent !important;
+  border-radius: 0.75rem 0 0 0.75rem !important;
 }
 
 .react-tel-input .selected-flag .arrow {
-  border-top-color: #94a3b8 !important;
+  border-top-color: var(--color-slate-400) !important;
 }
 
 .react-tel-input .selected-flag .arrow.up {
-  border-bottom-color: #94a3b8 !important;
+  border-bottom-color: var(--color-slate-400) !important;
 }
 
 .react-tel-input .country-list {
   z-index: 10000 !important;
-  background-color: #1e293b !important;
-  border: 1px solid #334155 !important;
-  color: #e2e8f0 !important;
+  background-color: var(--color-slate-800) !important;
+  border: 1px solid var(--color-slate-700) !important;
+  border-radius: 0.75rem !important;
+  color: var(--color-slate-200) !important;
 }
 
 .react-tel-input .country-list .country {
   background-color: transparent !important;
-  color: #e2e8f0 !important;
+  color: var(--color-slate-200) !important;
 }
 
 .react-tel-input .country-list .country:hover,
 .react-tel-input .country-list .country.highlight {
-  background-color: #334155 !important;
+  background-color: var(--color-slate-700) !important;
 }
 
 .react-tel-input .country-list .country .country-name {
-  color: #e2e8f0 !important;
+  color: var(--color-slate-200) !important;
 }
 
 .react-tel-input .country-list .country .dial-code {
-  color: #94a3b8 !important;
+  color: var(--color-slate-400) !important;
 }
 
 .react-tel-input .country-list .search {
-  background-color: #0f172a !important;
+  background-color: var(--color-slate-900) !important;
 }
 
 .react-tel-input .country-list .search-box {
-  background-color: #1e293b !important;
-  color: #e2e8f0 !important;
-  border: 1px solid #334155 !important;
+  background-color: var(--color-slate-800) !important;
+  color: var(--color-slate-200) !important;
+  border: 1px solid var(--color-slate-700) !important;
 }

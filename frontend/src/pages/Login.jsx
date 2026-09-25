@@ -8,15 +8,23 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!username.trim() || !password) {
+            setError('Completa usuario y contraseña');
+            return;
+        }
+        setError('');
+        setLoading(true);
         try {
-            await login(username, password);
+            await login(username.trim(), password);
             navigate('/dashboard');
         } catch (err) {
+            setLoading(false);
             const data = err?.response?.data;
             const msg = (typeof data === 'string')
                 ? data
@@ -27,6 +35,11 @@ export default function Login() {
                 navigate('/unblock-account', { state: { username: username } });
                 return;
             }
+            // Cuenta sin activar: llevar a la pantalla de activación
+            if (msg.toLowerCase().includes('inactivo')) {
+                navigate('/activate-existing', { state: { username: username } });
+                return;
+            }
             
             setError(msg);
         }
@@ -34,13 +47,6 @@ export default function Login() {
 
     return (
         <>
-            <Link 
-                to="/" 
-                className="fixed top-4 left-4 text-slate-400 hover:text-white transition flex items-center gap-2 z-50"
-            >
-                <span className="text-xl">←</span>
-                <span className="text-sm font-medium">Volver a inicio</span>
-            </Link>
             <AuthLayout
                 title="Bienvenido de nuevo"
                 subtitle="Inicia sesión para continuar"
@@ -50,7 +56,7 @@ export default function Login() {
                     </span>
                 }
             >
-            {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 text-red-400 text-sm text-center">{error}</div>}
+            {error && <div role="alert" className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 mb-5 text-rose-300 text-sm">{error}</div>}
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                     <label htmlFor="username" className="block text-sm font-medium text-slate-400 mb-1.5">Usuario</label>
@@ -65,7 +71,7 @@ export default function Login() {
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full pl-10 p-3 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                            className="w-full pl-10 p-3 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
                             placeholder="Tu usuario"
                             autoComplete="username"
                         />
@@ -84,7 +90,7 @@ export default function Login() {
                             type={showPassword ? 'text' : 'password'}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-10 p-3 pr-12 rounded-xl bg-slate-800 border border-transparent text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors tracking-wide"
+                            className="w-full pl-10 p-3 pr-16 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors tracking-wide"
                             placeholder="••••••••"
                             autoComplete="current-password"
                         />
@@ -101,16 +107,13 @@ export default function Login() {
                         <Link to="/recover-password" className="text-indigo-400 hover:text-indigo-300 transition-colors">
                             ¿Olvidaste tu contraseña?
                         </Link>
-                        <Link to="/unblock-account" className="text-orange-400 hover:text-orange-300 transition-colors">
+                        <Link to="/unblock-account" className="text-amber-400 hover:text-amber-300 transition-colors">
                             ¿Cuenta bloqueada?
                         </Link>
                     </div>
                 </div>
-                <button
-                    type="submit"
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                    Entrar
+                <button type="submit" disabled={loading} className="btn-primary w-full">
+                    {loading ? 'Entrando…' : 'Entrar'}
                 </button>
             </form>
             </AuthLayout>
