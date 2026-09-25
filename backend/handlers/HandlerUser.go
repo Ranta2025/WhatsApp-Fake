@@ -7,15 +7,9 @@ import (
 	"gorm/backend/websocket"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
-
-// isSecureCookie devuelve true si la cookie debe tener flag Secure (HTTPS only)
-func isSecureCookie() bool {
-	return os.Getenv("ENV") == "production"
-}
 
 // setTokenCookies genera y establece las cookies de access y refresh token.
 // Retorna el access token string o error.
@@ -39,7 +33,7 @@ func (s *HandlerUser) setTokenCookies(c *gin.Context, username, telephon string)
 		return "", err
 	}
 
-	secure := isSecureCookie()
+	secure := utils.SecureCookies()
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", accessToken, int(utils.AccessTokenDuration.Seconds()), "/", "", secure, true)
 	c.SetCookie("refresh_token", refreshToken, int(utils.RefreshTokenDuration.Seconds()), "/", "", secure, true)
@@ -49,7 +43,7 @@ func (s *HandlerUser) setTokenCookies(c *gin.Context, username, telephon string)
 
 // clearTokenCookies elimina las cookies de access y refresh token
 func clearTokenCookies(c *gin.Context) {
-	secure := isSecureCookie()
+	secure := utils.SecureCookies()
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", "", -1, "/", "", secure, true)
 	c.SetCookie("refresh_token", "", -1, "/", "", secure, true)

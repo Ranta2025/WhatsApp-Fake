@@ -73,87 +73,61 @@ frontend en **Vercel** (`frontend/vercel.json`). Guía paso a paso en
 
 ---
 
-## 📋 Requisitos Previos
+## ⚡ Probarlo en local (Docker, 1 comando)
 
-- [Go 1.25+](https://golang.org/dl/)
-- [Node.js 20+](https://nodejs.org/)
-- [Docker & Docker Compose](https://www.docker.com/)
-
-> Con Docker no necesitas instalar PostgreSQL, Redis ni MinIO localmente.
-
----
-
-## 🛠️ Instalación
-
-### 1. Clonar el Repositorio
+Solo necesitas [Docker Desktop](https://www.docker.com/products/docker-desktop/) (o Docker
+Engine + Compose v2). No hace falta crear `.env` ni instalar Go/Node.
 
 ```bash
-git clone github.com/Ranta2025/Whatsapp-Fake.git
-cd <nombre-proyecto>
+git clone https://github.com/Ranta2025/WhatsApp-Fake.git
+cd WhatsApp-Fake
+docker compose up -d --build        # o: make up
 ```
 
-### 2. Configurar Variables de Entorno
+La primera vez tarda unos minutos (compila el backend, el frontend y MinIO). Después:
 
-Crea un archivo `.env` en la raíz con las variables listadas en la sección [Variables de Entorno](#-variables-de-entorno).
+| Qué | Dónde |
+|---|---|
+| **App** | http://localhost |
+| Bandeja de correo (códigos de activación) | http://localhost:8025 (Mailpit) |
+| Consola de archivos | http://localhost:9001 (`minioadmin` / `minioadmin`) |
+| API directa | http://localhost:8080 (`/healthz` para comprobar el estado) |
 
-### 3. Opción A: Docker (Recomendado)
+**Usuarios de prueba** (se crean solos): `ana_demo`, `luis_demo`, `marta_demo` — contraseña
+`Demo1234!`. Ya son contactos entre sí, tienen una conversación y un grupo. Abre dos
+navegadores (o uno normal y otro en incógnito) con dos usuarios para ver el chat en tiempo real.
+
+También puedes registrarte: el código de activación llega a **Mailpit** (http://localhost:8025).
+
+Servicios del stack: `web` (nginx con el frontend compilado + proxy de `/api`, WebSocket y
+`/storage`), `app` (API Go), `postgres`, `redis`, `minio` y `mailpit`.
+
+Comandos útiles:
 
 ```bash
-cd docker
-docker-compose up -d
+docker compose ps                  # estado (todos deben aparecer "healthy")
+docker compose logs -f app         # logs del backend
+docker compose down                # parar (conserva los datos)
+docker compose down -v             # parar y BORRAR los datos
+docker compose --profile tunnel up -d && ./scripts/setup-cloudflare.sh   # URL pública temporal
 ```
 
-Esto levanta **7 servicios**: PostgreSQL, Redis, MinIO, Backend (Go), Frontend (Vite), Nginx (reverse proxy) y Cloudflared en un solo comando.
+Para personalizar (puertos si el 80 está ocupado, correo real, llamadas con ZegoCloud…)
+copia `.env.example` a `.env` y descomenta lo que necesites, por ejemplo `WEB_PORT=8081`.
 
-### 3. Opción B: Manual
+> Las **llamadas** necesitan credenciales gratuitas de ZegoCloud (`ZEGO_APP_ID`,
+> `ZEGO_SERVER_SECRET`); todo lo demás funciona sin configurar nada.
 
-**Backend:**
-```bash
-go mod download
-go run main.go
-```
+### Desarrollo con recarga en caliente
 
-**Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
----
-
-## 🎯 Uso
-
-### Desarrollo Local
-
-1. Iniciar el backend (puerto `8080`): `go run main.go`
-2. Iniciar el frontend (puerto `5173`): `cd frontend && npm run dev`
-3. Abrir `http://localhost:5173`
-
-### Con Docker
+Con el stack de Docker en marcha, el frontend en modo desarrollo usa la API de `localhost:8080`:
 
 ```bash
-cd docker
-docker-compose up -d
-
-# Ver logs
-docker-compose logs -f
-
-# Detener
-docker-compose down
+cd frontend && npm install && npm run dev    # http://localhost:5173
 ```
 
-### Compartir con Cloudflare Tunnel
-
-```bash
-# Windows
-./scripts/setup-cloudflare.ps1
-
-# Linux/Mac
-./scripts/setup-cloudflare.sh
-```
-
-Estos scripts leen los logs de `cloudflared` y te muestran la URL pública `https://*.trycloudflare.com`.
+Para el backend fuera de Docker (Go 1.25+): `docker compose up -d postgres redis minio mailpit`,
+copia `.env.example` a `.env` con los valores de `localhost` y ejecuta `go run .`.
 
 ---
 
@@ -186,7 +160,8 @@ Estos scripts leen los logs de `cloudflared` y te muestran la URL pública `http
 │       ├── pages/       # Login, register, dashboard, recuperación, etc.
 │       └── utils/       # notificaciones, permisos, validaciones
 │
-├── docker/              # compose.yml, dockerfile, nginx.conf
+├── docker/              # Dockerfiles (backend, frontend, minio) y nginx.conf
+├── compose.yaml         # Stack local completo (docker compose up -d --build)
 ├── docs/                # Documentación técnica (despliegue: docs/DEPLOY.md)
 ├── scripts/             # Automatización cloudflare
 ├── tests/               # Tests de integración
@@ -374,46 +349,11 @@ Ver: [docs/TESTS_INSTRUCTIONS.md](docs/TESTS_INSTRUCTIONS.md)
 
 ## 🌐 Variables de Entorno
 
-Crea un `.env` en la raíz del proyecto:
-
-```env
-# Base de datos
-POSTGRES_USER=usuario
-POSTGRES_PASSWORD=contraseña
-POSTGRES_DB=chatdb
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-
-# Redis
-REDIS_ADDR=localhost:6379
-REDIS_PASSWORD=
-
-# JWT
-SECRETKEY=clave_super_secreta_muy_larga
-
-# Email (Gmail SMTP)
-GMAIL=tu@gmail.com
-GMAIL_PASSWORD=app_password_de_google
-
-# MinIO (Object Storage)
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=media
-MINIO_PUBLIC_URL=http://localhost:9000
-
-# ZegoCloud (videollamadas)
-ZEGO_APP_ID=tu_app_id
-ZEGO_SERVER_SECRET=tu_secret
-
-# Bug reporting (opcional)
-GITHUB_TOKEN=ghp_...
-GITHUB_OWNER=tu_usuario
-GITHUB_REPO=tu_repositorio
-
-# Cloudflare Tunnel (opcional)
-CLOUDFLARE_TUNNEL_TOKEN=tu_tunnel_token
-```
+Todas están documentadas en [`.env.example`](.env.example). Con Docker ninguna es
+obligatoria (compose.yaml trae valores por defecto para uso local); en producción las
+imprescindibles son `SECRETKEY` (≥ 32 caracteres), la base de datos (`DATABASE_URL` o
+`POSTGRES_*`), Redis (`REDIS_URL` o `REDIS_*`), el almacenamiento (`MINIO_*`) y el correo
+(`SMTP_*`/`GMAIL_*` o `BREVO_API_KEY`). Ver también [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ---
 
@@ -421,6 +361,7 @@ CLOUDFLARE_TUNNEL_TOKEN=tu_tunnel_token
 
 | Documento | Descripción |
 |-----------|-------------|
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Despliegue gratuito (Render + Vercel) |
 | [docs/WEBSOCKET_GUIDE.md](docs/WEBSOCKET_GUIDE.md) | Protocolo WebSocket detallado |
 | [docs/BUG_REPORT_SYSTEM.md](docs/BUG_REPORT_SYSTEM.md) | Sistema de reportes a GitHub |
 | [scripts/setup-cloudflare.ps1](scripts/setup-cloudflare.ps1) | Obtener URL pública con Cloudflare (Windows) |
@@ -434,8 +375,10 @@ CLOUDFLARE_TUNNEL_TOKEN=tu_tunnel_token
 ## 🔐 Seguridad
 
 - Contraseñas hasheadas con **bcrypt**
-- Autenticación stateless con **JWT** (access + refresh)
-- Bloqueo automático de cuenta tras 5 intentos fallidos
+- Sesión en cookies HttpOnly: JWT de 15 min + refresh token opaco, rotado y revocable
+- Bloqueo automático de cuenta tras 5 intentos fallidos; códigos de un solo uso
+- Límite de peticiones por IP en login, códigos y envío de emails
+- URLs de archivos validadas (sin `javascript:`) y contenido de subidas verificado
 - Validación estricta de inputs en middlewares
 - CORS configurado por entorno
 - Secrets exclusivamente en variables de entorno

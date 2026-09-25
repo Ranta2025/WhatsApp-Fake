@@ -7,7 +7,7 @@ services:
     name: whatsapp-fake-api
     runtime: docker
     plan: free
-    dockerfilePath: ./docker/dockerfile
+    dockerfilePath: ./docker/backend.Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
     autoDeploy: true

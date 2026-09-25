@@ -4,11 +4,11 @@ Write-Host "🔧 Obteniendo URL de Cloudflare Tunnel" -ForegroundColor Cyan
 Write-Host ""
 
 # Verificar si cloudflared está corriendo
-$cfRunning = docker ps --filter "name=cloudflared" --format "{{.Names}}"
+$cfRunning = docker compose ps -q cloudflared 2>$null
 
 if (-not $cfRunning) {
     Write-Host "❌ El contenedor de cloudflared no está corriendo" -ForegroundColor Red
-    Write-Host "Inicia tu aplicación con: docker compose -f docker/compose.yml up -d" -ForegroundColor Yellow
+    Write-Host "Inicia tu aplicación con: docker compose --profile tunnel up -d" -ForegroundColor Yellow
     exit 1
 }
 
@@ -17,12 +17,12 @@ Write-Host "⏳ Esperando a que Cloudflare Tunnel se inicialice..." -ForegroundC
 Start-Sleep -Seconds 5
 
 # Extraer la URL de los logs del contenedor (cloudflared la imprime en stderr)
-$logs = docker logs cloudflared 2>&1
+$logs = docker compose logs cloudflared 2>&1
 $match = ($logs | Select-String -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com') | Select-Object -Last 1
 
 if (-not $match) {
     Write-Host "❌ No se encontró la URL de Cloudflare Tunnel" -ForegroundColor Red
-    Write-Host "Verifica los logs: docker logs cloudflared" -ForegroundColor Yellow
+    Write-Host "Verifica los logs: docker compose logs cloudflared" -ForegroundColor Yellow
     exit 1
 }
 
@@ -43,6 +43,6 @@ Write-Host "   • La URL cambia cada vez que reinicias los contenedores" -Foreg
 Write-Host "   • No requiere cuenta ni token de Cloudflare" -ForegroundColor Gray
 Write-Host ""
 Write-Host "🔧 Arquitectura:" -ForegroundColor Cyan
-Write-Host "   Internet → Cloudflare Tunnel → Nginx → Frontend (React) + Backend (Go API)" -ForegroundColor Gray
+Write-Host "   Internet → Cloudflare Tunnel → web (nginx: React + proxy /api) → app (Go API)" -ForegroundColor Gray
 Write-Host "   Todo está en el mismo dominio, Nginx maneja el routing" -ForegroundColor Gray
 Write-Host ""

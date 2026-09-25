@@ -6,9 +6,9 @@ echo "🔧 Obteniendo URL de Cloudflare Tunnel"
 echo ""
 
 # Verificar si cloudflared está corriendo
-if ! docker ps | grep -q cloudflared; then
+if [ -z "$(docker compose ps -q cloudflared 2>/dev/null)" ]; then
     echo "❌ El contenedor de cloudflared no está corriendo"
-    echo "Inicia tu aplicación con: docker compose -f docker/compose.yml up -d"
+    echo "Inicia tu aplicación con: docker compose --profile tunnel up -d"
     exit 1
 fi
 
@@ -17,11 +17,11 @@ echo "⏳ Esperando a que Cloudflare Tunnel se inicialice..."
 sleep 5
 
 # Extraer la URL de los logs (cloudflared la imprime en stderr)
-publicUrl=$(docker logs cloudflared 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1)
+publicUrl=$(docker compose logs cloudflared 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1)
 
 if [ -z "$publicUrl" ]; then
     echo "❌ No se encontró la URL de Cloudflare Tunnel"
-    echo "Verifica los logs: docker logs cloudflared"
+    echo "Verifica los logs: docker compose logs cloudflared"
     exit 1
 fi
 
@@ -40,6 +40,6 @@ echo "   • La URL cambia cada vez que reinicias los contenedores"
 echo "   • No requiere cuenta ni token de Cloudflare"
 echo ""
 echo "🔧 Arquitectura:"
-echo "   Internet → Cloudflare Tunnel → Nginx → Frontend (React) + Backend (Go API)"
+echo "   Internet → Cloudflare Tunnel → web (nginx: React + proxy /api) → app (Go API)"
 echo "   Todo está en el mismo dominio, Nginx maneja el routing"
 echo ""

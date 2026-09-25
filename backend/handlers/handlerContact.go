@@ -7,7 +7,6 @@ import (
 	"gorm/backend/websocket"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -90,9 +89,8 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		secure := os.Getenv("ENV") == "production"
 		ctx.SetSameSite(http.SameSiteLaxMode)
-		ctx.SetCookie("token", token, int(utils.AccessTokenDuration.Seconds()), "/", "", secure, true)
+		ctx.SetCookie("token", token, int(utils.AccessTokenDuration.Seconds()), "/", "", utils.SecureCookies(), true)
 		ctx.JSON(200, gin.H{
 			"message": user,
 		})

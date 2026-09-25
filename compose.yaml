@@ -1,0 +1,154 @@
+# Stack completo para desarrollo/pruebas locales.
+#
+#   docker compose up -d --build
+#
+#   App ............. http://localhost          (usuarios demo: ana_demo / luis_demo / marta_demo, contraseña Demo1234!)
+#   Correos ......... http://localhost:8025     (Mailpit: aquí llegan los códigos de activación)
+#   MinIO consola ... http://localhost:9001     (minioadmin / minioadmin)
+#   API directa ..... http://localhost:8080     (para `npm run dev` en frontend/)
+#
+# No hace falta .env: todas las variables tienen valores por defecto para uso
+# local. Si existe un .env en la raíz, sus valores tienen prioridad.
+# Túnel público opcional (Cloudflare): docker compose --profile tunnel up -d
+
+name: whatsapp-fake
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *restart
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    image: whatsapp-fake/backend:local
+    environment:
+      ENV: ${ENV:-production}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}     # local por HTTP
+      SECRETKEY: ${SECRETKEY:-local-dev-secret-key-please-change-0123456789}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      # Base de datos y caché
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-whatsapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whatsapp}
+      POSTGRES_DB: ${POSTGRES_DB:-whatsapp}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Archivos (MinIO)
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-media}
+      MINIO_USE_SSL: "false"
+      # Correo: por defecto Mailpit (bandeja local). Para enviar correos reales
+      # define SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, GMAIL_FROM y GMAIL_PASSWORD,
+      # o BREVO_API_KEY + EMAIL_FROM.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      GMAIL_FROM: ${GMAIL_FROM:-no-reply@todos.local}
+      GMAIL_PASSWORD: ${GMAIL_PASSWORD:-local}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      # Opcionales
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      ZEGO_APP_ID: ${ZEGO_APP_ID:-}
+      ZEGO_SERVER_SECRET: ${ZEGO_SERVER_SECRET:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_OWNER: ${GITHUB_OWNER:-}
+      GITHUB_REPO: ${GITHUB_REPO:-}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  web:
+    <<: *restart
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    image: whatsapp-fake/web:local
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      app:
+        condition: service_healthy
+
+  postgres:
+    <<: *restart
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-whatsapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whatsapp}
+      POSTGRES_DB: ${POSTGRES_DB:-whatsapp}
+    ports:
+      - "127.0.0.1:${POSTGRES_PUBLIC_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PUBLIC_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    <<: *restart
+    # La imagen oficial ya no se publica en Docker Hub: se compila desde el código
+    build:
+      context: .
+      dockerfile: docker/minio.Dockerfile
+    image: whatsapp-fake/minio:local
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "127.0.0.1:${MINIO_PUBLIC_PORT:-9000}:9000"   # API S3
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"  # Consola web
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9000/minio/health/live >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mailpit:
+    <<: *restart
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"     # Bandeja web
+
+  # Túnel público temporal (URL *.trycloudflare.com en los logs)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate --protocol http2 --url http://web:80
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

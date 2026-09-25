@@ -70,7 +70,7 @@ Crea un proyecto en la consola de ZegoCloud y copia `AppID` → `ZEGO_APP_ID` y
 
 1. Render Dashboard → **New → Blueprint** → conecta este repositorio. Render lee
    `render.yaml` y crea:
-   - `whatsapp-fake-api` (Docker, `docker/dockerfile`, health check `/healthz`)
+   - `whatsapp-fake-api` (Docker, `docker/backend.Dockerfile`, health check `/healthz`)
    - `whatsapp-fake-db` (PostgreSQL) y `whatsapp-fake-redis` (Key Value)
    - `SECRETKEY` generada automáticamente, `DATABASE_URL` y `REDIS_URL` conectadas solas.
 2. Rellena las variables que pide (`sync: false`) con los valores de los pasos 1-3.
@@ -127,8 +127,7 @@ código del email y listo.
 ## Desarrollo local (sin cambios)
 
 ```bash
-cp .env.example .env          # y ajusta los valores
-docker compose -f docker/compose.yml up -d --build
+docker compose up -d --build     # ver README → "Probarlo en local"
 ```
 
 Tests:

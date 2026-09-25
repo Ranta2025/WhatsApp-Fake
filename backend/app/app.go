@@ -40,6 +40,7 @@ func New() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	seedDemoData(db)
 
 	engine, err := newEngine()
 	if err != nil {
