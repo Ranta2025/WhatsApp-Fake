@@ -45,16 +45,12 @@ func New() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	engine.GET("/healthz", healthHandler(db, rd))
 	routers.Router(engine, buildDeps(db, rd, mc))
-
-	addr := os.Getenv("SERVER_ADDR")
-	if addr == "" {
-		addr = "0.0.0.0:8080"
-	}
 
 	return &App{
 		server: &http.Server{
-			Addr:              addr,
+			Addr:              listenAddr(),
 			Handler:           engine,
 			ReadHeaderTimeout: 10 * time.Second,
 			// Sin ReadTimeout/WriteTimeout globales: romperían las conexiones
@@ -65,6 +61,42 @@ func New() (*App, error) {
 		db:    db,
 		redis: rd,
 	}, nil
+}
+
+// listenAddr devuelve SERVER_ADDR, o 0.0.0.0:$PORT (Render, Railway, Fly...)
+// o 0.0.0.0:8080 por defecto.
+func listenAddr() string {
+	if addr := os.Getenv("SERVER_ADDR"); addr != "" {
+		return addr
+	}
+	if port := os.Getenv("PORT"); port != "" {
+		return "0.0.0.0:" + port
+	}
+	return "0.0.0.0:8080"
+}
+
+// healthHandler responde 200 si PostgreSQL y Redis están accesibles
+// (usado por el health check de la plataforma de despliegue).
+func healthHandler(db *gorm.DB, rd *redis.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancel()
+		status := gin.H{"postgres": "ok", "redis": "ok"}
+		healthy := true
+		if sqlDB, err := db.DB(); err != nil || sqlDB.PingContext(ctx) != nil {
+			status["postgres"] = "error"
+			healthy = false
+		}
+		if err := rd.Ping(ctx).Err(); err != nil {
+			status["redis"] = "error"
+			healthy = false
+		}
+		if !healthy {
+			c.JSON(http.StatusServiceUnavailable, status)
+			return
+		}
+		c.JSON(http.StatusOK, status)
+	}
 }
 
 // newEngine crea el motor de Gin con los middlewares globales.
@@ -83,6 +115,12 @@ func newEngine() (*gin.Engine, error) {
 	// saltarse los límites de peticiones.
 	if err := engine.SetTrustedProxies(trustedProxies()); err != nil {
 		return nil, err
+	}
+	// CLIENT_IP_HEADER: cabecera con la IP real del cliente que añade la
+	// plataforma que está delante (p. ej. "X-Real-IP" con las rewrites de
+	// Vercel, "CF-Connecting-IP" con Cloudflare). Si falta, se usa X-Forwarded-For.
+	if header := os.Getenv("CLIENT_IP_HEADER"); header != "" {
+		engine.TrustedPlatform = header
 	}
 
 	engine.GET("/", func(c *gin.Context) {
@@ -136,6 +174,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) routers.Deps {
 		HandlerGroup:     handlers.InitHandlerGroup(serviceGroup, hub),
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),
 		Hub:              hub,
+		WSTickets:        cache.NewWSTicketStore(rd),
 		ChatService:      serviceChat,
 		ContactService:   serviceContact,
 		CallService:      serviceCall,

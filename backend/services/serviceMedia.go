@@ -72,10 +72,10 @@ func InitServiceMedia(client *minio.Client) MediaServicer {
 	if bucket == "" {
 		bucket = "media"
 	}
-	baseURL := os.Getenv("MINIO_PUBLIC_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:9000"
-	}
+	// MEDIA_PUBLIC_BASE_URL: URL pública del bucket (p. ej. https://pub-xxxx.r2.dev)
+	// cuando los archivos se sirven desde un dominio externo. Vacío = rutas
+	// relativas /storage/<bucket>/... que nginx / Vite redirigen a MinIO.
+	baseURL := os.Getenv("MEDIA_PUBLIC_BASE_URL")
 	return &ServiceMedia{
 		client:  client,
 		bucket:  bucket,
@@ -136,6 +136,9 @@ func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHe
 
 	// 6. Construir URL relativa
 	url := fmt.Sprintf("/storage/%s/%s", s.bucket, objectName)
+	if s.baseURL != "" {
+		url = s.baseURL + "/" + objectName
+	}
 
 	// 7. Determinar mediaType genérico
 	mediaType := "document"

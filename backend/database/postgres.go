@@ -62,6 +62,11 @@ func Conection() (*gorm.DB, error) {
 		dbname,
 		port,
 		sslmode)
+	// DATABASE_URL (formato postgres://...) tiene prioridad: es lo que dan los
+	// proveedores gestionados (Neon, Render, Supabase), normalmente con sslmode=require.
+	if url := os.Getenv("DATABASE_URL"); url != "" {
+		dsn = url
+	}
 	var data *gorm.DB
 	var err error
 	for i := 0; i < 10; i++ {

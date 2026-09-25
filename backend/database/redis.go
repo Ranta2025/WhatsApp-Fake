@@ -11,13 +11,24 @@ import (
 )
 
 // GetRedis crea el cliente de Redis y verifica la conexión con un PING.
+// Si existe REDIS_URL (redis:// o rediss:// con TLS, como Upstash o Render
+// Key Value) se usa; si no, REDIS_HOST / REDIS_PORT / REDIS_PASSWORD.
 func GetRedis() (*redis.Client, error) {
-	host := os.Getenv("REDIS_HOST")
-	port := os.Getenv("REDIS_PORT")
-	addr := fmt.Sprintf("%s:%s", host, port)
-	password := os.Getenv("REDIS_PASSWORD")
-	db := 0
-	rd := redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db})
+	var opts *redis.Options
+	if url := os.Getenv("REDIS_URL"); url != "" {
+		parsed, err := redis.ParseURL(url)
+		if err != nil {
+			return nil, fmt.Errorf("REDIS_URL inválida: %w", err)
+		}
+		opts = parsed
+	} else {
+		opts = &redis.Options{
+			Addr:     fmt.Sprintf("%s:%s", os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT")),
+			Password: os.Getenv("REDIS_PASSWORD"),
+			DB:       0,
+		}
+	}
+	rd := redis.NewClient(opts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
