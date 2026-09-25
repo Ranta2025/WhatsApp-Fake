@@ -21,7 +21,7 @@ export default function ActivateExisting() {
 
         setLoading(true);
         try {
-            await api.post('/recover', {
+            await api.post('/api/v1/auth/resend-activation', {
                 username: username
             });
             navigate('/activate', { state: { username } });

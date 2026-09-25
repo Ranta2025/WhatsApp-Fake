@@ -110,11 +110,11 @@ func TestE2E(t *testing.T) {
 	alice, bob := mk("alice", 1), mk("bob", 2)
 
 	ca, cb := newClient(t, base), newClient(t, base)
-	code, _ := ca.do("POST", "/LogIn", map[string]string{"username": alice.Username, "password": "wrong"})
+	code, _ := ca.do("POST", "/api/v1/auth/login", map[string]string{"username": alice.Username, "password": "wrong"})
 	assert.Equal(t, 401, code)
-	code, _ = ca.do("POST", "/LogIn", map[string]string{"username": alice.Username, "password": "Passw0rd!"})
+	code, _ = ca.do("POST", "/api/v1/auth/login", map[string]string{"username": alice.Username, "password": "Passw0rd!"})
 	require.Equal(t, 200, code)
-	code, _ = cb.do("POST", "/LogIn", map[string]string{"username": bob.Username, "password": "Passw0rd!"})
+	code, _ = cb.do("POST", "/api/v1/auth/login", map[string]string{"username": bob.Username, "password": "Passw0rd!"})
 	require.Equal(t, 200, code)
 
 	code, me := ca.do("GET", "/api/v1/user", nil)
@@ -219,13 +219,13 @@ func TestE2E(t *testing.T) {
 	require.NotNil(t, refreshCookie)
 	onlyRefresh := newClient(t, base)
 	onlyRefresh.http.Jar.SetCookies(aliceURL, []*http.Cookie{{Name: "refresh_token", Value: refreshCookie.Value}})
-	code, _ = onlyRefresh.do("POST", "/refresh", nil)
+	code, _ = onlyRefresh.do("POST", "/api/v1/auth/refresh", nil)
 	assert.Equal(t, 200, code)
 	reuse := newClient(t, base)
 	reuse.http.Jar.SetCookies(aliceURL, []*http.Cookie{{Name: "refresh_token", Value: refreshCookie.Value}})
-	code, _ = reuse.do("POST", "/refresh", nil)
+	code, _ = reuse.do("POST", "/api/v1/auth/refresh", nil)
 	assert.Equal(t, 401, code, "un refresh token usado no debe volver a servir")
 
-	code, _ = cb.do("POST", "/logout", nil)
+	code, _ = cb.do("POST", "/api/v1/auth/logout", nil)
 	assert.Equal(t, 200, code)
 }

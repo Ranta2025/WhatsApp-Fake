@@ -26,7 +26,7 @@ export default function RecoverPassword() {
 
         setLoading(true);
         try {
-            await api.post('/forgot-password-send', {
+            await api.post('/api/v1/auth/forgot-password', {
                 email: email
             });
             setStep(2);
@@ -89,7 +89,7 @@ export default function RecoverPassword() {
 
         setLoading(true);
         try {
-            await api.post('/forgot-password-change', {
+            await api.post('/api/v1/auth/reset-password', {
                 email: email,
                 code: code,
                 password: newPassword

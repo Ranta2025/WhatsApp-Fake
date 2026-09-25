@@ -52,7 +52,7 @@ export default function Register() {
             return;
         }
         try {
-            await api.post('/register', cleanFormData);
+            await api.post('/api/v1/auth/register', cleanFormData);
             // La cookie HttpOnly se setió automáticamente por el servidor
             navigate('/activate', { state: { username: formData.username, gmail: formData.email } });
         } catch (err) {

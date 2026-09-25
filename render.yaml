@@ -1,0 +1,70 @@
+# Blueprint de Render: backend (Docker) + PostgreSQL + Key Value (Redis), plan gratuito.
+# Uso: Render Dashboard → New → Blueprint → selecciona este repositorio.
+# Las variables marcadas con "sync: false" se piden al crear el Blueprint.
+# Guía completa: docs/DEPLOY.md
+services:
+  - type: web
+    name: whatsapp-fake-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./docker/dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: whatsapp-fake-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: whatsapp-fake-redis
+          property: connectionString
+      - key: SECRETKEY
+        generateValue: true
+      # URL del frontend (p. ej. https://whatsapp-fake.vercel.app) para permitir el WebSocket
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Almacenamiento S3 (Cloudflare R2 gratis: 10 GB)
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_BUCKET
+        value: media
+      - key: MINIO_USE_SSL
+        value: "true"
+      - key: MINIO_REGION
+        value: auto
+      - key: MINIO_MANAGE_BUCKET
+        value: "false"
+      - key: MEDIA_PUBLIC_BASE_URL
+        sync: false
+      # Envío de códigos por correo. Recomendado en Render: API HTTP de Brevo
+      # (gratis, 300/día), porque el plan gratuito puede bloquear los puertos SMTP.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      # Llamadas (ZegoCloud, plan gratuito)
+      - key: ZEGO_APP_ID
+        sync: false
+      - key: ZEGO_SERVER_SECRET
+        sync: false
+
+  - type: keyvalue
+    name: whatsapp-fake-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []   # solo accesible desde servicios de Render
+
+databases:
+  - name: whatsapp-fake-db
+    plan: free
+    databaseName: whatsapp
+    user: whatsapp

@@ -65,6 +65,14 @@ Una plataforma de mensajería instantánea completa construida con **Go (Gin)** 
 
 ---
 
+## ☁️ Despliegue gratuito
+
+Backend en **Render** (blueprint `render.yaml` con PostgreSQL y Redis gratuitos) y
+frontend en **Vercel** (`frontend/vercel.json`). Guía paso a paso en
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+---
+
 ## 📋 Requisitos Previos
 
 - [Go 1.25+](https://golang.org/dl/)
@@ -153,9 +161,11 @@ Estos scripts leen los logs de `cloudflared` y te muestran la URL pública `http
 
 ```
 ├── backend/
-│   ├── cache/           # Caché Redis (intentos, validaciones, utilidades)
+│   ├── app/             # Raíz de composición: dependencias, servidor y apagado ordenado
+│   ├── cache/           # Redis: refresh tokens, códigos, intentos, tickets WS
 │   ├── config/          # Configuración CORS
 │   ├── database/        # Conexiones PostgreSQL, Redis, MinIO
+│   ├── integration/     # Tests de integración (-tags integration) y e2e (-tags e2e)
 │   ├── handlers/        # HTTP handlers (User, Contact, Chat, Call, Group, Media, BugReport)
 │   ├── middleware/      # Validación de inputs, JWT, reglas de negocio
 │   ├── models/          # Modelos de dominio y DTOs base
@@ -177,7 +187,7 @@ Estos scripts leen los logs de `cloudflared` y te muestran la URL pública `http
 │       └── utils/       # notificaciones, permisos, validaciones
 │
 ├── docker/              # compose.yml, dockerfile, nginx.conf
-├── docs/                # Documentación técnica
+├── docs/                # Documentación técnica (despliegue: docs/DEPLOY.md)
 ├── scripts/             # Automatización cloudflare
 ├── tests/               # Tests de integración
 └── main.go              # Entry point
@@ -187,21 +197,29 @@ Estos scripts leen los logs de `cloudflared` y te muestran la URL pública `http
 
 ## 🛣️ API Endpoints
 
-### Autenticación (sin token)
+### Autenticación — `/api/v1/auth/` (sin token)
+
+La sesión usa cookies HttpOnly: `token` (access, 15 min) y `refresh_token` (7 días,
+opaco, rotado en cada uso y revocado al cambiar la contraseña o bloquear la cuenta).
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `POST` | `/register` | Crear cuenta |
-| `POST` | `/LogIn` | Iniciar sesión → devuelve JWT |
-| `POST` | `/logout` | Cerrar sesión |
-| `POST` | `/refresh` | Refrescar JWT |
-| `POST` | `/activate` | Activar cuenta con código |
-| `POST` | `/activate-cuenta` | Solicitar código de recuperación |
-| `POST` | `/resend-code` | Reenviar código de activación |
-| `POST` | `/recover-cuenta` | Desbloquear cuenta con código |
-| `POST` | `/unlock-account` | Recuperar cuenta y cambiar contraseña |
-| `POST` | `/forgot-password-send` | Enviar código para cambio de contraseña |
-| `POST` | `/forgot-password-change` | Cambiar contraseña con código |
+| `POST` | `/api/v1/auth/register` | Crear cuenta (inactiva hasta verificar el código del email) |
+| `POST` | `/api/v1/auth/login` | Iniciar sesión (cookies de sesión) |
+| `POST` | `/api/v1/auth/logout` | Cerrar sesión (invalida el refresh token) |
+| `POST` | `/api/v1/auth/refresh` | Renovar la sesión con la cookie `refresh_token` |
+| `POST` | `/api/v1/auth/activate` | Activar cuenta con código |
+| `POST` | `/api/v1/auth/resend-activation` | Reenviar código de activación (por username) |
+| `POST` | `/api/v1/auth/resend-unlock-code` | Enviar código de desbloqueo (por email) |
+| `POST` | `/api/v1/auth/unlock` | Desbloquear cuenta con código |
+| `POST` | `/api/v1/auth/unlock-and-reset` | Desbloquear y cambiar contraseña con código |
+| `POST` | `/api/v1/auth/forgot-password` | Enviar código para restablecer contraseña |
+| `POST` | `/api/v1/auth/reset-password` | Restablecer contraseña con código |
+
+Los códigos son de un solo uso, caducan a los 10 minutos y se invalidan tras 5 intentos
+fallidos. Las rutas antiguas en la raíz (`/LogIn`, `/register`, …) siguen disponibles por
+compatibilidad. Los endpoints de login/códigos y los que envían emails tienen límite de
+peticiones por IP.
 
 ### Usuarios — `/api/v1/` (requiere JWT)
 
@@ -273,7 +291,9 @@ Estos scripts leen los logs de `cloudflared` y te muestran la URL pública `http
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `GET` | `/api/v1/ws` | Conectar WebSocket (requiere cookie JWT) |
+| `GET` | `/api/v1/ws-ticket` | Ticket de un solo uso (30 s) para abrir el WebSocket |
+| `GET` | `/api/v1/ws` | Conectar WebSocket (cookie de sesión o `?ticket=`) |
+| `GET` | `/healthz` | Estado de PostgreSQL y Redis |
 
 ---
 

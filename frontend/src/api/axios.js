@@ -37,9 +37,9 @@ api.interceptors.response.use(
         if (
             error.response?.status === 401 &&
             !originalRequest._retry &&
-            !originalRequest.url?.includes('/refresh') &&
-            !originalRequest.url?.includes('/LogIn') &&
-            !originalRequest.url?.includes('/logout')
+            !originalRequest.url?.includes('/auth/refresh') &&
+            !originalRequest.url?.includes('/auth/login') &&
+            !originalRequest.url?.includes('/auth/logout')
         ) {
             if (isRefreshing) {
                 // Si ya se está refrescando, encolar la petición
@@ -53,7 +53,7 @@ api.interceptors.response.use(
 
             try {
                 // El refresh_token se envía automáticamente via cookie HttpOnly
-                await axios.post(`${baseURL}/refresh`, {}, {
+                await axios.post(`${baseURL}/api/v1/auth/refresh`, {}, {
                     withCredentials: true,
                 });
 

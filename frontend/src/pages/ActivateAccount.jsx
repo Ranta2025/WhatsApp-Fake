@@ -37,7 +37,7 @@ export default function ActivateAccount() {
 
         setLoading(true);
         try {
-            await api.post('/activate', {
+            await api.post('/api/v1/auth/activate', {
                 username: username,
                 code: code
             });
@@ -73,7 +73,7 @@ export default function ActivateAccount() {
 
         setResendLoading(true);
         try {
-            await api.post('/recover', {
+            await api.post('/api/v1/auth/resend-activation', {
                 username: username
             });
             setResendSuccess(true);

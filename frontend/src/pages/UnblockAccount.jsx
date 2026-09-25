@@ -37,7 +37,7 @@ export default function UnblockAccount() {
 
         setLoading(true);
         try {
-            await api.post('/resend-code', {
+            await api.post('/api/v1/auth/resend-unlock-code', {
                 gmail: gmail
             });
             setStep(2);
@@ -103,7 +103,7 @@ export default function UnblockAccount() {
         setLoading(true);
         try {
             // Operación atómica: desbloquear + cambiar contraseña en una sola llamada
-            await api.post('/unlock-account', {
+            await api.post('/api/v1/auth/unlock-and-reset', {
                 email: gmail,
                 code: code,
                 password: newPassword

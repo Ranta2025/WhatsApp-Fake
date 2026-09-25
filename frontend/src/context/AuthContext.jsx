@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = useCallback(async (username, password) => {
-        await api.post('/LogIn', { username, password });
+        await api.post('/api/v1/auth/login', { username, password });
         // Las cookies HttpOnly las establece el servidor
         await refreshUser();
         return true;
@@ -49,7 +49,7 @@ export const AuthProvider = ({ children }) => {
 
     const logout = useCallback(async () => {
         try {
-            await api.post('/logout');
+            await api.post('/api/v1/auth/logout');
         } catch {
             // Aunque falle la petición, se limpia la sesión local
         } finally {
