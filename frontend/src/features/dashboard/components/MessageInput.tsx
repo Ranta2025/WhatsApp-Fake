@@ -1,8 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, type ChangeEvent, type KeyboardEvent } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import MediaUploadMenu from '../../../components/MediaUploadMenu';
 import api from '../../../api/axios';
+import type { MediaUploadResult } from '../../../types/api';
+import { replySenderLabel } from '../lib/replyLabel';
 
 const MessageInput = () => {
     const { 
@@ -18,14 +20,18 @@ const MessageInput = () => {
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
-    const attachButtonRef = useRef(null);
-    const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
-    const recordingTimerRef = useRef(null);
+    const attachButtonRef = useRef<HTMLButtonElement>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const currentDraft = selected ? (drafts[selected.Number] || '') : '';
 
-    const handleInputChange = (e) => {
+    const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+        // El textarea solo se renderiza cuando `selected` no es null (guard
+        // más abajo, `if (!selected) return null;`), pero TS no lo sabe en
+        // este closure — invariante explícita, no cambia el comportamiento.
+        if (!selected) return;
         const val = e.target.value;
         setDrafts(prev => ({ ...prev, [selected.Number]: val }));
         if (isConnected && selected) {
@@ -44,7 +50,7 @@ const MessageInput = () => {
             mediaRecorderRef.current = mediaRecorder;
             audioChunksRef.current = [];
 
-            mediaRecorder.ondataavailable = (e) => {
+            mediaRecorder.ondataavailable = (e: BlobEvent) => {
                 if (e.data.size > 0) audioChunksRef.current.push(e.data);
             };
 
@@ -53,7 +59,9 @@ const MessageInput = () => {
                 const formData = new FormData();
                 formData.append('file', audioBlob, 'voice_note.webm');
                 try {
-                    const response = await api.post('/api/v1/upload', formData, {
+                    // El cuerpo puede llegar vacío/null; guard `response.data &&`
+                    // restaura la tolerancia de la versión JS.
+                    const response = await api.post<MediaUploadResult | null>('/api/v1/upload', formData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
                     if (response.data && response.data.url) {
@@ -80,23 +88,24 @@ const MessageInput = () => {
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
             setIsRecording(false);
-            clearInterval(recordingTimerRef.current);
+            clearInterval(recordingTimerRef.current || undefined);
         }
     };
 
     const cancelRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.onstop = () => {
-                mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        const recorder = mediaRecorderRef.current;
+        if (recorder && isRecording) {
+            recorder.onstop = () => {
+                recorder.stream.getTracks().forEach(track => track.stop());
             };
-            mediaRecorderRef.current.stop();
+            recorder.stop();
             setIsRecording(false);
-            clearInterval(recordingTimerRef.current);
+            clearInterval(recordingTimerRef.current || undefined);
             setRecordingTime(0);
         }
     };
 
-    const formatRecordingTime = (seconds) => {
+    const formatRecordingTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -111,7 +120,7 @@ const MessageInput = () => {
                     <div className="w-1 h-8 bg-indigo-500 rounded-full"></div>
                     <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-indigo-400">
-                            Respondiendo a {replyingTo.SenderTelephon === profile?.Telephon ? 'ti mismo' : replyingTo.SenderUsername || 'mensaje'}
+                            Respondiendo a {replySenderLabel(replyingTo, profile?.Telephon, selected)}
                         </div>
                         <div className="text-xs text-slate-400 truncate">{replyingTo.Message}</div>
                     </div>
@@ -161,7 +170,7 @@ const MessageInput = () => {
                             placeholder="Escribe un mensaje..."
                             className="w-full p-3 px-4 bg-transparent focus:outline-none text-slate-100 placeholder-slate-500 text-[15px] resize-none min-h-[44px] max-h-[120px] transition-all"
                             rows={1}
-                            onKeyDown={(e) => {
+                            onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
                                     if (selected && currentDraft.trim()) handleSend();

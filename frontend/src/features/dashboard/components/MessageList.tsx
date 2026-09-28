@@ -5,13 +5,23 @@ import { formatDaySeparator, formatTime } from '../../../utils/format';
 import AudioPlayer from '../../../components/AudioPlayer';
 import Popover from '../../../components/ui/Popover';
 import { useRefMap } from '../../../hooks/useRefMap';
+import type { Message, MessageStatus, MediaType } from '../../../types/api';
 
 /**
  * MessageList Component
  * Renderiza la lista de mensajes de un chat con optimizaciones de UI/UX.
  */
+
+/**
+ * `Message` (types/api.ts) solo tiene `Time` (requerido) — `Timestamp` no
+ * existe en el contrato del backend; el fallback `m.Time || m.Timestamp` es
+ * código muerto preexistente (`Time` siempre está presente), documentado en
+ * vez de removido sin test (mismo criterio que CallHistory/MediaUploadMenu).
+ */
+type MessageWithLegacyTimestamp = Message & { Timestamp?: string };
+
 // Lee los fondos por chat guardados en localStorage (puede fallar en modo privado)
-const readChatWallpapers = () => {
+const readChatWallpapers = (): Record<string, string> => {
     try {
         return JSON.parse(localStorage.getItem('chat_wallpapers') || '{}') || {};
     } catch {
@@ -25,18 +35,19 @@ const MessageList = () => {
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
-    const [chatWallpapers, setChatWallpapers] = useState(readChatWallpapers);
+    const [chatWallpapers, setChatWallpapers] = useState<Record<string, string>>(readChatWallpapers);
 
     useEffect(() => {
         // Listen for storage changes (cross-tab)
-        const onStorage = (e) => {
+        const onStorage = (e: StorageEvent) => {
             if (e.key === 'chat_wallpapers') {
                 try { setChatWallpapers(e.newValue ? JSON.parse(e.newValue) : {}); } catch { /* ignore */ }
             }
         };
         // Listen for same-tab wallpaper changes (dispatched by ContactDetails)
-        const onCustom = (e) => {
-            setChatWallpapers(e.detail || {});
+        const onCustom = (e: Event) => {
+            const detail = (e as CustomEvent<Record<string, string>>).detail;
+            setChatWallpapers(detail || {});
         };
         window.addEventListener('storage', onStorage);
         window.addEventListener('chat-wallpaper-changed', onCustom);
@@ -55,7 +66,7 @@ const MessageList = () => {
         messageMenuOpen, setMessageMenuOpen
     } = useMessaging();
 
-    const messagesContainerRef = useRef(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     // Disparadores del menú de cada mensaje, para el Popover portado (ver T4:
     // R2 — el menú ya no depende del hover del padre para mantenerse visible).
     const getMenuTriggerRef = useRefMap();
@@ -71,15 +82,21 @@ const MessageList = () => {
         });
     }, [selected?.Number, messageCount]);
 
+    interface MessageGroup {
+        date: string;
+        label: string;
+        messages: MessageWithLegacyTimestamp[];
+    }
+
     // Agrupación de mensajes por fecha
-    const groupedMessages = useMemo(() => {
+    const groupedMessages = useMemo((): MessageGroup[] => {
         if (!selected) return [];
-        const messages = messagesByChat[selected.Number] || [];
-        const groups = [];
-        let currentGroup = null;
+        const messages = (messagesByChat[selected.Number] || []) as MessageWithLegacyTimestamp[];
+        const groups: MessageGroup[] = [];
+        let currentGroup: MessageGroup | null = null;
 
         messages.forEach((m) => {
-            const date = new Date(m.Time || m.Timestamp);
+            const date = new Date(m.Time || m.Timestamp || '');
             const dayKey = date.toDateString();
 
             if (!currentGroup || currentGroup.date !== dayKey) {
@@ -98,7 +115,7 @@ const MessageList = () => {
      * Detecta si el contenido de m.Message es una URL de media (archivo adjunto).
      * Retorna true si el mensaje no debe mostrarse como texto plano.
      */
-    const isMediaUrl = (m) => {
+    const isMediaUrl = (m: Message) => {
         const text = m.Message || '';
         // Si tiene MediaType y MediaUrl, el texto es redundante si coincide con la URL
         if (m.MediaType && m.MediaUrl) return true;
@@ -113,14 +130,14 @@ const MessageList = () => {
         return false;
     };
 
-    const getStatusIcon = (status) => {
+    const getStatusIcon = (status: MessageStatus) => {
         // Stroke-based ticks: the second check is shifted right so both marks stay distinct
         const strokeProps = {
             fill: 'none',
             stroke: 'currentColor',
             strokeWidth: 1.7,
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
+            strokeLinecap: 'round' as const,
+            strokeLinejoin: 'round' as const,
         };
         if (status === 'visto' || status === 'entregado') {
             const isRead = status === 'visto';
@@ -164,8 +181,8 @@ const MessageList = () => {
         );
     };
 
-    const renderMedia = (m, isMine) => {
-        let mediaType = m.MediaType;
+    const renderMedia = (m: Message, isMine: boolean) => {
+        let mediaType: MediaType | undefined = m.MediaType;
         let mediaUrl = m.MediaUrl;
         const text = m.Message || '';
 
@@ -258,7 +275,7 @@ const MessageList = () => {
                         {group.messages.map((m) => {
                             const isMine = m.SenderTelephon === profile?.Telephon;
                             const isMenuOpen = messageMenuOpen === m.MessageID;
-                            const time = formatTime(m.Time || m.Timestamp);
+                            const time = formatTime(m.Time || m.Timestamp || '');
 
                             return (
                                 <div 
@@ -273,7 +290,7 @@ const MessageList = () => {
                                             si el menú está abierto, o con foco de teclado (accesible/táctil). */}
                                         <div className={`absolute top-0 ${isMine ? '-left-10' : '-right-10'} transition-opacity z-20 ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'}`}>
                                             <button
-                                                ref={(el) => {
+                                                ref={(el: HTMLButtonElement | null) => {
                                                     // R3-refmap-unbounded: liberar la entrada al desmontarse
                                                     // (el === null), en vez de dejarla colgada para siempre.
                                                     if (el) getMenuTriggerRef(m.MessageID).current = el;
