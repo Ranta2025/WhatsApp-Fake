@@ -170,9 +170,11 @@ describe('api axios interceptor: 401 auto-refresh', () => {
             return respond(config, 401, {});
         });
 
-        await expect(api.get('/api/v1/protected')).rejects.toBe(refreshError);
-        expect(sessionExpiredEvents).toBe(1);
-
-        window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+        try {
+            await expect(api.get('/api/v1/protected')).rejects.toBe(refreshError);
+            expect(sessionExpiredEvents).toBe(1);
+        } finally {
+            window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+        }
     });
 });

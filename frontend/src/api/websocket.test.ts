@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, beforeEach, afterEach } from 'vitest';
+import type { WsHandlerMap } from './websocket';
 
 // R3-websocket-dispatch-untested: la clase WebSocketManager remapea algunos
 // eventos de red antes de notificar a los listeners (chat -> 'message',
@@ -230,5 +231,15 @@ describe('wsManager.connect() failure paths', () => {
         expect(getMock).toHaveBeenCalledTimes(2);
 
         wsManager.disconnect();
+    });
+});
+
+// R3-ws-error-nonstring-typed-as-string: el envelope de 'error' se pasa tal
+// cual llega del servidor, así que su campo `error` no puede tiparse como
+// string (puede faltar o ser de otro tipo). El tipo tiene que obligar a
+// estrechar antes de usarlo. Chequeo en tiempo de compilación (npm run typecheck).
+describe('tipo del payload de error', () => {
+    it('el campo error es unknown', () => {
+        expectTypeOf<WsHandlerMap['error']['error']>().toEqualTypeOf<unknown>();
     });
 });

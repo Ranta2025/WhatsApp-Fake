@@ -28,13 +28,17 @@ const debug = import.meta.env.DEV ? (...args: unknown[]) => console.log(...args)
 
 type DirectPassthroughType = Exclude<WsEventType, 'chat' | 'error' | 'contacts_online' | 'pong'>;
 
+/** Envelope de error tal como llega del servidor, sin normalizar. */
+export type WsErrorEnvelope = Omit<WsError, 'error'> & { error?: unknown } & Record<string, unknown>;
+
 export type WsHandlerMap = {
     [K in DirectPassthroughType]: WsEventOf<K>['payload'];
 } & {
     message: WsEventOf<'chat'>['payload'];
     // El listener recibe el envelope crudo tal cual llegó por el wire (ver
-    // handleMessage): puede traer campos extra que WsError no declara.
-    error: WsError & Record<string, unknown>;
+    // handleMessage): puede traer campos extra, y `error` puede faltar o no
+    // ser string, así que se tipa como unknown y el consumidor lo estrecha.
+    error: WsErrorEnvelope;
     contacts_online: string[];
 };
 
@@ -251,7 +255,7 @@ class WebSocketManager {
             // R3-ws-error-envelope-normalization: notificar el envelope crudo
             // tal cual (todos sus campos), no un objeto reconstruido a mano
             // que descartaba cualquier campo extra fuera de {type, error}.
-            const envelope = raw as WsError & Record<string, unknown>;
+            const envelope = raw as WsErrorEnvelope;
             const errorMessage = typeof envelope.error === 'string' ? envelope.error : '';
             console.error('Error del servidor:', errorMessage);
             this.notifyHandlers('error', envelope);
