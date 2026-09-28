@@ -87,5 +87,10 @@ whole frontend for render problems (overlays/dropdowns not on top, broken chat l
 - a9c2f4e fix(docker): stop publishing redis on host port 6379 (pre-task, stack fix).
 - Baseline: go test ./... ok; lint ok; build ok.
 
+## Closure
+- Commits: a9c2f4e (docker), 0d7d908 (T1), 8dc9ad9 (T2), 4af3347 (doc), fda9605 (T3), c285234 (T2b), 85d1eb0 (T3b), 47510a4 (T4), 4419f3d (T4b), ce323be (T4c: Escape flag read from nativeEvent + ref identity kept; RED→GREEN 4 tests, 47/47 green).
+- Reviews (all APPROVED + acknowledged): review-642e7822c131d198 (…4af3347), review-f7d0021c6a1954b2 (fda9605), review-00d7dfceb4666cec (c285234–85d1eb0), T4 lineage (47510a4), T4b lineage (4419f3d; its 2 WARNINGs fixed in ce323be). ce323be: medium, under_budget → pending in the next slice.
+- Final checks: go vet/test/build ok; e2e mutual-visibility test ok; npm test 47/47, lint 0, build ok; Playwright visual pass (desktop + mobile) ok, 0 console errors.
+
 ## Next step
-T2b, T3b and T4 done (all green: go vet/test/build; npm test/lint/build). T4 changes are uncommitted (writer pass only, no commit/push per its instructions) — next step is for the parent to review and commit the frontend render fixes.
+Feature complete. Follow-up feature: `feat/typescript-migration` (odd/tasks/typescript-migration.md).
