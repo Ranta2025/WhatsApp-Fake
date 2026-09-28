@@ -1,38 +1,45 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import type { CallType } from '../types/api';
+
+interface IncomingCallProps {
+    callerName: string;
+    callerNumber: string;
+    callType?: CallType;
+    onAccept: () => void;
+    onReject: () => void;
+}
 
 /**
  * IncomingCall Component
  * Interfaz profesional para recibir llamadas entrantes.
  * Reproduce un sonido de timbre durante la llamada entrante.
- * 
- * @param {Object} props
- * @param {string} props.callerName - Nombre del que llama
- * @param {string} props.callerNumber - Teléfono del que llama
- * @param {string} props.callType - "video" | "audio"
- * @param {Function} props.onAccept - Callback al aceptar
- * @param {Function} props.onReject - Callback al rechazar
  */
-export default function IncomingCall({ callerName, callerNumber, callType = 'video', onAccept, onReject }) {
+export default function IncomingCall({ callerName, callerNumber, callType = 'video', onAccept, onReject }: IncomingCallProps) {
     const [elapsed, setElapsed] = useState(0);
-    const audioCtxRef = useRef(null);
-    const ringIntervalRef = useRef(null);
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const ringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Reproducir sonido de timbre de llamada entrante
     useEffect(() => {
-        let audioCtx;
-        let intervalId;
+        let audioCtx: AudioContext | undefined;
 
         const playRingtone = () => {
             try {
                 if (!audioCtx || audioCtx.state === 'closed') {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    // Safari-only vendor-prefixed constructor; no d.ts for it, narrowed via `unknown` instead of `any`.
+                    const AudioContextCtor = window.AudioContext
+                        ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+                    audioCtx = new AudioContextCtor!();
                     audioCtxRef.current = audioCtx;
                 }
+                // Narrowed once into a local const — closures below can't
+                // keep TS's narrowing on the outer `let audioCtx`.
+                const ctx = audioCtx;
 
                 // Tono dual: simula timbre de teléfono (480Hz + 620Hz)
-                const playTone = (freq, startTime, duration) => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
+                const playTone = (freq: number, startTime: number, duration: number) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
                     osc.type = 'sine';
                     osc.frequency.value = freq;
                     gain.gain.setValueAtTime(0, startTime);
@@ -40,12 +47,12 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                     gain.gain.setValueAtTime(0.12, startTime + duration - 0.02);
                     gain.gain.linearRampToValueAtTime(0, startTime + duration);
                     osc.connect(gain);
-                    gain.connect(audioCtx.destination);
+                    gain.connect(ctx.destination);
                     osc.start(startTime);
                     osc.stop(startTime + duration);
                 };
 
-                const now = audioCtx.currentTime;
+                const now = ctx.currentTime;
                 // Ring pattern: two short bursts
                 playTone(480, now, 0.4);
                 playTone(620, now, 0.4);
@@ -58,13 +65,13 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
 
         // Reproducir inmediatamente y cada 2 segundos
         playRingtone();
-        intervalId = setInterval(playRingtone, 2000);
+        const intervalId = setInterval(playRingtone, 2000);
         ringIntervalRef.current = intervalId;
 
         return () => {
             if (intervalId) clearInterval(intervalId);
             if (audioCtx) {
-                try { audioCtx.close(); } catch (e) { /* ignore */ }
+                try { audioCtx.close(); } catch { /* ignore */ }
             }
         };
     }, []);

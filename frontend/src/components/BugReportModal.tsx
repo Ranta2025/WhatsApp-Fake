@@ -1,10 +1,26 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 import api from '../api/axios';
 import { WarningIcon } from './ui/icons';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
 
-export default function BugReportModal({ isOpen, onClose }) {
-    const [formData, setFormData] = useState({
+interface BugReportModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+interface BugReportFormData {
+    title: string;
+    description: string;
+    steps: string;
+    expected: string;
+    actual: string;
+    user_email: string;
+}
+
+type SubmitStatus = 'success' | 'error' | null;
+
+export default function BugReportModal({ isOpen, onClose }: BugReportModalProps) {
+    const [formData, setFormData] = useState<BugReportFormData>({
         title: '',
         description: '',
         steps: '',
@@ -13,7 +29,7 @@ export default function BugReportModal({ isOpen, onClose }) {
         user_email: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [submitStatus, setSubmitStatus] = useState(null); // 'success', 'error', null
+    const [submitStatus, setSubmitStatus] = useState<SubmitStatus>(null);
 
     // Detectar información del sistema automáticamente
     const getSystemInfo = () => {
@@ -38,14 +54,15 @@ export default function BugReportModal({ isOpen, onClose }) {
         return { browser, os, screen_size: screenSize };
     };
 
-    const handleChange = (e) => {
+    const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
         setFormData({
             ...formData,
-            [e.target.name]: e.target.value
+            [name as keyof BugReportFormData]: value
         });
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setIsSubmitting(true);
         setSubmitStatus(null);
@@ -57,7 +74,7 @@ export default function BugReportModal({ isOpen, onClose }) {
                 ...systemInfo
             };
 
-            await api.post('/api/v1/bug-report', reportData);
+            await api.post<unknown>('/api/v1/bug-report', reportData);
             
             setSubmitStatus('success');
             
@@ -143,7 +160,7 @@ export default function BugReportModal({ isOpen, onClose }) {
                             value={formData.description}
                             onChange={handleChange}
                             required
-                            rows="3"
+                            rows={3}
                             placeholder="Describe el problema que encontraste..."
                             className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                         />
@@ -158,7 +175,7 @@ export default function BugReportModal({ isOpen, onClose }) {
                             name="steps"
                             value={formData.steps}
                             onChange={handleChange}
-                            rows="3"
+                            rows={3}
                             placeholder="1. Ir a la página de login&#10;2. Ingresar credenciales&#10;3. Hacer clic en enviar..."
                             className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                         />
@@ -174,7 +191,7 @@ export default function BugReportModal({ isOpen, onClose }) {
                                 name="expected"
                                 value={formData.expected}
                                 onChange={handleChange}
-                                rows="2"
+                                rows={2}
                                 placeholder="¿Qué debería pasar?"
                                 className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                             />
@@ -187,7 +204,7 @@ export default function BugReportModal({ isOpen, onClose }) {
                                 name="actual"
                                 value={formData.actual}
                                 onChange={handleChange}
-                                rows="2"
+                                rows={2}
                                 placeholder="¿Qué pasa realmente?"
                                 className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                             />

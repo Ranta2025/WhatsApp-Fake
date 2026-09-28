@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BoltIcon, PhoneIcon, LockIcon } from './ui/icons';
 
@@ -33,7 +34,16 @@ const ChatPreview = () => (
     </div>
 );
 
-export default function AuthLayout({ children, title, subtitle, footer, backTo = '/', backLabel = 'Inicio' }) {
+interface AuthLayoutProps {
+    children: ReactNode;
+    title: ReactNode;
+    subtitle?: ReactNode;
+    footer?: ReactNode | (() => ReactNode);
+    backTo?: string;
+    backLabel?: string;
+}
+
+export default function AuthLayout({ children, title, subtitle, footer, backTo = '/', backLabel = 'Inicio' }: AuthLayoutProps) {
     return (
         <div className="h-full w-full overflow-y-auto hero-surface text-slate-100">
             <div className="min-h-full grid lg:grid-cols-[1.05fr_1fr]">

@@ -1,22 +1,34 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import api from '../api/axios';
+import type { CallType } from '../types/api';
+
+interface CallRoomProps {
+    roomID: string;
+    userID?: string;
+    userName?: string;
+    callType?: CallType;
+    onCallEnd?: () => void;
+}
+
+/** GET /api/v1/call/token/:roomID (backend/handlers/handlerCall.go) — no está en types/api.ts porque solo lo usa este componente. */
+interface ZegoCallToken {
+    token: string;
+    appID: number;
+    userID: string;
+    roomID: string;
+}
+
+type CallStatus = 'connecting' | 'active' | 'error';
 
 /**
  * CallRoom Component
  * Interfaz profesional de videollamada/audio con gestión de estados y WebRTC.
- * 
- * @param {Object} props
- * @param {string} props.roomID - ID de la sala
- * @param {string} props.userID - Teléfono del usuario actual
- * @param {string} props.userName - Nombre del usuario actual
- * @param {string} props.callType - "video" | "audio"
- * @param {Function} props.onCallEnd - Callback al finalizar
  */
-export default function CallRoom({ roomID, userID, userName, callType = 'video', onCallEnd }) {
-    const containerRef = useRef(null);
-    const zpRef = useRef(null);
-    const [callStatus, setCallStatus] = useState('connecting'); // connecting, active, error
+export default function CallRoom({ roomID, userID, userName, callType = 'video', onCallEnd }: CallRoomProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const zpRef = useRef<ZegoUIKitPrebuilt | null>(null);
+    const [callStatus, setCallStatus] = useState<CallStatus>('connecting');
     const [errorMsg, setErrorMsg] = useState('');
 
     useEffect(() => {
@@ -41,8 +53,10 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                     preStream.getTracks().forEach(t => t.stop());
                     console.log('[CallRoom] Media permissions granted');
                 } catch (mediaErr) {
-                    console.warn('[CallRoom] Media permission issue:', mediaErr.name);
-                    if (mediaErr.name === 'NotAllowedError' || mediaErr.name === 'PermissionDeniedError') {
+                    // getUserMedia rejects with a DOMException in browsers; narrowed via `unknown` (catch is typed `unknown` under strict), no `any`.
+                    const mediaErrName = mediaErr instanceof DOMException ? mediaErr.name : undefined;
+                    console.warn('[CallRoom] Media permission issue:', mediaErrName);
+                    if (mediaErrName === 'NotAllowedError' || mediaErrName === 'PermissionDeniedError') {
                         setErrorMsg(
                             callType === 'video' 
                                 ? 'Permiso de cámara y micrófono denegado. Habilita los permisos en tu navegador.'
@@ -54,7 +68,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                         }, 4000);
                         return;
                     }
-                    if (mediaErr.name === 'NotFoundError') {
+                    if (mediaErrName === 'NotFoundError') {
                         // Sin cámara disponible, intentar solo audio para video calls
                         if (callType === 'video') {
                             try {
@@ -78,7 +92,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                 let attempts = 0;
                 while (attempts < 3) {
                     try {
-                        response = await api.get(`/api/v1/call/token/${roomID}`);
+                        response = await api.get<ZegoCallToken>(`/api/v1/call/token/${roomID}`);
                         break;
                     } catch (e) {
                         attempts++;
@@ -86,6 +100,10 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                         await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
                     }
                 }
+                // El bucle solo sale del `while` con `response` asignado (o
+                // relanza en el 3er intento fallido) — guard para el análisis
+                // de flujo de TS, no cambia el comportamiento.
+                if (!response) return;
 
                 const { token, appID } = response.data;
                 if (cancelled) return;

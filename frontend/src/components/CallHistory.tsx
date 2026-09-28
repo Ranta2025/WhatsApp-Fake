@@ -1,39 +1,45 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api/axios';
+import type { CallLogResponse, CallLogStatus, CallType, ContactChat } from '../types/api';
+import type { SelectedChatTarget } from '../features/dashboard/lib/chatSelection';
+
+interface IconProps {
+    className?: string;
+}
 
 // Iconos SVG inline
-const PhoneIcon = ({ className = "w-4 h-4" }) => (
+const PhoneIcon = ({ className = "w-4 h-4" }: IconProps) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
     </svg>
 );
 
-const VideoIcon = ({ className = "w-4 h-4" }) => (
+const VideoIcon = ({ className = "w-4 h-4" }: IconProps) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
     </svg>
 );
 
-const IncomingIcon = ({ className = "w-3.5 h-3.5" }) => (
+const IncomingIcon = ({ className = "w-3.5 h-3.5" }: IconProps) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
     </svg>
 );
 
-const OutgoingIcon = ({ className = "w-3.5 h-3.5" }) => (
+const OutgoingIcon = ({ className = "w-3.5 h-3.5" }: IconProps) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
     </svg>
 );
 
-const TrashIcon = ({ className = "w-4 h-4" }) => (
+const TrashIcon = ({ className = "w-4 h-4" }: IconProps) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
     </svg>
 );
 
 // Formatear duración en formato m:ss
-function formatDuration(seconds) {
+function formatDuration(seconds: number | undefined): string {
     if (!seconds || seconds <= 0) return '';
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -41,11 +47,11 @@ function formatDuration(seconds) {
 }
 
 // Formatear fecha relativa
-function formatDate(dateStr) {
+function formatDate(dateStr: string | undefined): string {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     const now = new Date();
-    const diff = now - date;
+    const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
     if (days === 0) {
@@ -60,7 +66,7 @@ function formatDate(dateStr) {
 }
 
 // Color y texto según estado
-function getStatusInfo(status, isOutgoing) {
+function getStatusInfo(status: CallLogStatus, isOutgoing: boolean): { color: string; label: string } {
     switch (status) {
         case 'answered':
             return { color: 'text-green-400', label: '' };
@@ -81,14 +87,46 @@ function getStatusInfo(status, isOutgoing) {
     }
 }
 
-export default function CallHistory({ contacts, onSelectContact, onStartCall }) {
-    const [calls, setCalls] = useState([]);
+/**
+ * `CallLogResponse` (types/api.ts) is camelCase-only, per the real backend
+ * source (schemaCall.go) — the PascalCase reads below (`call.ID`, `call.
+ * IsOutgoing`, ...) predate that research and are dead code today (never
+ * true at runtime), but kept as-is (behavior-preserving) rather than
+ * removed without a test. Typed as optional legacy aliases so the existing
+ * `??` fallbacks still compile without `any`.
+ */
+interface CallLogLegacyAliases {
+    ID?: number;
+    IsOutgoing?: boolean;
+    CallerTelephon?: string;
+    ReceiverTelephon?: string;
+    CallerUsername?: string;
+    ReceiverUsername?: string;
+    Status?: CallLogStatus;
+    Duration?: number;
+    StartedAt?: string;
+    CallType?: CallType;
+}
+type CallLogEntry = CallLogResponse & CallLogLegacyAliases;
+
+interface CallHistoryProps {
+    contacts?: ContactChat[];
+    onSelectContact?: (contact: SelectedChatTarget) => void;
+    onStartCall?: (telephon: string, displayName: string, callType: CallType) => void;
+    /** Pasado por Sidebar.tsx pero nunca leído por este componente (no hay filtro de búsqueda en Llamadas) — prop muerta preexistente, documentada. */
+    searchQuery?: string;
+}
+
+export default function CallHistory({ contacts, onSelectContact, onStartCall }: CallHistoryProps) {
+    const [calls, setCalls] = useState<CallLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchCalls = async () => {
         try {
-            const res = await api.get('/api/v1/call/history');
-            setCalls(res.data.calls || []);
+            // El cuerpo puede llegar vacío/null; `data?.` restaura la
+            // tolerancia de la versión JS en vez de asumir el wrapper no-nulo.
+            const res = await api.get<{ calls: CallLogEntry[] } | null>('/api/v1/call/history');
+            setCalls(res.data?.calls || []);
         } catch (err) {
             console.error('Error cargando historial de llamadas:', err);
         } finally {
@@ -100,7 +138,7 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
         fetchCalls();
     }, []);
 
-    const handleDelete = async (callID, e) => {
+    const handleDelete = async (callID: number, e: React.MouseEvent) => {
         e.stopPropagation();
         if (!callID) return;
         try {
@@ -112,7 +150,7 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }) 
     };
 
     // Buscar nombre del contacto por teléfono
-    const getDisplayName = (telephon, username) => {
+    const getDisplayName = (telephon: string | undefined, username: string | undefined) => {
         const contact = contacts?.find(c => c.Number === telephon);
         return contact?.ContactName || username || telephon;
     };

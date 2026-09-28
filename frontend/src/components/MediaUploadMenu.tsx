@@ -1,6 +1,35 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type RefObject } from 'react';
+import axios, { type AxiosProgressEvent } from 'axios';
 import api from '../api/axios';
 import Popover from './ui/Popover';
+import type { ApiErrorBody, MediaType, MediaUploadResult } from '../types/api';
+
+/**
+ * `'video'` is never actually set by this component today (no button calls
+ * `triggerFileInput('video', ...)`) — `handleFileSelect`'s `uploadType ===
+ * 'video'` branch is pre-existing dead defensive code. Kept in the union
+ * (not narrowed to just `'camera'|'image'|'document'`) so that branch still
+ * type-checks instead of being flagged as an impossible comparison —
+ * documented, not removed, per the task's "document rather than fix
+ * out-of-scope dead code" precedent (M4/M5).
+ */
+type UploadType = 'camera' | 'image' | 'video' | 'document';
+
+interface MediaUploadMenuProps {
+    onUploadSuccess: (url: string, type?: MediaType | null) => void;
+    onUploadError: (message: string) => void;
+    onClose: () => void;
+    anchorRef: RefObject<HTMLElement | null>;
+}
+
+/** Lee un mensaje de error legible de una respuesta de axios, o cae a `fallback` (mismo comportamiento que la versión JS). */
+function getErrorMessage(error: unknown, fallback: string): string {
+    if (axios.isAxiosError<ApiErrorBody>(error)) {
+        return error.response?.data?.error || error.message || fallback;
+    }
+    if (error instanceof Error) return error.message || fallback;
+    return fallback;
+}
 
 /**
  * MediaUploadMenu Component
@@ -9,22 +38,16 @@ import Popover from './ui/Popover';
  *
  * El menú (no la captura de cámara a pantalla completa) se porta con Popover:
  * se cierra con click fuera / Escape, algo que antes no ocurría.
- *
- * @param {Object} props
- * @param {Function} props.onUploadSuccess - Callback al subir exitosamente un archivo
- * @param {Function} props.onUploadError - Callback al fallar una subida
- * @param {Function} props.onClose - Callback para cerrar el menú
- * @param {import('react').RefObject<HTMLElement>} props.anchorRef - Ref del botón disparador ("+"), para posicionar el Popover
  */
-export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClose, anchorRef }) {
+export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClose, anchorRef }: MediaUploadMenuProps) {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [showCameraPreview, setShowCameraPreview] = useState(false);
-    const [cameraStream, setCameraStream] = useState(null);
-    const fileInputRef = useRef(null);
-    const videoPreviewRef = useRef(null);
-    const canvasRef = useRef(null);
-    const [uploadType, setUploadType] = useState(null);
+    const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const videoPreviewRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [uploadType, setUploadType] = useState<UploadType | null>(null);
 
     // Extensiones permitidas para documentos y sus tipos MIME asociados
     const ALLOWED_DOC_EXTENSIONS = ['.doc', '.docx', '.pdf', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'];
@@ -84,12 +107,12 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
             }
         } catch (permError) {
             // Si la query de permisos falla (Safari), continuar con getUserMedia
-            if (permError.message.includes('bloqueado')) throw permError;
+            if (permError instanceof Error && permError.message.includes('bloqueado')) throw permError;
         }
 
         // 3. Solicitar acceso a la cámara con constraints progresivos
-        let stream = null;
-        const constraints = [
+        let stream: MediaStream | null = null;
+        const constraints: MediaStreamConstraints[] = [
             // Intento 1: Video HD + Audio
             { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
             // Intento 2: Video básico
@@ -103,22 +126,25 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                 stream = await navigator.mediaDevices.getUserMedia(constraint);
                 break;
             } catch (err) {
-                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                // getUserMedia rechaza con un DOMException; narrowed via `unknown`, no `any`.
+                const name = err instanceof DOMException ? err.name : undefined;
+                if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
                     throw new Error(
                         'Permiso de cámara denegado. Permite el acceso a la cámara en tu navegador e intenta de nuevo.'
                     );
                 }
-                if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
                     throw new Error('No se detectó ninguna cámara en este dispositivo.');
                 }
-                if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                if (name === 'NotReadableError' || name === 'TrackStartError') {
                     throw new Error(
                         'La cámara está siendo usada por otra aplicación. Cierra otras apps que usen la cámara e intenta de nuevo.'
                     );
                 }
                 // Si es el último intento, propagar el error
                 if (constraint === constraints[constraints.length - 1]) {
-                    throw new Error('No se pudo acceder a la cámara: ' + (err.message || err.name));
+                    const message = err instanceof Error ? err.message : undefined;
+                    throw new Error('No se pudo acceder a la cámara: ' + (message || name));
                 }
             }
         }
@@ -147,7 +173,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
             setCameraStream(stream);
             setShowCameraPreview(true);
         } catch (err) {
-            onUploadError(err.message);
+            onUploadError(err instanceof Error ? err.message : String(err));
         }
     }, [isMobileDevice, requestCameraAccess, onUploadError]);
 
@@ -163,6 +189,10 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
             canvas.width = video.videoWidth || 640;
             canvas.height = video.videoHeight || 480;
             const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                onUploadError('Error al capturar la foto.');
+                return;
+            }
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             // Detener cámara
@@ -171,7 +201,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
             setShowCameraPreview(false);
 
             // Convertir a blob y subir
-            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
             if (!blob) {
                 onUploadError('Error al capturar la foto.');
                 return;
@@ -182,10 +212,12 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
             const formData = new FormData();
             formData.append('file', blob, `camera_${Date.now()}.jpg`);
 
-            const response = await api.post('/api/v1/upload', formData, {
+            // El cuerpo puede llegar vacío/null; guard `response.data &&` restaura
+            // la tolerancia de la versión JS en vez de asumir MediaUploadResult no-nulo.
+            const response = await api.post<MediaUploadResult | null>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: (progressEvent) => {
-                    const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+                    const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total ?? NaN));
                     setUploadProgress(progress);
                 }
             });
@@ -196,8 +228,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                 throw new Error('Respuesta del servidor inválida.');
             }
         } catch (error) {
-            const msg = error.response?.data?.error || error.message || 'Error al subir la foto';
-            onUploadError(msg);
+            onUploadError(getErrorMessage(error, 'Error al subir la foto'));
         } finally {
             setIsUploading(false);
             onClose();
@@ -215,8 +246,8 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
         setShowCameraPreview(false);
     }, [cameraStream]);
 
-    const handleFileSelect = async (e) => {
-        const file = e.target.files[0];
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
         if (!file) return;
 
         // 1. Validación de tamaño (10MB)
@@ -247,14 +278,14 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
         formData.append('file', file);
 
         try {
-            const response = await api.post('/api/v1/upload', formData, {
+            const response = await api.post<MediaUploadResult | null>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: (progressEvent) => {
-                    const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+                    const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total ?? NaN));
                     setUploadProgress(progress);
                 }
             });
-            
+
             if (response.data && response.data.url) {
                 const finalType = uploadType === 'camera' ? 'image' : (response.data.mediaType || uploadType);
                 onUploadSuccess(response.data.url, finalType);
@@ -262,15 +293,14 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                 throw new Error('Respuesta del servidor inválida.');
             }
         } catch (error) {
-            const msg = error.response?.data?.error || error.message || 'Error al subir el archivo';
-            onUploadError(msg);
+            onUploadError(getErrorMessage(error, 'Error al subir el archivo'));
         } finally {
             setIsUploading(false);
             onClose();
         }
     };
 
-    const triggerFileInput = async (type, accept, capture = false) => {
+    const triggerFileInput = async (type: UploadType, accept: string, capture = false) => {
         setUploadType(type);
         if (fileInputRef.current) {
             fileInputRef.current.accept = accept;

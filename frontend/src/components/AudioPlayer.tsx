@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 
 /**
  * AudioPlayer Component
@@ -6,13 +6,18 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
  */
 const PLAYBACK_SPEEDS = [1, 1.5, 2, 0.5];
 
-export default function AudioPlayer({ src, isMine = false }) {
-    const audioRef = useRef(null);
+interface AudioPlayerProps {
+    src: string;
+    isMine?: boolean;
+}
+
+export default function AudioPlayer({ src, isMine = false }: AudioPlayerProps) {
+    const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
-    const progressRef = useRef(null);
+    const progressRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -59,13 +64,18 @@ export default function AudioPlayer({ src, isMine = false }) {
         }
     }, [isPlaying]);
 
-    const handleSeek = useCallback((e) => {
+    const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         const audio = audioRef.current;
         const bar = progressRef.current;
         if (!audio || !bar || !duration) return;
 
         const rect = bar.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        // `onClick` only ever carries a `MouseEvent` (no `touches` field) —
+        // this fallback is pre-existing defensive dead code, never actually
+        // reached today. Narrowed via `unknown` instead of widening the
+        // handler's own param type or using `any`.
+        const maybeTouches = (e as unknown as { touches?: Array<{ clientX: number }> }).touches;
+        const clientX = e.clientX || maybeTouches?.[0]?.clientX || 0;
         const clickX = clientX - rect.left;
         const pct = Math.max(0, Math.min(1, clickX / rect.width));
         audio.currentTime = pct * duration;
@@ -76,12 +86,13 @@ export default function AudioPlayer({ src, isMine = false }) {
         const audio = audioRef.current;
         if (!audio) return;
         const idx = PLAYBACK_SPEEDS.indexOf(playbackRate);
-        const next = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
+        // Modulo is always in range for a non-empty array; noUncheckedIndexedAccess can't know that.
+        const next = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length]!;
         audio.playbackRate = next;
         setPlaybackRate(next);
     }, [playbackRate]);
 
-    const formatTime = (t) => {
+    const formatTime = (t: number) => {
         if (!t || isNaN(t) || !isFinite(t)) return '0:00';
         const m = Math.floor(t / 60);
         const s = Math.floor(t % 60);
