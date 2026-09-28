@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"fmt"
 	"gorm/backend/models"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,8 +34,11 @@ func MiddlewareStatusID() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		var id uint64
-		if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil || id == 0 {
+		// ParseUint exige que TODA la cadena sean dígitos (a diferencia de
+		// Sscanf("%d"), que aceptaba silenciosamente basura al final, p. ej.
+		// "12abc" como id 12) y detecta overflow.
+		id, err := strconv.ParseUint(idStr, 10, 63)
+		if err != nil || id == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "id de estado inválido"})
 			c.Abort()
 			return

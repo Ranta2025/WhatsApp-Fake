@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"gorm/backend/models"
+	"gorm/backend/schemas"
 	"testing"
 	"time"
 
@@ -267,6 +268,229 @@ func TestDeleteStatusPropagatesRepoNotFoundError(t *testing.T) {
 	_, err := service.DeleteStatus("22222222", 42, ctx)
 
 	assert.Error(t, err)
+}
+
+// ==================== R3-status-auth-error-code-masks-infra-failures /
+// R3-create-status-all-errors-400: typed sentinel errors ====================
+
+func TestCreateStatusRejectsInvalidTypeWithErrStatusInvalid(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+
+	_, _, _, err := service.CreateStatus("12345678", models.StatusCreate{Type: "sticker"}, context.Background())
+
+	assert.ErrorIs(t, err, ErrStatusInvalid)
+}
+
+func TestMarkStatusViewedRejectsNonMutualContactWithErrStatusForbidden(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "22222222", ctx).Return(2, nil)
+	repo.On("GetStatusByID", uint(42), ctx).Return(&models.Status{Model: gorm.Model{ID: 42}, UserID: 1}, nil)
+	repo.On("IsMutualContact", uint(2), uint(1), ctx).Return(false, nil)
+
+	_, _, _, _, err := service.MarkStatusViewed("22222222", 42, ctx)
+
+	assert.ErrorIs(t, err, ErrStatusForbidden)
+}
+
+func TestMarkStatusViewedMissingStatusWithErrStatusNotFound(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "22222222", ctx).Return(2, nil)
+	repo.On("GetStatusByID", uint(999), ctx).Return(nil, gorm.ErrRecordNotFound)
+
+	_, _, _, _, err := service.MarkStatusViewed("22222222", 999, ctx)
+
+	assert.ErrorIs(t, err, ErrStatusNotFound)
+}
+
+func TestGetStatusViewersRejectsNonOwnerWithErrStatusForbidden(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "22222222", ctx).Return(2, nil)
+	repo.On("GetStatusByID", uint(42), ctx).Return(&models.Status{Model: gorm.Model{ID: 42}, UserID: 1}, nil)
+
+	_, err := service.GetStatusViewers("22222222", 42, ctx)
+
+	assert.ErrorIs(t, err, ErrStatusForbidden)
+}
+
+func TestGetStatusViewersMissingStatusWithErrStatusNotFound(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "22222222", ctx).Return(2, nil)
+	repo.On("GetStatusByID", uint(999), ctx).Return(nil, gorm.ErrRecordNotFound)
+
+	_, err := service.GetStatusViewers("22222222", 999, ctx)
+
+	assert.ErrorIs(t, err, ErrStatusNotFound)
+}
+
+// ==================== R3-mark-viewed-error-after-persist ====================
+
+func TestMarkStatusViewedPostPersistLookupFailureStillSucceeds(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "22222222", ctx).Return(2, nil)
+	repo.On("GetStatusByID", uint(42), ctx).Return(&models.Status{Model: gorm.Model{ID: 42}, UserID: 1}, nil)
+	repo.On("IsMutualContact", uint(2), uint(1), ctx).Return(true, nil)
+	repo.On("CreateStatusView", uint(42), uint(2), ctx).Return(true, nil)
+	repo.On("GetTelephonByID", uint(1), ctx).Return("", errors.New("db caída"))
+
+	created, ownerTelephon, viewer, viewCount, err := service.MarkStatusViewed("22222222", 42, ctx)
+
+	assert.NoError(t, err, "un fallo de lookup post-persistencia no debe fallar la petición")
+	assert.True(t, created, "la vista ya quedó persistida antes del fallo")
+	assert.Empty(t, ownerTelephon, "sin dueño resuelto, el handler no debe intentar notificar por WS")
+	assert.Equal(t, schemas.StatusViewer{}, viewer)
+	assert.Zero(t, viewCount)
+}
+
+func TestMarkStatusViewedPostPersistViewCountFailureStillSucceeds(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "22222222", ctx).Return(2, nil)
+	repo.On("GetStatusByID", uint(42), ctx).Return(&models.Status{Model: gorm.Model{ID: 42}, UserID: 1}, nil)
+	repo.On("IsMutualContact", uint(2), uint(1), ctx).Return(true, nil)
+	repo.On("CreateStatusView", uint(42), uint(2), ctx).Return(true, nil)
+	repo.On("GetTelephonByID", uint(1), ctx).Return("11111111", nil)
+	repo.On("GetViewCounts", []uint{42}, ctx).Return(map[uint]int64(nil), errors.New("db caída"))
+
+	created, ownerTelephon, _, _, err := service.MarkStatusViewed("22222222", 42, ctx)
+
+	assert.NoError(t, err)
+	assert.True(t, created)
+	assert.Empty(t, ownerTelephon, "sin conteo/espectador resuelto, se omite la notificación WS")
+}
+
+// ==================== R3-delete-notfound-mapping-unproved ====================
+
+func TestDeleteStatusNonOwnerOrMissingMapsToErrStatusNotFound(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "22222222", ctx).Return(2, nil)
+	repo.On("DeleteStatus", uint(42), uint(2), ctx).Return(gorm.ErrRecordNotFound)
+
+	_, err := service.DeleteStatus("22222222", 42, ctx)
+
+	assert.ErrorIs(t, err, ErrStatusNotFound, "no debe revelar si el estado existe pero es de otro dueño")
+}
+
+func TestDeleteStatusSuccessNotifiesMutualContacts(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	repo.On("GetIdByTelephon", "11111111", ctx).Return(1, nil)
+	repo.On("DeleteStatus", uint(42), uint(1), ctx).Return(nil)
+	repo.On("GetMutualContactIDs", uint(1), ctx).Return([]uint{2, 3}, nil)
+	repo.On("GetUsersBasicByIDs", []uint{2, 3}, ctx).Return(map[uint]models.UserBasic{
+		2: {ID: 2, Telephon: "22222222"},
+		3: {ID: 3, Telephon: "33333333"},
+	}, nil)
+
+	telephons, err := service.DeleteStatus("11111111", 42, ctx)
+
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"22222222", "33333333"}, telephons)
+}
+
+// ==================== R3-getfeed-untested ====================
+
+func TestGetFeedGroupsAndOrdersUnseenFirstThenMostRecent(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	now := time.Now()
+	mine := []models.Status{{Model: gorm.Model{ID: 100, CreatedAt: now}, UserID: 1, Type: "text", Text: "yo"}}
+	// Contacto 2: todo visto, más reciente. Contacto 3: tiene algo sin ver, más antiguo.
+	// Debe salir 3 primero (no todo visto) y luego 2, a pesar de que 2 sea más reciente.
+	contactStatuses := []models.Status{
+		{Model: gorm.Model{ID: 1, CreatedAt: now.Add(-1 * time.Minute)}, UserID: 2, Type: "text", Text: "b1"},
+		{Model: gorm.Model{ID: 2, CreatedAt: now.Add(-10 * time.Minute)}, UserID: 3, Type: "text", Text: "c1"},
+		{Model: gorm.Model{ID: 3, CreatedAt: now.Add(-5 * time.Minute)}, UserID: 3, Type: "text", Text: "c2"},
+	}
+
+	repo.On("GetIdByTelephon", "11111111", ctx).Return(1, nil)
+	repo.On("GetActiveStatusesByUserIDs", []uint{1}, ctx).Return(mine, nil)
+	repo.On("GetViewCounts", []uint{100}, ctx).Return(map[uint]int64{100: 7}, nil)
+	repo.On("GetMutualContactIDs", uint(1), ctx).Return([]uint{2, 3}, nil)
+	repo.On("GetActiveStatusesByUserIDs", []uint{2, 3}, ctx).Return(contactStatuses, nil)
+	repo.On("GetViewedStatusIDs", uint(1), []uint{1, 2, 3}, ctx).Return(map[uint]bool{
+		1: true, // b1 (de 2) visto
+		2: true, // c1 (de 3) visto
+		3: false, // c2 (de 3) NO visto
+	}, nil)
+	repo.On("GetAddedContactIDs", uint(1), ctx).Return(map[uint]string{2: "Beto", 3: "Cami"}, nil)
+	repo.On("GetUsersBasicByIDs", []uint{2, 3}, ctx).Return(map[uint]models.UserBasic{
+		2: {ID: 2, Telephon: "22222222", Username: "beto"},
+		3: {ID: 3, Telephon: "33333333", Username: "cami"},
+	}, nil)
+
+	feed, err := service.GetFeed("11111111", ctx)
+
+	assert.NoError(t, err)
+	require_ := assert.New(t)
+	require_.Len(feed.Mine, 1)
+	assert.Equal(t, int64(7), feed.Mine[0].ViewCount, "ViewCount de 'mine' viene de GetViewCounts")
+	assert.True(t, feed.Mine[0].Viewed, "el dueño siempre ve sus propios estados como vistos")
+
+	require_.Len(feed.Contacts, 2)
+	assert.Equal(t, "33333333", feed.Contacts[0].Telephon, "contacto con estados sin ver va primero")
+	assert.Equal(t, "Cami", feed.Contacts[0].ContactName)
+	assert.False(t, feed.Contacts[0].AllViewed)
+	require_.Len(feed.Contacts[0].Statuses, 2)
+
+	assert.Equal(t, "22222222", feed.Contacts[1].Telephon)
+	assert.True(t, feed.Contacts[1].AllViewed)
+	assert.Equal(t, "Beto", feed.Contacts[1].ContactName)
+}
+
+func TestGetFeedOrdersMostRecentFirstWithinSameSeenState(t *testing.T) {
+	repo := new(MockStatusRepo)
+	service := InitServiceStatus(repo)
+	ctx := context.Background()
+
+	now := time.Now()
+	contactStatuses := []models.Status{
+		{Model: gorm.Model{ID: 1, CreatedAt: now.Add(-30 * time.Minute)}, UserID: 2, Type: "text", Text: "old"},
+		{Model: gorm.Model{ID: 2, CreatedAt: now.Add(-1 * time.Minute)}, UserID: 3, Type: "text", Text: "new"},
+	}
+
+	repo.On("GetIdByTelephon", "11111111", ctx).Return(1, nil)
+	repo.On("GetActiveStatusesByUserIDs", []uint{1}, ctx).Return([]models.Status{}, nil)
+	repo.On("GetViewCounts", []uint{}, ctx).Return(map[uint]int64{}, nil)
+	repo.On("GetMutualContactIDs", uint(1), ctx).Return([]uint{2, 3}, nil)
+	repo.On("GetActiveStatusesByUserIDs", []uint{2, 3}, ctx).Return(contactStatuses, nil)
+	repo.On("GetViewedStatusIDs", uint(1), []uint{1, 2}, ctx).Return(map[uint]bool{1: false, 2: false}, nil)
+	repo.On("GetAddedContactIDs", uint(1), ctx).Return(map[uint]string{}, nil)
+	repo.On("GetUsersBasicByIDs", []uint{2, 3}, ctx).Return(map[uint]models.UserBasic{
+		2: {ID: 2, Telephon: "22222222"},
+		3: {ID: 3, Telephon: "33333333"},
+	}, nil)
+
+	feed, err := service.GetFeed("11111111", ctx)
+
+	assert.NoError(t, err)
+	assert.Len(t, feed.Contacts, 2)
+	assert.Equal(t, "33333333", feed.Contacts[0].Telephon, "estado más reciente primero cuando ambos están sin ver")
+	assert.Equal(t, "22222222", feed.Contacts[1].Telephon)
 }
 
 func TestCleanupExpiredStatusesDelegatesToRepo(t *testing.T) {

@@ -6,10 +6,10 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/websocket"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // HandlerStatus gestiona los endpoints REST del feature de "Estados" (stories)
@@ -24,14 +24,24 @@ func InitHandlerStatus(service services.StatusServicer, hub *websocket.Hub) *Han
 	return &HandlerStatus{service: service, hub: hub}
 }
 
-// statusAuthErrorCode traduce un error de autorización/ownership del servicio
-// de estados al código HTTP correspondiente: 404 si el estado no existe,
-// 403 si existe pero el solicitante no es el dueño / no es contacto mutuo.
-func statusAuthErrorCode(err error) int {
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return http.StatusNotFound
+// respondStatusError traduce un error del servicio de estados a su respuesta
+// HTTP: 400 si es de validación, 403 si es de autorización/ownership, 404 si
+// el estado no existe, y 500 genérico (sin filtrar el error crudo) para
+// cualquier otra cosa (fallos de infraestructura), que se loggea aparte.
+// Los tres primeros casos usan sentinels tipados (services.ErrStatus*), así
+// que un fallo de DB nunca se disfraza de 403/404 solo por no ser "not found".
+func respondStatusError(ctx *gin.Context, action string, err error) {
+	switch {
+	case errors.Is(err, services.ErrStatusInvalid):
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrStatusForbidden):
+		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrStatusNotFound):
+		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	default:
+		log.Printf("[STATUS-HANDLER] Error interno en %s: %v", action, err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Ocurrió un error interno, inténtalo de nuevo"})
 	}
-	return http.StatusForbidden
 }
 
 // broadcastStatusWS envía msg (ya serializado) a cada teléfono de la lista.
@@ -59,7 +69,7 @@ func (hd *HandlerStatus) HandlerCreateStatus() gin.HandlerFunc {
 
 		item, owner, mutualTelephons, err := hd.service.CreateStatus(telephon.(string), body, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondStatusError(ctx, "CreateStatus", err)
 			return
 		}
 
@@ -109,7 +119,7 @@ func (hd *HandlerStatus) HandlerMarkStatusViewed() gin.HandlerFunc {
 
 		created, ownerTelephon, viewer, viewCount, err := hd.service.MarkStatusViewed(telephon.(string), statusID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(statusAuthErrorCode(err), gin.H{"error": err.Error()})
+			respondStatusError(ctx, "MarkStatusViewed", err)
 			return
 		}
 
@@ -144,7 +154,7 @@ func (hd *HandlerStatus) HandlerGetStatusViewers() gin.HandlerFunc {
 
 		viewers, err := hd.service.GetStatusViewers(telephon.(string), statusID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(statusAuthErrorCode(err), gin.H{"error": err.Error()})
+			respondStatusError(ctx, "GetStatusViewers", err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"viewers": viewers})
@@ -164,7 +174,7 @@ func (hd *HandlerStatus) HandlerDeleteStatus() gin.HandlerFunc {
 
 		mutualTelephons, err := hd.service.DeleteStatus(telephon.(string), statusID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(statusAuthErrorCode(err), gin.H{"error": err.Error()})
+			respondStatusError(ctx, "DeleteStatus", err)
 			return
 		}
 

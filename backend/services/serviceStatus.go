@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"gorm.io/gorm"
 )
 
 // maxStatusContentLen es el máximo de caracteres para el texto/leyenda de un estado.
@@ -21,6 +23,47 @@ const maxStatusContentLen = 700
 const statusExpiry = 24 * time.Hour
 
 var hexColorRegexp = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+// Sentinel errors del feature de estados: el handler los distingue con
+// errors.Is() para elegir el código HTTP (400/403/404) y no reventar en 500
+// genérico, sin necesidad de parsear texto ni de exponer errores de
+// infraestructura (DB, etc.) como si fueran fallos de autorización.
+var (
+	// ErrStatusInvalid señala datos de entrada inválidos (400).
+	ErrStatusInvalid = errors.New("datos de estado inválidos")
+	// ErrStatusForbidden señala que el solicitante no es dueño / no es
+	// contacto mutuo del estado (403).
+	ErrStatusForbidden = errors.New("no autorizado para esta acción")
+	// ErrStatusNotFound señala que el estado no existe o ya expiró (404).
+	ErrStatusNotFound = errors.New("estado no encontrado")
+)
+
+// statusErr envuelve uno de los sentinels de arriba con un mensaje público
+// específico (en español, apto para mostrar al usuario), preservando
+// errors.Is(err, sentinel) para que el handler pueda mapear el código HTTP.
+type statusErr struct {
+	sentinel error
+	msg      string
+}
+
+func (e *statusErr) Error() string        { return e.msg }
+func (e *statusErr) Is(target error) bool { return target == e.sentinel }
+func (e *statusErr) Unwrap() error        { return e.sentinel }
+
+func invalidStatusErr(msg string) error   { return &statusErr{ErrStatusInvalid, msg} }
+func forbiddenStatusErr(msg string) error { return &statusErr{ErrStatusForbidden, msg} }
+func notFoundStatusErr(msg string) error  { return &statusErr{ErrStatusNotFound, msg} }
+
+// translateStatusLookupErr traduce un error de "estado no encontrado" del
+// repositorio (gorm.ErrRecordNotFound) al sentinel público ErrStatusNotFound.
+// Cualquier otro error (infraestructura) se propaga sin tocar, para que el
+// handler lo mapee a 500 en vez de esconderlo como si fuera un 404/403.
+func translateStatusLookupErr(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return notFoundStatusErr("estado no encontrado")
+	}
+	return err
+}
 
 // StatusServicer define las operaciones de negocio del feature de "Estados" (stories).
 type StatusServicer interface {
@@ -75,30 +118,30 @@ func validateStatusCreate(input *models.StatusCreate) error {
 	switch input.Type {
 	case "text":
 		if strings.TrimSpace(input.Text) == "" {
-			return errors.New("el texto del estado no puede estar vacío")
+			return invalidStatusErr("el texto del estado no puede estar vacío")
 		}
 		if utf8.RuneCountInString(input.Text) > maxStatusContentLen {
-			return errors.New("el texto del estado no puede superar los 700 caracteres")
+			return invalidStatusErr("el texto del estado no puede superar los 700 caracteres")
 		}
 		if input.BackgroundColor != "" && !hexColorRegexp.MatchString(input.BackgroundColor) {
-			return errors.New("el color de fondo debe tener formato hexadecimal (#RRGGBB)")
+			return invalidStatusErr("el color de fondo debe tener formato hexadecimal (#RRGGBB)")
 		}
 		input.MediaUrl = ""
 		input.Caption = ""
 	case "image", "video":
 		if input.MediaUrl == "" {
-			return errors.New("el estado de imagen/video requiere una URL de archivo")
+			return invalidStatusErr("el estado de imagen/video requiere una URL de archivo")
 		}
 		if !utils.IsSafeMediaURL(input.MediaUrl) {
-			return errors.New("URL del archivo adjunto no válida")
+			return invalidStatusErr("URL del archivo adjunto no válida")
 		}
 		if utf8.RuneCountInString(input.Caption) > maxStatusContentLen {
-			return errors.New("la leyenda no puede superar los 700 caracteres")
+			return invalidStatusErr("la leyenda no puede superar los 700 caracteres")
 		}
 		input.Text = ""
 		input.BackgroundColor = ""
 	default:
-		return errors.New("tipo de estado no válido")
+		return invalidStatusErr("tipo de estado no válido")
 	}
 	return nil
 }
@@ -288,7 +331,7 @@ func (s *ServiceStatus) MarkStatusViewed(telephon string, statusID uint, ctx con
 
 	status, err := s.repo.GetStatusByID(statusID, ctx)
 	if err != nil {
-		return false, "", schemas.StatusViewer{}, 0, err
+		return false, "", schemas.StatusViewer{}, 0, translateStatusLookupErr(err)
 	}
 
 	if status.UserID == userID {
@@ -300,7 +343,7 @@ func (s *ServiceStatus) MarkStatusViewed(telephon string, statusID uint, ctx con
 		return false, "", schemas.StatusViewer{}, 0, err
 	}
 	if !mutual {
-		return false, "", schemas.StatusViewer{}, 0, errors.New("no autorizado para ver este estado")
+		return false, "", schemas.StatusViewer{}, 0, forbiddenStatusErr("no autorizado para ver este estado")
 	}
 
 	created, err := s.repo.CreateStatusView(statusID, userID, ctx)
@@ -308,19 +351,26 @@ func (s *ServiceStatus) MarkStatusViewed(telephon string, statusID uint, ctx con
 		return false, "", schemas.StatusViewer{}, 0, err
 	}
 
+	// A partir de aquí la vista ya quedó persistida: un fallo al resolver a
+	// quién notificar o los datos del espectador no debe fallar la petición
+	// (el cliente ya cumplió su parte). Se loggea y se omite, en el mejor
+	// esfuerzo, la notificación por WS.
 	ownerTelephon, err := s.repo.GetTelephonByID(status.UserID, ctx)
 	if err != nil {
-		return created, "", schemas.StatusViewer{}, 0, err
+		log.Printf("[STATUS-SERVICE] Vista de %d en estado %d persistida, pero no se pudo resolver al dueño %d para notificar: %v", userID, statusID, status.UserID, err)
+		return created, "", schemas.StatusViewer{}, 0, nil
 	}
 
 	counts, err := s.repo.GetViewCounts([]uint{statusID}, ctx)
 	if err != nil {
-		return created, ownerTelephon, schemas.StatusViewer{}, 0, err
+		log.Printf("[STATUS-SERVICE] Vista de %d en estado %d persistida, pero no se pudo obtener el conteo de vistas: %v", userID, statusID, err)
+		return created, "", schemas.StatusViewer{}, 0, nil
 	}
 
 	usersMap, err := s.repo.GetUsersBasicByIDs([]uint{userID}, ctx)
 	if err != nil {
-		return created, ownerTelephon, schemas.StatusViewer{}, counts[statusID], err
+		log.Printf("[STATUS-SERVICE] Vista de %d en estado %d persistida, pero no se pudieron resolver sus datos: %v", userID, statusID, err)
+		return created, "", schemas.StatusViewer{}, 0, nil
 	}
 	viewerUser := usersMap[userID]
 	viewer := schemas.StatusViewer{
@@ -342,10 +392,10 @@ func (s *ServiceStatus) GetStatusViewers(telephon string, statusID uint, ctx con
 
 	status, err := s.repo.GetStatusByID(statusID, ctx)
 	if err != nil {
-		return nil, err
+		return nil, translateStatusLookupErr(err)
 	}
 	if status.UserID != userID {
-		return nil, errors.New("no autorizado para ver los espectadores de este estado")
+		return nil, forbiddenStatusErr("no autorizado para ver los espectadores de este estado")
 	}
 
 	views, err := s.repo.GetStatusViewers(statusID, ctx)
@@ -386,8 +436,11 @@ func (s *ServiceStatus) DeleteStatus(telephon string, statusID uint, ctx context
 	}
 	userID := uint(userIDInt)
 
+	// gorm.ErrRecordNotFound cubre tanto "no existe" como "existe pero es de
+	// otro dueño" (ver DeleteStatus del repo): se mapea siempre a 404, sin
+	// revelar si el estado pertenece a otra persona.
 	if err := s.repo.DeleteStatus(statusID, userID, ctx); err != nil {
-		return nil, err
+		return nil, translateStatusLookupErr(err)
 	}
 
 	mutualIDs, err := s.repo.GetMutualContactIDs(userID, ctx)

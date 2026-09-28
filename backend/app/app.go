@@ -197,8 +197,14 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, c
 }
 
 // statusCleanupLoop borra periódicamente los estados expirados (y sus vistas).
-// Se detiene cuando ctx se cancela (apagado ordenado del servidor).
+// Corre una limpieza inmediatamente al arrancar (no espera al primer tick,
+// para no dejar estados vencidos visibles hasta interval después de un
+// despliegue) y luego una vez por cada tick. Un error de una pasada no
+// detiene las siguientes; solo se detiene cuando ctx se cancela (apagado
+// ordenado del servidor).
 func statusCleanupLoop(ctx context.Context, service services.StatusServicer, interval time.Duration) {
+	runStatusCleanup(ctx, service)
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -206,13 +212,18 @@ func statusCleanupLoop(ctx context.Context, service services.StatusServicer, int
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			deleted, err := service.CleanupExpiredStatuses(ctx)
-			if err != nil {
-				log.Printf("[STATUS-CLEANUP] Error limpiando estados expirados: %v", err)
-			} else if deleted > 0 {
-				log.Printf("[STATUS-CLEANUP] %d estados expirados eliminados", deleted)
-			}
+			runStatusCleanup(ctx, service)
 		}
+	}
+}
+
+// runStatusCleanup ejecuta una pasada de limpieza y loggea el resultado.
+func runStatusCleanup(ctx context.Context, service services.StatusServicer) {
+	deleted, err := service.CleanupExpiredStatuses(ctx)
+	if err != nil {
+		log.Printf("[STATUS-CLEANUP] Error limpiando estados expirados: %v", err)
+	} else if deleted > 0 {
+		log.Printf("[STATUS-CLEANUP] %d estados expirados eliminados", deleted)
 	}
 }
 
