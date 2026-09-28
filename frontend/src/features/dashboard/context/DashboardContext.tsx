@@ -7,8 +7,7 @@ import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/gr
 import { useAuth, type AuthContextValue } from '../../../context/AuthContext';
 import { useWebSocket } from '../../../hooks/useWebSocket';
 import {
-    onNotificationClick, offNotificationClick, showNativeNotification,
-    type NotificationClickPayload, type NotificationPermissionState,
+    showNativeNotification, type NotificationPermissionState,
 } from '../../../utils/notifications';
 import type { WsHandlerMap } from '../../../api/websocket';
 import type {
@@ -17,7 +16,10 @@ import type {
 import {
     resolveChatTarget, type DashboardChatGroupEntry, type SelectedChatTarget,
 } from '../lib/chatSelection';
-import { extractNotificationTelephon } from '../lib/notificationClick';
+import {
+    normalizeGroupsResponse, normalizeGroupMessagesResponse, normalizeGroupDetailMessages,
+} from '../lib/normalizeResponses';
+import { useNotificationClick } from '../hooks/useNotificationClick';
 
 export type SidebarView = 'chats' | 'groups' | 'contacts' | 'estados' | 'calls';
 
@@ -262,10 +264,12 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     // Fetch initial data
     const fetchProfile = useCallback(async () => {
         try {
-            const { data } = await api.get<UserGet>('/api/v1/user');
+            // El cuerpo puede llegar vacío/null (204, sesión recién creada);
+            // `data?.` restaura la tolerancia que tenía la versión JS.
+            const { data } = await api.get<UserGet | null>('/api/v1/user');
             setProfile(data);
-            if (data.avatar_url) setMyAvatar(data.avatar_url);
-            if (data.wallpaper_url) setGlobalWallpaper(data.wallpaper_url);
+            if (data?.avatar_url) setMyAvatar(data.avatar_url);
+            if (data?.wallpaper_url) setGlobalWallpaper(data.wallpaper_url);
         } catch (err) {
             console.error('Error fetching profile:', err);
         }
@@ -340,7 +344,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const fetchUserGroups = useCallback(async () => {
         try {
             const { data } = await getUserGroups();
-            setGroups(Array.isArray(data.groups) ? data.groups : []);
+            setGroups(normalizeGroupsResponse(data));
         } catch (err) {
             console.error('Error fetching groups:', err);
         }
@@ -350,7 +354,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const fetchGroupMessages = useCallback(async (groupID: number) => {
         try {
             const { data } = await getGroupMessages(groupID);
-            const messages = Array.isArray(data.messages) ? data.messages : [];
+            const messages = normalizeGroupMessagesResponse(data);
             const sorted = [...messages].sort((a, b) => new Date(a.Time).getTime() - new Date(b.Time).getTime());
             setGroupMessages(prev => ({ ...prev, [groupID]: sorted }));
         } catch (err) {
@@ -369,8 +373,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 return { ...prev, ...data };
             });
             // Pre-populate message cache if backend returned messages
-            if (Array.isArray(data.Messages) && data.Messages.length > 0) {
-                const sorted = [...data.Messages].sort((a, b) => new Date(a.Time).getTime() - new Date(b.Time).getTime());
+            const detailMessages = normalizeGroupDetailMessages(data);
+            if (detailMessages.length > 0) {
+                const sorted = [...detailMessages].sort((a, b) => new Date(a.Time).getTime() - new Date(b.Time).getTime());
                 setGroupMessages(prev => ({
                     ...prev,
                     [groupID]: sorted,
@@ -769,24 +774,13 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     }, [selectedGroup?.ID, isConnected, sendGroupJoin]);
 
     // manejar clicks sobre notificaciones (fuerza apertura de chat)
-    useEffect(() => {
-        const handler = (payload: NotificationClickPayload | CustomEvent<NotificationClickPayload>) => {
-            const telephon = extractNotificationTelephon(payload);
-            if (!telephon) return;
-            // intentar seleccionar contacto o grupo existente
-            setSelectedContact(resolveChatTarget(telephon, contacts, allChatGroups));
-            setSidebarView('chats');
-            setSidebarOpen(false);
-        };
-
-        onNotificationClick(handler);
-        // algunas notificaciones se disparan como evento de ventana
-        window.addEventListener('notification-click', handler as EventListener);
-        return () => {
-            offNotificationClick(handler);
-            window.removeEventListener('notification-click', handler as EventListener);
-        };
+    const handleNotificationClick = useCallback((telephon: string) => {
+        // intentar seleccionar contacto o grupo existente
+        setSelectedContact(resolveChatTarget(telephon, contacts, allChatGroups));
+        setSidebarView('chats');
+        setSidebarOpen(false);
     }, [contacts, allChatGroups, setSidebarView, setSidebarOpen, setSelectedContact]);
+    useNotificationClick(handleNotificationClick);
 
     const value: DashboardContextValue = {
         profile, setProfile,

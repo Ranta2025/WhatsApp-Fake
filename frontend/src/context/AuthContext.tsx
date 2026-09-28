@@ -4,13 +4,9 @@ import {
 } from 'react';
 import api, { SESSION_EXPIRED_EVENT } from '../api/axios';
 import type { UserGet, UserLoginRequest } from '../types/api';
+import { toUser, type AuthUser } from './authUser';
 
-/** Perfil de sesión normalizado que expone AuthContext (derivado de UserGet). */
-export interface AuthUser {
-    username: string;
-    telephon: string;
-    avatar: string;
-}
+export type { AuthUser } from './authUser';
 
 export interface AuthContextValue {
     user: AuthUser | null;
@@ -31,13 +27,6 @@ export const useAuth = (): AuthContextValue => {
     }
     return context;
 };
-
-// El backend devuelve el perfil con claves Username / Telephon / avatar_url.
-const toUser = (data: UserGet): AuthUser => ({
-    username: data.Username || '',
-    telephon: data.Telephon || '',
-    avatar: data.avatar_url || '',
-});
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<AuthUser | null>(null);
