@@ -139,6 +139,19 @@ keeping the app compiling and green after every wave.
 4. `group-read-receipts`: per-member delivered/read for group messages, WhatsApp-style ticks + "read by" details.
 Other ideas offered (not yet approved): push notifications, in-chat search, unified API casing, disappearing messages, reactions, observability, PWA.
 
+## Session checkpoint (2026-09-28, paused by user — plan limit)
+- M6 was split into area commits because the full slice exceeded the reviewer context budget (renames count as whole files): 47854c1, 24d7d5c, b1e8b1f, 97815cf, b4de85c, 010ce0b. Each verified in a scratch worktree (tsc ok, tests green) and each reviewed individually: ALL APPROVED + acknowledged. Reviewed boundary: 010ce0b.
+- [ ] M6b NEXT — fix advisory WARNINGs from those reviews (same class as M4b: stricter narrowing changed runtime behavior). Test first for each:
+  1. CallRoom.tsx:56-59 and MediaUploadMenu.tsx:129-131 — `instanceof DOMException` narrowing; restore structural `.name` check on any object (e.g. `getErrorName(e: unknown)` helper + tests).
+  2. AddContactModal.tsx:171-172 — `in` operator on possibly null PhoneInput country arg throws; restore null-safe fallback to current dial/ISO code.
+  3. replyLabel.ts:10-11 — label assumes 1:1 chat; decide group behavior (sender name from group member list) + tests for myTelephon undefined and missing ContactName.
+  4. ToastContainer.tsx:259-261 — fallback lost senderName → ContactName; pass senderName into the target; tests for contact match / no match / no telephon, and setSidebarOpen/view.
+  5. StatusComposer.tsx:166 — mediaType narrowing: keep `data.mediaType || fileKind` semantics for image/video, reject/guard others explicitly; test. Also :135 getErrorMessage should read `.message`/`response.data.error` structurally.
+  6. SUGGESTIONs: MediaUploadMenu.tsx:192-195 stop camera stream on null 2D context; ProfileModal/AddContactModal/CreateGroupModal error-extraction tests.
+- Browser smoke of M6 pending: Docker daemon was down (no /var/run/docker.sock) — start Docker Desktop, `docker compose up -d --build web`, then Playwright smoke (login, chat, message menu, Estados, attach menu).
+- Then: M7 (ChatWindow, GroupChatWindow 1125 lines, DashboardFeature, pages), M8 (App, main.tsx, index.html, vite.config.ts, drop allowJs), then queued features.
+- RDD helper: `.git/rdd-state/cycle.zsh` (`source` it, `cycle <base>` reviews base..HEAD with standing consent). For big renamed slices review commit by commit (detached checkout per commit).
+
 ## Next step
 M7 Composites + pages: `ChatWindow.jsx`, `GroupChatWindow.jsx` (1125 lines), `DashboardFeature.jsx`, `pages/*.jsx` (`ActivateAccount`, `ActivateExisting`, `Dashboard`, `Login`, `RecoverPassword`, `Register`, `UnblockAccount`, `Welcome`). This is the full remaining `.jsx` set except `App.jsx`/`main.jsx` (M8) — confirmed via `fd -e jsx -e js src` after M6. Notes carried over for whoever picks this up:
 - `useMessaging.ts`'s `handleFileUpload` and `useGroupMessaging.ts`'s `handleMediaUploadSuccess` are still unused dead code (see M5 note) — the latter is superseded by the queued `group-media` follow-up feature, which will need to actually wire group media upload. Not introduced or touched by M6.
