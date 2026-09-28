@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@zegocloud/zego-uikit-prebuilt": "^2.17.2",
@@ -30,6 +31,7 @@
     "globals": "^16.5.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^5.0.2"
   }
 }

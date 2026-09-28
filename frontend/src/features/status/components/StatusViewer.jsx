@@ -4,8 +4,13 @@ import Avatar from '../../../components/ui/Avatar';
 import { useStatus } from '../context/StatusContext';
 import { useDashboard } from '../../dashboard/context/DashboardContext';
 import { formatStatusTimestamp } from '../../../utils/format';
+import { computeVideoProgressPercent, shouldResumeClockAfterDeleteAttempt } from '../lib/viewer';
 
 const DEFAULT_DURATION_MS = 5000;
+// Si un video falla en cargar/reproducir, seguir mostrándolo congelado no
+// tiene sentido: se avanza igual, pero dando un momento para que se vea el
+// error antes de saltar (en vez de saltar instantáneamente).
+const VIDEO_ERROR_SKIP_DELAY_MS = 1500;
 
 const CloseIcon = () => (
     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
@@ -119,12 +124,22 @@ export default function StatusViewer() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de estado mostrado
     }, [currentStatus?.ID]);
 
+    // R3-viewer-stale-pause: el componente no se desmonta al cerrar el visor
+    // (solo retorna null), así que "paused" y "showViewers" sobreviven entre
+    // aperturas si no se resetean explícitamente al abrir/cerrar (no solo al
+    // cambiar de ID de estado): sin esto, una sesión anterior que quedó
+    // pausada (p. ej. un pointerup que no llegó a disparar) deja el reloj
+    // congelado la próxima vez que se abre el visor.
+    useEffect(() => {
+        setPaused(false);
+        setShowViewers(false);
+    }, [isOpen]);
+
     // Cerrar la hoja de vistos y resetear progreso al cambiar de estado.
     useEffect(() => {
         setShowViewers(false);
         elapsedRef.current = 0;
         setProgress(0);
-        // Para video, onLoadedMetadata ajusta durationRef con la duración real.
         durationRef.current = DEFAULT_DURATION_MS;
     }, [currentStatus?.ID]);
 
@@ -134,9 +149,13 @@ export default function StatusViewer() {
         goNext();
     }, [goNext]);
 
-    // Reloj de avance automático (pausable).
+    const isVideo = currentStatus?.Type === 'video';
+
+    // Reloj de avance automático para texto/imagen (pausable). El video NO usa
+    // este reloj de pared: tiene su propio efecto más abajo que sigue el
+    // currentTime/duration reales del elemento <video> (ver R3-video-wallclock).
     useEffect(() => {
-        if (!isOpen || paused || !currentStatus || showViewers) return;
+        if (!isOpen || paused || !currentStatus || showViewers || isVideo) return;
         startRef.current = performance.now() - elapsedRef.current;
         const tick = (now) => {
             const elapsed = now - startRef.current;
@@ -151,17 +170,50 @@ export default function StatusViewer() {
         };
         rafRef.current = requestAnimationFrame(tick);
         return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-    }, [isOpen, paused, currentStatus, showViewers, advance]);
+    }, [isOpen, paused, currentStatus, showViewers, isVideo, advance]);
+
+    // Progreso de video: se deriva de currentTime/duration reales (timeupdate),
+    // avanza al terminar (ended), y ante un error de carga/reproducción salta
+    // tras un breve delay en vez de quedarse congelado indefinidamente.
+    useEffect(() => {
+        if (!isOpen || !isVideo || showViewers) return;
+        const video = videoRef.current;
+        if (!video) return;
+
+        let errorTimeout = null;
+        const handleTimeUpdate = () => setProgress(computeVideoProgressPercent(video.currentTime, video.duration));
+        const handleEnded = () => advance();
+        const handleError = () => {
+            if (errorTimeout) return;
+            errorTimeout = setTimeout(() => advance(), VIDEO_ERROR_SKIP_DELAY_MS);
+        };
+        // "waiting"/"stalled" no necesitan handler propio: al no depender de un
+        // reloj de pared, el progreso simplemente deja de avanzar (currentTime
+        // no avanza) hasta que vuelva a haber datos, sin saltarse nada.
+
+        video.addEventListener('timeupdate', handleTimeUpdate);
+        video.addEventListener('ended', handleEnded);
+        video.addEventListener('error', handleError);
+        return () => {
+            video.removeEventListener('timeupdate', handleTimeUpdate);
+            video.removeEventListener('ended', handleEnded);
+            video.removeEventListener('error', handleError);
+            if (errorTimeout) clearTimeout(errorTimeout);
+        };
+    }, [isOpen, isVideo, showViewers, advance]);
+
+    // Pausar/reanudar la reproducción real del video al mantener presionado
+    // (o al abrir la hoja de vistos), en vez de solo congelar una barra que
+    // seguía corriendo en el elemento <video> por su cuenta.
+    useEffect(() => {
+        if (!isVideo) return;
+        const video = videoRef.current;
+        if (!video) return;
+        if (paused || showViewers) video.pause();
+        else video.play().catch(() => {}); // autoplay puede rechazar la promesa; no es un error a reportar
+    }, [isVideo, paused, showViewers, currentStatus?.ID]);
 
     if (!isOpen || !currentStatus) return null;
-
-    const handleVideoLoaded = () => {
-        const dur = videoRef.current?.duration;
-        if (dur && Number.isFinite(dur) && dur > 0) {
-            durationRef.current = dur * 1000;
-            elapsedRef.current = 0;
-        }
-    };
 
     const handleTap = (e) => {
         const rect = containerRef.current.getBoundingClientRect();
@@ -182,12 +234,33 @@ export default function StatusViewer() {
     };
 
     const handleDelete = async () => {
-        if (!window.confirm('¿Eliminar este estado?')) return;
+        // R3-delete-timer-race: window.confirm() bloquea el hilo principal, así
+        // que un simple setPaused(true) no alcanza a evitar que un tick de rAF
+        // ya encolado dispare un avance con un salto de tiempo enorme apenas se
+        // cierra el diálogo (el tiempo real que tardó el usuario en decidir).
+        // Se cancela el rAF pendiente de forma síncrona, ANTES del diálogo.
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        setPaused(true);
+
+        const confirmed = window.confirm('¿Eliminar este estado?');
+        if (!confirmed) {
+            setPaused(false);
+            return;
+        }
+
+        let deleteSucceeded = false;
         try {
             await removeMyStatus(currentStatus.ID);
+            deleteSucceeded = true;
         } catch (err) {
             console.error('Error al eliminar el estado:', err);
         }
+        if (shouldResumeClockAfterDeleteAttempt({ confirmed, deleteSucceeded })) {
+            setPaused(false);
+        }
+        // Si el borrado tuvo éxito no se reanuda: el estado ya no existe y el
+        // efecto que reajusta statusIndex / cierra el visor se encarga del resto,
+        // sin que un reloj recién reanudado dispare un avance/skip adicional.
     };
 
     const viewers = viewersByStatusId[currentStatus.ID] || [];
@@ -260,7 +333,6 @@ export default function StatusViewer() {
                         autoPlay
                         muted
                         playsInline
-                        onLoadedMetadata={handleVideoLoaded}
                     />
                 )}
             </div>

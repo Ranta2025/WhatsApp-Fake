@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     getStatusFeed,
     createStatus,
@@ -8,6 +8,14 @@ import {
 } from '../../../api/statusApi';
 import { useDashboard } from '../../dashboard/context/DashboardContext';
 import { useWebSocket } from '../../../hooks/useWebSocket';
+import {
+    sortContacts,
+    applyStatusNew,
+    applyStatusDeleted,
+    applyStatusViewedForOwner,
+    nextTarget,
+    contactsByTelephon,
+} from '../lib/feed';
 
 const StatusContext = createContext();
 
@@ -17,55 +25,6 @@ export const useStatus = () => {
         throw new Error('useStatus must be used within a StatusProvider');
     }
     return context;
-};
-
-/** Contactos con al menos un estado sin ver primero; dentro de cada grupo, el más reciente primero. */
-const sortContacts = (list) => [...list].sort((a, b) => {
-    if (a.AllViewed !== b.AllViewed) return a.AllViewed ? 1 : -1;
-    return new Date(b.LastUpdated) - new Date(a.LastUpdated);
-});
-
-const applyStatusNew = (prevFeed, owner, status) => {
-    const contacts = prevFeed.Contacts || [];
-    const idx = contacts.findIndex(g => g.Telephon === owner.Telephon);
-    let nextContacts;
-    if (idx === -1) {
-        nextContacts = [...contacts, {
-            Telephon: owner.Telephon,
-            Username: owner.Username,
-            ContactName: owner.ContactName,
-            AvatarUrl: owner.AvatarUrl,
-            Statuses: [status],
-            AllViewed: false,
-            LastUpdated: status.CreatedAt,
-        }];
-    } else {
-        nextContacts = contacts.map((g, i) => i !== idx ? g : {
-            ...g,
-            // Refrescar datos públicos del dueño por si cambiaron (avatar, nombre).
-            Username: owner.Username || g.Username,
-            ContactName: owner.ContactName ?? g.ContactName,
-            AvatarUrl: owner.AvatarUrl ?? g.AvatarUrl,
-            Statuses: [...g.Statuses, status],
-            AllViewed: false,
-            LastUpdated: status.CreatedAt,
-        });
-    }
-    return { ...prevFeed, Contacts: sortContacts(nextContacts) };
-};
-
-const applyStatusDeleted = (prevFeed, ownerTelephon, statusId) => {
-    const mine = (prevFeed.Mine || []).filter(s => s.ID !== statusId);
-    const contacts = (prevFeed.Contacts || [])
-        .map(g => g.Telephon !== ownerTelephon ? g : { ...g, Statuses: g.Statuses.filter(s => s.ID !== statusId) })
-        .filter(g => g.Statuses.length > 0)
-        .map(g => ({ ...g, AllViewed: g.Statuses.every(s => s.Viewed) }));
-    return { ...prevFeed, Mine: mine, Contacts: sortContacts(contacts) };
-};
-
-const applyStatusViewedForOwner = (prevFeed, payload) => {
-    const mine = (prevFeed.Mine || []).map(s => s.ID === payload.statusId ? { ...s, ViewCount: payload.viewCount } : s);
-    return { ...prevFeed, Mine: mine };
 };
 
 export const StatusProvider = ({ children }) => {
@@ -200,9 +159,16 @@ export const StatusProvider = ({ children }) => {
         setStatusIndex(0);
     }, [feed.Mine]);
 
+    // Orden de feed.Contacts congelado al abrir el visor (ver R3-goNext-reorder):
+    // goNext navega sobre esta copia estable en vez del array en vivo, que puede
+    // reordenarse (AllViewed se manda al final) justo al marcar como visto el
+    // último estado del propio grupo que se está mostrando.
+    const contactOrderSnapshotRef = useRef([]);
+
     const openContactViewer = useCallback((telephon) => {
         const group = feed.Contacts.find(g => g.Telephon === telephon);
         if (!group) return;
+        contactOrderSnapshotRef.current = feed.Contacts.map(g => g.Telephon);
         const firstUnseen = group.Statuses.findIndex(s => !s.Viewed);
         setViewerKey({ mode: 'contact', telephon });
         setStatusIndex(firstUnseen === -1 ? 0 : firstUnseen);
@@ -244,15 +210,13 @@ export const StatusProvider = ({ children }) => {
             closeViewer();
             return;
         }
-        const idx = feed.Contacts.findIndex(g => g.Telephon === viewerKey.telephon);
-        for (let i = idx + 1; i < feed.Contacts.length; i++) {
-            if (!feed.Contacts[i].AllViewed) {
-                setViewerKey({ mode: 'contact', telephon: feed.Contacts[i].Telephon });
-                setStatusIndex(0);
-                return;
-            }
+        const target = nextTarget(contactOrderSnapshotRef.current, contactsByTelephon(feed.Contacts), viewerKey.telephon);
+        if (!target) {
+            closeViewer();
+            return;
         }
-        closeViewer();
+        setViewerKey({ mode: 'contact', telephon: target.telephon });
+        setStatusIndex(target.statusIndex);
     }, [viewerKey, statusIndex, currentStatuses, feed.Contacts, closeViewer]);
 
     const goPrev = useCallback(() => {

@@ -56,6 +56,16 @@ export default function StatusComposer() {
         setError('');
     }, [filePreviewUrl]);
 
+    // R3-composer-escape-reset: Escape debe pasar por el mismo camino de
+    // cierre+reset que el botón de cerrar (handleClose), no solo cerrar el
+    // overlay: de lo contrario queda mode/text/file/objectURL de la sesión
+    // anterior la próxima vez que se abre el composer, y el object URL de la
+    // vista previa nunca se revoca (memory leak).
+    const handleClose = useCallback(() => {
+        closeComposer();
+        reset();
+    }, [closeComposer, reset]);
+
     // Bloquear scroll del body, enfocar y permitir cerrar con Escape mientras está abierto.
     useEffect(() => {
         if (!composerOpen) return;
@@ -63,21 +73,25 @@ export default function StatusComposer() {
         document.body.style.overflow = 'hidden';
         containerRef.current?.focus();
         const onKeyDown = (e) => {
-            if (e.key === 'Escape') closeComposer();
+            if (e.key === 'Escape') handleClose();
         };
         window.addEventListener('keydown', onKeyDown);
         return () => {
             document.body.style.overflow = prevOverflow;
             window.removeEventListener('keydown', onKeyDown);
         };
-    }, [composerOpen, closeComposer]);
+    }, [composerOpen, handleClose]);
+
+    // Revocar el object URL de la vista previa también al desmontar el
+    // composer (no solo en reset()), por si el componente se desmonta con
+    // una vista previa activa.
+    const filePreviewUrlRef = useRef(null);
+    useEffect(() => { filePreviewUrlRef.current = filePreviewUrl; }, [filePreviewUrl]);
+    useEffect(() => () => {
+        if (filePreviewUrlRef.current) URL.revokeObjectURL(filePreviewUrlRef.current);
+    }, []);
 
     if (!composerOpen) return null;
-
-    const handleClose = () => {
-        closeComposer();
-        reset();
-    };
 
     const handleFileSelect = (e) => {
         const f = e.target.files?.[0];
