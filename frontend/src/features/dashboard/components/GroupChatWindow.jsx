@@ -4,7 +4,7 @@ import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMess
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
-import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { useEscapeToClose, ESCAPE_HANDLED_FLAG } from '../../../hooks/useEscapeToClose';
 import { useRefMap } from '../../../hooks/useRefMap';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -205,6 +205,14 @@ const GroupMessageInput = () => {
             }
         }
         if (e.key === 'Escape') {
+            // Si alguna capa de overlay (modal/popover, incluido este mismo
+            // panel de grupo) ya manejó este Escape vía useEscapeToClose, no
+            // cancelar también la respuesta/edición en la misma pulsación
+            // (ver R3-escape-capture-swallows-unregistered-handlers): el
+            // hook ya no usa stopPropagation, así que sin este chequeo
+            // cerrar un popover ajeno y cancelar la edición ocurrirían a la
+            // vez con una sola tecla.
+            if (e[ESCAPE_HANDLED_FLAG]) return;
             if (editingMessageId) handleEditMessageCancel();
             if (replyingTo) cancelReply();
         }
@@ -878,7 +886,12 @@ const GroupChatWindowInner = () => {
                                         return (
                                             <div key={m.Telephon} className="relative">
                                                 <div
-                                                    ref={(el) => { getMemberTriggerRef(m.Telephon).current = el; }}
+                                                    ref={(el) => {
+                                                        // R3-refmap-unbounded: liberar la entrada al desmontarse
+                                                        // (el === null), en vez de dejarla colgada para siempre.
+                                                        if (el) getMemberTriggerRef(m.Telephon).current = el;
+                                                        else getMemberTriggerRef.release(m.Telephon);
+                                                    }}
                                                     onClick={() => !isSelf && setMemberMenuOpen(isOpen ? null : m.Telephon)}
                                                     className={`flex items-center gap-3 px-4 py-3 transition-colors ${!isSelf ? 'hover:bg-white/5 cursor-pointer' : ''}`}>
                                                     {/* Avatar */}

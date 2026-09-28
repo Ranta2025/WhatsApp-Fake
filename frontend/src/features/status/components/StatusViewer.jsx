@@ -4,9 +4,9 @@ import Avatar from '../../../components/ui/Avatar';
 import { useStatus } from '../context/StatusContext';
 import { useDashboard } from '../../dashboard/context/DashboardContext';
 import { formatStatusTimestamp } from '../../../utils/format';
-import { computeVideoProgressPercent, shouldResumeClockAfterDeleteAttempt } from '../lib/viewer';
+import { computeVideoProgressPercent, shouldResumeClockAfterDeleteAttempt, resetViewerStateForStatusChange, DEFAULT_DURATION_MS } from '../lib/viewer';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
-const DEFAULT_DURATION_MS = 5000;
 // Si un video falla en cargar/reproducir, seguir mostrándolo congelado no
 // tiene sentido: se avanza igual, pero dando un momento para que se vea el
 // error antes de saltar (en vez de saltar instantáneamente).
@@ -105,17 +105,23 @@ export default function StatusViewer() {
         return () => { document.body.style.overflow = prevOverflow; };
     }, [isOpen]);
 
-    // Navegación por teclado.
+    // Cierre con Escape vía la pila compartida (ver useEscapeToClose /
+    // R3-escape-capture-swallows-unregistered-handlers): antes el visor
+    // tenía su propio listener de window, fuera de la pila de capas, así que
+    // un Popover o modal abierto simultáneamente (o el propio visor) podía
+    // quedar descoordinado con el resto de overlays de la app.
+    useEscapeToClose(closeViewer, isOpen);
+
+    // Navegación por teclado (flechas).
     useEffect(() => {
         if (!isOpen) return;
         const onKeyDown = (e) => {
-            if (e.key === 'Escape') closeViewer();
-            else if (e.key === 'ArrowRight') goNext();
+            if (e.key === 'ArrowRight') goNext();
             else if (e.key === 'ArrowLeft') goPrev();
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [isOpen, closeViewer, goNext, goPrev]);
+    }, [isOpen, goNext, goPrev]);
 
     // Marcar como visto en cuanto se muestra (si no es mío y no estaba visto).
     useEffect(() => {
@@ -145,11 +151,12 @@ export default function StatusViewer() {
     // se cierra (currentStatus se vuelve null) y el estado "paused" deja de
     // importar.
     useEffect(() => {
-        setShowViewers(false);
-        setPaused(false);
-        elapsedRef.current = 0;
-        setProgress(0);
-        durationRef.current = DEFAULT_DURATION_MS;
+        const next = resetViewerStateForStatusChange();
+        setShowViewers(next.showViewers);
+        setPaused(next.paused);
+        elapsedRef.current = next.elapsed;
+        setProgress(next.progress);
+        durationRef.current = next.durationMs;
     }, [currentStatus?.ID]);
 
     const advance = useCallback(() => {

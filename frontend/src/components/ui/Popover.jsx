@@ -39,7 +39,16 @@ export default function Popover({ open, onClose, anchorRef, children, align = 'l
     useLayoutEffect(() => {
         if (!open) return undefined;
         const anchor = anchorRef?.current;
-        if (!anchor) return undefined;
+        if (!anchor) {
+            // R3-popover-null-anchor-invisible-open: sin disparador no hay
+            // nada que posicionar; quedar "open" así lo deja invisible
+            // (fallback top/left en -9999, visibility:hidden) pero atrapado
+            // -- sigue registrado en la pila de Escape y con su listener de
+            // click-fuera activo -- sin que el usuario tenga forma de
+            // cerrarlo. Se cierra explícitamente en vez de quedar así.
+            onCloseRef.current?.();
+            return undefined;
+        }
 
         const reposition = () => {
             const rect = anchor.getBoundingClientRect();

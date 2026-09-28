@@ -1,7 +1,10 @@
-// Lógica pura del visor de Estados: cálculo de progreso de video y la
-// decisión de reanudar (o no) el reloj tras un intento de borrado. Extraído
-// de StatusViewer.jsx para poder testearlo sin DOM (ver R3-video-wallclock /
-// R3-delete-timer-race).
+// Lógica pura del visor de Estados: cálculo de progreso de video, la
+// decisión de reanudar (o no) el reloj tras un intento de borrado, y el
+// estado con el que arranca el visor cada vez que cambia el estado
+// mostrado. Extraído de StatusViewer.jsx para poder testearlo sin DOM (ver
+// R3-video-wallclock / R3-delete-timer-race / R3-viewer-resume-untested).
+
+export const DEFAULT_DURATION_MS = 5000;
 
 /**
  * Progreso (0-100) de un video a partir de su tiempo actual y duración real
@@ -32,3 +35,21 @@ export const shouldResumeClockAfterDeleteAttempt = ({ confirmed, deleteSucceeded
     if (!deleteSucceeded) return true;
     return false;
 };
+
+/**
+ * Estado con el que debe arrancar el visor cada vez que cambia el ID del
+ * estado mostrado (nueva apertura, avance automático, o el reajuste de
+ * índice que sigue a un borrado — ver R3-viewer-resume-untested): siempre
+ * reanuda el reloj (paused:false) y reinicia progreso/duración/hoja de
+ * vistos, sin importar cuál fuera el estado previo (p. ej. `paused:true`
+ * dejado a propósito por handleDelete tras un borrado exitoso, ver
+ * shouldResumeClockAfterDeleteAttempt más arriba: es este reset -- no
+ * handleDelete -- el que debe reanudarlo).
+ */
+export const resetViewerStateForStatusChange = () => ({
+    showViewers: false,
+    paused: false,
+    elapsed: 0,
+    progress: 0,
+    durationMs: DEFAULT_DURATION_MS,
+});

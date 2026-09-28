@@ -273,7 +273,12 @@ const MessageList = () => {
                                             si el menú está abierto, o con foco de teclado (accesible/táctil). */}
                                         <div className={`absolute top-0 ${isMine ? '-left-10' : '-right-10'} transition-opacity z-20 ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'}`}>
                                             <button
-                                                ref={(el) => { getMenuTriggerRef(m.MessageID).current = el; }}
+                                                ref={(el) => {
+                                                    // R3-refmap-unbounded: liberar la entrada al desmontarse
+                                                    // (el === null), en vez de dejarla colgada para siempre.
+                                                    if (el) getMenuTriggerRef(m.MessageID).current = el;
+                                                    else getMenuTriggerRef.release(m.MessageID);
+                                                }}
                                                 onClick={() => setMessageMenuOpen(isMenuOpen ? null : m.MessageID)}
                                                 className="p-1.5 glass rounded-full text-slate-400 hover:text-white transition-all shadow-lg"
                                                 aria-label="Opciones"

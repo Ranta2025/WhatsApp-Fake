@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../../api/axios';
 import { useStatus } from '../context/StatusContext';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const TEXT_MAX = 700;
 const CAPTION_MAX = 700;
@@ -66,21 +67,19 @@ export default function StatusComposer() {
         reset();
     }, [closeComposer, reset]);
 
-    // Bloquear scroll del body, enfocar y permitir cerrar con Escape mientras está abierto.
+    // Cierre con Escape vía la pila compartida (ver useEscapeToClose /
+    // R3-escape-capture-swallows-unregistered-handlers): antes el composer
+    // tenía su propio listener de window, fuera de la pila de capas.
+    useEscapeToClose(handleClose, composerOpen);
+
+    // Bloquear scroll del body y enfocar mientras está abierto.
     useEffect(() => {
         if (!composerOpen) return;
         const prevOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         containerRef.current?.focus();
-        const onKeyDown = (e) => {
-            if (e.key === 'Escape') handleClose();
-        };
-        window.addEventListener('keydown', onKeyDown);
-        return () => {
-            document.body.style.overflow = prevOverflow;
-            window.removeEventListener('keydown', onKeyDown);
-        };
-    }, [composerOpen, handleClose]);
+        return () => { document.body.style.overflow = prevOverflow; };
+    }, [composerOpen]);
 
     // Revocar el object URL de la vista previa también al desmontar el
     // composer (no solo en reset()), por si el componente se desmonta con
