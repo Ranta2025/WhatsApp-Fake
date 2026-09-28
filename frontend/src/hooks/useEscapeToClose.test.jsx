@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { useEscapeToClose, ESCAPE_HANDLED_FLAG } from './useEscapeToClose';
+import { useEscapeToClose, ESCAPE_HANDLED_FLAG, isEscapeHandled } from './useEscapeToClose';
 
 // React exige esta marca global para reconocer el entorno de test como
 // compatible con act(...) (createRoot no la detecta sola bajo Vitest+jsdom).
@@ -127,5 +127,21 @@ describe('useEscapeToClose', () => {
         expect(receivedEvent[ESCAPE_HANDLED_FLAG]).toBe(true);
 
         document.removeEventListener('keydown', unrelatedListener);
+    });
+});
+
+// R3-escape-flag-read-on-synthetic-event: el flag se marca en el evento
+// NATIVO; los handlers de React reciben un evento sintético que no lo tiene.
+describe('isEscapeHandled', () => {
+    it('lee el flag desde nativeEvent en un evento sintético de React', () => {
+        expect(isEscapeHandled({ nativeEvent: { [ESCAPE_HANDLED_FLAG]: true } })).toBe(true);
+    });
+
+    it('lee el flag directamente de un evento nativo', () => {
+        expect(isEscapeHandled({ [ESCAPE_HANDLED_FLAG]: true })).toBe(true);
+    });
+
+    it('es false cuando ninguna capa manejó la tecla', () => {
+        expect(isEscapeHandled({ nativeEvent: {} })).toBe(false);
     });
 });

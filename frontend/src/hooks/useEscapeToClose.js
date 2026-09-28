@@ -13,6 +13,12 @@ import { pushEscapeLayer, popEscapeLayer, triggerTopEscapeLayer } from '../lib/e
 // flag en el evento y decidir no actuar en la misma pulsación.
 export const ESCAPE_HANDLED_FLAG = '__escapeHandledByLayer';
 
+// El flag se marca en el evento NATIVO del documento. Los handlers de React
+// reciben un evento sintético, así que hay que mirar `nativeEvent`.
+export function isEscapeHandled(e) {
+    return Boolean((e?.nativeEvent ?? e)?.[ESCAPE_HANDLED_FLAG]);
+}
+
 // Listener único compartido a nivel de documento (en vez de uno por capa
 // activa): se instala perezosamente cuando hay al menos una capa y se retira
 // cuando no queda ninguna. Sigue en fase de captura para enterarse antes que

@@ -4,7 +4,7 @@ import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMess
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
-import { useEscapeToClose, ESCAPE_HANDLED_FLAG } from '../../../hooks/useEscapeToClose';
+import { useEscapeToClose, isEscapeHandled } from '../../../hooks/useEscapeToClose';
 import { useRefMap } from '../../../hooks/useRefMap';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ const GroupMessageInput = () => {
             // hook ya no usa stopPropagation, así que sin este chequeo
             // cerrar un popover ajeno y cancelar la edición ocurrirían a la
             // vez con una sola tecla.
-            if (e[ESCAPE_HANDLED_FLAG]) return;
+            if (isEscapeHandled(e)) return;
             if (editingMessageId) handleEditMessageCancel();
             if (replyingTo) cancelReply();
         }

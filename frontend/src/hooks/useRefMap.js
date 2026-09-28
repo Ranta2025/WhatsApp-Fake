@@ -35,8 +35,18 @@ export function useRefMap() {
         // sites actuales `getX(key)`) para que el ref-callback del nodo la
         // invoque cuando React lo desmonta (`el === null`): ver
         // MessageList.jsx / GroupChatWindow.jsx.
+        // Un ref-callback inline se llama con null y enseguida con el nodo en
+        // cada re-render: el borrado se difiere a un microtask y solo ocurre si
+        // la entrada sigue vacía, para no cambiar la identidad del ref.
         getRef.release = (key) => {
-            refs.current.delete(key);
+            const ref = refs.current.get(key);
+            if (!ref) return;
+            ref.current = null;
+            queueMicrotask(() => {
+                if (refs.current.get(key) === ref && ref.current === null) {
+                    refs.current.delete(key);
+                }
+            });
         };
 
         return getRef;
