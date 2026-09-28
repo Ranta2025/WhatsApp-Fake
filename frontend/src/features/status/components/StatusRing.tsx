@@ -3,9 +3,19 @@
 // lista de "Estados" para mostrar cuántas actualizaciones tiene cada contacto
 // y cuáles ya se vieron.
 
+import type { ReactNode } from 'react';
+
 const GAP_DEG = 8;
 
-export default function StatusRing({ segments = [], size = 48, solid = null, children }) {
+interface StatusRingProps {
+    /** Un elemento por estado: `true` = visto (gris), `false` = sin ver (verde). */
+    segments?: boolean[];
+    size?: number;
+    solid?: string | null;
+    children?: ReactNode;
+}
+
+export default function StatusRing({ segments = [], size = 48, solid = null, children }: StatusRingProps) {
     const hasSegments = segments.length > 0;
     const radius = (size - 4) / 2;
     const center = size / 2;

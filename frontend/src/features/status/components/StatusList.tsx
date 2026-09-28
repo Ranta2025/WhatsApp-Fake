@@ -3,14 +3,20 @@ import StatusRing from './StatusRing';
 import { useStatus } from '../context/StatusContext';
 import { useDashboard } from '../../dashboard/context/DashboardContext';
 import { formatStatusTimestamp } from '../../../utils/format';
+import type { StatusContactGroup } from '../../../types/api';
 
-const PlusIcon = ({ className = 'h-3.5 w-3.5' }) => (
+const PlusIcon = ({ className = 'h-3.5 w-3.5' }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
     </svg>
 );
 
-const ContactRow = ({ group, onOpen }) => {
+interface ContactRowProps {
+    group: StatusContactGroup;
+    onOpen: (telephon: string) => void;
+}
+
+const ContactRow = ({ group, onOpen }: ContactRowProps) => {
     const name = group.ContactName || group.Username || group.Telephon;
     const segments = group.Statuses.map(s => s.Viewed);
     return (

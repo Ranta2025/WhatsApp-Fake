@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import Avatar from '../../../components/ui/Avatar';
 import { useStatus } from '../context/StatusContext';
@@ -6,6 +6,8 @@ import { useDashboard } from '../../dashboard/context/DashboardContext';
 import { formatStatusTimestamp } from '../../../utils/format';
 import { computeVideoProgressPercent, shouldResumeClockAfterDeleteAttempt, resetViewerStateForStatusChange, DEFAULT_DURATION_MS } from '../lib/viewer';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+// Alias: el default export de este mismo archivo también se llama `StatusViewer`.
+import type { StatusViewer as StatusViewerData } from '../../../types/api';
 
 // Si un video falla en cargar/reproducir, seguir mostrándolo congelado no
 // tiene sentido: se avanza igual, pero dando un momento para que se vea el
@@ -31,8 +33,13 @@ const TrashIcon = () => (
     </svg>
 );
 
+interface ViewersSheetProps {
+    viewers: StatusViewerData[];
+    onClose: () => void;
+}
+
 /** Bottom sheet con la lista de quién vio un estado propio. */
-const ViewersSheet = ({ viewers, onClose }) => (
+const ViewersSheet = ({ viewers, onClose }: ViewersSheetProps) => (
     <div className="absolute inset-0 z-10 flex items-end" onClick={onClose}>
         <div className="absolute inset-0 bg-black/60" />
         <div
@@ -80,12 +87,12 @@ export default function StatusViewer() {
     const [paused, setPaused] = useState(false);
     const [progress, setProgress] = useState(0);
     const [showViewers, setShowViewers] = useState(false);
-    const containerRef = useRef(null);
-    const videoRef = useRef(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
     const durationRef = useRef(DEFAULT_DURATION_MS);
     const elapsedRef = useRef(0);
     const startRef = useRef(0);
-    const rafRef = useRef(null);
+    const rafRef = useRef<number | null>(null);
 
     const isOpen = !!viewerKey;
     const isMine = viewerKey?.mode === 'mine';
@@ -115,7 +122,7 @@ export default function StatusViewer() {
     // Navegación por teclado (flechas).
     useEffect(() => {
         if (!isOpen) return;
-        const onKeyDown = (e) => {
+        const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'ArrowRight') goNext();
             else if (e.key === 'ArrowLeft') goPrev();
         };
@@ -173,7 +180,7 @@ export default function StatusViewer() {
     useEffect(() => {
         if (!isOpen || paused || !currentStatus || showViewers || isVideo) return;
         startRef.current = performance.now() - elapsedRef.current;
-        const tick = (now) => {
+        const tick = (now: number) => {
             const elapsed = now - startRef.current;
             elapsedRef.current = elapsed;
             const pct = Math.min(100, (elapsed / durationRef.current) * 100);
@@ -196,7 +203,7 @@ export default function StatusViewer() {
         const video = videoRef.current;
         if (!video) return;
 
-        let errorTimeout = null;
+        let errorTimeout: ReturnType<typeof setTimeout> | null = null;
         const handleTimeUpdate = () => setProgress(computeVideoProgressPercent(video.currentTime, video.duration));
         const handleEnded = () => advance();
         const handleError = () => {
@@ -231,7 +238,11 @@ export default function StatusViewer() {
 
     if (!isOpen || !currentStatus) return null;
 
-    const handleTap = (e) => {
+    const handleTap = (e: ReactMouseEvent<HTMLDivElement>) => {
+        // `containerRef` (el div raíz del overlay) monta/desmonta junto con
+        // el div al que está atado `onClick={handleTap}` — siempre presente
+        // cuando este handler puede dispararse; guard solo para el narrowing de TS.
+        if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         if (x < rect.width / 2) goPrev();

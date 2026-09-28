@@ -1,8 +1,22 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
+import axios, { type AxiosProgressEvent } from 'axios';
 import api from '../../../api/axios';
 import { useStatus } from '../context/StatusContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import type { MediaUploadResult, StatusType } from '../../../types/api';
+
+type ComposerMode = 'text' | 'media' | null;
+type FileKind = 'image' | 'video' | null;
+
+/** Mismo comportamiento que otros catches de axios del proyecto (ver MediaUploadMenu.tsx). */
+function getErrorMessage(err: unknown, fallback: string): string {
+    if (axios.isAxiosError<{ error?: string }>(err)) {
+        return err.response?.data?.error || err.message || fallback;
+    }
+    if (err instanceof Error) return err.message || fallback;
+    return fallback;
+}
 
 const TEXT_MAX = 700;
 const CAPTION_MAX = 700;
@@ -30,18 +44,18 @@ const CloseIcon = () => (
  */
 export default function StatusComposer() {
     const { composerOpen, closeComposer, publishStatus } = useStatus();
-    const [mode, setMode] = useState(null); // null | 'text' | 'media'
+    const [mode, setMode] = useState<ComposerMode>(null);
     const [text, setText] = useState('');
     const [colorIndex, setColorIndex] = useState(0);
-    const [file, setFile] = useState(null);
-    const [filePreviewUrl, setFilePreviewUrl] = useState(null);
-    const [fileKind, setFileKind] = useState(null); // 'image' | 'video'
+    const [file, setFile] = useState<File | null>(null);
+    const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+    const [fileKind, setFileKind] = useState<FileKind>(null);
     const [caption, setCaption] = useState('');
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [error, setError] = useState('');
-    const fileInputRef = useRef(null);
-    const containerRef = useRef(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const reset = useCallback(() => {
         setMode(null);
@@ -84,7 +98,7 @@ export default function StatusComposer() {
     // Revocar el object URL de la vista previa también al desmontar el
     // composer (no solo en reset()), por si el componente se desmonta con
     // una vista previa activa.
-    const filePreviewUrlRef = useRef(null);
+    const filePreviewUrlRef = useRef<string | null>(null);
     useEffect(() => { filePreviewUrlRef.current = filePreviewUrl; }, [filePreviewUrl]);
     useEffect(() => () => {
         if (filePreviewUrlRef.current) URL.revokeObjectURL(filePreviewUrlRef.current);
@@ -92,7 +106,7 @@ export default function StatusComposer() {
 
     if (!composerOpen) return null;
 
-    const handleFileSelect = (e) => {
+    const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
         const f = e.target.files?.[0];
         if (!f) return;
         const kind = f.type.startsWith('video/') ? 'video' : f.type.startsWith('image/') ? 'image' : null;
@@ -118,36 +132,45 @@ export default function StatusComposer() {
             });
             handleClose();
         } catch (err) {
-            setError(err.response?.data?.error || err.message || 'Error al publicar el estado');
+            setError(getErrorMessage(err, 'Error al publicar el estado'));
         } finally {
             setUploading(false);
         }
     };
 
     const publishMedia = async () => {
-        if (!file) return;
+        // `fileKind` siempre se setea junto con `file` en handleFileSelect —
+        // invariante explícita para el narrowing de TS, no cambia el comportamiento.
+        if (!file || !fileKind) return;
         setError('');
         setUploading(true);
         setUploadProgress(0);
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const { data } = await api.post('/api/v1/upload', formData, {
+            // El cuerpo puede llegar vacío/null; guard `!data?.url` restaura
+            // la tolerancia de la versión JS.
+            const { data } = await api.post<MediaUploadResult | null>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: (evt) => {
+                onUploadProgress: (evt: AxiosProgressEvent) => {
                     if (!evt.total) return;
                     setUploadProgress(Math.round((evt.loaded * 100) / evt.total));
                 },
             });
             if (!data?.url) throw new Error('Respuesta del servidor inválida.');
+            // `MediaUploadResult.mediaType` (MediaType | 'document') es más
+            // ancho que `StatusType` ('text'|'image'|'video') — el input solo
+            // acepta image/*,video/*, así que en la práctica siempre calza;
+            // se narrowa explícitamente en vez de mentirle al tipo con un cast.
+            const mediaType: StatusType = data.mediaType === 'image' || data.mediaType === 'video' ? data.mediaType : fileKind;
             await publishStatus({
-                type: data.mediaType || fileKind,
+                type: mediaType,
                 mediaUrl: data.url,
                 caption,
             });
             handleClose();
         } catch (err) {
-            setError(err.response?.data?.error || err.message || 'Error al publicar el estado');
+            setError(getErrorMessage(err, 'Error al publicar el estado'));
         } finally {
             setUploading(false);
         }
