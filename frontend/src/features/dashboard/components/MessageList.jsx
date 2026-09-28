@@ -109,36 +109,52 @@ const MessageList = () => {
     };
 
     const getStatusIcon = (status) => {
-        const base = "h-3.5 w-3.5 transition-colors duration-300";
-        if (status === 'visto') {
-            // Doble check verde (leído)
+        // Stroke-based ticks: the second check is shifted right so both marks stay distinct
+        const strokeProps = {
+            fill: 'none',
+            stroke: 'currentColor',
+            strokeWidth: 1.7,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+        };
+        if (status === 'visto' || status === 'entregado') {
+            const isRead = status === 'visto';
             return (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
-                    <path fill="#34d399" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
-                    <path fill="#34d399" d="M10 13l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z" transform="translate(-4,-4)"></path>
-                </svg>
-            );
-        }
-        if (status === 'entregado') {
-            // Doble check gris (entregado)
-            return (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
-                    <path fill="#94a3b8" d="M3.5 12.5l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z"></path>
-                    <path fill="#94a3b8" d="M10 13l4.5 4.5 6.5-6.5 1.5 1.5-8 8-6-6z" transform="translate(-4,-4)"></path>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 12"
+                    className={`h-3 w-5 shrink-0 transition-colors duration-300 ${isRead ? 'text-sky-300' : 'text-white/60'}`}
+                    role="img"
+                    aria-label={isRead ? 'Visto' : 'Entregado'}
+                >
+                    <path {...strokeProps} d="M1.5 6.5 5 10l7.5-8" />
+                    <path {...strokeProps} d="M8.6 9.4 9.2 10l7.5-8" />
                 </svg>
             );
         }
         if (status === 'enviado') {
-            // Un solo check gris (enviado al servidor)
             return (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={base}>
-                    <path fill="#64748b" d="M4 12l4 4 10-10 2 2-12 12-6-6z"></path>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 12"
+                    className="h-3 w-5 shrink-0 text-white/60"
+                    role="img"
+                    aria-label="Enviado"
+                >
+                    <path {...strokeProps} d="M4.5 6.5 8 10l7.5-8" />
                 </svg>
             );
         }
         return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={`${base} opacity-50`}>
-                <path fill="#94a3b8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                className="h-3 w-3 shrink-0 text-white/50"
+                role="img"
+                aria-label="Enviando"
+            >
+                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+                <path d="M12 7v5l3 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
         );
     };
