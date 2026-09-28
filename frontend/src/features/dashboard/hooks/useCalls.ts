@@ -1,17 +1,30 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useWebSocket } from '../../../hooks/useWebSocket';
 import { useDashboard } from '../context/DashboardContext';
+import type { CallType } from '../../../types/api';
+import type { WsHandlerMap } from '../../../api/websocket';
+import type { CallState } from '../context/DashboardContext';
+
+/** Return shape of `useCalls()` — matches `DashboardFeature.jsx`'s single consumer (verified via `rg`). */
+export interface UseCallsResult {
+    callState: CallState | null;
+    incomingCall: WsHandlerMap['incoming_call'] | null;
+    handleStartCall: (callType?: CallType) => void;
+    handleAcceptIncomingCall: () => void;
+    handleRejectIncomingCall: () => void;
+    handleEndCall: () => void;
+}
 
 /**
  * useCalls Hook
  * Maneja la lógica de señalización de llamadas y videollamadas con WebRTC.
  * Implementa reintentos, timeouts y gestión de estados.
  */
-export const useCalls = () => {
+export const useCalls = (): UseCallsResult => {
     const { on, off, sendCallOffer, sendCallAccept, sendCallReject, sendCallEnd } = useWebSocket();
     const { selected, callState, setCallState, incomingCall, setIncomingCall, isConnected, addToast } = useDashboard();
-    
-    const callTimeoutRef = useRef(null);
+
+    const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const retryCountRef = useRef(0);
     const MAX_RETRIES = 3;
 
@@ -26,7 +39,7 @@ export const useCalls = () => {
     }, []);
 
     useEffect(() => {
-        const handleIncomingCall = (payload) => {
+        const handleIncomingCall = (payload: WsHandlerMap['incoming_call']) => {
             // Ocupado (en llamada o con otra llamada entrante sonando): rechazar
             if (callState || incomingCall) {
                 sendCallReject(payload.from, payload.roomID);
@@ -47,7 +60,7 @@ export const useCalls = () => {
             addToast({ type: 'info', message: 'Llamada rechazada' });
         };
 
-        const handleCallEnded = (payload) => {
+        const handleCallEnded = (payload: WsHandlerMap['call_ended']) => {
             clearCallTimeout();
             setCallState(null);
             // Si el que llamaba colgó mientras aún sonaba, dejar de mostrar la llamada entrante
@@ -56,11 +69,11 @@ export const useCalls = () => {
 
         const handleCallUnavailable = () => {
             clearCallTimeout();
-            
+
             if (retryCountRef.current < MAX_RETRIES && callState?.role === 'caller') {
                 const delay = Math.pow(2, retryCountRef.current) * 1000;
                 retryCountRef.current++;
-                
+
                 setTimeout(() => {
                     if (callState) {
                         sendCallOffer(callState.remoteTelephon, callState.roomID, callState.callType);
@@ -90,9 +103,8 @@ export const useCalls = () => {
 
     /**
      * Inicia una nueva llamada.
-     * @param {string} callType - 'video' o 'audio'
      */
-    const handleStartCall = useCallback((callType = 'video') => {
+    const handleStartCall = useCallback((callType: CallType = 'video') => {
         if (!selected) return;
         if (!isConnected) {
             addToast({ type: 'error', message: 'No hay conexión con el servidor' });
@@ -101,7 +113,7 @@ export const useCalls = () => {
 
         const roomID = `call_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
         retryCountRef.current = 0;
-        
+
         setCallState({
             roomID,
             remoteTelephon: selected.Number,
@@ -121,7 +133,7 @@ export const useCalls = () => {
             setCallState(null);
             addToast({ type: 'error', message: 'La llamada no pudo establecerse (Timeout)' });
         }, 30000);
-        
+
     }, [selected, isConnected, sendCallOffer, sendCallEnd, setCallState, addToast, clearCallTimeout]);
 
     /**
@@ -159,14 +171,14 @@ export const useCalls = () => {
         }
         clearCallTimeout();
         setCallState(null);
-    }, [callState, sendCallEnd, setCallState, clearCallTimeout]);
+    }, [callState, sendCallEnd, clearCallTimeout, setCallState]);
 
-    return { 
-        callState, 
-        incomingCall, 
-        handleStartCall, 
-        handleAcceptIncomingCall, 
-        handleRejectIncomingCall, 
-        handleEndCall 
+    return {
+        callState,
+        incomingCall,
+        handleStartCall,
+        handleAcceptIncomingCall,
+        handleRejectIncomingCall,
+        handleEndCall
     };
 };

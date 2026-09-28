@@ -6,20 +6,21 @@ import { useDashboard } from '../context/DashboardContext';
 // Si llega un 'online' antes del timeout, se cancela el offline (evita parpadeo).
 const OFFLINE_DEBOUNCE_MS = 3000;
 
-export const usePresence = () => {
+export const usePresence = (): void => {
     const { on, off } = useWebSocket();
     const { setOnlineUsers, setLastSeenMap, setTypingUsers } = useDashboard();
     // Map de telephon → timeoutId para debounce de offline
-    const offlineTimers = useRef(new Map());
+    const offlineTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
     useEffect(() => {
         const timers = offlineTimers.current;
-        const handleContactsOnline = (contacts) => {
+        const handleContactsOnline = (contacts: string[]) => {
             if (Array.isArray(contacts)) {
                 // Cancelar cualquier timer de offline pendiente para contactos que están online
                 contacts.forEach(tel => {
-                    if (offlineTimers.current.has(tel)) {
-                        clearTimeout(offlineTimers.current.get(tel));
+                    const timer = offlineTimers.current.get(tel);
+                    if (timer !== undefined) {
+                        clearTimeout(timer);
                         offlineTimers.current.delete(tel);
                     }
                 });
@@ -27,23 +28,25 @@ export const usePresence = () => {
             }
         };
 
-        const handleUserOnline = (payload) => {
+        const handleUserOnline = (payload: { telephon: string; username: string }) => {
             if (payload?.telephon) {
                 // Cancelar timer de offline pendiente (reconexión rápida)
-                if (offlineTimers.current.has(payload.telephon)) {
-                    clearTimeout(offlineTimers.current.get(payload.telephon));
+                const timer = offlineTimers.current.get(payload.telephon);
+                if (timer !== undefined) {
+                    clearTimeout(timer);
                     offlineTimers.current.delete(payload.telephon);
                 }
                 setOnlineUsers(prev => new Set([...prev, payload.telephon]));
             }
         };
 
-        const handleUserOffline = (payload) => {
+        const handleUserOffline = (payload: { telephon: string; username: string; last_seen: string }) => {
             if (payload?.telephon) {
                 const { telephon, last_seen } = payload;
                 // Debounce: no marcar offline de inmediato, esperar por si se reconecta
-                if (offlineTimers.current.has(telephon)) {
-                    clearTimeout(offlineTimers.current.get(telephon));
+                const existing = offlineTimers.current.get(telephon);
+                if (existing !== undefined) {
+                    clearTimeout(existing);
                 }
                 offlineTimers.current.set(telephon, setTimeout(() => {
                     offlineTimers.current.delete(telephon);
@@ -59,7 +62,7 @@ export const usePresence = () => {
             }
         };
 
-        const handleTyping = (typingData) => {
+        const handleTyping = (typingData: { from: string }) => {
             if (!typingData?.from) return;
             const { from } = typingData;
             setTypingUsers(prev => new Set([...prev, from]));

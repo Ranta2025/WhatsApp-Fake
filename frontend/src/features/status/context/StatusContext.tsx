@@ -1,4 +1,7 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+    createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
+    type ReactNode,
+} from 'react';
 import {
     getStatusFeed,
     createStatus,
@@ -16,10 +19,45 @@ import {
     nextTarget,
     contactsByTelephon,
 } from '../lib/feed';
+import type { WsHandlerMap } from '../../../api/websocket';
+import type { StatusFeed, StatusItem, StatusContactGroup, StatusViewer, StatusCreateRequest } from '../../../types/api';
 
-const StatusContext = createContext();
+/** Qué overlay de visor está abierto: el propio estado o el de un contacto. */
+export type ViewerKey = { mode: 'mine' } | { mode: 'contact'; telephon: string };
 
-export const useStatus = () => {
+/** Return shape of `useStatus()` — members verified against real consumers
+ * (`StatusList.jsx`, `StatusComposer.jsx`, `StatusViewer.jsx`, `Sidebar.jsx`, via `rg`). */
+export interface StatusContextValue {
+    feed: StatusFeed;
+    loading: boolean;
+    /** Sin consumidores hoy (dead field, preexistente) — se mantiene, no se agrega comportamiento nuevo. */
+    feedError: unknown;
+    fetchFeed: () => Promise<void>;
+    hasUnseen: boolean;
+    publishStatus: (body: StatusCreateRequest) => Promise<StatusItem>;
+    viewStatus: (status: StatusItem, ownerTelephon: string, isMine: boolean) => void;
+    fetchViewers: (statusId: number) => Promise<StatusViewer[]>;
+    viewersByStatusId: Record<number, StatusViewer[]>;
+    removeMyStatus: (statusId: number) => Promise<void>;
+    // Composer
+    composerOpen: boolean;
+    openComposer: () => void;
+    closeComposer: () => void;
+    // Viewer
+    viewerKey: ViewerKey | null;
+    statusIndex: number;
+    currentStatuses: StatusItem[];
+    currentOwner: StatusContactGroup | null;
+    openMyViewer: () => void;
+    openContactViewer: (telephon: string) => void;
+    closeViewer: () => void;
+    goNext: () => void;
+    goPrev: () => void;
+}
+
+const StatusContext = createContext<StatusContextValue | null>(null);
+
+export const useStatus = (): StatusContextValue => {
     const context = useContext(StatusContext);
     if (!context) {
         throw new Error('useStatus must be used within a StatusProvider');
@@ -27,23 +65,25 @@ export const useStatus = () => {
     return context;
 };
 
-export const StatusProvider = ({ children }) => {
+export const StatusProvider = ({ children }: { children: ReactNode }) => {
     const { user, sidebarView } = useDashboard();
     const { isConnected, on, off } = useWebSocket();
 
-    const [feed, setFeed] = useState({ Mine: [], Contacts: [] });
+    const [feed, setFeed] = useState<StatusFeed>({ Mine: [], Contacts: [] });
     const [loading, setLoading] = useState(false);
-    const [feedError, setFeedError] = useState(null);
-    const [viewersByStatusId, setViewersByStatusId] = useState({});
+    const [feedError, setFeedError] = useState<unknown>(null);
+    const [viewersByStatusId, setViewersByStatusId] = useState<Record<number, StatusViewer[]>>({});
 
     // Overlays: composer y viewer full-screen.
     const [composerOpen, setComposerOpen] = useState(false);
-    const [viewerKey, setViewerKey] = useState(null); // null | { mode: 'mine' } | { mode: 'contact', telephon }
+    const [viewerKey, setViewerKey] = useState<ViewerKey | null>(null);
     const [statusIndex, setStatusIndex] = useState(0);
 
     const fetchFeed = useCallback(async () => {
         setLoading(true);
         try {
+            // El cuerpo puede llegar vacío/null; `data?.` restaura la tolerancia
+            // de la versión JS en vez de asumir StatusFeed no-nulo.
             const { data } = await getStatusFeed();
             setFeed({ Mine: data?.Mine || [], Contacts: sortContacts(data?.Contacts || []) });
             setFeedError(null);
@@ -64,24 +104,28 @@ export const StatusProvider = ({ children }) => {
     // Refrescar al abrir la pestaña "Estados".
     useEffect(() => {
         if (sidebarView === 'estados') fetchFeed();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- solo se dispara al cambiar de pestaña
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- solo se dispara al cambiar de tab
     }, [sidebarView]);
 
     // WebSocket: eventos en tiempo real de estados.
     useEffect(() => {
         if (!isConnected) return;
 
-        const handleStatusNew = (payload) => {
+        const handleStatusNew = (payload: WsHandlerMap['status_new']) => {
             if (!payload?.status) return;
-            setFeed(prev => applyStatusNew(prev, payload.owner || {}, payload.status));
+            // El contrato (ws.ts) garantiza `owner`, pero el runtime no lo
+            // valida — se mantiene el fallback defensivo de la versión JS con
+            // un owner "vacío" honesto en vez de mentirle al tipo con un cast.
+            const owner: WsHandlerMap['status_new']['owner'] = payload.owner || { Telephon: '', Username: '' };
+            setFeed(prev => applyStatusNew(prev, owner, payload.status));
         };
 
-        const handleStatusDeleted = (payload) => {
+        const handleStatusDeleted = (payload: WsHandlerMap['status_deleted']) => {
             if (!payload) return;
             setFeed(prev => applyStatusDeleted(prev, payload.ownerTelephon, payload.statusId));
         };
 
-        const handleStatusViewed = (payload) => {
+        const handleStatusViewed = (payload: WsHandlerMap['status_viewed']) => {
             if (!payload?.statusId) return;
             setFeed(prev => applyStatusViewedForOwner(prev, payload));
             setViewersByStatusId(prev => {
@@ -107,13 +151,13 @@ export const StatusProvider = ({ children }) => {
 
     // ── Acciones ─────────────────────────────────────────────────────────────
 
-    const publishStatus = useCallback(async (body) => {
+    const publishStatus = useCallback(async (body: StatusCreateRequest) => {
         const { data } = await createStatus(body);
         setFeed(prev => ({ ...prev, Mine: [...(prev.Mine || []), data.status] }));
         return data.status;
     }, []);
 
-    const viewStatus = useCallback((status, ownerTelephon, isMine) => {
+    const viewStatus = useCallback((status: StatusItem, ownerTelephon: string, isMine: boolean) => {
         if (isMine || !status || status.Viewed) return;
         setFeed(prev => {
             const contacts = (prev.Contacts || []).map(g => {
@@ -126,7 +170,7 @@ export const StatusProvider = ({ children }) => {
         markStatusViewed(status.ID).catch(err => console.error('Error al marcar estado como visto:', err));
     }, []);
 
-    const fetchViewers = useCallback(async (statusId) => {
+    const fetchViewers = useCallback(async (statusId: number): Promise<StatusViewer[]> => {
         try {
             const { data } = await getStatusViewers(statusId);
             const viewers = data?.viewers || [];
@@ -138,7 +182,7 @@ export const StatusProvider = ({ children }) => {
         }
     }, []);
 
-    const removeMyStatus = useCallback(async (statusId) => {
+    const removeMyStatus = useCallback(async (statusId: number) => {
         await deleteStatus(statusId);
         setFeed(prev => ({ ...prev, Mine: (prev.Mine || []).filter(s => s.ID !== statusId) }));
         // El viewer se cierra solo si ese era el último estado (ver efecto de
@@ -163,9 +207,9 @@ export const StatusProvider = ({ children }) => {
     // goNext navega sobre esta copia estable en vez del array en vivo, que puede
     // reordenarse (AllViewed se manda al final) justo al marcar como visto el
     // último estado del propio grupo que se está mostrando.
-    const contactOrderSnapshotRef = useRef([]);
+    const contactOrderSnapshotRef = useRef<string[]>([]);
 
-    const openContactViewer = useCallback((telephon) => {
+    const openContactViewer = useCallback((telephon: string) => {
         const group = feed.Contacts.find(g => g.Telephon === telephon);
         if (!group) return;
         contactOrderSnapshotRef.current = feed.Contacts.map(g => g.Telephon);
@@ -176,13 +220,13 @@ export const StatusProvider = ({ children }) => {
 
     const closeViewer = useCallback(() => setViewerKey(null), []);
 
-    const currentStatuses = useMemo(() => {
+    const currentStatuses = useMemo((): StatusItem[] => {
         if (!viewerKey) return [];
         if (viewerKey.mode === 'mine') return feed.Mine;
         return feed.Contacts.find(g => g.Telephon === viewerKey.telephon)?.Statuses || [];
     }, [viewerKey, feed]);
 
-    const currentOwner = useMemo(() => {
+    const currentOwner = useMemo((): StatusContactGroup | null => {
         if (!viewerKey) return null;
         if (viewerKey.mode === 'mine') return null; // el consumidor usa profile/myAvatar
         return feed.Contacts.find(g => g.Telephon === viewerKey.telephon) || null;
@@ -229,6 +273,7 @@ export const StatusProvider = ({ children }) => {
         const idx = feed.Contacts.findIndex(g => g.Telephon === viewerKey.telephon);
         if (idx > 0) {
             const prevGroup = feed.Contacts[idx - 1];
+            if (!prevGroup) return;
             setViewerKey({ mode: 'contact', telephon: prevGroup.Telephon });
             setStatusIndex(Math.max(prevGroup.Statuses.length - 1, 0));
         }
@@ -236,7 +281,7 @@ export const StatusProvider = ({ children }) => {
 
     const hasUnseen = useMemo(() => feed.Contacts.some(g => !g.AllViewed), [feed.Contacts]);
 
-    const value = {
+    const value: StatusContextValue = {
         feed,
         loading,
         feedError,
@@ -269,5 +314,3 @@ export const StatusProvider = ({ children }) => {
         </StatusContext.Provider>
     );
 };
-
-export default StatusContext;

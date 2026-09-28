@@ -1,15 +1,45 @@
-import { useState, useCallback, useContext, createContext, createElement } from 'react';
+import {
+    useState, useCallback, useContext, createContext, createElement,
+    type ReactNode, type ChangeEvent, type Dispatch, type SetStateAction,
+} from 'react';
 import { useDashboard } from '../context/DashboardContext';
+import type { GroupMessageResponse, MediaType } from '../../../types/api';
 
-const GroupMessagingContext = createContext(null);
+/** Return shape of `useGroupMessaging()` — members verified against real
+ * consumers (`GroupChatWindow.jsx`'s `GroupMessageInput`/`GroupMessageList`, via `rg`). */
+export interface UseGroupMessagingResult {
+    // Actions
+    handleSend: (text: string, mediaType?: MediaType | null) => void;
+    handleEditMessage: (message: GroupMessageResponse) => void;
+    handleEditMessageChange: (e: ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => void;
+    handleEditMessageSave: () => void;
+    handleEditMessageCancel: () => void;
+    handleDeleteMessage: (message: GroupMessageResponse) => void;
+    handleDeleteMessageForMe: (message: GroupMessageResponse) => void;
+    handleReplyToMessage: (message: GroupMessageResponse) => void;
+    cancelReply: () => void;
+    handleTyping: () => void;
+    /** Not wired to any UI yet (group chat has no media upload UI) — kept as-is, behavior-preserving rename. */
+    handleMediaUploadSuccess: (url: string, type?: MediaType | null) => void;
+
+    // UI state
+    editingMessageId: number | null;
+    editingMessageText: string;
+    replyingTo: GroupMessageResponse | null;
+    messageMenuOpen: number | null;
+    setMessageMenuOpen: Dispatch<SetStateAction<number | null>>;
+    setReplyingTo: Dispatch<SetStateAction<GroupMessageResponse | null>>;
+}
+
+const GroupMessagingContext = createContext<UseGroupMessagingResult | null>(null);
 
 /** Wrap GroupChatWindow (or any subtree) to provide group messaging actions. */
-export const GroupMessagingProvider = ({ children }) => {
+export const GroupMessagingProvider = ({ children }: { children: ReactNode }) => {
     const value = useGroupMessagingInternal();
     return createElement(GroupMessagingContext.Provider, { value }, children);
 };
 
-export const useGroupMessaging = () => {
+export const useGroupMessaging = (): UseGroupMessagingResult => {
     const ctx = useContext(GroupMessagingContext);
     if (!ctx) throw new Error('useGroupMessaging must be used within GroupMessagingProvider');
     return ctx;
@@ -17,7 +47,7 @@ export const useGroupMessaging = () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const useGroupMessagingInternal = () => {
+const useGroupMessagingInternal = (): UseGroupMessagingResult => {
     const {
         isConnected,
         selectedGroup,
@@ -30,14 +60,14 @@ const useGroupMessagingInternal = () => {
     } = useDashboard();
 
     // UI state
-    const [editingMessageId, setEditingMessageId]     = useState(null);
+    const [editingMessageId, setEditingMessageId]     = useState<number | null>(null);
     const [editingMessageText, setEditingMessageText] = useState('');
-    const [replyingTo, setReplyingTo]                 = useState(null);
-    const [messageMenuOpen, setMessageMenuOpen]        = useState(null);
+    const [replyingTo, setReplyingTo]                 = useState<GroupMessageResponse | null>(null);
+    const [messageMenuOpen, setMessageMenuOpen]        = useState<number | null>(null);
 
     // ── Send ──────────────────────────────────────────────────────────────────
 
-    const handleSend = useCallback((text, mediaType = null) => {
+    const handleSend = useCallback((text: string, mediaType: MediaType | null = null) => {
         if (!selectedGroup || (!text?.trim() && !mediaType)) return;
 
         if (!isConnected) {
@@ -56,13 +86,13 @@ const useGroupMessagingInternal = () => {
 
     // ── Edit ──────────────────────────────────────────────────────────────────
 
-    const handleEditMessage = useCallback((message) => {
+    const handleEditMessage = useCallback((message: GroupMessageResponse) => {
         setEditingMessageId(message.MessageID);
         setEditingMessageText(message.Message);
         setMessageMenuOpen(null);
     }, []);
 
-    const handleEditMessageChange = useCallback((e) => {
+    const handleEditMessageChange = useCallback((e: ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
         setEditingMessageText(e.target.value);
     }, []);
 
@@ -86,7 +116,7 @@ const useGroupMessagingInternal = () => {
 
     // ── Delete for everyone ────────────────────────────────────────────────────
 
-    const handleDeleteMessage = useCallback((message) => {
+    const handleDeleteMessage = useCallback((message: GroupMessageResponse) => {
         if (!selectedGroup) return;
 
         if (!isConnected) {
@@ -107,7 +137,7 @@ const useGroupMessagingInternal = () => {
 
     // ── Delete for me (local only — no WS event) ──────────────────────────────
 
-    const handleDeleteMessageForMe = useCallback((message) => {
+    const handleDeleteMessageForMe = useCallback((message: GroupMessageResponse) => {
         if (!selectedGroup) return;
         setGroupMessages(prev => {
             const msgs = prev[selectedGroup.ID];
@@ -119,7 +149,7 @@ const useGroupMessagingInternal = () => {
 
     // ── Reply ─────────────────────────────────────────────────────────────────
 
-    const handleReplyToMessage = useCallback((message) => {
+    const handleReplyToMessage = useCallback((message: GroupMessageResponse) => {
         setReplyingTo(message);
         setMessageMenuOpen(null);
     }, []);
@@ -136,7 +166,7 @@ const useGroupMessagingInternal = () => {
 
     // ── Media upload helper ───────────────────────────────────────────────────
 
-    const handleMediaUploadSuccess = useCallback((url, type) => {
+    const handleMediaUploadSuccess = useCallback((url: string, type?: MediaType | null) => {
         handleSend(url, type);
     }, [handleSend]);
 
