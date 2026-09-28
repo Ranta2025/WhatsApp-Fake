@@ -1,5 +1,22 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, type SyntheticEvent } from 'react';
 import { useDashboard } from '../context/DashboardContext';
+import { resolveChatTarget } from '../lib/chatSelection';
+import type { Toast } from '../context/DashboardContext';
+import type { MediaType } from '../../../types/api';
+
+/**
+ * `Toast` (DashboardContext.tsx) is typed after what `addToast` actually
+ * receives (`{type, message}`) — `telephon`/`senderName`/`icon`/`mediaType`/
+ * `avatarUrl` below are dead fields no `addToast` call site ever provides
+ * (documented in M4's notes), kept optional here rather than widening the
+ * canonical `Toast` type app-wide.
+ */
+interface DisplayToast extends Toast {
+    telephon?: string;
+    senderName?: string;
+    icon?: string;
+    mediaType?: MediaType;
+}
 
 const NOTIF_DURATION = 4000;
 // Máximo tiempo que una notificación se mantiene en cola esperando que el usuario vuelva (30s)
@@ -17,19 +34,28 @@ const AVATAR_GRADIENTS = [
     'from-red-500 to-rose-600',
 ];
 
-function hashStr(str) {
+function hashStr(str: string | undefined) {
     let h = 0;
-    for (let i = 0; i < (str || '').length; i++) {
-        h = ((h << 5) - h) + str.charCodeAt(i);
+    const s = str || '';
+    for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) - h) + s.charCodeAt(i);
         h |= 0;
     }
     return Math.abs(h);
 }
 
+type NotifPhase = 'enter' | 'visible' | 'exit';
+
+interface InAppNotificationProps {
+    notif: DisplayToast;
+    onDismiss: (id: number) => void;
+    onOpen: (notif: DisplayToast) => void;
+}
+
 // ─── Notificación individual ───────────────────────────────────
-const InAppNotification = ({ notif, onDismiss, onOpen }) => {
-    const [phase, setPhase] = useState('enter'); // enter | visible | exit
-    const progressRef = useRef(null);
+const InAppNotification = ({ notif, onDismiss, onOpen }: InAppNotificationProps) => {
+    const [phase, setPhase] = useState<NotifPhase>('enter');
+    const progressRef = useRef<number | null>(null);
     // Track elapsed time to pause/resume when visibility changes
     const elapsedRef = useRef(0);
     const lastTickRef = useRef(0);
@@ -87,7 +113,8 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
 
     const hasAvatar = notif.icon && notif.icon !== '/vite.svg' && notif.icon !== '/todos.svg';
     const initial = (notif.senderName || '?').charAt(0).toUpperCase();
-    const gradientClass = AVATAR_GRADIENTS[hashStr(notif.senderName) % AVATAR_GRADIENTS.length];
+    // Modulo siempre en rango; noUncheckedIndexedAccess no puede saberlo.
+    const gradientClass = AVATAR_GRADIENTS[hashStr(notif.senderName) % AVATAR_GRADIENTS.length]!;
 
     // Media label
     const bodyText = (() => {
@@ -142,7 +169,11 @@ const InAppNotification = ({ notif, onDismiss, onOpen }) => {
                                     src={notif.icon}
                                     alt=""
                                     className="w-full h-full object-cover"
-                                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                                    onError={(e: SyntheticEvent<HTMLImageElement>) => {
+                                        e.currentTarget.style.display = 'none';
+                                        const sibling = e.currentTarget.nextElementSibling;
+                                        if (sibling instanceof HTMLElement) sibling.style.display = 'flex';
+                                    }}
                                 />
                             ) : null}
                             <div
@@ -216,15 +247,18 @@ const ToastContainer = () => {
     }, [toasts, dismissToast]);
 
     // Solo mostrar máximo 3 notificaciones a la vez
-    const visibleToasts = toasts.slice(-3);
+    const visibleToasts = toasts.slice(-3) as DisplayToast[];
 
     if (visibleToasts.length === 0) return null;
 
-    const handleOpen = (notif) => {
-        const contact = contacts.find(c => c.Number === notif.telephon)
-            || allChatGroups[notif.telephon]
-            || { Number: notif.telephon, ContactName: notif.senderName };
-        setSelected(contact);
+    // R3 (M6): antes caía directo a `allChatGroups[notif.telephon]` — esa
+    // entrada tiene `ContactTelephon`, no `Number`, rompiendo silenciosamente
+    // toda comparación posterior con `selected.Number` (mismo bug que
+    // `resolveChatTarget`, M4, arregló para el mismo patrón). `notif.telephon`
+    // es un campo hoy muerto (ver `DisplayToast`), así que se degrada a ''.
+    const handleOpen = (notif: DisplayToast) => {
+        const target = resolveChatTarget(notif.telephon || '', contacts, allChatGroups);
+        setSelected(target);
         setSidebarOpen(false);
         dismissToast(notif.id);
     };

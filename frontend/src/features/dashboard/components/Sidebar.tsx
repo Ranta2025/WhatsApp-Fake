@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useStatus } from '../../status/context/StatusContext';
@@ -6,8 +6,17 @@ import CallHistory from '../../../components/CallHistory';
 import Avatar from '../../../components/ui/Avatar';
 import StatusList from '../../status/components/StatusList';
 import { formatChatTimestamp, formatLastSeen, previewMessage } from '../../../utils/format';
+import type { ContactChat, Message, GroupResponse } from '../../../types/api';
+import type { SidebarView } from '../context/DashboardContext';
+import type { DashboardChatGroupEntry } from '../lib/chatSelection';
 
-const TABS = [
+interface Tab {
+    id: SidebarView;
+    label: string;
+    placeholder: string;
+}
+
+const TABS: Tab[] = [
     { id: 'chats', label: 'Chats', placeholder: 'Buscar chats' },
     { id: 'groups', label: 'Grupos', placeholder: 'Buscar grupos' },
     { id: 'contacts', label: 'Contactos', placeholder: 'Buscar contactos' },
@@ -25,13 +34,25 @@ const Icon = {
     chat: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
 };
 
-const Svg = ({ d, className = 'h-5 w-5' }) => (
+interface SvgProps {
+    d: string;
+    className?: string;
+}
+
+const Svg = ({ d, className = 'h-5 w-5' }: SvgProps) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d={d} />
     </svg>
 );
 
-const EmptyState = ({ icon, title, action, onAction }) => (
+interface EmptyStateProps {
+    icon: string;
+    title: string;
+    action?: string | null;
+    onAction?: () => void;
+}
+
+const EmptyState = ({ icon, title, action, onAction }: EmptyStateProps) => (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6 animate-fade-in">
         <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-500 mb-4">
             <Svg d={icon} className="h-7 w-7" />
@@ -45,7 +66,18 @@ const EmptyState = ({ icon, title, action, onAction }) => (
     </div>
 );
 
-const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unread = 0 }) => (
+interface ListItemProps {
+    active: boolean;
+    onClick: () => void;
+    avatar: ReactNode;
+    title: ReactNode;
+    badge?: ReactNode;
+    subtitle?: ReactNode;
+    meta?: ReactNode;
+    unread?: number;
+}
+
+const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unread = 0 }: ListItemProps) => (
     <button
         onClick={onClick}
         className={`group w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
@@ -77,7 +109,23 @@ const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unrea
     </button>
 );
 
-const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
+interface SidebarProps {
+    onOpenProfile: () => void;
+    onAddContact: () => void;
+    onCreateGroup: () => void;
+}
+
+interface ChatEntry {
+    number: string;
+    contact: ContactChat | undefined;
+    group: DashboardChatGroupEntry | undefined;
+    last: Message | null;
+    unread: number;
+    name: string;
+    lastTime: number;
+}
+
+const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) => {
     const {
         contacts, onlineUsers, selected, setSelected,
         sidebarView, setSidebarView, setSidebarOpen,
@@ -97,20 +145,20 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
     }, [searchQuery]);
 
     const contactByNumber = useMemo(() => {
-        const map = new Map();
+        const map = new Map<string, ContactChat>();
         contacts.forEach(c => map.set(c.Number, c));
         return map;
     }, [contacts]);
 
     // Conversaciones: contactos aceptados + cualquier chat con mensajes,
     // ordenadas por la actividad más reciente.
-    const chats = useMemo(() => {
+    const chats = useMemo((): ChatEntry[] => {
         const numbers = new Set([
             ...contacts.filter(c => c.Status === 'accepted').map(c => c.Number),
             ...Object.keys(messagesByChat),
         ]);
         return Array.from(numbers)
-            .map(number => {
+            .map((number): ChatEntry => {
                 const contact = contactByNumber.get(number);
                 const group = allChatGroups[number];
                 const messages = messagesByChat[number] || [];
@@ -139,14 +187,14 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
         .sort((a, b) => (a.ContactName || a.Username || '').localeCompare(b.ContactName || b.Username || '')),
     [contacts, query]);
 
-    const filteredGroups = useMemo(() => (groups || [])
+    const filteredGroups = useMemo((): GroupResponse[] => (groups || [])
         .filter(g => !query || (g.Name || '').toLowerCase().includes(query)),
     [groups, query]);
 
     const totalUnread = chats.reduce((sum, c) => sum + c.unread, 0);
-    const activeTab = TABS.find(t => t.id === sidebarView) || TABS[0];
+    const activeTab = TABS.find(t => t.id === sidebarView) || TABS[0]!;
 
-    const openChat = (chat) => {
+    const openChat = (chat: ChatEntry) => {
         setSelected(chat.contact || {
             Number: chat.number,
             Username: chat.group?.ContactUsername || chat.number,
