@@ -8,9 +8,10 @@
 //   - "pong" no lleva nada más que { type: "pong" }.
 // No existe ningún evento con clave "data".
 //
-// No se migra src/api/websocket.js en este milestone (M2): estos tipos
-// describen el contrato de red tal como el backend lo envía/espera, antes
-// de cualquier remapeo que haga el cliente.
+// Estos tipos describen el contrato de red tal como el backend lo envía/
+// espera, antes de cualquier remapeo que haga el cliente (ver
+// src/api/websocket.ts `WsHandlerMap` para el contrato post-remapeo que
+// reciben los listeners de `wsManager.on(...)`).
 
 import type {
   Message,
@@ -232,7 +233,7 @@ export type WsEventType = WsEvent['type'];
 export type WsEventOf<T extends WsEventType> = Extract<WsEvent, { type: T }>;
 
 // ─────────────────────────────────────────────────────────────────────────
-// Cliente → Servidor (ver frontend/src/api/websocket.js `_send`, todo viaja
+// Cliente → Servidor (ver frontend/src/api/websocket.ts `_send`, todo viaja
 // como { type, payload } salvo "ping"; router del backend en cliente.go
 // buildRouter — cualquier `type` fuera de esta lista se descarta).
 // ─────────────────────────────────────────────────────────────────────────

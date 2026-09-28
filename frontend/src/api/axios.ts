@@ -1,6 +1,14 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 
+// Aumenta la config de axios con la marca de reintento único que usa el
+// interceptor de abajo (evita bucles de refresh infinitos).
+declare module 'axios' {
+    export interface InternalAxiosRequestConfig {
+        _retry?: boolean;
+    }
+}
+
 const baseURL = API_BASE_URL;
 
 // Evento global que se emite cuando la sesión no se puede renovar.
@@ -14,10 +22,15 @@ const api = axios.create({
 });
 
 // --- Response interceptor: auto-refresh en 401 (cookie-only) ---
-let isRefreshing = false;
-let failedQueue = [];
+interface QueuedRequest {
+    resolve: () => void;
+    reject: (reason: unknown) => void;
+}
 
-const processQueue = (error) => {
+let isRefreshing = false;
+let failedQueue: QueuedRequest[] = [];
+
+const processQueue = (error: unknown): void => {
     failedQueue.forEach(({ resolve, reject }) => {
         if (error) {
             reject(error);
@@ -30,12 +43,17 @@ const processQueue = (error) => {
 
 api.interceptors.response.use(
     (response) => response,
-    async (error) => {
+    async (error: unknown) => {
+        if (!axios.isAxiosError(error)) {
+            return Promise.reject(error);
+        }
+
         const originalRequest = error.config;
 
         // Si la respuesta es 401 y NO es la petición de refresh ni login
         if (
             error.response?.status === 401 &&
+            originalRequest &&
             !originalRequest._retry &&
             !originalRequest.url?.includes('/auth/refresh') &&
             !originalRequest.url?.includes('/auth/login') &&
@@ -43,7 +61,7 @@ api.interceptors.response.use(
         ) {
             if (isRefreshing) {
                 // Si ya se está refrescando, encolar la petición
-                return new Promise((resolve, reject) => {
+                return new Promise<void>((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
                 }).then(() => api(originalRequest));
             }
