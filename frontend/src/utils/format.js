@@ -68,3 +68,18 @@ export const previewMessage = (msg) => {
     if (msg.MediaType && MEDIA_LABELS[msg.MediaType]) return MEDIA_LABELS[msg.MediaType];
     return msg.Message || '';
 };
+
+/**
+ * Hora relativa para estados/estados vistos: "Hoy a las 14:05", "Ayer a las 14:05"
+ * o fecha corta con hora en otro caso.
+ */
+export const formatStatusTimestamp = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    const now = new Date();
+    if (sameDay(date, now)) return `Hoy a las ${formatTime(date)}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (sameDay(date, yesterday)) return `Ayer a las ${formatTime(date)}`;
+    return `${date.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} a las ${formatTime(date)}`;
+};

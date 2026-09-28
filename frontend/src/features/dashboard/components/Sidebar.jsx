@@ -1,14 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
+import { useStatus } from '../../status/context/StatusContext';
 import CallHistory from '../../../components/CallHistory';
 import Avatar from '../../../components/ui/Avatar';
+import StatusList from '../../status/components/StatusList';
 import { formatChatTimestamp, formatLastSeen, previewMessage } from '../../../utils/format';
 
 const TABS = [
     { id: 'chats', label: 'Chats', placeholder: 'Buscar chats' },
     { id: 'groups', label: 'Grupos', placeholder: 'Buscar grupos' },
     { id: 'contacts', label: 'Contactos', placeholder: 'Buscar contactos' },
+    { id: 'estados', label: 'Estados', placeholder: 'Buscar estados' },
     { id: 'calls', label: 'Llamadas', placeholder: 'Buscar llamadas' },
 ];
 
@@ -83,6 +86,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
         groups, selectedGroup, setSelectedGroup,
     } = useDashboard();
     const { user } = useAuth();
+    const { hasUnseen: hasUnseenStatuses } = useStatus();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [query, setQuery] = useState('');
@@ -210,7 +214,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
 
             {/* Pestañas (control segmentado) */}
             <nav className="px-4 pb-2" role="tablist">
-                <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-950/60 border border-white/[0.04]">
+                <div className="grid grid-cols-5 gap-1 p-1 rounded-xl bg-slate-950/60 border border-white/[0.04]">
                     {TABS.map(tab => (
                         <button
                             key={tab.id}
@@ -228,6 +232,12 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                                 <span className="absolute -top-1 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-indigo-500 text-slate-950 text-[10px] font-bold flex items-center justify-center">
                                     {totalUnread > 99 ? '99+' : totalUnread}
                                 </span>
+                            )}
+                            {tab.id === 'estados' && hasUnseenStatuses && (
+                                <span
+                                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400"
+                                    aria-label="Hay estados nuevos"
+                                />
                             )}
                         </button>
                     ))}
@@ -307,6 +317,8 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }) => {
                         )}
                     </>
                 )}
+
+                {sidebarView === 'estados' && <StatusList />}
 
                 {sidebarView === 'groups' && (
                     <>

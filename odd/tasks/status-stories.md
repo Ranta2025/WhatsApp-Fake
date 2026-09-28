@@ -39,8 +39,9 @@ whole frontend for render problems (overlays/dropdowns not on top, broken chat l
 
 ## Tasks
 - [x] T1 Tick icon redesign — route: inline (1 mechanical file) — commit 0d7d908; eslint ok; RDD assess: medium, under_budget (pending in slice)
-- [ ] T2 Backend status feature (TDD) — route: delegated writer (2+ non-trivial files)
-- [ ] T3 Frontend status feature — route: delegated writer (2+ non-trivial files)
+- [x] T2 Backend status feature (TDD) — route: delegated writer (2+ non-trivial files) — commit 8dc9ad9; go vet/test/build ok (spot-checked); live smoke vs Postgres ok (create, validation, feed, views idempotent, owner-only viewers/delete, non-mutual → hidden + 403). RDD: medium, slice_budget_reached → review granted (lineage review-642e7822c131d198, lens reliability) → APPROVED, acknowledged; boundary now 4af3347.
+- [ ] T2b Backend hardening from advisory review findings — route: delegated writer. WARNINGs: create-status all errors → 400 (handlerStatus.go:60-64); auth error code masks infra failures (handlerStatus.go:30-35); mark-viewed returns error after persisting view (serviceStatus.go:311-324); GetFeed untested (serviceStatus.go:192-277); mutual-contact SQL unproved (statusData.go:147-159, needs integration test). SUGGESTIONs: cleanup loop untested, delete not-found mapping, lenient status id parse.
+- [x] T3 Frontend status feature — route: delegated writer (2+ non-trivial files). Files: api/statusApi.js (new); features/status/context/StatusContext.jsx (new, WS-wired); features/status/components/{StatusRing,StatusList,StatusComposer,StatusViewer}.jsx (new); utils/format.js (+formatStatusTimestamp); dashboard/components/Sidebar.jsx (Estados tab + badge + panel); dashboard/DashboardFeature.jsx (StatusProvider + overlay mounts); eslint.config.js (+useStatus to allowExportNames). `npm run lint` ok (0 errors/warnings), `npm run build` ok. No commit made (writer does not commit); pending work-unit commit by orchestrator. RDD not run by this writer.
 - [ ] T4 Frontend render audit + fixes — route: delegated (mapping 4+ files + writer)
 
 ## Acceptance criteria
@@ -54,4 +55,4 @@ whole frontend for render problems (overlays/dropdowns not on top, broken chat l
 - Baseline: go test ./... ok; lint ok; build ok.
 
 ## Next step
-T2 in progress (delegated backend writer).
+T3 done. Next: T2b (backend hardening), then T4 (frontend render audit — see T3 known limitations below).

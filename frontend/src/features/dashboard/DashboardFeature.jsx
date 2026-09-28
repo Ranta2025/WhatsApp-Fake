@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { DashboardProvider, useDashboard } from './context/DashboardContext';
+import { StatusProvider } from '../status/context/StatusContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import GroupChatWindow from './components/GroupChatWindow';
@@ -8,6 +9,8 @@ import ContactDetails from './components/ContactDetails';
 import NotificationBanner from './components/NotificationBanner';
 import AddContactModal from './components/AddContactModal';
 import CreateGroupModal from './components/CreateGroupModal';
+import StatusComposer from '../status/components/StatusComposer';
+import StatusViewer from '../status/components/StatusViewer';
 import IncomingCall from '../../components/IncomingCall';
 import FullScreenLoader from '../../components/ui/FullScreenLoader';
 import { usePresence } from './hooks/usePresence';
@@ -191,6 +194,9 @@ const DashboardContent = () => {
 
             <NotificationBanner />
 
+            <StatusComposer />
+            <StatusViewer />
+
             {/* Modal para ver imagen en grande */}
             {viewImage && (
                 <div 
@@ -256,7 +262,9 @@ const DashboardContent = () => {
 export const DashboardFeature = () => {
     return (
         <DashboardProvider>
-            <DashboardContent />
+            <StatusProvider>
+                <DashboardContent />
+            </StatusProvider>
         </DashboardProvider>
     );
 };

@@ -29,7 +29,7 @@ export default defineConfig([
         caughtErrors: 'none',
       }],
       // Los contextos exportan su hook junto al Provider (patrón habitual).
-      'react-refresh/only-export-components': ['error', { allowExportNames: ['useAuth', 'useDashboard', 'useMessaging', 'useGroupMessaging'] }],
+      'react-refresh/only-export-components': ['error', { allowExportNames: ['useAuth', 'useDashboard', 'useMessaging', 'useGroupMessaging', 'useStatus'] }],
     },
   },
   {
