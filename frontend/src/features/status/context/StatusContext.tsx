@@ -114,10 +114,11 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
         const handleStatusNew = (payload: WsHandlerMap['status_new']) => {
             if (!payload?.status) return;
             // El contrato (ws.ts) garantiza `owner`, pero el runtime no lo
-            // valida — se mantiene el fallback defensivo de la versión JS con
-            // un owner "vacío" honesto en vez de mentirle al tipo con un cast.
-            const owner: WsHandlerMap['status_new']['owner'] = payload.owner || { Telephon: '', Username: '' };
-            setFeed(prev => applyStatusNew(prev, owner, payload.status));
+            // valida (R3-status-new-owner-fallback-unproved) — sin
+            // `owner.Telephon` no hay grupo al que agregar el estado;
+            // `applyStatusNew` ignora el evento (no cambia el feed) en vez de
+            // crear un grupo fantasma con teléfono vacío.
+            setFeed(prev => applyStatusNew(prev, payload.owner, payload.status));
         };
 
         const handleStatusDeleted = (payload: WsHandlerMap['status_deleted']) => {

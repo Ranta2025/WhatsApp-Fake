@@ -12,12 +12,20 @@ export const sortContacts = <G extends { AllViewed: boolean; LastUpdated: string
     return new Date(b.LastUpdated).getTime() - new Date(a.LastUpdated).getTime();
 });
 
-/** Aplica el evento WS "status_new": agrega el estado al grupo del dueño (o crea el grupo). */
+/**
+ * Aplica el evento WS "status_new": agrega el estado al grupo del dueño (o
+ * crea el grupo). El contrato (types/ws.ts) declara `owner` no-nulo, pero el
+ * runtime no lo garantiza (R3-status-new-owner-fallback-unproved): sin
+ * `owner.Telephon` no hay a qué grupo de contacto agregar el estado, así que
+ * el evento se ignora sin cambiar el feed en vez de crear un grupo fantasma
+ * con teléfono vacío.
+ */
 export const applyStatusNew = (
     prevFeed: StatusFeed,
-    owner: StatusOwnerBrief,
+    owner: StatusOwnerBrief | null | undefined,
     status: StatusItem,
 ): StatusFeed => {
+    if (!owner?.Telephon) return prevFeed;
     const contacts = prevFeed.Contacts || [];
     const idx = contacts.findIndex(g => g.Telephon === owner.Telephon);
     let nextContacts: StatusContactGroup[];

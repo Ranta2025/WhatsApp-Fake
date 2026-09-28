@@ -82,6 +82,23 @@ describe('applyStatusNew', () => {
         expect(next.Contacts[0]?.Statuses).toHaveLength(2);
         expect(next.Contacts[0]?.AllViewed).toBe(false);
     });
+
+    // R3-status-new-owner-fallback-unproved: el contrato (types/ws.ts) declara
+    // `owner` no-nulo, pero el runtime no lo garantiza. Sin `owner.Telephon` no
+    // hay grupo de contacto al que agregar el estado — se ignora el evento en
+    // vez de crear un grupo fantasma con teléfono vacío.
+    it('ignora el evento (no cambia el feed) si owner no tiene Telephon', () => {
+        const feed: StatusFeed = { Mine: [], Contacts: [] };
+        const next = applyStatusNew(feed, { Telephon: '', Username: '' }, status);
+        expect(next).toBe(feed);
+        expect(next.Contacts).toHaveLength(0);
+    });
+
+    it('ignora el evento (no cambia el feed) si owner es null o undefined', () => {
+        const feed: StatusFeed = { Mine: [], Contacts: [] };
+        expect(applyStatusNew(feed, null, status)).toBe(feed);
+        expect(applyStatusNew(feed, undefined, status)).toBe(feed);
+    });
 });
 
 describe('applyStatusDeleted', () => {
