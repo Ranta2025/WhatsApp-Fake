@@ -99,6 +99,31 @@ describe('wsManager dispatch (remapped listener contract)', () => {
         wsManager.disconnect();
     });
 
+    // R3-ws-error-envelope-normalization: el listener 'error' debe recibir
+    // el envelope crudo tal cual llegó (todos los campos), no un objeto
+    // reconstruido a mano que solo conserva `type`/`error`.
+    it('passes extra fields on the error envelope through unchanged (no rebuilt object)', async () => {
+        const { wsManager, socket } = await connectAndOpen();
+        const handler = vi.fn();
+        wsManager.on('error', handler);
+
+        emit(socket, { type: 'error', error: 'boom', code: 'AUTH_FAILED', requestId: 42 });
+
+        expect(handler).toHaveBeenCalledWith({ type: 'error', error: 'boom', code: 'AUTH_FAILED', requestId: 42 });
+        wsManager.disconnect();
+    });
+
+    it('passes a non-string/missing "error" field through unchanged too', async () => {
+        const { wsManager, socket } = await connectAndOpen();
+        const handler = vi.fn();
+        wsManager.on('error', handler);
+
+        emit(socket, { type: 'error', error: 404, detail: 'not found' });
+
+        expect(handler).toHaveBeenCalledWith({ type: 'error', error: 404, detail: 'not found' });
+        wsManager.disconnect();
+    });
+
     it('unwraps "contacts_online" to a bare string[] (not {contacts})', async () => {
         const { wsManager, socket } = await connectAndOpen();
         const handler = vi.fn();
@@ -143,6 +168,67 @@ describe('wsManager dispatch (remapped listener contract)', () => {
         emit(socket, { type: 'typing', payload: { from: '111' } });
 
         expect(handler).not.toHaveBeenCalled();
+        wsManager.disconnect();
+    });
+});
+
+// R3-ws-unauthorized-branch-untested: connect() pide un ticket vía axios
+// antes de abrir el WebSocket; si esa petición falla con 401 la sesión
+// caducó de verdad (no reintentar), y con cualquier otro error se agenda un
+// reconnect con backoff. La rama 401 se detecta de forma ESTRUCTURAL
+// (`error.response?.status === 401`, igual que el JS original) y no debe
+// exigir que el error sea una instancia real de AxiosError.
+describe('wsManager.connect() failure paths', () => {
+    beforeEach(() => {
+        vi.resetModules();
+        FakeWebSocket.instances = [];
+        vi.stubGlobal('WebSocket', FakeWebSocket);
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+        vi.clearAllMocks();
+    });
+
+    it('stops (no retry) and reports "unauthorized" on a structurally-401 error, even if it is not a real AxiosError', async () => {
+        const axiosMock = await import('./axios');
+        const getMock = vi.fn(() => Promise.reject({ response: { status: 401 } }));
+        axiosMock.default.get = getMock as unknown as typeof axiosMock.default.get;
+
+        const { default: wsManager } = await import('./websocket');
+        const states: string[] = [];
+        wsManager.onConnectionState((state) => states.push(state));
+
+        await wsManager.connect();
+
+        expect(states).toEqual(['unauthorized']);
+        expect(FakeWebSocket.instances).toHaveLength(0);
+
+        // Sesión caducada de verdad: no debe reintentar el ticket más tarde.
+        await vi.advanceTimersByTimeAsync(30000);
+        expect(getMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('schedules a reconnect/backoff retry (no "unauthorized") on a non-401 ticket-fetch error', async () => {
+        const axiosMock = await import('./axios');
+        const getMock = vi.fn(() => Promise.reject(new Error('network down')));
+        axiosMock.default.get = getMock as unknown as typeof axiosMock.default.get;
+
+        const { default: wsManager } = await import('./websocket');
+        const states: string[] = [];
+        wsManager.onConnectionState((state) => states.push(state));
+
+        await wsManager.connect();
+
+        expect(states).toEqual([]);
+        expect(getMock).toHaveBeenCalledTimes(1);
+
+        // Primer backoff: reconnectDelay (1500ms) * 1.5^0 = 1500ms.
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(getMock).toHaveBeenCalledTimes(2);
+
         wsManager.disconnect();
     });
 });

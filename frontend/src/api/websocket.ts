@@ -1,4 +1,3 @@
-import axios from 'axios';
 import api from './axios';
 import { WS_URL } from '../config';
 import type { Message, CallType, MediaType } from '../types/api';
@@ -33,7 +32,9 @@ export type WsHandlerMap = {
     [K in DirectPassthroughType]: WsEventOf<K>['payload'];
 } & {
     message: WsEventOf<'chat'>['payload'];
-    error: WsError;
+    // El listener recibe el envelope crudo tal cual llegó por el wire (ver
+    // handleMessage): puede traer campos extra que WsError no declara.
+    error: WsError & Record<string, unknown>;
     contacts_online: string[];
 };
 
@@ -61,6 +62,22 @@ function toEnvelope(raw: unknown): RawWsEnvelope {
         return raw as RawWsEnvelope;
     }
     return {};
+}
+
+// R3-ws-unauthorized-branch-untested: igual que el JS original
+// (`error.response?.status === 401`), sin exigir que `error` sea una
+// instancia real de AxiosError — solo que tenga esa forma estructuralmente.
+// Narrowing seguro de `unknown` en vez de un cast directo.
+function getErrorStatus(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null || !('response' in error)) {
+        return undefined;
+    }
+    const { response } = error as { response?: unknown };
+    if (typeof response !== 'object' || response === null || !('status' in response)) {
+        return undefined;
+    }
+    const { status } = response as { status?: unknown };
+    return typeof status === 'number' ? status : undefined;
 }
 
 type ClientPayloadOf<T extends WsClientMessageType> = Extract<
@@ -154,7 +171,7 @@ class WebSocketManager {
             ticket = data.ticket;
         } catch (error) {
             this.connecting = false;
-            if (axios.isAxiosError(error) && error.response?.status === 401) {
+            if (getErrorStatus(error) === 401) {
                 // Sesión caducada definitivamente: no reintentar
                 this.isIntentionallyClosed = true;
                 this.notifyConnectionState('unauthorized');
@@ -231,9 +248,13 @@ class WebSocketManager {
         }
 
         if (type === 'error') {
-            const errorMessage = typeof (raw as RawWsEnvelope).error === 'string' ? (raw as RawWsEnvelope).error! : '';
+            // R3-ws-error-envelope-normalization: notificar el envelope crudo
+            // tal cual (todos sus campos), no un objeto reconstruido a mano
+            // que descartaba cualquier campo extra fuera de {type, error}.
+            const envelope = raw as WsError & Record<string, unknown>;
+            const errorMessage = typeof envelope.error === 'string' ? envelope.error : '';
             console.error('Error del servidor:', errorMessage);
-            this.notifyHandlers('error', { type: 'error', error: errorMessage });
+            this.notifyHandlers('error', envelope);
             return;
         }
 
