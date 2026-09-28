@@ -115,6 +115,9 @@ func Conection() (*gorm.DB, error) {
 		&models.Group{},
 		&models.GroupMember{},
 		&models.GroupMessage{},
+		// ── Estados (stories) ──────────────────────────────────────────────
+		&models.Status{},
+		&models.StatusView{},
 	); err != nil {
 		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}
@@ -273,6 +276,37 @@ func Conection() (*gorm.DB, error) {
 			ALTER TABLE group_messages ADD CONSTRAINT chk_group_messages_media_type
 				CHECK (media_type IS NULL OR media_type = ''
 					OR media_type IN ('image', 'audio', 'video', 'sticker', 'document'));
+		END IF;
+	END $$;`)
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// ESTADOS (stories): índices y constraints
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// Índice único parcial: evita vistas duplicadas de un mismo espectador
+	// sobre un mismo estado (idempotencia de "marcar como visto").
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_status_view_unique
+		ON status_views (status_id, viewer_id)
+		WHERE deleted_at IS NULL`)
+
+	// Índice para el filtro de expiración (todas las lecturas de estados lo usan).
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_statuses_expires_at
+		ON statuses (expires_at)
+		WHERE deleted_at IS NULL`)
+
+	// Índice para cargar los estados de una lista de dueños (feed), ordenados.
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_statuses_user_created
+		ON statuses (user_id, created_at)
+		WHERE deleted_at IS NULL`)
+
+	execMigration(data, `DO $$ BEGIN
+		-- statuses.type
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'statuses' AND constraint_name = 'chk_statuses_type'
+		) THEN
+			ALTER TABLE statuses ADD CONSTRAINT chk_statuses_type
+				CHECK (type IN ('text', 'image', 'video'));
 		END IF;
 	END $$;`)
 

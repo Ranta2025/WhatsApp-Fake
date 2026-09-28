@@ -29,9 +29,10 @@ import (
 
 // App contiene el servidor HTTP y los recursos que hay que cerrar al apagar.
 type App struct {
-	server *http.Server
-	db     *gorm.DB
-	redis  *redis.Client
+	server              *http.Server
+	db                  *gorm.DB
+	redis               *redis.Client
+	cancelStatusCleanup context.CancelFunc
 }
 
 // New conecta con las dependencias externas y construye la aplicación.
@@ -47,7 +48,8 @@ func New() (*App, error) {
 		return nil, err
 	}
 	engine.GET("/healthz", healthHandler(db, rd))
-	routers.Router(engine, buildDeps(db, rd, mc))
+	deps, cancelStatusCleanup := buildDeps(db, rd, mc)
+	routers.Router(engine, deps)
 
 	return &App{
 		server: &http.Server{
@@ -59,8 +61,9 @@ func New() (*App, error) {
 			IdleTimeout:    120 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		},
-		db:    db,
-		redis: rd,
+		db:                  db,
+		redis:               rd,
+		cancelStatusCleanup: cancelStatusCleanup,
 	}, nil
 }
 
@@ -145,8 +148,13 @@ func trustedProxies() []string {
 	return []string{"127.0.0.1/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
 }
 
+// statusCleanupInterval es cada cuánto se ejecuta el job de limpieza de estados expirados.
+const statusCleanupInterval = 10 * time.Minute
+
 // buildDeps construye el grafo de dependencias: repositorios → servicios → handlers.
-func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) routers.Deps {
+// También arranca el job periódico de limpieza de estados expirados y devuelve
+// su función de cancelación, para poder detenerlo en un apagado ordenado.
+func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, context.CancelFunc) {
 	// Repositorios
 	repoUser := repos.GetRespositorieUser(db)
 	repoContact := repos.InitRepoContact(db, rd)
@@ -165,6 +173,10 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) routers.Deps {
 	serviceGroup := services.InitServiceGroup(repoGroup, repoContact)
 	serviceMedia := services.InitServiceMedia(mc)
 	serviceBugReport := services.InitServiceBugReport()
+	serviceStatus := services.InitServiceStatus(repoContact)
+
+	cleanupCtx, cancelCleanup := context.WithCancel(context.Background())
+	go statusCleanupLoop(cleanupCtx, serviceStatus, statusCleanupInterval)
 
 	return routers.Deps{
 		HandlerUser:      handlers.GetHandlerUser(serviceUser, hub),
@@ -173,6 +185,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) routers.Deps {
 		HandlerCall:      handlers.InitHandlerCall(serviceCall),
 		HandlerMedia:     handlers.InitHandlerMedia(serviceMedia),
 		HandlerGroup:     handlers.InitHandlerGroup(serviceGroup, hub),
+		HandlerStatus:    handlers.InitHandlerStatus(serviceStatus, hub),
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),
 		Hub:              hub,
 		WSTickets:        cache.NewWSTicketStore(rd),
@@ -180,6 +193,26 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) routers.Deps {
 		ContactService:   serviceContact,
 		CallService:      serviceCall,
 		GroupService:     serviceGroup,
+	}, cancelCleanup
+}
+
+// statusCleanupLoop borra periódicamente los estados expirados (y sus vistas).
+// Se detiene cuando ctx se cancela (apagado ordenado del servidor).
+func statusCleanupLoop(ctx context.Context, service services.StatusServicer, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			deleted, err := service.CleanupExpiredStatuses(ctx)
+			if err != nil {
+				log.Printf("[STATUS-CLEANUP] Error limpiando estados expirados: %v", err)
+			} else if deleted > 0 {
+				log.Printf("[STATUS-CLEANUP] %d estados expirados eliminados", deleted)
+			}
+		}
 	}
 }
 
@@ -203,6 +236,9 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	log.Println("[APP] Apagando el servidor...")
+	if a.cancelStatusCleanup != nil {
+		a.cancelStatusCleanup()
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	err := a.server.Shutdown(shutdownCtx)

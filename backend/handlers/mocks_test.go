@@ -380,3 +380,37 @@ func (m *MockMediaService) UploadMedia(file multipart.File, header *multipart.Fi
 	args := m.Called(file, header, ctx)
 	return args.Get(0).(services.MediaUploadResult), args.Error(1)
 }
+
+type MockStatusService struct {
+	mock.Mock
+}
+
+func (m *MockStatusService) CreateStatus(telephon string, input models.StatusCreate, ctx context.Context) (schemas.StatusItem, schemas.StatusOwnerBrief, []string, error) {
+	args := m.Called(telephon, input, ctx)
+	return args.Get(0).(schemas.StatusItem), args.Get(1).(schemas.StatusOwnerBrief), args.Get(2).([]string), args.Error(3)
+}
+
+func (m *MockStatusService) GetFeed(telephon string, ctx context.Context) (schemas.StatusFeed, error) {
+	args := m.Called(telephon, ctx)
+	return args.Get(0).(schemas.StatusFeed), args.Error(1)
+}
+
+func (m *MockStatusService) MarkStatusViewed(telephon string, statusID uint, ctx context.Context) (bool, string, schemas.StatusViewer, int64, error) {
+	args := m.Called(telephon, statusID, ctx)
+	return args.Bool(0), args.String(1), args.Get(2).(schemas.StatusViewer), args.Get(3).(int64), args.Error(4)
+}
+
+func (m *MockStatusService) GetStatusViewers(telephon string, statusID uint, ctx context.Context) ([]schemas.StatusViewer, error) {
+	args := m.Called(telephon, statusID, ctx)
+	return args.Get(0).([]schemas.StatusViewer), args.Error(1)
+}
+
+func (m *MockStatusService) DeleteStatus(telephon string, statusID uint, ctx context.Context) ([]string, error) {
+	args := m.Called(telephon, statusID, ctx)
+	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockStatusService) CleanupExpiredStatuses(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}

@@ -16,6 +16,7 @@ type RouterApiMessage struct {
 	handlerCall    *handlers.HandlerCall
 	handlerMedia   *handlers.HandlerMedia
 	handlerGroup   *handlers.HandlerGroup
+	handlerStatus  *handlers.HandlerStatus
 	hub            *websocket.Hub
 	chatService    services.ChatServicer
 	contactService services.ContactServicer
@@ -25,7 +26,7 @@ type RouterApiMessage struct {
 
 // InitRouterApiMessage inicializa el subrouter /api/v1/ con todos los handlers
 // y aplica el middleware de validación de token JWT.
-func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) *RouterApiMessage {
+func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, handlerStatus *handlers.HandlerStatus, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) *RouterApiMessage {
 	rout := &RouterApiMessage{
 		app:            app,
 		handlerContact: handler,
@@ -33,6 +34,7 @@ func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact
 		handlerCall:    handlerCall,
 		handlerMedia:   handlerMedia,
 		handlerGroup:   handlerGroup,
+		handlerStatus:  handlerStatus,
 		hub:            hub,
 		chatService:    chatService,
 		contactService: contactService,
@@ -74,6 +76,17 @@ func (rt *RouterApiMessage) ApiChat() {
 // ApiMedia registra la ruta de subida de archivos multimedia.
 func (rt *RouterApiMessage) ApiMedia() {
 	rt.app.POST("upload", rt.handlerMedia.HandlerUploadMedia())
+}
+
+// ApiStatus registra las rutas del feature de "Estados" (stories): publicar,
+// listar el feed (propios + contactos mutuos), marcar como visto, listar
+// espectadores de un estado propio y borrarlo.
+func (rt *RouterApiMessage) ApiStatus() {
+	rt.app.POST("status", middleware.MiddlewareStatusCreate(), rt.handlerStatus.HandlerCreateStatus())
+	rt.app.GET("status", rt.handlerStatus.HandlerGetStatusFeed())
+	rt.app.POST("status/:id/view", middleware.MiddlewareStatusID(), rt.handlerStatus.HandlerMarkStatusViewed())
+	rt.app.GET("status/:id/views", middleware.MiddlewareStatusID(), rt.handlerStatus.HandlerGetStatusViewers())
+	rt.app.DELETE("status/:id", middleware.MiddlewareStatusID(), rt.handlerStatus.HandlerDeleteStatus())
 }
 
 // ApiCall registra las rutas del sistema de llamadas (token ZegoCloud, historial, eliminar).

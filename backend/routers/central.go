@@ -22,6 +22,7 @@ type Deps struct {
 	HandlerCall      *handlers.HandlerCall
 	HandlerMedia     *handlers.HandlerMedia
 	HandlerGroup     *handlers.HandlerGroup
+	HandlerStatus    *handlers.HandlerStatus
 	HandlerBugReport *handlers.HandlerBugReport
 	Hub              *websocket.Hub
 	WSTickets        *cache.WSTicketStore
@@ -52,13 +53,14 @@ func Router(app *gin.Engine, d Deps) {
 
 	subrouter := app.Group("/api/v1/")
 	subrouter.GET("ws-ticket", middleware.MiddlewareTokenWithTelephon(), wsTicketHandler(d.WSTickets))
-	apiMessage := api.InitRouterApiMessage(subrouter, d.HandlerContact, d.HandlerChat, d.HandlerCall, d.HandlerMedia, d.HandlerGroup, d.Hub, d.ChatService, d.ContactService, d.CallService, d.GroupService)
+	apiMessage := api.InitRouterApiMessage(subrouter, d.HandlerContact, d.HandlerChat, d.HandlerCall, d.HandlerMedia, d.HandlerGroup, d.HandlerStatus, d.Hub, d.ChatService, d.ContactService, d.CallService, d.GroupService)
 	apiMessage.ApiUser()
 	apiMessage.ApiContact()
 	apiMessage.ApiChat()
 	apiMessage.ApiMedia()
 	apiMessage.ApiCall()
 	apiMessage.ApiGroup()
+	apiMessage.ApiStatus()
 }
 
 // wsTicketHandler emite un ticket de un solo uso (30 s) para abrir el WebSocket.
