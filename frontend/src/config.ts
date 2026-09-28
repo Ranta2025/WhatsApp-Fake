@@ -8,9 +8,9 @@
 //   Necesaria cuando el frontend se sirve desde un dominio que no puede
 //   reenviar WebSockets (Vercel). Si no se define, se deriva de la API.
 
-const trimSlash = (url) => url.replace(/\/+$/, '');
+const trimSlash = (url: string): string => url.replace(/\/+$/, '');
 
-const resolveApiBaseUrl = () => {
+const resolveApiBaseUrl = (): string => {
     const configured = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
     if (configured) return trimSlash(configured);
     if (import.meta.env.DEV) {
@@ -21,7 +21,7 @@ const resolveApiBaseUrl = () => {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
-const resolveWsBaseUrl = () => {
+const resolveWsBaseUrl = (): string => {
     const configured = import.meta.env.VITE_WS_URL;
     const base = configured ? trimSlash(configured) : API_BASE_URL;
     return base.replace(/^http/, 'ws');

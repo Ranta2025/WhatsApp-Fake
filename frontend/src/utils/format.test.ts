@@ -6,7 +6,7 @@ import { formatStatusTimestamp, formatTime } from './format';
 // tests verifican el BRANCH elegido (hoy/ayer/más antiguo) y la hora exacta
 // delegando el formato de hora/fecha a las mismas funciones que usa la fuente
 // (formatTime / toLocaleDateString), en vez de asumir un locale concreto.
-const shortDate = (date) => date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+const shortDate = (date: Date) => date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 
 // ==================== R3-missing-tests (formatStatusTimestamp) ====================
 

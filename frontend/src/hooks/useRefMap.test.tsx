@@ -1,19 +1,21 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { useRefMap } from './useRefMap';
+import { createRoot, type Root } from 'react-dom/client';
+import { useRefMap, type RefMapGetter } from './useRefMap';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-function Harness({ onReady }) {
-    const getRef = useRefMap();
+function Harness({ onReady }: { onReady: (getRef: RefMapGetter<HTMLElement>) => void }) {
+    const getRef = useRefMap<HTMLElement>();
     onReady(getRef);
     return null;
 }
 
-function renderHarness() {
-    let getRef;
+function renderHarness(): { getRef: RefMapGetter<HTMLElement>; root: Root; container: HTMLDivElement } {
+    // act() ejecuta el render de forma síncrona, así que onReady ya corrió
+    // cuando act() retorna: la aserción de asignación definitiva es segura.
+    let getRef!: RefMapGetter<HTMLElement>;
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);

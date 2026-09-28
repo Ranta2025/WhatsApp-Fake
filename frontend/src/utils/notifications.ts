@@ -1,13 +1,13 @@
 // Utilidad para manejar notificaciones nativas del sistema operativo
 // Genera iconos circulares dinámicos estilo Telegram/WhatsApp
 
-let swRegistration = null;
+let swRegistration: ServiceWorkerRegistration | null = null;
 
 // Cache de iconos generados para no regenerar cada vez
-const iconCache = new Map();
+const iconCache = new Map<string, string>();
 
 // Paleta de colores estilo Telegram para avatars sin foto
-const AVATAR_COLORS = [
+const AVATAR_COLORS: ReadonlyArray<readonly [string, string]> = [
     ['#FF6B6B', '#EE5A24'], // Rojo
     ['#7C5CFC', '#6C5CE7'], // Púrpura
     ['#00B894', '#00A381'], // Verde
@@ -22,11 +22,12 @@ const AVATAR_COLORS = [
  * Genera un icono circular con avatar o inicial del contacto
  * Usa OffscreenCanvas/Canvas para crear un PNG blob URL
  */
-async function generateNotificationIcon(avatarUrl, name) {
+async function generateNotificationIcon(avatarUrl: string | undefined, name: string | undefined): Promise<string> {
     // Si tenemos avatar URL, intentar convertirlo a circular
     if (avatarUrl) {
         const cacheKey = `avatar_${avatarUrl}`;
-        if (iconCache.has(cacheKey)) return iconCache.get(cacheKey);
+        const cached = iconCache.get(cacheKey);
+        if (cached) return cached;
 
         try {
             const icon = await createCircularAvatar(avatarUrl);
@@ -42,7 +43,8 @@ async function generateNotificationIcon(avatarUrl, name) {
     // Generar icono con inicial y color basado en el nombre
     const initial = (name || '?').charAt(0).toUpperCase();
     const cacheKey = `init_${initial}_${name}`;
-    if (iconCache.has(cacheKey)) return iconCache.get(cacheKey);
+    const cached = iconCache.get(cacheKey);
+    if (cached) return cached;
 
     const icon = createInitialAvatar(initial, name || '');
     iconCache.set(cacheKey, icon);
@@ -52,7 +54,7 @@ async function generateNotificationIcon(avatarUrl, name) {
 /**
  * Crea un avatar circular a partir de una URL de imagen
  */
-function createCircularAvatar(imageUrl) {
+function createCircularAvatar(imageUrl: string): Promise<string | null> {
     return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -62,7 +64,9 @@ function createCircularAvatar(imageUrl) {
                 const canvas = document.createElement('canvas');
                 canvas.width = size;
                 canvas.height = size;
-                const ctx = canvas.getContext('2d');
+                // El contexto 2D siempre existe para un <canvas> recién creado
+                // en el navegador; si no, cae al catch y resuelve null igual.
+                const ctx = canvas.getContext('2d')!;
 
                 // Fondo
                 ctx.fillStyle = '#0F172A';
@@ -108,16 +112,18 @@ function createCircularAvatar(imageUrl) {
 /**
  * Crea un avatar con inicial estilo Telegram (gradiente + letra grande)
  */
-function createInitialAvatar(initial, name) {
+function createInitialAvatar(initial: string, name: string): string {
     const size = 192;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
-    const ctx = canvas.getContext('2d');
+    // Ver nota en createCircularAvatar: siempre disponible en el navegador.
+    const ctx = canvas.getContext('2d')!;
 
     // Color basado en hash del nombre
     const colorIdx = Math.abs(hashCode(name)) % AVATAR_COLORS.length;
-    const [color1, color2] = AVATAR_COLORS[colorIdx];
+    const pair = AVATAR_COLORS[colorIdx]!;
+    const [color1, color2] = pair;
 
     // Fondo
     ctx.fillStyle = '#0F172A';
@@ -144,7 +150,7 @@ function createInitialAvatar(initial, name) {
     return canvas.toDataURL('image/png');
 }
 
-function hashCode(str) {
+function hashCode(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
         hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -156,7 +162,7 @@ function hashCode(str) {
 /**
  * Registra el Service Worker y guarda la referencia
  */
-export async function registerServiceWorker() {
+export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
     if (!('serviceWorker' in navigator)) {
         console.warn('[Notif] Service Workers no soportados en este navegador');
         return null;
@@ -179,11 +185,12 @@ export async function registerServiceWorker() {
     }
 }
 
+export type NotificationPermissionState = NotificationPermission | 'unsupported';
+
 /**
  * Solicita permiso para mostrar notificaciones
- * @returns {'granted' | 'denied' | 'default' | 'unsupported'}
  */
-export async function requestNotificationPermission() {
+export async function requestNotificationPermission(): Promise<NotificationPermissionState> {
     if (!('Notification' in window)) {
         console.warn('[Notif] Notification API no soportada');
         return 'unsupported';
@@ -208,16 +215,26 @@ export async function requestNotificationPermission() {
 /**
  * Obtiene el estado actual del permiso
  */
-export function getNotificationPermission() {
+export function getNotificationPermission(): NotificationPermissionState {
     if (!('Notification' in window)) return 'unsupported';
     return Notification.permission;
+}
+
+export interface ShowNativeNotificationArgs {
+    title: string;
+    body: string;
+    icon?: string;
+    image?: string;
+    tag?: string;
+    data?: { telephon?: string };
+    contactName?: string;
 }
 
 /**
  * Muestra una notificación nativa con avatar circular generado dinámicamente.
  * Genera PNG en canvas para que se vea bonita en Windows/macOS/Android.
  */
-export async function showNativeNotification({ title, body, icon, image, tag, data, contactName }) {
+export async function showNativeNotification({ title, body, icon, image, tag, data, contactName }: ShowNativeNotificationArgs): Promise<boolean> {
     if (!('Notification' in window)) return false;
     if (Notification.permission !== 'granted') return false;
 
@@ -249,7 +266,7 @@ export async function showNativeNotification({ title, body, icon, image, tag, da
             tag: tag || 'chat-message',
             renotify: true,
             silent: false,
-        });
+        } as NotificationOptions);
 
         notif.onclick = () => {
             window.focus();
@@ -267,29 +284,37 @@ export async function showNativeNotification({ title, body, icon, image, tag, da
     }
 }
 
+export type NotificationClickPayload = { telephon: string };
+export type NotificationClickHandler = (payload: NotificationClickPayload) => void;
+
 // Callbacks registrados para manejar clicks en notificaciones
-const notificationClickHandlers = [];
+const notificationClickHandlers: NotificationClickHandler[] = [];
 
 /**
  * Registra un callback para cuando el usuario hace click en una notificación
- * @param {Function} handler - Recibe { telephon }
+ * @param handler - Recibe { telephon }
  */
-export function onNotificationClick(handler) {
+export function onNotificationClick(handler: NotificationClickHandler): void {
     notificationClickHandlers.push(handler);
 }
 
 /**
  * Desregistra un callback
  */
-export function offNotificationClick(handler) {
+export function offNotificationClick(handler: NotificationClickHandler): void {
     const idx = notificationClickHandlers.indexOf(handler);
     if (idx > -1) notificationClickHandlers.splice(idx, 1);
+}
+
+interface ServiceWorkerClickMessage {
+    type?: string;
+    telephon?: string;
 }
 
 /**
  * Maneja mensajes del Service Worker
  */
-function handleSWMessage(event) {
+function handleSWMessage(event: MessageEvent<ServiceWorkerClickMessage | undefined>): void {
     const { type, telephon } = event.data || {};
     if (type === 'NOTIFICATION_CLICK' && telephon) {
         notificationClickHandlers.forEach(h => h({ telephon }));

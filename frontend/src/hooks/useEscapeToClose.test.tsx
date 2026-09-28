@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { useEscapeToClose, ESCAPE_HANDLED_FLAG, isEscapeHandled } from './useEscapeToClose';
+
+type FlaggedKeyboardEvent = KeyboardEvent & Record<string, unknown>;
 
 // React exige esta marca global para reconocer el entorno de test como
 // compatible con act(...) (createRoot no la detecta sola bajo Vitest+jsdom).
@@ -17,25 +19,32 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 // pila; en su lugar marca el evento con ESCAPE_HANDLED_FLAG para que ese
 // código decida.
 
-function TwoLayers({ aEnabled, bEnabled, onCloseA, onCloseB }) {
+interface TwoLayersProps {
+    aEnabled?: boolean;
+    bEnabled?: boolean;
+    onCloseA: () => void;
+    onCloseB: () => void;
+}
+
+function TwoLayers({ aEnabled, bEnabled, onCloseA, onCloseB }: TwoLayersProps) {
     useEscapeToClose(onCloseA, aEnabled);
     useEscapeToClose(onCloseB, bEnabled);
     return null;
 }
 
-function pressEscape() {
-    let handledFlag;
+function pressEscape(): boolean {
+    let handledFlag = false;
     act(() => {
         const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
         document.dispatchEvent(event);
-        handledFlag = event[ESCAPE_HANDLED_FLAG];
+        handledFlag = Boolean((event as FlaggedKeyboardEvent)[ESCAPE_HANDLED_FLAG]);
     });
     return handledFlag;
 }
 
 describe('useEscapeToClose', () => {
-    let container;
-    let root;
+    let container!: HTMLDivElement;
+    let root!: Root;
 
     beforeEach(() => {
         container = document.createElement('div');
@@ -123,7 +132,7 @@ describe('useEscapeToClose', () => {
         expect(handled).toBe(true);
         // El listener ajeno igual se ejecuta: el hook no llama stopPropagation.
         expect(unrelatedListener).toHaveBeenCalledTimes(1);
-        const receivedEvent = unrelatedListener.mock.calls[0][0];
+        const receivedEvent = unrelatedListener.mock.calls[0]?.[0] as FlaggedKeyboardEvent;
         expect(receivedEvent[ESCAPE_HANDLED_FLAG]).toBe(true);
 
         document.removeEventListener('keydown', unrelatedListener);

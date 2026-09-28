@@ -1,5 +1,11 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
+export interface PhoneValidationResult {
+    valid: boolean;
+    error: string | null;
+    formatted: string | null;
+}
+
 /**
  * Valida un número de teléfono completo (con código de país).
  * Usa la librería de Google libphonenumber para validar:
@@ -7,10 +13,9 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js';
  * - Que tenga la cantidad correcta de dígitos para el país detectado
  * - Que sea un número posible/válido
  *
- * @param {string} phoneValue - Número en formato E.164 (con +), ej: "+5350123456"
- * @returns {{ valid: boolean, error: string|null, formatted: string|null }}
+ * @param phoneValue - Número en formato E.164 (con +), ej: "+5350123456"
  */
-export function validatePhone(phoneValue) {
+export function validatePhone(phoneValue: string): PhoneValidationResult {
     if (!phoneValue || phoneValue.trim() === '' || phoneValue.trim() === '+') {
         return { valid: false, error: 'El número de teléfono es requerido', formatted: null };
     }

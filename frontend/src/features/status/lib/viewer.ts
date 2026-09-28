@@ -12,11 +12,16 @@ export const DEFAULT_DURATION_MS = 5000;
  * (performance.now()) que se desincroniza si el video hace buffering/stalls
  * o si el usuario lo pausa sin que el componente se entere.
  */
-export const computeVideoProgressPercent = (currentTime, duration) => {
+export const computeVideoProgressPercent = (currentTime: number, duration: number): number => {
     if (!Number.isFinite(duration) || duration <= 0) return 0;
     if (!Number.isFinite(currentTime) || currentTime < 0) return 0;
     return Math.min(100, (currentTime / duration) * 100);
 };
+
+export interface ShouldResumeClockArgs {
+    confirmed: boolean;
+    deleteSucceeded: boolean;
+}
 
 /**
  * Decide si hay que reanudar el reloj de avance automático después de un
@@ -30,11 +35,19 @@ export const computeVideoProgressPercent = (currentTime, duration) => {
  *     del resto, y un reloj que arranca de nuevo en ese instante es
  *     exactamente el "stale tick" que causa el salto/cierre indebido.
  */
-export const shouldResumeClockAfterDeleteAttempt = ({ confirmed, deleteSucceeded }) => {
+export const shouldResumeClockAfterDeleteAttempt = ({ confirmed, deleteSucceeded }: ShouldResumeClockArgs): boolean => {
     if (!confirmed) return true;
     if (!deleteSucceeded) return true;
     return false;
 };
+
+export interface ViewerState {
+    showViewers: boolean;
+    paused: boolean;
+    elapsed: number;
+    progress: number;
+    durationMs: number;
+}
 
 /**
  * Estado con el que debe arrancar el visor cada vez que cambia el ID del
@@ -46,7 +59,7 @@ export const shouldResumeClockAfterDeleteAttempt = ({ confirmed, deleteSucceeded
  * shouldResumeClockAfterDeleteAttempt más arriba: es este reset -- no
  * handleDelete -- el que debe reanudarlo).
  */
-export const resetViewerStateForStatusChange = () => ({
+export const resetViewerStateForStatusChange = (): ViewerState => ({
     showViewers: false,
     paused: false,
     elapsed: 0,

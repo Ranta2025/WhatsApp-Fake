@@ -1,4 +1,16 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, type RefObject } from 'react';
+
+export type RefMapKey = string | number;
+
+export interface RefMapGetter<T> {
+    (key: RefMapKey): RefObject<T | null>;
+    /**
+     * Borra la entrada para `key` (diferido a un microtask, ver más abajo).
+     * Se expone como propiedad de la función para no cambiar la forma del
+     * valor de retorno y romper los call sites actuales `getX(key)`.
+     */
+    release: (key: RefMapKey) => void;
+}
 
 /**
  * Devuelve un getter estable `getRef(key)` que crea, de forma perezosa, un
@@ -10,8 +22,8 @@ import { useMemo, useRef } from 'react';
  * el render, que la regla `react-hooks/refs` prohíbe: el componente solo
  * necesita el objeto ref en sí (identidad estable), nunca su valor actual.
  */
-export function useRefMap() {
-    const refs = useRef(new Map());
+export function useRefMap<T = HTMLElement>(): RefMapGetter<T> {
+    const refs = useRef(new Map<RefMapKey, RefObject<T | null>>());
 
     // La función devuelta (con su propiedad `.release`, ver más abajo) se
     // arma completa DENTRO del factory de useMemo, antes de que useMemo la
@@ -19,14 +31,14 @@ export function useRefMap() {
     // ya devuelto por un hook (p. ej. adjuntar `.release` a lo que devuelve
     // useCallback), pero no un objeto local que todavía se está construyendo.
     return useMemo(() => {
-        const getRef = (key) => {
+        const getRef = ((key: RefMapKey): RefObject<T | null> => {
             let ref = refs.current.get(key);
             if (!ref) {
                 ref = { current: null };
                 refs.current.set(key, ref);
             }
             return ref;
-        };
+        }) as RefMapGetter<T>;
 
         // R3-refmap-unbounded: las entradas nunca se borraban (un mensaje o
         // miembro que desaparece de la lista dejaba su ref colgando en el
@@ -38,7 +50,7 @@ export function useRefMap() {
         // Un ref-callback inline se llama con null y enseguida con el nodo en
         // cada re-render: el borrado se difiere a un microtask y solo ocurre si
         // la entrada sigue vacía, para no cambiar la identidad del ref.
-        getRef.release = (key) => {
+        getRef.release = (key: RefMapKey): void => {
             const ref = refs.current.get(key);
             if (!ref) return;
             ref.current = null;

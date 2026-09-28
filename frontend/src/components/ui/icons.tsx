@@ -4,7 +4,11 @@
 // un emoji se renderiza como tofu/□ (ver T4). Mismo estilo "stroke" de 24x24
 // que ya usa el resto de la app.
 
-const Stroke = ({ className = 'w-5 h-5', children, ...props }) => (
+import type { JSX, SVGProps } from 'react';
+
+type IconProps = SVGProps<SVGSVGElement>;
+
+const Stroke = ({ className = 'w-5 h-5', children, ...props }: IconProps): JSX.Element => (
     <svg
         xmlns="http://www.w3.org/2000/svg"
         className={className}
@@ -19,7 +23,7 @@ const Stroke = ({ className = 'w-5 h-5', children, ...props }) => (
     </svg>
 );
 
-const Path = (d) => ({ className, ...props }) => (
+const Path = (d: string) => ({ className, ...props }: IconProps): JSX.Element => (
     <Stroke className={className} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d={d} />
     </Stroke>
@@ -36,20 +40,20 @@ export const WarningIcon = Path('M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.
 export const ArrowTrendingUpIcon = Path('M2.25 18L9 11.25l4.306 4.306a11.95 11.95 0 015.814-5.518l2.74-1.22m0 0l-5.94-2.281m5.94 2.28l-2.28 5.941');
 export const CheckCircleIcon = Path('M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z');
 
-export const MicIcon = ({ className = 'w-5 h-5', ...props }) => (
+export const MicIcon = ({ className = 'w-5 h-5', ...props }: IconProps): JSX.Element => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true" {...props}>
         <path d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
         <path d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
     </svg>
 );
 
-export const SparklesIcon = ({ className = 'w-5 h-5', ...props }) => (
+export const SparklesIcon = ({ className = 'w-5 h-5', ...props }: IconProps): JSX.Element => (
     <Stroke className={className} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.456-2.456L14.25 6l1.035-.259a3.375 3.375 0 002.456-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
     </Stroke>
 );
 
-export const MapPinIcon = ({ className = 'w-5 h-5', ...props }) => (
+export const MapPinIcon = ({ className = 'w-5 h-5', ...props }: IconProps): JSX.Element => (
     <Stroke className={className} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />

@@ -7,6 +7,36 @@ import {
     nextTarget,
     contactsByTelephon,
 } from './feed';
+import type { StatusItem, StatusContactGroup, StatusOwnerBrief, StatusFeed } from '../../../types/api';
+
+// applyStatusNew/applyStatusDeleted/applyStatusViewedForOwner operan sobre
+// StatusFeed/StatusItem/StatusContactGroup reales: estas fábricas completan
+// los campos que estos tests no ejercitan, para que los fixtures sigan
+// siendo objetos StatusItem/StatusContactGroup válidos bajo `strict`.
+const makeStatus = (overrides: Partial<StatusItem> = {}): StatusItem => ({
+    ID: 0,
+    Type: 'text',
+    CreatedAt: '2024-01-01T00:00:00Z',
+    ExpiresAt: '2024-01-02T00:00:00Z',
+    Viewed: false,
+    ViewCount: 0,
+    ...overrides,
+});
+
+const makeOwner = (overrides: Partial<StatusOwnerBrief> = {}): StatusOwnerBrief => ({
+    Telephon: '000',
+    Username: 'owner',
+    ...overrides,
+});
+
+const makeGroup = (overrides: Partial<StatusContactGroup> = {}): StatusContactGroup => ({
+    Telephon: '000',
+    Username: 'contact',
+    Statuses: [],
+    AllViewed: false,
+    LastUpdated: '2024-01-01T00:00:00Z',
+    ...overrides,
+});
 
 describe('sortContacts', () => {
     it('pone primero los grupos con estados sin ver', () => {
@@ -33,64 +63,64 @@ describe('sortContacts', () => {
 });
 
 describe('applyStatusNew', () => {
-    const owner = { Telephon: '111', Username: 'ana', ContactName: 'Ana', AvatarUrl: 'a.png' };
-    const status = { ID: 1, CreatedAt: '2024-01-01T00:00:00Z' };
+    const owner = makeOwner({ Telephon: '111', Username: 'ana', ContactName: 'Ana', AvatarUrl: 'a.png' });
+    const status = makeStatus({ ID: 1, CreatedAt: '2024-01-01T00:00:00Z' });
 
     it('crea un grupo nuevo si el dueño no tenía estados', () => {
-        const feed = { Mine: [], Contacts: [] };
+        const feed: StatusFeed = { Mine: [], Contacts: [] };
         const next = applyStatusNew(feed, owner, status);
         expect(next.Contacts).toHaveLength(1);
         expect(next.Contacts[0]).toMatchObject({ Telephon: '111', AllViewed: false, Statuses: [status] });
     });
 
     it('agrega el estado a un grupo existente y lo marca como no-todo-visto', () => {
-        const feed = {
+        const feed: StatusFeed = {
             Mine: [],
-            Contacts: [{ Telephon: '111', Username: 'ana', Statuses: [{ ID: 0 }], AllViewed: true, LastUpdated: '2023-12-31T00:00:00Z' }],
+            Contacts: [makeGroup({ Telephon: '111', Username: 'ana', Statuses: [makeStatus({ ID: 0 })], AllViewed: true, LastUpdated: '2023-12-31T00:00:00Z' })],
         };
         const next = applyStatusNew(feed, owner, status);
-        expect(next.Contacts[0].Statuses).toHaveLength(2);
-        expect(next.Contacts[0].AllViewed).toBe(false);
+        expect(next.Contacts[0]?.Statuses).toHaveLength(2);
+        expect(next.Contacts[0]?.AllViewed).toBe(false);
     });
 });
 
 describe('applyStatusDeleted', () => {
     it('quita el estado de Mine', () => {
-        const feed = { Mine: [{ ID: 1 }, { ID: 2 }], Contacts: [] };
+        const feed: StatusFeed = { Mine: [makeStatus({ ID: 1 }), makeStatus({ ID: 2 })], Contacts: [] };
         const next = applyStatusDeleted(feed, 'x', 1);
         expect(next.Mine.map(s => s.ID)).toEqual([2]);
     });
 
     it('elimina el grupo entero si era su único estado', () => {
-        const feed = {
+        const feed: StatusFeed = {
             Mine: [],
-            Contacts: [{ Telephon: '111', Statuses: [{ ID: 5, Viewed: true }], AllViewed: true, LastUpdated: '2024-01-01T00:00:00Z' }],
+            Contacts: [makeGroup({ Telephon: '111', Statuses: [makeStatus({ ID: 5, Viewed: true })], AllViewed: true, LastUpdated: '2024-01-01T00:00:00Z' })],
         };
         const next = applyStatusDeleted(feed, '111', 5);
         expect(next.Contacts).toHaveLength(0);
     });
 
     it('si quedan otros estados, recalcula AllViewed', () => {
-        const feed = {
+        const feed: StatusFeed = {
             Mine: [],
-            Contacts: [{
+            Contacts: [makeGroup({
                 Telephon: '111',
-                Statuses: [{ ID: 5, Viewed: true }, { ID: 6, Viewed: false }],
+                Statuses: [makeStatus({ ID: 5, Viewed: true }), makeStatus({ ID: 6, Viewed: false })],
                 AllViewed: false,
                 LastUpdated: '2024-01-01T00:00:00Z',
-            }],
+            })],
         };
         const next = applyStatusDeleted(feed, '111', 6);
-        expect(next.Contacts[0].Statuses.map(s => s.ID)).toEqual([5]);
-        expect(next.Contacts[0].AllViewed).toBe(true);
+        expect(next.Contacts[0]?.Statuses.map(s => s.ID)).toEqual([5]);
+        expect(next.Contacts[0]?.AllViewed).toBe(true);
     });
 });
 
 describe('applyStatusViewedForOwner', () => {
     it('actualiza el ViewCount del estado propio correspondiente', () => {
-        const feed = { Mine: [{ ID: 1, ViewCount: 0 }, { ID: 2, ViewCount: 3 }], Contacts: [] };
+        const feed: StatusFeed = { Mine: [makeStatus({ ID: 1, ViewCount: 0 }), makeStatus({ ID: 2, ViewCount: 3 })], Contacts: [] };
         const next = applyStatusViewedForOwner(feed, { statusId: 1, viewCount: 4 });
-        expect(next.Mine).toEqual([{ ID: 1, ViewCount: 4 }, { ID: 2, ViewCount: 3 }]);
+        expect(next.Mine).toEqual([makeStatus({ ID: 1, ViewCount: 4 }), makeStatus({ ID: 2, ViewCount: 3 })]);
     });
 });
 

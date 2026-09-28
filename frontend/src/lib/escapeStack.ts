@@ -9,23 +9,31 @@
 // R3-escape-stack-untested) para poder testear la semántica de la pila
 // (topmost-only, reactivar la de abajo, capas deshabilitadas/desmontadas)
 // sin necesidad de renderizar componentes ni de jsdom.
-let stack = [];
+
+export type EscapeLayerClose = () => void;
+
+interface EscapeLayer {
+    id: number;
+    onClose: EscapeLayerClose;
+}
+
+let stack: EscapeLayer[] = [];
 let nextId = 0;
 
 /** Agrega una nueva capa al tope de la pila y devuelve su id. */
-export function pushEscapeLayer(onClose) {
+export function pushEscapeLayer(onClose: EscapeLayerClose): number {
     const id = ++nextId;
     stack = [...stack, { id, onClose }];
     return id;
 }
 
 /** Quita una capa de la pila (al desmontarse o deshabilitarse). */
-export function popEscapeLayer(id) {
+export function popEscapeLayer(id: number): void {
     stack = stack.filter((layer) => layer.id !== id);
 }
 
 /** true si hay al menos una capa activa. */
-export function hasEscapeLayers() {
+export function hasEscapeLayers(): boolean {
     return stack.length > 0;
 }
 
@@ -35,15 +43,15 @@ export function hasEscapeLayers() {
  * decisión de si conviene detener su propagación (o marcarlo como
  * "manejado") es responsabilidad de quien la invoque (ver useEscapeToClose).
  */
-export function triggerTopEscapeLayer() {
-    if (stack.length === 0) return false;
+export function triggerTopEscapeLayer(): boolean {
     const top = stack[stack.length - 1];
+    if (!top) return false;
     top.onClose?.();
     return true;
 }
 
 /** Solo para tests: vuelve la pila a su estado inicial entre casos. */
-export function __resetEscapeStackForTests() {
+export function __resetEscapeStackForTests(): void {
     stack = [];
     nextId = 0;
 }
