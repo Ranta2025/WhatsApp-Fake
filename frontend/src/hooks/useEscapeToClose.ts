@@ -13,18 +13,19 @@ import { pushEscapeLayer, popEscapeLayer, triggerTopEscapeLayer } from '../lib/e
 // flag en el evento y decidir no actuar en la misma pulsación.
 export const ESCAPE_HANDLED_FLAG = '__escapeHandledByLayer';
 
-/** Forma mínima de un evento (nativo o sintético de React) que puede llevar el flag. */
-type MaybeHandledEvent =
-    | { nativeEvent?: Record<string, unknown>; [key: string]: unknown }
-    | Record<string, unknown>
-    | null
-    | undefined;
+/**
+ * Forma mínima de un evento (nativo o sintético de React) que puede llevar el
+ * flag. Estructural y sin index signature, para aceptar un React.KeyboardEvent
+ * o un KeyboardEvent nativo sin casts.
+ */
+type MaybeHandledEvent = { nativeEvent?: object } | object | null | undefined;
 
 // El flag se marca en el evento NATIVO del documento. Los handlers de React
 // reciben un evento sintético, así que hay que mirar `nativeEvent`.
 export function isEscapeHandled(e: MaybeHandledEvent): boolean {
-    const source = (e?.nativeEvent ?? e) as Record<string, unknown> | undefined;
-    return Boolean(source?.[ESCAPE_HANDLED_FLAG]);
+    if (!e) return false;
+    const source = 'nativeEvent' in e && e.nativeEvent ? e.nativeEvent : e;
+    return Boolean((source as Record<string, unknown>)[ESCAPE_HANDLED_FLAG]);
 }
 
 // Listener único compartido a nivel de documento (en vez de uno por capa

@@ -154,3 +154,75 @@ describe('isEscapeHandled', () => {
         expect(isEscapeHandled({ nativeEvent: {} })).toBe(false);
     });
 });
+
+// R3-001: prueba de integración con un handler onKeyDown REAL de React (evento
+// sintético delegado en la raíz). El listener de captura del documento debe
+// marcar el evento nativo ANTES de que React ejecute el onKeyDown del input.
+// R3-002: el handler recibe un React.KeyboardEvent tipado y se lo pasa tal cual
+// a isEscapeHandled, sin casts.
+interface ComposerProbeProps {
+    layerOpen: boolean;
+    onCloseLayer: () => void;
+    onComposerEscape: (handled: boolean) => void;
+}
+
+function ComposerProbe({ layerOpen, onCloseLayer, onComposerEscape }: ComposerProbeProps) {
+    useEscapeToClose(onCloseLayer, layerOpen);
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Escape') onComposerEscape(isEscapeHandled(e));
+    };
+    return <input data-testid="composer" onKeyDown={handleKeyDown} />;
+}
+
+describe('isEscapeHandled con un onKeyDown real de React', () => {
+    let root: Root;
+    let container: HTMLDivElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        root = createRoot(container);
+    });
+
+    afterEach(() => {
+        act(() => root.unmount());
+        container.remove();
+    });
+
+    function render(layerOpen: boolean, onCloseLayer: () => void, onComposerEscape: (h: boolean) => void) {
+        act(() => {
+            root.render(
+                <ComposerProbe layerOpen={layerOpen} onCloseLayer={onCloseLayer} onComposerEscape={onComposerEscape} />,
+            );
+        });
+        return container.querySelector('input') as HTMLInputElement;
+    }
+
+    function pressEscapeOn(target: HTMLElement) {
+        act(() => {
+            target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        });
+    }
+
+    it('con una capa abierta, el composer ve el Escape como ya manejado', () => {
+        const onCloseLayer = vi.fn();
+        const onComposerEscape = vi.fn();
+        const input = render(true, onCloseLayer, onComposerEscape);
+
+        pressEscapeOn(input);
+
+        expect(onCloseLayer).toHaveBeenCalledTimes(1);
+        expect(onComposerEscape).toHaveBeenCalledWith(true);
+    });
+
+    it('sin capas abiertas, el composer recibe el Escape como no manejado', () => {
+        const onCloseLayer = vi.fn();
+        const onComposerEscape = vi.fn();
+        const input = render(false, onCloseLayer, onComposerEscape);
+
+        pressEscapeOn(input);
+
+        expect(onCloseLayer).not.toHaveBeenCalled();
+        expect(onComposerEscape).toHaveBeenCalledWith(false);
+    });
+});
