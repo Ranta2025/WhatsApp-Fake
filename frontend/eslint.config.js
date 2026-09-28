@@ -2,7 +2,10 @@ import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
+
+const allowExportNames = ['useAuth', 'useDashboard', 'useMessaging', 'useGroupMessaging', 'useStatus']
 
 export default defineConfig([
   globalIgnores(['dist']),
@@ -29,12 +32,34 @@ export default defineConfig([
         caughtErrors: 'none',
       }],
       // Los contextos exportan su hook junto al Provider (patrón habitual).
-      'react-refresh/only-export-components': ['error', { allowExportNames: ['useAuth', 'useDashboard', 'useMessaging', 'useGroupMessaging', 'useStatus'] }],
+      'react-refresh/only-export-components': ['error', { allowExportNames }],
+    },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      ...tseslint.configs.recommended,
+      reactHooks.configs.flat.recommended,
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // Los contextos exportan su hook junto al Provider (patrón habitual).
+      'react-refresh/only-export-components': ['error', { allowExportNames }],
     },
   },
   {
     // Archivos de configuración que se ejecutan en Node
-    files: ['vite.config.js', 'scripts/**/*.{js,mjs}', 'eslint.config.js'],
+    files: ['vite.config.js', 'vite.config.ts', 'scripts/**/*.{js,mjs}', 'eslint.config.js'],
     languageOptions: { globals: globals.node },
   },
 ])
