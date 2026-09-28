@@ -1,5 +1,11 @@
+import type { JSX } from 'react';
+
+export interface FullScreenLoaderProps {
+    label?: string;
+}
+
 /** Pantalla de carga a pantalla completa con el logo de la app */
-export default function FullScreenLoader({ label = 'Cargando…' }) {
+export default function FullScreenLoader({ label = 'Cargando…' }: FullScreenLoaderProps): JSX.Element {
     return (
         <div className="h-full min-h-screen flex flex-col items-center justify-center gap-6 bg-slate-950 hero-surface" role="status" aria-live="polite">
             <div className="relative">

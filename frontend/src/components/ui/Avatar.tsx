@@ -1,6 +1,21 @@
 // Avatar reutilizable: foto o inicial sobre un degradado estable por nombre,
 // con indicador opcional de "en línea".
 
+import type { JSX } from 'react';
+
+export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';
+
+export interface AvatarProps {
+    /** URL de la foto de perfil; si falta, se muestra la inicial sobre un degradado. */
+    src?: string;
+    name?: string;
+    size?: AvatarSize;
+    online?: boolean;
+    /** Color del ring del indicador "en línea" (debe combinar con el fondo detrás del avatar). */
+    ringClass?: string;
+    className?: string;
+}
+
 const GRADIENTS = [
     'from-indigo-500 to-purple-500',
     'from-sky-500 to-indigo-500',
@@ -25,15 +40,16 @@ const DOT_SIZES = {
     xl: 'w-5 h-5',
 };
 
-const hash = (text) => {
+const hash = (text: string): number => {
     let h = 0;
     for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
     return Math.abs(h);
 };
 
-export default function Avatar({ src, name = '', size = 'md', online = false, ringClass = 'ring-slate-900', className = '' }) {
+export default function Avatar({ src, name = '', size = 'md', online = false, ringClass = 'ring-slate-900', className = '' }: AvatarProps): JSX.Element {
     const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
-    const gradient = GRADIENTS[hash(name || '?') % GRADIENTS.length];
+    // El módulo (%) de GRADIENTS.length siempre cae dentro del array.
+    const gradient = GRADIENTS[hash(name || '?') % GRADIENTS.length]!;
 
     return (
         <div className={`relative flex-shrink-0 ${SIZES[size]} ${className}`}>

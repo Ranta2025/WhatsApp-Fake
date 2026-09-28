@@ -1,8 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, JSX, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
 const VIEWPORT_MARGIN = 8;
+
+export interface PopoverProps {
+    open: boolean;
+    onClose: () => void;
+    /** Objeto ref (no el elemento ya resuelto); ver nota sobre `.current` más abajo. */
+    anchorRef: RefObject<HTMLElement | null>;
+    children: ReactNode;
+    align?: 'left' | 'right';
+    className?: string;
+}
 
 /**
  * Menú/popover reutilizable: se renderiza en un portal a document.body, en la
@@ -24,9 +35,9 @@ const VIEWPORT_MARGIN = 8;
  * Uso: <Popover open={isOpen} onClose={close} anchorRef={triggerRef}
  *        align="right">...</Popover>
  */
-export default function Popover({ open, onClose, anchorRef, children, align = 'left', className = '' }) {
-    const popoverRef = useRef(null);
-    const [style, setStyle] = useState(null);
+export default function Popover({ open, onClose, anchorRef, children, align = 'left', className = '' }: PopoverProps): JSX.Element | null {
+    const popoverRef = useRef<HTMLDivElement | null>(null);
+    const [style, setStyle] = useState<CSSProperties | null>(null);
     // "Ref siempre al día" para leer la última `onClose` desde los listeners
     // sin volver a suscribirlos; se actualiza en un efecto (nunca durante el
     // render, que la regla react-hooks/refs prohíbe).
@@ -85,9 +96,10 @@ export default function Popover({ open, onClose, anchorRef, children, align = 'l
     // Cerrar en click/tap fuera del popover y del disparador.
     useEffect(() => {
         if (!open) return undefined;
-        const handlePointerDown = (e) => {
-            if (popoverRef.current?.contains(e.target)) return;
-            if (anchorRef?.current?.contains(e.target)) return;
+        const handlePointerDown = (e: PointerEvent) => {
+            const target = e.target as Node;
+            if (popoverRef.current?.contains(target)) return;
+            if (anchorRef?.current?.contains(target)) return;
             onCloseRef.current?.();
         };
         document.addEventListener('pointerdown', handlePointerDown, true);

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { act } from 'react';
+import type { RefObject } from 'react';
 import { createRoot } from 'react-dom/client';
 import Popover from './Popover';
 
@@ -13,7 +14,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 describe('Popover', () => {
     it('se cierra a sí mismo si anchorRef.current es null mientras open=true', () => {
         const onClose = vi.fn();
-        const anchorRef = { current: null };
+        const anchorRef: RefObject<HTMLElement | null> = { current: null };
         const container = document.createElement('div');
         document.body.appendChild(container);
         const root = createRoot(container);
