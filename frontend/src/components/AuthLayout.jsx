@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
+import { BoltIcon, PhoneIcon, LockIcon } from './ui/icons';
 
 const FEATURES = [
-    { icon: '⚡', title: 'Tiempo real', text: 'Mensajes, confirmaciones de lectura y "escribiendo…" al instante.' },
-    { icon: '📞', title: 'Voz y video', text: 'Llamadas y videollamadas con un toque.' },
-    { icon: '🔒', title: 'Privado', text: 'Sesiones seguras y verificación por correo.' },
+    { Icon: BoltIcon, title: 'Tiempo real', text: 'Mensajes, confirmaciones de lectura y "escribiendo…" al instante.' },
+    { Icon: PhoneIcon, title: 'Voz y video', text: 'Llamadas y videollamadas con un toque.' },
+    { Icon: LockIcon, title: 'Privado', text: 'Sesiones seguras y verificación por correo.' },
 ];
 
 /** Vista previa decorativa de una conversación (panel de marca) */
@@ -52,7 +53,9 @@ export default function AuthLayout({ children, title, subtitle, footer, backTo =
                         <ul className="space-y-4">
                             {FEATURES.map(f => (
                                 <li key={f.title} className="flex gap-3">
-                                    <span className="w-9 h-9 rounded-xl bg-white/[0.05] border border-white/[0.06] flex items-center justify-center flex-shrink-0">{f.icon}</span>
+                                    <span className="w-9 h-9 rounded-xl bg-white/[0.05] border border-white/[0.06] flex items-center justify-center flex-shrink-0 text-indigo-300">
+                                        <f.Icon />
+                                    </span>
                                     <div>
                                         <div className="font-semibold text-sm">{f.title}</div>
                                         <div className="text-sm text-slate-400">{f.text}</div>

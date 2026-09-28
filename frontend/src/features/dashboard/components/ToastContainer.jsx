@@ -230,7 +230,7 @@ const ToastContainer = () => {
     };
 
     return (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2.5 pointer-events-none w-[400px] max-w-[calc(100vw-2rem)]">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-toast flex flex-col gap-2.5 pointer-events-none w-[400px] max-w-[calc(100vw-2rem)]">
             {visibleToasts.map(notif => (
                 <InAppNotification
                     key={notif.id}

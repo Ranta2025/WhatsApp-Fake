@@ -159,7 +159,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
     }, [roomID, userID, userName, callType, onCallEnd]);
 
     return (
-        <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col overflow-hidden animate-fade-in">
+        <div className="fixed inset-0 z-call bg-slate-950 flex flex-col overflow-hidden animate-fade-in">
             {/* Capa de estado / Overlay */}
             {callStatus === 'connecting' && (
                 <div className="absolute inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center gap-6">

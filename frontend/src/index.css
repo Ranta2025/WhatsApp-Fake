@@ -52,6 +52,31 @@
   --shadow-glow: 0 0 0 1px rgb(19 181 132 / 0.25), 0 10px 40px -10px rgb(19 181 132 / 0.45);
   --radius-bubble: 1.125rem;
 
+  /* Escala de z-index ─────────────────────────────────────────────────────
+     Namespace `--z-index-*` de Tailwind 4: cada token de abajo genera
+     automáticamente una utilidad `z-<nombre>` (z-sticky, z-modal, etc.),
+     reemplazando los valores sueltos (z-50…z-100000, z-9998/9999/99999) que
+     había repartidos por los componentes. Reglas de convivencia:
+       - dropdown (50) va POR ENCIMA de modal (40) a propósito: los menús
+         contextuales portados (Popover) a veces se abren dentro de un panel
+         tipo modal (p. ej. el menú de un miembro dentro del panel de info
+         de grupo) y deben seguir visibles por encima de ese panel.
+       - call (70) y toast (60) quedan por encima de cualquier modal/menú:
+         una llamada entrante o un toast deben verse aunque haya un modal
+         abierto debajo.
+       - status (80) es la capa del visor/composer de Estados: por encima de
+         todo excepto el loader de pantalla completa (90), que es lo último
+         que se oculta cuando la app arranca.
+     No se tocan los z-1/z-10/z-20 locales dentro de un mismo componente
+     (p. ej. MessageList.jsx) salvo que causen un bug real. */
+  --z-index-sticky: 30;
+  --z-index-modal: 40;
+  --z-index-dropdown: 50;
+  --z-index-toast: 60;
+  --z-index-call: 70;
+  --z-index-status: 80;
+  --z-index-loader: 90;
+
   --animate-fade-in: fade-in 0.35s ease-out;
   --animate-slide-up: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-loading-bar: loading-bar 1.5s ease-in-out infinite;

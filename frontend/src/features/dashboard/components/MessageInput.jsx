@@ -18,6 +18,7 @@ const MessageInput = () => {
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
+    const attachButtonRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
@@ -125,6 +126,7 @@ const MessageInput = () => {
             <div className="px-3 py-2.5 sm:px-4 sm:py-3 flex gap-2 items-end relative">
                 <div className="relative">
                     <button
+                        ref={attachButtonRef}
                         onClick={() => setShowAttachMenu(!showAttachMenu)}
                         className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] transition-all"
                         aria-label="Adjuntar archivo"
@@ -134,7 +136,8 @@ const MessageInput = () => {
                         </svg>
                     </button>
                     {showAttachMenu && (
-                        <MediaUploadMenu 
+                        <MediaUploadMenu
+                            anchorRef={attachButtonRef}
                             onUploadSuccess={(url, type) => { handleMediaUploadSuccess(url, type); setShowAttachMenu(false); }}
                             onUploadError={(err) => { addToast({ type: 'error', message: String(err) }); setShowAttachMenu(false); }}
                             onClose={() => setShowAttachMenu(false)}

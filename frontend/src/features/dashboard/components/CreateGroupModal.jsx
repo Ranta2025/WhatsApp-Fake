@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { createGroup } from '../../../api/groupApi';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 /**
  * Modal to create a new group chat.
@@ -75,12 +76,14 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
         }
     };
 
+    useEscapeToClose(handleClose, isOpen);
+
     if (!isOpen) return null;
 
     return (
         <div
-            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={handleClose}
+            className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
         >
             <div
                 className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]"

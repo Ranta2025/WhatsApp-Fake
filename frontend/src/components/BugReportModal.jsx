@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import api from '../api/axios';
+import { WarningIcon } from './ui/icons';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 
 export default function BugReportModal({ isOpen, onClose }) {
     const [formData, setFormData] = useState({
@@ -83,15 +85,20 @@ export default function BugReportModal({ isOpen, onClose }) {
         }
     };
 
+    useEscapeToClose(onClose, isOpen);
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div
+            className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
             <div className="bg-gradient-to-br from-gray-900 to-purple-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-purple-500/30">
                 {/* Header */}
                 <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex justify-between items-center rounded-t-2xl">
                     <div className="flex items-center gap-2">
-                        <span className="text-2xl">🐛</span>
+                        <WarningIcon className="w-6 h-6 text-white" />
                         <h2 className="text-2xl font-bold text-white">Reportar un Bug</h2>
                     </div>
                     <button

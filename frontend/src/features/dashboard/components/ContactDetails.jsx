@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
     const { 
@@ -26,6 +27,8 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
             }
         }
     }, []);
+
+    useEscapeToClose(onClose, isOpen);
 
     if (!isOpen || !selected) return null;
 
@@ -79,7 +82,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
     const displayName = selected.ContactName || selected.Username;
 
     return (
-        <div className="fixed inset-0 lg:static lg:w-80 bg-slate-900/95 lg:border-l border-white/10 flex flex-col h-full z-50 lg:z-40 shadow-2xl transition-all duration-300">
+        <div className="fixed inset-0 lg:static lg:w-80 bg-slate-900/95 lg:border-l border-white/10 flex flex-col h-full z-modal shadow-2xl transition-all duration-300">
             <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-white/5">
                 <button 
                     onClick={onClose}

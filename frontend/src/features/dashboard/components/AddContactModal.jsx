@@ -4,6 +4,7 @@ import { useDashboard } from '../context/DashboardContext';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { validatePhone } from '../../../utils/phoneValidation';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = '' }) => {
     const { setContacts, setSelected, setAllChatGroups, setSidebarView, setSidebarOpen, fetchContacts } = useDashboard();
@@ -35,6 +36,8 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
             setPhoneDialCode('53');
         }
     }, [isOpen, initialNumber, initialName]);
+
+    useEscapeToClose(onClose, isOpen);
 
     if (!isOpen) return null;
 
@@ -91,7 +94,10 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+            className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-modal p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
             <div className="bg-slate-800 rounded-2xl w-full max-w-md overflow-visible shadow-2xl border border-slate-700/50">
                 <div className="p-6 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/50">
                     <h2 className="text-xl font-semibold text-slate-100">Añadir Contacto</h2>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useDashboard } from '../context/DashboardContext';
+import { BellIcon } from '../../../components/ui/icons';
 
 const NotificationBanner = () => {
     const { notifPermission, setNotifPermission, requestNotificationPermission } = useDashboard();
@@ -7,8 +8,8 @@ const NotificationBanner = () => {
     if (notifPermission !== 'default') return null;
 
     return (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-sm">
-            <span className="text-xl">🔔</span>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-toast bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-sm">
+            <BellIcon className="w-6 h-6 flex-shrink-0" />
             <div className="flex-1 text-sm">
                 <div className="font-semibold">Activa las notificaciones</div>
                 <div className="text-indigo-200 text-xs mt-0.5">Recibe mensajes aunque no estés en la app</div>

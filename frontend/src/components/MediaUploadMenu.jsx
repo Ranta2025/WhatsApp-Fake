@@ -1,17 +1,22 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../api/axios';
+import Popover from './ui/Popover';
 
 /**
  * MediaUploadMenu Component
  * Proporciona una interfaz para capturar cámara, fotos, videos y documentos.
  * Maneja permisos de cámara cross-browser con fallbacks apropiados.
- * 
+ *
+ * El menú (no la captura de cámara a pantalla completa) se porta con Popover:
+ * se cierra con click fuera / Escape, algo que antes no ocurría.
+ *
  * @param {Object} props
  * @param {Function} props.onUploadSuccess - Callback al subir exitosamente un archivo
  * @param {Function} props.onUploadError - Callback al fallar una subida
  * @param {Function} props.onClose - Callback para cerrar el menú
+ * @param {import('react').RefObject<HTMLElement>} props.anchorRef - Ref del botón disparador ("+"), para posicionar el Popover
  */
-export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClose }) {
+export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClose, anchorRef }) {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [showCameraPreview, setShowCameraPreview] = useState(false);
@@ -279,9 +284,10 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
     };
 
     // Si se muestra el preview de la cámara, renderizar la interfaz de captura
+    // (a pantalla completa: no va dentro del Popover anclado al botón "+").
     if (showCameraPreview) {
         return (
-            <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center">
+            <div className="fixed inset-0 z-modal bg-black flex flex-col items-center justify-center">
                 <canvas ref={canvasRef} className="hidden" />
                 <div className="relative w-full max-w-lg flex-1 flex items-center justify-center">
                     <video 
@@ -316,8 +322,13 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
     }
 
     return (
-        <div className="absolute bottom-full mb-2 left-0 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 z-50 min-w-[200px] animate-slide-up origin-bottom-left">
-            <input 
+        <Popover
+            open
+            onClose={onClose}
+            anchorRef={anchorRef}
+            className="bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 min-w-[200px] animate-slide-up origin-bottom-left"
+        >
+            <input
                 type="file" 
                 ref={fileInputRef} 
                 className="hidden" 
@@ -386,6 +397,6 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                     </button>
                 </>
             )}
-        </div>
+        </Popover>
     );
 }

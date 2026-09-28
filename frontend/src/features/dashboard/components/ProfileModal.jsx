@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
 const ProfileModal = ({ isOpen, onClose }) => {
     const { myAvatar, setMyAvatar, globalWallpaper, setGlobalWallpaper, fetchProfile } = useDashboard();
@@ -18,6 +19,8 @@ const ProfileModal = ({ isOpen, onClose }) => {
     useEffect(() => {
         if (user?.username) setNewUsername(user.username);
     }, [user]);
+
+    useEscapeToClose(onClose, isOpen);
 
     if (!isOpen) return null;
 
@@ -125,7 +128,10 @@ const ProfileModal = ({ isOpen, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+            className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-modal p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
             <div className="bg-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-700/50">
                 <div className="p-6 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/50">
                     <h2 className="text-xl font-semibold text-slate-100">Editar Perfil</h2>

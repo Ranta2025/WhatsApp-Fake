@@ -7,6 +7,7 @@ import AddContactModal from './AddContactModal';
 import ForwardMessageModal from './ForwardMessageModal';
 import api from '../../../api/axios';
 import Avatar from '../../../components/ui/Avatar';
+import { ChatIcon, PhoneIcon as PhoneEmojiIcon, GroupIcon } from '../../../components/ui/icons';
 import { formatLastSeen } from '../../../utils/format';
 
 // Inner component: must live inside MessagingProvider to access useMessaging()
@@ -51,13 +52,15 @@ const WelcomePane = ({ isConnected }) => (
             </p>
             <div className="mt-10 grid grid-cols-3 gap-3 max-w-lg w-full">
                 {[
-                    ['💬', 'Chats en tiempo real'],
-                    ['📞', 'Voz y videollamadas'],
-                    ['👥', 'Grupos'],
-                ].map(([emoji, label]) => (
-                    <div key={label} className="glass rounded-2xl px-3 py-4 text-sm text-slate-300">
-                        <div className="text-2xl mb-1.5">{emoji}</div>
-                        {label}
+                    { Icon: ChatIcon, label: 'Chats en tiempo real' },
+                    { Icon: PhoneEmojiIcon, label: 'Voz y videollamadas' },
+                    { Icon: GroupIcon, label: 'Grupos' },
+                ].map((f) => (
+                    <div key={f.label} className="glass rounded-2xl px-3 py-4 text-sm text-slate-300">
+                        <div className="mb-1.5 text-indigo-300 flex justify-center">
+                            <f.Icon className="w-6 h-6" />
+                        </div>
+                        {f.label}
                     </div>
                 ))}
             </div>

@@ -2,14 +2,18 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import BugReportModal from '../components/BugReportModal';
 import { useAuth } from '../context/AuthContext';
+import {
+    ChatIcon, PhoneIcon, GroupIcon, MicIcon, LockIcon, BellIcon,
+    ArrowTrendingUpIcon, SparklesIcon, MapPinIcon, CheckCircleIcon,
+} from '../components/ui/icons';
 
 const FEATURES = [
-    { icon: '💬', title: 'Chat en tiempo real', description: 'Mensajes instantáneos con confirmaciones de entrega y lectura, y el indicador de "escribiendo…".' },
-    { icon: '📞', title: 'Llamadas y video', description: 'Llama o haz videollamadas a tus contactos directamente desde el chat.' },
-    { icon: '👥', title: 'Grupos', description: 'Crea grupos, añade a tus contactos y conversa con todos a la vez.' },
-    { icon: '🎙️', title: 'Notas de voz y archivos', description: 'Envía audios, fotos, videos y documentos en segundos.' },
-    { icon: '🔒', title: 'Seguro', description: 'Sesiones protegidas, contraseñas cifradas y verificación por correo.' },
-    { icon: '🔔', title: 'Notificaciones', description: 'Entérate de cada mensaje aunque tengas la app en segundo plano.' },
+    { Icon: ChatIcon, title: 'Chat en tiempo real', description: 'Mensajes instantáneos con confirmaciones de entrega y lectura, y el indicador de "escribiendo…".' },
+    { Icon: PhoneIcon, title: 'Llamadas y video', description: 'Llama o haz videollamadas a tus contactos directamente desde el chat.' },
+    { Icon: GroupIcon, title: 'Grupos', description: 'Crea grupos, añade a tus contactos y conversa con todos a la vez.' },
+    { Icon: MicIcon, title: 'Notas de voz y archivos', description: 'Envía audios, fotos, videos y documentos en segundos.' },
+    { Icon: LockIcon, title: 'Seguro', description: 'Sesiones protegidas, contraseñas cifradas y verificación por correo.' },
+    { Icon: BellIcon, title: 'Notificaciones', description: 'Entérate de cada mensaje aunque tengas la app en segundo plano.' },
 ];
 
 const STEPS = [
@@ -25,15 +29,18 @@ const AppMockup = () => (
         <div className="relative glass rounded-3xl overflow-hidden shadow-2xl shadow-black/50 flex h-[340px] sm:h-[380px]">
             <div className="hidden sm:flex flex-col w-44 border-r border-white/[0.06] bg-slate-900/60 p-3 gap-1.5">
                 {[
-                    ['Laura', 'from-amber-500 to-rose-500', '¿Nos vemos a las 8?', true],
-                    ['Equipo', 'from-indigo-500 to-purple-500', 'Ana: ¡listo! 🚀', false],
-                    ['Marcos', 'from-sky-500 to-indigo-500', 'Nota de voz', false],
-                ].map(([name, gradient, preview, active]) => (
+                    ['Laura', 'from-amber-500 to-rose-500', '¿Nos vemos a las 8?', null, true],
+                    ['Equipo', 'from-indigo-500 to-purple-500', 'Ana: ¡listo!', ArrowTrendingUpIcon, false],
+                    ['Marcos', 'from-sky-500 to-indigo-500', 'Nota de voz', null, false],
+                ].map(([name, gradient, preview, PreviewIcon, active]) => (
                     <div key={name} className={`flex items-center gap-2 rounded-xl p-2 ${active ? 'bg-indigo-500/10 ring-1 ring-indigo-500/20' : ''}`}>
                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-xs font-semibold`}>{name[0]}</div>
                         <div className="min-w-0">
                             <div className="text-xs font-semibold truncate">{name}</div>
-                            <div className="text-[10px] text-slate-400 truncate">{preview}</div>
+                            <div className="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                                {preview}
+                                {PreviewIcon && <PreviewIcon className="w-2.5 h-2.5 flex-shrink-0" />}
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -47,10 +54,10 @@ const AppMockup = () => (
                     </div>
                 </div>
                 <div className="flex-1 p-4 space-y-2.5 text-sm">
-                    <div className="flex justify-start"><div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%]">¡Hola! ¿Nos vemos a las 8? 🎉</div></div>
-                    <div className="flex justify-end"><div className="bg-indigo-700 rounded-2xl rounded-br-md px-3.5 py-2 max-w-[80%]">¡Claro! Te llamo al salir 📞</div></div>
-                    <div className="flex justify-start"><div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%]">Perfecto, te mando la ubicación 📍</div></div>
-                    <div className="flex justify-end"><div className="bg-indigo-700 rounded-2xl rounded-br-md px-3.5 py-2">👍 <span className="text-[10px] text-white/60 ml-1">✓✓</span></div></div>
+                    <div className="flex justify-start"><div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%] flex items-center gap-1.5">¡Hola! ¿Nos vemos a las 8? <SparklesIcon className="w-3.5 h-3.5 flex-shrink-0 text-amber-300" /></div></div>
+                    <div className="flex justify-end"><div className="bg-indigo-700 rounded-2xl rounded-br-md px-3.5 py-2 max-w-[80%] flex items-center gap-1.5">¡Claro! Te llamo al salir <PhoneIcon className="w-3.5 h-3.5 flex-shrink-0" /></div></div>
+                    <div className="flex justify-start"><div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%] flex items-center gap-1.5">Perfecto, te mando la ubicación <MapPinIcon className="w-3.5 h-3.5 flex-shrink-0 text-rose-300" /></div></div>
+                    <div className="flex justify-end"><div className="bg-indigo-700 rounded-2xl rounded-br-md px-3.5 py-2 flex items-center gap-1"><CheckCircleIcon className="w-4 h-4 flex-shrink-0" /> <span className="text-[10px] text-white/60 ml-1">✓✓</span></div></div>
                 </div>
                 <div className="p-3 border-t border-white/[0.06] bg-slate-900/60 flex items-center gap-2">
                     <div className="flex-1 h-9 rounded-xl bg-slate-800/80 px-3 flex items-center text-xs text-slate-500">Escribe un mensaje…</div>
@@ -141,7 +148,9 @@ export default function Welcome() {
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {FEATURES.map(f => (
                         <div key={f.title} className="glass rounded-2xl p-6 hover:border-indigo-500/30 hover:-translate-y-0.5 transition-all">
-                            <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-xl mb-4">{f.icon}</div>
+                            <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-300 mb-4">
+                                <f.Icon className="w-6 h-6" />
+                            </div>
                             <h3 className="font-semibold text-lg mb-1.5">{f.title}</h3>
                             <p className="text-sm text-slate-400 leading-relaxed">{f.description}</p>
                         </div>

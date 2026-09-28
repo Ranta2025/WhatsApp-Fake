@@ -3,6 +3,8 @@ import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import { formatDaySeparator, formatTime } from '../../../utils/format';
 import AudioPlayer from '../../../components/AudioPlayer';
+import Popover from '../../../components/ui/Popover';
+import { useRefMap } from '../../../hooks/useRefMap';
 
 /**
  * MessageList Component
@@ -54,6 +56,9 @@ const MessageList = () => {
     } = useMessaging();
 
     const messagesContainerRef = useRef(null);
+    // Disparadores del menú de cada mensaje, para el Popover portado (ver T4:
+    // R2 — el menú ya no depende del hover del padre para mantenerse visible).
+    const getMenuTriggerRef = useRefMap();
 
     // Scroll al final al abrir un chat o cuando llega un mensaje nuevo a ESTE
     // chat (antes saltaba con cualquier cambio en cualquier conversación).
@@ -261,9 +266,14 @@ const MessageList = () => {
                                     className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 animate-slide-up`}
                                 >
                                     <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`}>
-                                        {/* Menú de opciones contextual */}
-                                        <div className={`absolute top-0 ${isMine ? '-left-10' : '-right-10'} opacity-0 group-hover/bubble:opacity-100 transition-opacity z-20`}>
-                                            <button 
+                                        {/* Disparador del menú: revelado con hover como antes, pero ya NO
+                                            envuelve al menú (ver T4: R2 — antes, al dejar de hacer hover, todo
+                                            el contenedor (disparador + menú abierto) se volvía invisible por
+                                            CSS aunque el estado siguiera "abierto"). También queda visible
+                                            si el menú está abierto, o con foco de teclado (accesible/táctil). */}
+                                        <div className={`absolute top-0 ${isMine ? '-left-10' : '-right-10'} transition-opacity z-20 ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'}`}>
+                                            <button
+                                                ref={(el) => { getMenuTriggerRef(m.MessageID).current = el; }}
                                                 onClick={() => setMessageMenuOpen(isMenuOpen ? null : m.MessageID)}
                                                 className="p-1.5 glass rounded-full text-slate-400 hover:text-white transition-all shadow-lg"
                                                 aria-label="Opciones"
@@ -272,36 +282,43 @@ const MessageList = () => {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                                 </svg>
                                             </button>
-                                            
-                                            {isMenuOpen && (
-                                                <div className={`absolute ${isMine ? 'left-0' : 'right-0'} mt-2 w-48 p-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in origin-top-left`}>
-                                                    <button onClick={() => handleReplyToMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                                                        Responder
-                                                    </button>
-                                                    <button onClick={() => handleForwardMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                                                        Reenviar
-                                                    </button>
-                                                    {isMine && (
-                                                        <>
-                                                            <button onClick={() => handleEditMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                                                Editar
-                                                            </button>
-                                                            <button onClick={() => handleDeleteMessage(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-2.5">
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                                Eliminar para todos
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    <button onClick={() => handleDeleteMessageForMe(m)} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                        Eliminar para mí
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
+
+                                        {/* Menú de opciones contextual — portado (Popover): se cierra al
+                                            hacer click fuera o con Escape, y ya no depende del hover del
+                                            disparador para seguir visible. */}
+                                        <Popover
+                                            open={isMenuOpen}
+                                            onClose={() => setMessageMenuOpen(null)}
+                                            anchorRef={getMenuTriggerRef(m.MessageID)}
+                                            align={isMine ? 'left' : 'right'}
+                                            className="w-48 p-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
+                                        >
+                                            <button onClick={() => { handleReplyToMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                                Responder
+                                            </button>
+                                            <button onClick={() => { handleForwardMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                                                Reenviar
+                                            </button>
+                                            {isMine && (
+                                                <>
+                                                    <button onClick={() => { handleEditMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                        Editar
+                                                    </button>
+                                                    <button onClick={() => { handleDeleteMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-2.5">
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        Eliminar para todos
+                                                    </button>
+                                                </>
+                                            )}
+                                            <button onClick={() => { handleDeleteMessageForMe(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                Eliminar para mí
+                                            </button>
+                                        </Popover>
 
                                         {/* Burbuja de mensaje */}
                                         <div className={`

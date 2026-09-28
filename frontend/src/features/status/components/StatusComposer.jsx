@@ -164,7 +164,7 @@ export default function StatusComposer() {
             role="dialog"
             aria-modal="true"
             aria-label="Crear estado"
-            className="fixed inset-0 z-[100000] bg-slate-950 flex flex-col outline-none animate-fade-in"
+            className="fixed inset-0 z-status bg-slate-950 flex flex-col outline-none animate-fade-in"
         >
             {/* Cabecera */}
             <header className="flex items-center justify-between px-4 py-3 flex-shrink-0">

@@ -3,6 +3,9 @@ import { useDashboard } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
+import Popover from '../../../components/ui/Popover';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { useRefMap } from '../../../hooks/useRefMap';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -14,16 +17,7 @@ const formatTime = (iso) => {
 // ── GroupMessageBubble ────────────────────────────────────────────────────────
 
 const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen }) => {
-    const menuRef = useRef(null);
-
-    // Close context menu when clicking outside
-    useEffect(() => {
-        const handler = (e) => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(null);
-        };
-        if (menuOpen) document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [menuOpen, setMenuOpen]);
+    const triggerRef = useRef(null);
 
     const renderMedia = () => {
         if (!msg.MediaType) return null;
@@ -100,11 +94,13 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
                         <span>{formatTime(msg.Time)}</span>
                     </div>
 
-                    {/* Context menu button (hover) */}
+                    {/* Context menu button (hover; se mantiene visible mientras el menú está abierto o con foco por teclado) */}
                     <button
+                        ref={triggerRef}
                         onClick={(e) => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : msg.MessageID); }}
                         className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'}
-                            px-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-white`}
+                            px-1 transition-opacity text-slate-400 hover:text-white focus-visible:opacity-100
+                            ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         aria-label="Opciones"
                     >
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -113,53 +109,55 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
                     </button>
                 </div>
 
-                {/* Context menu */}
-                {isMenuOpen && (
-                    <div
-                        ref={menuRef}
-                        className={`absolute z-50 mt-1 ${isMine ? 'right-0' : 'left-0'} top-full bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]`}
-                    >
-                        {/* Reply — always available */}
-                        <button onClick={() => { onReply(msg); setMenuOpen(null); }}
+                {/* Context menu — portado (Popover) para no quedar recortado por el
+                    overflow-y-auto de la lista de mensajes */}
+                <Popover
+                    open={isMenuOpen}
+                    onClose={() => setMenuOpen(null)}
+                    anchorRef={triggerRef}
+                    align={isMine ? 'right' : 'left'}
+                    className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]"
+                >
+                    {/* Reply — always available */}
+                    <button onClick={() => { onReply(msg); setMenuOpen(null); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Responder
+                    </button>
+
+                    {/* Edit — only my messages */}
+                    {isMine && (
+                        <button onClick={() => { onEdit(msg); setMenuOpen(null); }}
                                 className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
-                            Responder
+                            Editar
                         </button>
+                    )}
 
-                        {/* Edit — only my messages */}
-                        {isMine && (
-                            <button onClick={() => { onEdit(msg); setMenuOpen(null); }}
-                                    className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                Editar
-                            </button>
-                        )}
-
-                        {/* Delete for everyone — only my messages */}
-                        {isMine && (
-                            <button onClick={() => { onDelete(msg); setMenuOpen(null); }}
-                                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                Eliminar para todos
-                            </button>
-                        )}
-
-                        {/* Delete for me — always available */}
-                        <button onClick={() => { onDeleteForMe(msg); }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-white/5 flex items-center gap-2">
+                    {/* Delete for everyone — only my messages */}
+                    {isMine && (
+                        <button onClick={() => { onDelete(msg); setMenuOpen(null); }}
+                                className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
-                            Eliminar para mí
+                            Eliminar para todos
                         </button>
-                    </div>
-                )}
+                    )}
+
+                    {/* Delete for me — always available */}
+                    <button onClick={() => { onDeleteForMe(msg); setMenuOpen(null); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-white/5 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        </svg>
+                        Eliminar para mí
+                    </button>
+                </Popover>
             </div>
         </div>
     );
@@ -387,11 +385,13 @@ const AddMembersModal = ({ isOpen, onClose, group }) => {
         }
     };
 
+    useEscapeToClose(onClose, isOpen);
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-             onClick={onClose}>
+        <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col"
                  onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-4 border-b border-white/5">
@@ -466,19 +466,9 @@ const GroupChatWindowInner = () => {
     const [addContactOpen, setAddContactOpen]     = useState(false);
     const [addContactTarget, setAddContactTarget] = useState({ number: '', username: '' });
     const optionsRef                               = useRef(null);
-    const memberMenuRef                            = useRef(null);
     const avatarInputRef                           = useRef(null);
-    const avatarMenuRef                            = useRef(null);
-
-    // Close avatar menu on outside click
-    useEffect(() => {
-        if (!showAvatarMenu) return;
-        const handler = (e) => {
-            if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target)) setShowAvatarMenu(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [showAvatarMenu]);
+    const avatarTriggerRef                         = useRef(null); // disparador del menú de avatar (Popover)
+    const getMemberTriggerRef                      = useRefMap();  // disparador del menú de cada miembro, por telephon (Popover)
 
     // Per-group wallpapers from localStorage
     const [groupWallpapers, setGroupWallpapers] = useState(() => {
@@ -523,16 +513,6 @@ const GroupChatWindowInner = () => {
         localStorage.setItem('group_wallpapers', JSON.stringify(newWps));
         window.dispatchEvent(new CustomEvent('group-wallpaper-changed', { detail: newWps }));
     };
-
-    // Close member popup when clicking outside
-    useEffect(() => {
-        if (!memberMenuOpen) return;
-        const handler = (e) => {
-            if (memberMenuRef.current && !memberMenuRef.current.contains(e.target)) setMemberMenuOpen(null);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [memberMenuOpen]);
 
     // Close options dropdown when clicking outside
     useEffect(() => {
@@ -640,6 +620,15 @@ const GroupChatWindowInner = () => {
         }
     }, [selectedGroup?.ID, selectedGroup?.Members, fetchGroupDetail, fetchGroupMessages]);
 
+    // Escape cierra, en orden, lo que esté "más arriba": el panel de info del
+    // grupo, o los diálogos de confirmación / el visor de avatar (cada
+    // useEscapeToClose se apila y solo la capa abierta más reciente reacciona).
+    useEscapeToClose(() => setShowMembers(false), showMembers);
+    useEscapeToClose(() => setConfirmLeave(false), confirmLeave);
+    useEscapeToClose(() => setConfirmDelete(false), confirmDelete);
+    useEscapeToClose(() => setConfirmClear(false), confirmClear);
+    useEscapeToClose(() => setViewAvatarOpen(false), viewAvatarOpen);
+
     if (!selectedGroup) return null;
 
     return (
@@ -687,7 +676,7 @@ const GroupChatWindowInner = () => {
                             </svg>
                         </button>
                         {showOptions && (
-                            <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[185px] z-50">
+                            <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[185px] z-dropdown">
                                 {selectedGroup?.UserRole !== 'left' && (
                                     <button onClick={() => { setConfirmLeave(true); setShowOptions(false); }}
                                             className="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2">
@@ -722,11 +711,11 @@ const GroupChatWindowInner = () => {
             {showMembers && (
                 <>
                     {/* Backdrop */}
-                    <div className="absolute inset-0 z-[100] bg-black/40"
+                    <div className="absolute inset-0 z-modal bg-black/40"
                          onClick={() => setShowMembers(false)} />
 
                     {/* Panel */}
-                    <div className="absolute top-0 right-0 h-full w-full sm:w-96 z-[101] bg-slate-900 flex flex-col shadow-2xl"
+                    <div className="absolute top-0 right-0 h-full w-full sm:w-96 z-modal bg-slate-900 flex flex-col shadow-2xl"
                          style={{ animation: 'slideInRight 0.22s ease' }}>
 
                         {/* Panel header */}
@@ -744,8 +733,9 @@ const GroupChatWindowInner = () => {
                             {/* Group avatar + name */}
                             <div className="flex flex-col items-center py-7 px-4 bg-slate-900">
                                 {/* Clickable avatar — tap to open menu */}
-                                <div className="relative group/avatar mb-4" ref={avatarMenuRef}>
+                                <div className="relative group/avatar mb-4">
                                     <button
+                                        ref={avatarTriggerRef}
                                         onClick={() => setShowAvatarMenu(v => !v)}
                                         className="relative w-24 h-24 rounded-full overflow-hidden shadow-xl focus:outline-none"
                                         disabled={uploadingAvatar}>
@@ -766,32 +756,36 @@ const GroupChatWindowInner = () => {
                                         </div>
                                     </button>
 
-                                    {/* Avatar action menu */}
-                                    {showAvatarMenu && (
-                                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-44 bg-slate-800 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-fade-in">
-                                            {selectedGroup.AvatarUrl && (
-                                                <button
-                                                    onClick={() => { setViewAvatarOpen(true); setShowAvatarMenu(false); }}
-                                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors">
-                                                    <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                    </svg>
-                                                    Ver foto
-                                                </button>
-                                            )}
-                                            {selectedGroup?.UserRole !== 'left' && (
-                                                <label className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors cursor-pointer">
-                                                    <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                    {uploadingAvatar ? 'Subiendo...' : 'Cambiar foto'}
-                                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { setShowAvatarMenu(false); handleGroupAvatarChange(e); }} disabled={uploadingAvatar} />
-                                                </label>
-                                            )}
-                                        </div>
-                                    )}
+                                    {/* Avatar action menu — portado (Popover) para no quedar recortado
+                                        por el overflow-y-auto del panel de info del grupo */}
+                                    <Popover
+                                        open={showAvatarMenu}
+                                        onClose={() => setShowAvatarMenu(false)}
+                                        anchorRef={avatarTriggerRef}
+                                        className="w-44 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
+                                    >
+                                        {selectedGroup.AvatarUrl && (
+                                            <button
+                                                onClick={() => { setViewAvatarOpen(true); setShowAvatarMenu(false); }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors">
+                                                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                                Ver foto
+                                            </button>
+                                        )}
+                                        {selectedGroup?.UserRole !== 'left' && (
+                                            <label className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors cursor-pointer">
+                                                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                                {uploadingAvatar ? 'Subiendo...' : 'Cambiar foto'}
+                                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { setShowAvatarMenu(false); handleGroupAvatarChange(e); }} disabled={uploadingAvatar} />
+                                            </label>
+                                        )}
+                                    </Popover>
 
                                     {/* Hidden file input (kept for ref compatibility) */}
                                     <input
@@ -882,8 +876,9 @@ const GroupChatWindowInner = () => {
                                         const isContact  = contacts.some(c => c.Number === m.Telephon && c.Status === 'accepted');
                                         const displayName = isSelf ? 'Tú' : (m.ContactName || ('~' + m.Username));
                                         return (
-                                            <div key={m.Telephon} className="relative" ref={isOpen ? memberMenuRef : null}>
+                                            <div key={m.Telephon} className="relative">
                                                 <div
+                                                    ref={(el) => { getMemberTriggerRef(m.Telephon).current = el; }}
                                                     onClick={() => !isSelf && setMemberMenuOpen(isOpen ? null : m.Telephon)}
                                                     className={`flex items-center gap-3 px-4 py-3 transition-colors ${!isSelf ? 'hover:bg-white/5 cursor-pointer' : ''}`}>
                                                     {/* Avatar */}
@@ -907,28 +902,34 @@ const GroupChatWindowInner = () => {
                                                         <div className="text-xs text-slate-500 truncate mt-0.5">{m.Telephon}</div>
                                                     </div>
                                                 </div>
-                                                {isOpen && (
-                                                    <div className="absolute left-4 top-full mt-0.5 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[190px] z-[200]">
+                                                {/* Menú de miembro — portado (Popover) para no quedar recortado
+                                                    por el overflow-y-auto del panel de info del grupo; se abre
+                                                    dentro de ese panel, por eso dropdown > modal en la escala. */}
+                                                <Popover
+                                                    open={isOpen}
+                                                    onClose={() => setMemberMenuOpen(null)}
+                                                    anchorRef={getMemberTriggerRef(m.Telephon)}
+                                                    className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[190px]"
+                                                >
+                                                    <button
+                                                        onClick={() => { setSelected({ Number: m.Telephon, Username: m.Username, ContactName: m.ContactName || '', Status: 'unknown' }); setShowMembers(false); setMemberMenuOpen(null); }}
+                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                        </svg>
+                                                        Iniciar chat
+                                                    </button>
+                                                    {!isContact && (
                                                         <button
-                                                            onClick={() => { setSelected({ Number: m.Telephon, Username: m.Username, ContactName: m.ContactName || '', Status: 'unknown' }); setShowMembers(false); setMemberMenuOpen(null); }}
+                                                            onClick={() => { setAddContactTarget({ number: m.Telephon, username: m.Username }); setAddContactOpen(true); setMemberMenuOpen(null); }}
                                                             className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                                                             </svg>
-                                                            Iniciar chat
+                                                            Agregar a contactos
                                                         </button>
-                                                        {!isContact && (
-                                                            <button
-                                                                onClick={() => { setAddContactTarget({ number: m.Telephon, username: m.Username }); setAddContactOpen(true); setMemberMenuOpen(null); }}
-                                                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                                                                </svg>
-                                                                Agregar a contactos
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                    )}
+                                                </Popover>
                                             </div>
                                         );
                                     })
@@ -997,7 +998,7 @@ const GroupChatWindowInner = () => {
 
             {/* ── Confirm leave group dialog ── */}
             {confirmLeave && (
-                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
                      onClick={() => setConfirmLeave(false)}>
                     <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
                          onClick={e => e.stopPropagation()}>
@@ -1028,7 +1029,7 @@ const GroupChatWindowInner = () => {
 
             {/* ── Confirm delete group dialog ── */}
             {confirmDelete && (
-                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
                      onClick={() => setConfirmDelete(false)}>
                     <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
                          onClick={e => e.stopPropagation()}>
@@ -1059,7 +1060,7 @@ const GroupChatWindowInner = () => {
 
             {/* ── Avatar full-screen lightbox ── */}
             {viewAvatarOpen && selectedGroup.AvatarUrl && (
-                <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
+                <div className="fixed inset-0 z-modal bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
                      onClick={() => setViewAvatarOpen(false)}>
                     <button onClick={() => setViewAvatarOpen(false)}
                             className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
@@ -1079,7 +1080,7 @@ const GroupChatWindowInner = () => {
 
             {/* ── Confirm clear chat dialog ── */}
             {confirmClear && (
-                <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
                      onClick={() => setConfirmClear(false)}>
                     <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
                          onClick={e => e.stopPropagation()}>

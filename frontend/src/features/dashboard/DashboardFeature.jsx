@@ -15,6 +15,7 @@ import IncomingCall from '../../components/IncomingCall';
 import FullScreenLoader from '../../components/ui/FullScreenLoader';
 import { usePresence } from './hooks/usePresence';
 import { useCalls } from './hooks/useCalls';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
 // El SDK de videollamadas (ZegoCloud) pesa varios MB: se carga solo al iniciar una llamada.
 const CallRoom = lazy(() => import('../../components/CallRoom'));
@@ -84,7 +85,7 @@ const CallingOverlay = ({ callState, onEndCall }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[9998] bg-black/80 backdrop-blur-md flex items-center justify-center">
+        <div className="fixed inset-0 z-call bg-black/80 backdrop-blur-md flex items-center justify-center">
             <div className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-[2rem] p-10 w-80 text-center shadow-2xl border border-white/10 relative overflow-hidden">
                 {/* Animación de ondas */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -141,13 +142,15 @@ const DashboardContent = () => {
     const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
     const [viewImage, setViewImage] = useState(null);
 
+    useEscapeToClose(() => setViewImage(null), !!viewImage);
+
     // Loading Screen logic (optional, can be integrated in DashboardProvider or here)
     const isInitialLoading = !profile;
 
     return (
         <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden relative" style={{height: '100dvh'}}>
             {isInitialLoading && (
-                <div className="absolute inset-0 z-[99999]">
+                <div className="absolute inset-0 z-loader">
                     <FullScreenLoader label="Cargando tus chats…" />
                 </div>
             )}
@@ -200,7 +203,7 @@ const DashboardContent = () => {
             {/* Modal para ver imagen en grande */}
             {viewImage && (
                 <div 
-                    className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center z-[100] p-4 animate-fade-in"
+                    className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center z-modal p-4 animate-fade-in"
                     onClick={() => setViewImage(null)}
                 >
                     <div className="relative max-w-5xl max-h-[90vh] w-full h-full flex items-center justify-center p-4">
@@ -238,7 +241,7 @@ const DashboardContent = () => {
             )}
 
             {callState && callState.status === 'active' && (
-                <Suspense fallback={<div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center text-white">Conectando llamada...</div>}>
+                <Suspense fallback={<div className="fixed inset-0 z-call bg-black/80 flex items-center justify-center text-white">Conectando llamada...</div>}>
                     <CallRoom
                         roomID={callState.roomID}
                         userID={user?.telephon || profile?.Telephon}

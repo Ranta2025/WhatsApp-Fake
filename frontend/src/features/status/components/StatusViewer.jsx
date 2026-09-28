@@ -135,9 +135,18 @@ export default function StatusViewer() {
         setShowViewers(false);
     }, [isOpen]);
 
-    // Cerrar la hoja de vistos y resetear progreso al cambiar de estado.
+    // Cerrar la hoja de vistos, resetear progreso y RESUMIR el reloj al
+    // cambiar de estado mostrado (T4 / carry-over R3-delete-success-leaves-
+    // viewer-paused): tras un borrado exitoso, handleDelete deja `paused` en
+    // true a propósito (ver su comentario) y no lo reanuda él mismo, para
+    // evitar el "stale tick" de R3-delete-timer-race. Es este efecto — que ya
+    // se dispara cuando el índice se reajusta al siguiente estado tras el
+    // borrado — el que debe reanudarlo; si no queda ningún estado, el visor
+    // se cierra (currentStatus se vuelve null) y el estado "paused" deja de
+    // importar.
     useEffect(() => {
         setShowViewers(false);
+        setPaused(false);
         elapsedRef.current = 0;
         setProgress(0);
         durationRef.current = DEFAULT_DURATION_MS;
@@ -272,7 +281,7 @@ export default function StatusViewer() {
             role="dialog"
             aria-modal="true"
             aria-label={`Estado de ${ownerName}`}
-            className="fixed inset-0 z-[100000] bg-black flex flex-col outline-none animate-fade-in"
+            className="fixed inset-0 z-status bg-black flex flex-col outline-none animate-fade-in"
             onPointerDown={() => setPaused(true)}
             onPointerUp={() => setPaused(false)}
             onPointerLeave={() => setPaused(false)}
