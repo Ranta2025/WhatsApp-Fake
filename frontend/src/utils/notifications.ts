@@ -185,7 +185,14 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     }
 }
 
-export type NotificationPermissionState = NotificationPermission | 'unsupported';
+/**
+ * `'dismissed'` is not a real DOM `NotificationPermission` value — it's an
+ * app-level state `NotificationBanner.tsx` writes when the user closes the
+ * banner without granting/denying (M6, typing surfaced the gap: the state
+ * was already set at runtime, just not part of this type). Compile-only
+ * widening, no behavior change.
+ */
+export type NotificationPermissionState = NotificationPermission | 'unsupported' | 'dismissed';
 
 /**
  * Solicita permiso para mostrar notificaciones

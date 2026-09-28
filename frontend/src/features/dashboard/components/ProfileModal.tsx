@@ -1,16 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import axios from 'axios';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import type { MediaUploadResult } from '../../../types/api';
 
-const ProfileModal = ({ isOpen, onClose }) => {
+interface ProfileModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+/** Mismo comportamiento que la versión JS: `d` puede ser un string plano o un objeto con `message`/`error`. */
+function extractErrorMessage(err: unknown, fallback: string): string {
+    if (axios.isAxiosError(err)) {
+        const d: unknown = err.response?.data;
+        if (typeof d === 'string') return d;
+        if (d && typeof d === 'object') {
+            const obj = d as { message?: unknown; error?: unknown };
+            if (typeof obj.message === 'string' && obj.message) return obj.message;
+            if (typeof obj.error === 'string' && obj.error) return obj.error;
+        }
+        return err.message || fallback;
+    }
+    if (err instanceof Error) return err.message || fallback;
+    return fallback;
+}
+
+const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
     const { myAvatar, setMyAvatar, globalWallpaper, setGlobalWallpaper, fetchProfile } = useDashboard();
     const { user, updateUsername } = useAuth();
 
     const [newUsername, setNewUsername] = useState(user?.username || '');
-    const [newAvatarFile, setNewAvatarFile] = useState(null);
-    const [newAvatarPreview, setNewAvatarPreview] = useState(null);
+    const [newAvatarFile, setNewAvatarFile] = useState<File | null>(null);
+    const [newAvatarPreview, setNewAvatarPreview] = useState<string | null>(null);
     const [removeAvatar, setRemoveAvatar] = useState(false);
     const [status, setStatus] = useState('');
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -24,8 +47,8 @@ const ProfileModal = ({ isOpen, onClose }) => {
 
     if (!isOpen) return null;
 
-    const handleAvatarUpload = (e) => {
-        const file = e.target.files[0];
+    const handleAvatarUpload = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
         if (file) {
             setNewAvatarFile(file);
             setNewAvatarPreview(URL.createObjectURL(file));
@@ -39,14 +62,14 @@ const ProfileModal = ({ isOpen, onClose }) => {
         setNewAvatarPreview(null);
     };
 
-    const handleGlobalWallpaperUpload = async (e) => {
-        const file = e.target.files[0];
+    const handleGlobalWallpaperUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
         if (!file) return;
         setUploadingWallpaper(true);
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const { data } = await api.post('/api/v1/upload', formData, {
+            const { data } = await api.post<MediaUploadResult>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             await api.put('/api/v1/profile/wallpaper', { wallpaper_url: data.url });
@@ -72,7 +95,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
         }
     };
 
-    const submitEdit = async (e) => {
+    const submitEdit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const nu = newUsername.trim();
         const nameChanged = nu && nu !== user?.username;
@@ -93,22 +116,22 @@ const ProfileModal = ({ isOpen, onClose }) => {
             setStatus('Guardando cambios...');
             setUploadingAvatar(true);
 
-            if (photoChanged) {
+            if (photoChanged && newAvatarFile) {
                 const formData = new FormData();
                 formData.append('file', newAvatarFile);
-                const { data: uploadData } = await api.post('/api/v1/upload', formData, {
+                const { data: uploadData } = await api.post<MediaUploadResult>('/api/v1/upload', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 const avatarUrl = uploadData.url;
-                await api.put('/api/v1/profile/avatar', { avatar_url: avatarUrl });
+                await api.put<unknown>('/api/v1/profile/avatar', { avatar_url: avatarUrl });
                 setMyAvatar(avatarUrl);
             } else if (photoRemoved) {
-                await api.put('/api/v1/profile/avatar', { avatar_url: "" });
+                await api.put<unknown>('/api/v1/profile/avatar', { avatar_url: "" });
                 setMyAvatar("");
             }
 
             if (nameChanged) {
-                await api.put('/api/v1/user', { username: nu });
+                await api.put<unknown>('/api/v1/user', { username: nu });
                 // El servidor ya actualizó la cookie HttpOnly con el nuevo JWT
                 updateUsername(nu);
             }
@@ -119,9 +142,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
             setNewAvatarFile(null);
             setNewAvatarPreview(null);
         } catch (err) {
-            const d = err?.response?.data;
-            const msg = typeof d === 'string' ? d : d?.message || d?.error || err?.message || 'Error al actualizar';
-            setStatus(msg);
+            setStatus(extractErrorMessage(err, 'Error al actualizar'));
         } finally {
             setUploadingAvatar(false);
         }

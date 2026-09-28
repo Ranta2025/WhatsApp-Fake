@@ -1,12 +1,20 @@
 import { useState } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import type { Message } from '../../../types/api';
 
 const MAX_CONTACTS = 5;
 
-const ForwardMessageModal = ({ isOpen, onClose, onForward, message }) => {
+interface ForwardMessageModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onForward: (targetNumbers: string[]) => void;
+    message: Message | null;
+}
+
+const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMessageModalProps) => {
     const { contacts, avatarMap } = useDashboard();
-    const [selected, setSelected] = useState([]);
+    const [selected, setSelected] = useState<string[]>([]);
     const [search, setSearch] = useState('');
 
     useEscapeToClose(onClose, isOpen);
@@ -15,15 +23,20 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }) => {
 
     const getMessagePreview = () => {
         if (!message) return '';
-        if (message.MediaType && message.MediaType !== 'text') {
-            const labels = { image: '📷 Imagen', video: '🎥 Vídeo', audio: '🎵 Audio', file: '📄 Archivo' };
+        // `MediaType` (types/api.ts) nunca vale 'text' (los mensajes de texto
+        // tienen `MediaType: undefined`) y no incluye 'file' — comparación y
+        // clave preexistentes, código muerto documentado (mismo criterio que
+        // CallHistory/MessageList), `labels` como registro laxo para no
+        // fingir que calzan con el contrato real de `MediaType`.
+        if (message.MediaType && (message.MediaType as string) !== 'text') {
+            const labels: Record<string, string> = { image: '📷 Imagen', video: '🎥 Vídeo', audio: '🎵 Audio', file: '📄 Archivo' };
             return labels[message.MediaType] || '📎 Archivo adjunto';
         }
         const text = message.Message || '';
         return text.length > 60 ? text.substring(0, 60) + '…' : text;
     };
 
-    const toggleContact = (number) => {
+    const toggleContact = (number: string) => {
         setSelected(prev =>
             prev.includes(number)
                 ? prev.filter(n => n !== number)

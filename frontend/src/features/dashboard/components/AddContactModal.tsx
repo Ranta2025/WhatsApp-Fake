@@ -1,12 +1,33 @@
-import React, { useState } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
+import axios from 'axios';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { validatePhone } from '../../../utils/phoneValidation';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import type { ContactChat } from '../../../types/api';
+import type { DashboardChatGroupEntry } from '../lib/chatSelection';
 
-const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = '' }) => {
+interface AddContactModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    initialNumber?: string;
+    initialName?: string;
+}
+
+/**
+ * `contact` es la clave real (backend/handlers/handlerContact.go). `'contacto
+ * creado'` no existe en ningún handler actual (grepped) — fallback muerto
+ * preexistente, documentado y no removido (mismo criterio que M4/M5 para
+ * código defensivo fuera de alcance).
+ */
+interface AddContactResponse {
+    contact?: ContactChat;
+    'contacto creado'?: ContactChat;
+}
+
+const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = '' }: AddContactModalProps) => {
     const { setContacts, setSelected, setAllChatGroups, setSidebarView, setSidebarOpen, fetchContacts } = useDashboard();
     const [numberInput, setNumberInput] = useState(initialNumber);
     const [contactNameInput, setContactNameInput] = useState(initialName);
@@ -17,7 +38,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
     const [phoneCountryIso, setPhoneCountryIso] = useState('cu');
     const [phoneDialCode, setPhoneDialCode] = useState('53');
 
-    const buildPhoneE164 = (dialCode, localNumber) => {
+    const buildPhoneE164 = (dialCode: string, localNumber: string) => {
         const codeDigits = String(dialCode || '').replace(/\D/g, '');
         const localDigits = String(localNumber || '').replace(/\D/g, '');
         if (!codeDigits && !localDigits) return '';
@@ -25,8 +46,9 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
     };
 
     // Actualizar campos cuando cambian las props (al abrir desde el banner del chat)
-    React.useEffect(() => {
+    useEffect(() => {
         if (isOpen) {
+            /* eslint-disable react-hooks/set-state-in-effect -- reset de campos al reabrir (prop -> estado local) */
             setNumberInput(initialNumber);
             setContactNameInput(initialName);
             setAddMsg('');
@@ -34,6 +56,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
             setPhoneLocalNumber(initialNumber.replace(/^\+\d+/, '').replace(/\D/g, ''));
             setPhoneCountryIso('cu');
             setPhoneDialCode('53');
+            /* eslint-enable react-hooks/set-state-in-effect */
         }
     }, [isOpen, initialNumber, initialName]);
 
@@ -41,18 +64,18 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
 
     if (!isOpen) return null;
 
-    const submitAddContact = async (e) => {
+    const submitAddContact = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setAddMsg('');
         const cn = contactNameInput.trim();
 
         const phoneResult = validatePhone(numberInput);
         if (!phoneResult.valid) {
-            setAddMsg(phoneResult.error);
-            setPhoneError(phoneResult.error);
+            setAddMsg(phoneResult.error || '');
+            setPhoneError(phoneResult.error || '');
             return;
         }
-        const n = phoneResult.formatted;
+        const n = phoneResult.formatted || '';
         if (!cn) {
             setAddMsg('Debes ingresar un nombre para el contacto');
             return;
@@ -60,14 +83,18 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
 
         setIsLoading(true);
         try {
-            const { data } = await api.post('/api/v1/contact', { number: n, contact_name: cn });
+            const { data } = await api.post<AddContactResponse | null>('/api/v1/contact', { number: n, contact_name: cn });
             const created = data?.contact || data?.['contacto creado'];
-            
+
             if (created) {
                 setContacts(prev => [created, ...prev]);
                 setAllChatGroups(prev => ({
                     ...prev,
-                    [n]: { ...prev[n], IsContact: true, ContactName: cn }
+                    // Si `prev[n]` todavía no existía (contacto sin chat previo), el
+                    // spread deja `ContactTelephon`/`ContactUsername` ausentes —
+                    // mismo comportamiento que la versión JS (objeto parcial en ese
+                    // caso raro); cast único y documentado, no se inventan datos.
+                    [n]: { ...prev[n], IsContact: true, ContactName: cn } as DashboardChatGroupEntry
                 }));
                 
                 setAddMsg('Contacto creado exitosamente');
@@ -86,8 +113,18 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                 setIsLoading(false);
             }
         } catch (err) {
-            const d = err?.response?.data;
-            const msg = typeof d === 'string' ? d : d?.message || d?.error || 'Error al agregar';
+            let msg = 'Error al agregar';
+            if (axios.isAxiosError(err)) {
+                const d: unknown = err.response?.data;
+                if (typeof d === 'string') {
+                    msg = d;
+                } else if (d && typeof d === 'object') {
+                    const obj = d as { message?: unknown; error?: unknown };
+                    msg = (typeof obj.message === 'string' && obj.message)
+                        || (typeof obj.error === 'string' && obj.error)
+                        || msg;
+                }
+            }
             setAddMsg(msg);
             setIsLoading(false);
         }
@@ -128,9 +165,11 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                                     disableSearchIcon={true}
                                     searchPlaceholder="Buscar por país..."
                                     value={`+${phoneDialCode}`}
-                                    onChange={(phone, countryData) => {
-                                        const code = countryData?.dialCode || phoneDialCode;
-                                        const iso = countryData?.countryCode || phoneCountryIso;
+                                    onChange={(_phone, countryData) => {
+                                        // El tipo del paquete declara `CountryData | {}` (el `{}` sale
+                                        // cuando aún no se seleccionó país) — narrowed con `in`.
+                                        const code = ('dialCode' in countryData && countryData.dialCode) || phoneDialCode;
+                                        const iso = ('countryCode' in countryData && countryData.countryCode) || phoneCountryIso;
                                         setPhoneDialCode(code);
                                         setPhoneCountryIso(iso);
                                         const full = buildPhoneE164(code, phoneLocalNumber);
@@ -166,7 +205,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                                     setNumberInput(full);
                                     if (full && full.length > 3) {
                                         const result = validatePhone(full);
-                                        setPhoneError(result.valid ? '' : result.error);
+                                        setPhoneError(result.valid ? '' : (result.error || ''));
                                     } else {
                                         setPhoneError('');
                                     }

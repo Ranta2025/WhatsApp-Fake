@@ -1,21 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo, type FormEvent } from 'react';
+import axios from 'axios';
 import { useDashboard } from '../context/DashboardContext';
 import { createGroup } from '../../../api/groupApi';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 
+interface CreateGroupModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
 /**
  * Modal to create a new group chat.
- *
- * Props:
- *   isOpen   {boolean}  - controls visibility
- *   onClose  {function} - called when the modal is dismissed
  */
-const CreateGroupModal = ({ isOpen, onClose }) => {
+const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
     const { contacts, addToast, fetchUserGroups } = useDashboard();
 
     const [name, setName]               = useState('');
     const [description, setDescription] = useState('');
-    const [selectedMembers, setSelectedMembers] = useState(new Set());
+    const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
     const [memberSearch, setMemberSearch]       = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -34,10 +36,10 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
         );
     }, [acceptedContacts, memberSearch]);
 
-    const toggleMember = (telephon) => {
+    const toggleMember = (telephon: string) => {
         setSelectedMembers(prev => {
             const next = new Set(prev);
-            next.has(telephon) ? next.delete(telephon) : next.add(telephon);
+            if (next.has(telephon)) next.delete(telephon); else next.add(telephon);
             return next;
         });
     };
@@ -45,12 +47,12 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
     const handleClose = () => {
         setName('');
         setDescription('');
-        setSelectedMembers(new Set());
+        setSelectedMembers(new Set<string>());
         setMemberSearch('');
         onClose();
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!name.trim()) {
             addToast({ type: 'error', message: 'El nombre del grupo es obligatorio' });
@@ -69,7 +71,7 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
             handleClose();
         } catch (err) {
             console.error('[CreateGroupModal] Error:', err);
-            const msg = err?.response?.data?.error || 'Error al crear el grupo';
+            const msg = (axios.isAxiosError<{ error?: string }>(err) && err.response?.data?.error) || 'Error al crear el grupo';
             addToast({ type: 'error', message: msg });
         } finally {
             setLoading(false);

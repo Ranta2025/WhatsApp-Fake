@@ -1,9 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import type { CallType, MediaUploadResult } from '../../../types/api';
 
-const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
+interface ContactDetailsProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onStartCall: (callType?: CallType) => void;
+    setViewImage: Dispatch<SetStateAction<string | null>>;
+}
+
+const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactDetailsProps) => {
     const { 
         selected, 
         onlineUsers, 
@@ -13,7 +21,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
         globalWallpaper 
     } = useDashboard();
 
-    const [chatWallpapers, setChatWallpapers] = useState({});
+    const [chatWallpapers, setChatWallpapers] = useState<Record<string, string>>({});
     const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
 
     // Cargar fondos de chat guardados en localStorage
@@ -32,14 +40,14 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
 
     if (!isOpen || !selected) return null;
 
-    const isContactOnline = (number) => onlineUsers.has(number);
-    
-    const getLastSeenText = (number) => {
+    const isContactOnline = (number: string) => onlineUsers.has(number);
+
+    const getLastSeenText = (number: string): string | null => {
         const lastSeen = lastSeenMap[number];
         if (!lastSeen) return null;
         const date = new Date(lastSeen);
         const now = new Date();
-        const diff = now - date;
+        const diff = now.getTime() - date.getTime();
         if (diff < 60000) return 'hace un momento';
         if (diff < 3600000) return `hace ${Math.floor(diff / 60000)} min`;
         if (date.toDateString() === now.toDateString()) {
@@ -48,14 +56,14 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
         return `el ${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     };
 
-    const handleContactWallpaperUpload = async (e, contactNumber) => {
-        const file = e.target.files[0];
+    const handleContactWallpaperUpload = async (e: ChangeEvent<HTMLInputElement>, contactNumber: string) => {
+        const file = e.target.files?.[0];
         if (!file) return;
         setUploadingWallpaper(true);
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const { data } = await api.post('/api/v1/upload', formData, {
+            const { data } = await api.post<MediaUploadResult>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             const newWps = { ...chatWallpapers, [contactNumber]: data.url };
@@ -70,7 +78,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }) => {
         }
     };
 
-    const handleRemoveContactWallpaper = (contactNumber) => {
+    const handleRemoveContactWallpaper = (contactNumber: string) => {
         const newWps = { ...chatWallpapers };
         delete newWps[contactNumber];
         setChatWallpapers(newWps);
