@@ -103,8 +103,8 @@ services:
     <<: *restart
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "127.0.0.1:${REDIS_PUBLIC_PORT:-6379}:6379"
+    # Not published on the host: the app reaches it over the compose network
+    # (redis:6379), and a native Redis may already own host port 6379.
     volumes:
       - redis_data:/data
     healthcheck:
