@@ -37,6 +37,7 @@ keeping the app compiling and green after every wave.
 ## Tasks (waves, leaf-first; no import cycles found)
 - [x] M0 Tooling: deps, tsconfig (strict, allowJs, checkJs false, jsx react-jsx, moduleResolution bundler, noEmit), `typecheck` script, build = `tsc --noEmit && vite build`, ESLint TS config, Vitest picks up `.test.ts(x)`.
 - [x] M1 Domain types (`src/types/`: api.ts REST shapes, ws.ts discriminated union of WS events) + leaf/pure modules: config, utils/{format,phoneValidation,notifications}, lib/escapeStack, hooks/{useRefMap,useEscapeToClose}, features/status/lib/{feed,viewer}, components/ui/icons; remove the wrong unused `features/dashboard/types/index.ts`.
+- Commits: da73785 (M0), 601a85c (M1) — slice review (base 4419f3d, incl. ce323be) APPROVED + acknowledged; boundary 601a85c. Findings R3-001 (no real-React-handler test for Escape flag ordering) + R3-002 (isEscapeHandled type rejects React.KeyboardEvent) fixed in b930a9e (tsc RED → GREEN; mutation check: reading synthetic event fails 2 tests; 49/49). b930a9e: medium under_budget → pending in slice.
 - [ ] M2 API layer: api/{axios,groupApi,statusApi}, api/websocket (typed event map).
 - [ ] M3 Base hooks/UI: hooks/useWebSocket, components/ui/{Avatar,FullScreenLoader,Popover}.
 - [ ] M4 Contexts: context/AuthContext, features/dashboard/context/DashboardContext (715 lines).
