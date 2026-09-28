@@ -1,13 +1,136 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import {
+    createContext, useContext, useState, useEffect, useRef, useCallback,
+    type ReactNode, type Dispatch, type SetStateAction,
+} from 'react';
 import api from '../../../api/axios';
 import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/groupApi';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth, type AuthContextValue } from '../../../context/AuthContext';
 import { useWebSocket } from '../../../hooks/useWebSocket';
-import { onNotificationClick, offNotificationClick, showNativeNotification } from '../../../utils/notifications';
+import {
+    onNotificationClick, offNotificationClick, showNativeNotification,
+    type NotificationClickPayload, type NotificationPermissionState,
+} from '../../../utils/notifications';
+import type { WsHandlerMap } from '../../../api/websocket';
+import type {
+    UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupDetail, GroupMessageResponse, CallType,
+} from '../../../types/api';
+import {
+    resolveChatTarget, type DashboardChatGroupEntry, type SelectedChatTarget,
+} from '../lib/chatSelection';
+import { extractNotificationTelephon } from '../lib/notificationClick';
 
-const DashboardContext = createContext();
+export type SidebarView = 'chats' | 'groups' | 'contacts' | 'estados' | 'calls';
 
-export const useDashboard = () => {
+export interface Toast {
+    id: number;
+    type: 'error' | 'success' | 'info';
+    message: string;
+    createdAt: number;
+}
+
+export interface CallState {
+    roomID: string;
+    remoteTelephon: string;
+    remoteName: string;
+    callType: CallType;
+    role: 'caller' | 'receiver';
+    status: 'ringing' | 'active';
+}
+
+/**
+ * `GroupResponse.UserRole` is `GroupRole` ('admin'|'member') per the backend
+ * contract (types/api.ts). `GroupChatWindow.jsx`'s "leave group" flow also
+ * writes the client-only sentinel `'left'` into this same field on `groups`/
+ * `selectedGroup` (keeps the group visible, read-only, without an extra
+ * state slot). That caller stays untyped JS (`checkJs:false`), so this
+ * quirk isn't reflected in `GroupRole` here — documented, not typed, per
+ * M1's "types document the contract as-is" policy.
+ */
+export type SelectedGroup = GroupResponse & Partial<Pick<GroupDetail, 'Members' | 'Messages'>>;
+
+/** System message injected locally for "member added"/"member left" (not sent by the backend). */
+export interface SystemGroupMessage {
+    MessageID: string;
+    GroupID: number;
+    IsSystem: true;
+    Message: string;
+    Time: string;
+}
+
+export type GroupMessageEntry = GroupMessageResponse | SystemGroupMessage;
+
+export interface DashboardContextValue {
+    profile: UserGet | null;
+    setProfile: Dispatch<SetStateAction<UserGet | null>>;
+    myAvatar: string;
+    setMyAvatar: Dispatch<SetStateAction<string>>;
+    globalWallpaper: string;
+    setGlobalWallpaper: Dispatch<SetStateAction<string>>;
+    contacts: ContactChat[];
+    setContacts: Dispatch<SetStateAction<ContactChat[]>>;
+    onlineUsers: Set<string>;
+    setOnlineUsers: Dispatch<SetStateAction<Set<string>>>;
+    typingUsers: Set<string>;
+    setTypingUsers: Dispatch<SetStateAction<Set<string>>>;
+    lastSeenMap: Record<string, string>;
+    setLastSeenMap: Dispatch<SetStateAction<Record<string, string>>>;
+    avatarMap: Record<string, string>;
+    setAvatarMap: Dispatch<SetStateAction<Record<string, string>>>;
+    selected: SelectedChatTarget | null;
+    setSelected: (
+        contactOrUpdater: SelectedChatTarget | null | ((prev: SelectedChatTarget | null) => SelectedChatTarget | null)
+    ) => void;
+    messagesByChat: Record<string, Message[]>;
+    setMessagesByChat: Dispatch<SetStateAction<Record<string, Message[]>>>;
+    allChatGroups: Record<string, DashboardChatGroupEntry>;
+    setAllChatGroups: Dispatch<SetStateAction<Record<string, DashboardChatGroupEntry>>>;
+    drafts: Record<string, string>;
+    setDrafts: Dispatch<SetStateAction<Record<string, string>>>;
+    toasts: Toast[];
+    addToast: (toast: Omit<Toast, 'id' | 'createdAt'>) => void;
+    dismissToast: (id: number) => void;
+    notifPermission: NotificationPermissionState;
+    setNotifPermission: Dispatch<SetStateAction<NotificationPermissionState>>;
+    requestNotificationPermission: () => Promise<NotificationPermission>;
+    callState: CallState | null;
+    setCallState: Dispatch<SetStateAction<CallState | null>>;
+    incomingCall: WsHandlerMap['incoming_call'] | null;
+    setIncomingCall: Dispatch<SetStateAction<WsHandlerMap['incoming_call'] | null>>;
+    sidebarView: SidebarView;
+    setSidebarView: Dispatch<SetStateAction<SidebarView>>;
+    sidebarOpen: boolean;
+    setSidebarOpen: Dispatch<SetStateAction<boolean>>;
+    fetchContacts: () => Promise<void>;
+    fetchProfile: () => Promise<void>;
+    fetchAllChats: () => Promise<void>;
+    fetchChatMessages: (contactNumber: string) => Promise<void>;
+    markAsRead: (contactNumber: string) => void;
+    groups: GroupResponse[];
+    setGroups: Dispatch<SetStateAction<GroupResponse[]>>;
+    groupMessages: Record<number, GroupMessageEntry[]>;
+    setGroupMessages: Dispatch<SetStateAction<Record<number, GroupMessageEntry[]>>>;
+    selectedGroup: SelectedGroup | null;
+    setSelectedGroup: (
+        groupOrUpdater: SelectedGroup | null | ((prev: SelectedGroup | null) => SelectedGroup | null)
+    ) => void;
+    fetchUserGroups: () => Promise<void>;
+    fetchGroupMessages: (groupID: number) => Promise<void>;
+    fetchGroupDetail: (groupID: number) => Promise<void>;
+    isConnected: boolean;
+    sendMessage: ReturnType<typeof useWebSocket>['sendMessage'];
+    sendTypingIndicator: ReturnType<typeof useWebSocket>['sendTypingIndicator'];
+    sendGroupMessage: ReturnType<typeof useWebSocket>['sendGroupMessage'];
+    sendGroupTyping: ReturnType<typeof useWebSocket>['sendGroupTyping'];
+    sendGroupEditMessage: ReturnType<typeof useWebSocket>['sendGroupEditMessage'];
+    sendGroupDeleteMessage: ReturnType<typeof useWebSocket>['sendGroupDeleteMessage'];
+    sendGroupJoin: ReturnType<typeof useWebSocket>['sendGroupJoin'];
+    user: AuthContextValue['user'];
+    logout: AuthContextValue['logout'];
+}
+
+const DashboardContext = createContext<DashboardContextValue | null>(null);
+
+export const useDashboard = (): DashboardContextValue => {
     const context = useContext(DashboardContext);
     if (!context) {
         throw new Error('useDashboard must be used within a DashboardProvider');
@@ -15,7 +138,7 @@ export const useDashboard = () => {
     return context;
 };
 
-export const DashboardProvider = ({ children }) => {
+export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const { user, logout } = useAuth();
     const {
         isConnected, on, off,
@@ -25,33 +148,35 @@ export const DashboardProvider = ({ children }) => {
     } = useWebSocket();
 
     // Profile & User State
-    const [profile, setProfile] = useState(null);
+    const [profile, setProfile] = useState<UserGet | null>(null);
     const [myAvatar, setMyAvatar] = useState('');
     const [globalWallpaper, setGlobalWallpaper] = useState('');
-    
+
     // Contacts & Presence
-    const [contacts, setContacts] = useState([]);
-    const [onlineUsers, setOnlineUsers] = useState(new Set());
-    const [typingUsers, setTypingUsers] = useState(new Set());
-    const [lastSeenMap, setLastSeenMap] = useState({});
-    const [avatarMap, setAvatarMap] = useState({});
-    
+    const [contacts, setContacts] = useState<ContactChat[]>([]);
+    const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+    const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+    const [lastSeenMap, setLastSeenMap] = useState<Record<string, string>>({});
+    const [avatarMap, setAvatarMap] = useState<Record<string, string>>({});
+
     // Messaging — 1-to-1
-    const [selected, setSelected] = useState(null);
-    const [messagesByChat, setMessagesByChat] = useState({});
-    const [allChatGroups, setAllChatGroups] = useState({});
-    const [drafts, setDrafts] = useState({});
+    const [selected, setSelected] = useState<SelectedChatTarget | null>(null);
+    const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
+    const [allChatGroups, setAllChatGroups] = useState<Record<string, DashboardChatGroupEntry>>({});
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
 
     // Groups
-    const [groups, setGroups] = useState([]);
-    const [groupMessages, setGroupMessages] = useState({}); // { [groupID]: GroupMessageResponse[] }
-    const [selectedGroup, setSelectedGroupState] = useState(null);
+    const [groups, setGroups] = useState<GroupResponse[]>([]);
+    const [groupMessages, setGroupMessages] = useState<Record<number, GroupMessageEntry[]>>({}); // { [groupID]: GroupMessageResponse[] }
+    const [selectedGroup, setSelectedGroupState] = useState<SelectedGroup | null>(null);
 
     /**
      * Selecciona un grupo y limpia la selección 1:1 (son excluyentes).
      * Acepta también una función updater, que solo modifica el grupo actual.
      */
-    const setSelectedGroup = useCallback((groupOrUpdater) => {
+    const setSelectedGroup = useCallback((
+        groupOrUpdater: SelectedGroup | null | ((prev: SelectedGroup | null) => SelectedGroup | null)
+    ) => {
         if (typeof groupOrUpdater === 'function') {
             setSelectedGroupState(groupOrUpdater);
             return;
@@ -61,7 +186,9 @@ export const DashboardProvider = ({ children }) => {
     }, []);
 
     /** Selecciona un chat 1:1 y limpia el grupo seleccionado (acepta updater). */
-    const setSelectedContact = useCallback((contactOrUpdater) => {
+    const setSelectedContact = useCallback((
+        contactOrUpdater: SelectedChatTarget | null | ((prev: SelectedChatTarget | null) => SelectedChatTarget | null)
+    ) => {
         if (typeof contactOrUpdater === 'function') {
             setSelected(contactOrUpdater);
             return;
@@ -69,32 +196,32 @@ export const DashboardProvider = ({ children }) => {
         setSelected(contactOrUpdater);
         if (contactOrUpdater) setSelectedGroupState(null);
     }, []);
-    
+
     // Notifications & Toasts
-    const [toasts, setToasts] = useState([]);
-    const [notifPermission, setNotifPermission] = useState(
+    const [toasts, setToasts] = useState<Toast[]>([]);
+    const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>(
         typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
     );
-    
+
     // Calls
-    const [callState, setCallState] = useState(null);
-    const [incomingCall, setIncomingCall] = useState(null);
+    const [callState, setCallState] = useState<CallState | null>(null);
+    const [incomingCall, setIncomingCall] = useState<WsHandlerMap['incoming_call'] | null>(null);
 
     // UI state (sidebar view & mobile open)
-    const [sidebarView, setSidebarView] = useState('chats');
+    const [sidebarView, setSidebarView] = useState<SidebarView>('chats');
     const [sidebarOpen, setSidebarOpen] = useState(true); // show sidebar by default
 
     // Toast functions
-    const addToast = useCallback((toast) => {
+    const addToast = useCallback((toast: Omit<Toast, 'id' | 'createdAt'>) => {
         const id = Date.now() + Math.random();
         setToasts(prev => [...prev, { ...toast, id, createdAt: Date.now() }]);
     }, []);
 
-    const dismissToast = useCallback((id) => {
+    const dismissToast = useCallback((id: number) => {
         setToasts(prev => prev.filter(t => t.id !== id));
     }, []);
 
-    const requestNotificationPermission = useCallback(async () => {
+    const requestNotificationPermission = useCallback(async (): Promise<NotificationPermission> => {
         if (!('Notification' in window)) return 'denied';
         const permission = await Notification.requestPermission();
         setNotifPermission(permission);
@@ -102,7 +229,7 @@ export const DashboardProvider = ({ children }) => {
     }, []);
 
     // Función para marcar como leídos: envía WS + actualiza estado local
-    const markAsRead = useCallback((contactNumber) => {
+    const markAsRead = useCallback((contactNumber: string) => {
         sendReadConfirmation(contactNumber);
         // Actualización optimista: marcar todos los mensajes entrantes como 'visto' localmente
         setMessagesByChat(prev => {
@@ -112,7 +239,7 @@ export const DashboardProvider = ({ children }) => {
             if (!hasUnread) return prev;
             const updated = msgs.map(m =>
                 m.SenderTelephon === contactNumber && m.Status !== 'visto'
-                    ? { ...m, Status: 'visto' }
+                    ? { ...m, Status: 'visto' as const }
                     : m
             );
             return { ...prev, [contactNumber]: updated };
@@ -120,25 +247,25 @@ export const DashboardProvider = ({ children }) => {
     }, [sendReadConfirmation]);
 
     // Refs for WebSocket handlers to avoid stale closures
-    const contactsRef = useRef([]);
-    const profileRef = useRef(null);
-    const selectedRef = useRef(null);
-    const allChatGroupsRef = useRef({});
+    const contactsRef = useRef<ContactChat[]>([]);
+    const profileRef = useRef<UserGet | null>(null);
+    const selectedRef = useRef<SelectedChatTarget | null>(null);
+    const allChatGroupsRef = useRef<Record<string, DashboardChatGroupEntry>>({});
 
     useEffect(() => { contactsRef.current = contacts; }, [contacts]);
     useEffect(() => { profileRef.current = profile; }, [profile]);
     useEffect(() => { selectedRef.current = selected; }, [selected]);
     useEffect(() => { allChatGroupsRef.current = allChatGroups; }, [allChatGroups]);
-    const avatarMapRef = useRef({});
+    const avatarMapRef = useRef<Record<string, string>>({});
     useEffect(() => { avatarMapRef.current = avatarMap; }, [avatarMap]);
 
     // Fetch initial data
     const fetchProfile = useCallback(async () => {
         try {
-            const { data } = await api.get('/api/v1/user');
+            const { data } = await api.get<UserGet>('/api/v1/user');
             setProfile(data);
-            if (data?.avatar_url) setMyAvatar(data.avatar_url);
-            if (data?.wallpaper_url) setGlobalWallpaper(data.wallpaper_url);
+            if (data.avatar_url) setMyAvatar(data.avatar_url);
+            if (data.wallpaper_url) setGlobalWallpaper(data.wallpaper_url);
         } catch (err) {
             console.error('Error fetching profile:', err);
         }
@@ -146,12 +273,12 @@ export const DashboardProvider = ({ children }) => {
 
     const fetchContacts = useCallback(async () => {
         try {
-            const { data } = await api.get('/api/v1/contact');
+            const { data } = await api.get<ContactChat[]>('/api/v1/contact');
             const list = Array.isArray(data) ? data : [];
             setContacts(list);
-            
-            const seenMap = {};
-            const avMap = {};
+
+            const seenMap: Record<string, string> = {};
+            const avMap: Record<string, string> = {};
             list.forEach(c => {
                 if (c.last_seen) seenMap[c.Number] = c.last_seen;
                 if (c.avatar_url) avMap[c.Number] = c.avatar_url;
@@ -166,13 +293,13 @@ export const DashboardProvider = ({ children }) => {
     // Cargar todos los chats (historial de mensajes) desde el backend
     const fetchAllChats = useCallback(async () => {
         try {
-            const { data } = await api.get('/api/v1/chats');
+            const { data } = await api.get<ChatGroup[]>('/api/v1/chats');
             const chatGroups = Array.isArray(data) ? data : [];
 
             // Poblar messagesByChat con los mensajes de cada grupo
-            const msgMap = {};
-            const groupMap = {};
-            const chatAvatarMap = {};
+            const msgMap: Record<string, Message[]> = {};
+            const groupMap: Record<string, DashboardChatGroupEntry> = {};
+            const chatAvatarMap: Record<string, string> = {};
             chatGroups.forEach(group => {
                 const key = group.ContactTelephon;
                 if (key) {
@@ -199,9 +326,9 @@ export const DashboardProvider = ({ children }) => {
     }, []);
 
     // Cargar mensajes de un contacto específico (bajo demanda)
-    const fetchChatMessages = useCallback(async (contactNumber) => {
+    const fetchChatMessages = useCallback(async (contactNumber: string) => {
         try {
-            const { data } = await api.get(`/api/v1/chat/${contactNumber}`);
+            const { data } = await api.get<Message[]>(`/api/v1/chat/${contactNumber}`);
             const messages = Array.isArray(data) ? data : [];
             setMessagesByChat(prev => ({ ...prev, [contactNumber]: messages }));
         } catch (err) {
@@ -213,18 +340,18 @@ export const DashboardProvider = ({ children }) => {
     const fetchUserGroups = useCallback(async () => {
         try {
             const { data } = await getUserGroups();
-            setGroups(Array.isArray(data?.groups) ? data.groups : []);
+            setGroups(Array.isArray(data.groups) ? data.groups : []);
         } catch (err) {
             console.error('Error fetching groups:', err);
         }
     }, []);
 
     // Fetch message history for a specific group (on demand)
-    const fetchGroupMessages = useCallback(async (groupID) => {
+    const fetchGroupMessages = useCallback(async (groupID: number) => {
         try {
             const { data } = await getGroupMessages(groupID);
-            const messages = Array.isArray(data?.messages) ? data.messages : [];
-            const sorted = [...messages].sort((a, b) => new Date(a.Time) - new Date(b.Time));
+            const messages = Array.isArray(data.messages) ? data.messages : [];
+            const sorted = [...messages].sort((a, b) => new Date(a.Time).getTime() - new Date(b.Time).getTime());
             setGroupMessages(prev => ({ ...prev, [groupID]: sorted }));
         } catch (err) {
             console.error(`Error fetching messages for group ${groupID}:`, err);
@@ -232,7 +359,7 @@ export const DashboardProvider = ({ children }) => {
     }, []);
 
     // Fetch full detail (with members) for a specific group and update selectedGroup
-    const fetchGroupDetail = useCallback(async (groupID) => {
+    const fetchGroupDetail = useCallback(async (groupID: number) => {
         try {
             const { data } = await getGroupDetail(groupID);
             // data is GroupDetail: GroupResponse + Members + Messages
@@ -242,8 +369,8 @@ export const DashboardProvider = ({ children }) => {
                 return { ...prev, ...data };
             });
             // Pre-populate message cache if backend returned messages
-            if (Array.isArray(data?.Messages) && data.Messages.length > 0) {
-                const sorted = [...data.Messages].sort((a, b) => new Date(a.Time) - new Date(b.Time));
+            if (Array.isArray(data.Messages) && data.Messages.length > 0) {
+                const sorted = [...data.Messages].sort((a, b) => new Date(a.Time).getTime() - new Date(b.Time).getTime());
                 setGroupMessages(prev => ({
                     ...prev,
                     [groupID]: sorted,
@@ -283,13 +410,13 @@ export const DashboardProvider = ({ children }) => {
     useEffect(() => {
         if (!isConnected) return;
 
-        const handleIncomingMessage = (messageData) => {
+        const handleIncomingMessage = (messageData: WsHandlerMap['message']) => {
             const myTelephon = profileRef.current?.Telephon;
             const currentSelected = selectedRef.current;
-            const { SenderTelephon, Receptor, MessageID, Message, MediaType } = messageData;
-            
-            let contactNumber = SenderTelephon === myTelephon ? Receptor : SenderTelephon;
-            
+            const { SenderTelephon, Receptor, MessageID, Message: messageText, MediaType } = messageData;
+
+            const contactNumber = SenderTelephon === myTelephon ? Receptor : SenderTelephon;
+
             setMessagesByChat(prev => {
                 const existing = prev[contactNumber] || [];
                 const alreadyExists = existing.some(m => m.MessageID === MessageID);
@@ -324,7 +451,7 @@ export const DashboardProvider = ({ children }) => {
                     else if (MediaType === 'video') body = '🎥 Video';
                     else if (MediaType === 'document') body = '📄 Documento';
                 }
-                if (!body) body = Message || 'Nuevo mensaje';
+                if (!body) body = messageText || 'Nuevo mensaje';
                 // Obtener avatar del contacto para la notificación
                 const icon = avatarMapRef.current[contactNumber] || undefined;
                 // Si es imagen, incluirla como preview en la notificación nativa
@@ -349,7 +476,7 @@ export const DashboardProvider = ({ children }) => {
         };
 
         // Handler: mensajes marcados como "visto" por el receptor
-        const handleReadConfirmation = (payload) => {
+        const handleReadConfirmation = (payload: WsHandlerMap['read']) => {
             const readerTelephon = payload?.from;
             if (!readerTelephon) return;
             // Actualizar todos los mensajes enviados a ese contacto a "visto"
@@ -358,7 +485,7 @@ export const DashboardProvider = ({ children }) => {
                 if (!msgs) return prev;
                 const updated = msgs.map(m =>
                     m.Receptor === readerTelephon && (m.Status === 'enviado' || m.Status === 'entregado')
-                        ? { ...m, Status: 'visto' }
+                        ? { ...m, Status: 'visto' as const }
                         : m
                 );
                 return { ...prev, [readerTelephon]: updated };
@@ -366,7 +493,7 @@ export const DashboardProvider = ({ children }) => {
         };
 
         // Handler: mensajes pendientes marcados como "entregado" (receptor se conectó)
-        const handleMessageDelivered = (payload) => {
+        const handleMessageDelivered = (payload: WsHandlerMap['message_delivered']) => {
             const receiverTelephon = payload?.receiver;
             if (!receiverTelephon) return;
             // Actualizar todos los mensajes "enviado" dirigidos a ese receptor a "entregado"
@@ -375,7 +502,7 @@ export const DashboardProvider = ({ children }) => {
                 if (!msgs) return prev;
                 const updated = msgs.map(m =>
                     m.Receptor === receiverTelephon && m.Status === 'enviado'
-                        ? { ...m, Status: 'entregado' }
+                        ? { ...m, Status: 'entregado' as const }
                         : m
                 );
                 return { ...prev, [receiverTelephon]: updated };
@@ -383,13 +510,13 @@ export const DashboardProvider = ({ children }) => {
         };
 
         // Handler: un contacto cambió su avatar
-        const handleAvatarChanged = (payload) => {
+        const handleAvatarChanged = (payload: WsHandlerMap['avatar_changed']) => {
             if (!payload?.telephon) return;
             setAvatarMap(prev => ({ ...prev, [payload.telephon]: payload.avatar_url || '' }));
         };
 
         // Handler: un contacto cambió su username
-        const handleUsernameChanged = (payload) => {
+        const handleUsernameChanged = (payload: WsHandlerMap['username_changed']) => {
             if (!payload?.telephon) return;
             const { telephon, new_username } = payload;
             // Actualizar en contactos
@@ -404,7 +531,7 @@ export const DashboardProvider = ({ children }) => {
         };
 
         // Handler: un mensaje fue editado (por mí o por el otro participante)
-        const handleEditMessage = (updatedMsg) => {
+        const handleEditMessage = (updatedMsg: WsHandlerMap['edit_message']) => {
             if (!updatedMsg?.MessageID) return;
             const myTelephon = profileRef.current?.Telephon;
             // Determinar en qué chat está este mensaje
@@ -425,7 +552,7 @@ export const DashboardProvider = ({ children }) => {
         };
 
         // Handler: un mensaje fue eliminado para todos (por mí o por el otro participante)
-        const handleDeleteMessage = (deletedMsg) => {
+        const handleDeleteMessage = (deletedMsg: WsHandlerMap['delete_message']) => {
             if (!deletedMsg?.MessageID) return;
             const myTelephon = profileRef.current?.Telephon;
             // Determinar en qué chat está este mensaje
@@ -444,7 +571,7 @@ export const DashboardProvider = ({ children }) => {
         // ── Group event handlers ───────────────────────────────────────────────────
 
         /** Incoming group message (from sender confirm or group broadcast). */
-        const handleGroupChatMessage = (msg) => {
+        const handleGroupChatMessage = (msg: WsHandlerMap['group_chat']) => {
             if (!msg?.GroupID) return;
             setGroupMessages(prev => {
                 const existing = prev[msg.GroupID] || [];
@@ -454,7 +581,7 @@ export const DashboardProvider = ({ children }) => {
         };
 
         /** Someone in a group is typing. */
-        const handleGroupTyping = (payload) => {
+        const handleGroupTyping = (payload: WsHandlerMap['group_typing']) => {
             if (!payload?.groupID || !payload?.from) return;
             // Reuse typingUsers with a composite key so it does not conflict with 1:1.
             const key = `group:${payload.groupID}:${payload.from}`;
@@ -473,7 +600,7 @@ export const DashboardProvider = ({ children }) => {
         };
 
         /** A group message was edited. */
-        const handleGroupEditMessage = (updatedMsg) => {
+        const handleGroupEditMessage = (updatedMsg: WsHandlerMap['group_edit_message']) => {
             if (!updatedMsg?.MessageID || !updatedMsg?.GroupID) return;
             setGroupMessages(prev => {
                 const msgs = prev[updatedMsg.GroupID];
@@ -490,7 +617,7 @@ export const DashboardProvider = ({ children }) => {
         };
 
         /** A group message was deleted for everyone. */
-        const handleGroupDeleteMessage = (deletedMsg) => {
+        const handleGroupDeleteMessage = (deletedMsg: WsHandlerMap['group_delete_message']) => {
             if (!deletedMsg?.MessageID || !deletedMsg?.GroupID) return;
             setGroupMessages(prev => {
                 const msgs = prev[deletedMsg.GroupID];
@@ -516,7 +643,7 @@ export const DashboardProvider = ({ children }) => {
         // de avatar o de miembros de un grupo cerraba el chat abierto.
 
         /** A group avatar was updated — update it in the groups list and selectedGroup. */
-        const handleGroupAvatarUpdate = (payload) => {
+        const handleGroupAvatarUpdate = (payload: WsHandlerMap['group_avatar_update']) => {
             if (!payload?.groupID || payload.avatarUrl === undefined) return;
             setGroups(prev => prev.map(g =>
                 g.ID === payload.groupID ? { ...g, AvatarUrl: payload.avatarUrl } : g
@@ -527,11 +654,11 @@ export const DashboardProvider = ({ children }) => {
         };
 
         /** Members were added to a group — inject system messages and update member list. */
-        const handleGroupMemberAdded = (payload) => {
+        const handleGroupMemberAdded = (payload: WsHandlerMap['group_member_added']) => {
             if (!payload?.groupID || !payload?.addedMembers?.length) return;
             const adder = payload.addedByUsername || 'Alguien';
             const now = Date.now();
-            const systemMsgs = payload.addedMembers.map((m, i) => ({
+            const systemMsgs: SystemGroupMessage[] = payload.addedMembers.map((m, i) => ({
                 MessageID: `system_add_${now}_${i}_${m.telephon}`,
                 GroupID: payload.groupID,
                 IsSystem: true,
@@ -552,7 +679,7 @@ export const DashboardProvider = ({ children }) => {
                 const newMembers = (payload.addedMembers || []).map(m => ({
                     Telephon: m.telephon,
                     Username: m.username,
-                    Role: 'member',
+                    Role: 'member' as const,
                 }));
                 const existing = new Set((prev.Members || []).map(m => m.Telephon));
                 const toAdd = newMembers.filter(m => !existing.has(m.Telephon));
@@ -565,10 +692,10 @@ export const DashboardProvider = ({ children }) => {
         };
 
         /** A group member left — inject a system message and update member count/list. */
-        const handleGroupMemberLeft = (payload) => {
+        const handleGroupMemberLeft = (payload: WsHandlerMap['group_member_left']) => {
             if (!payload?.groupID) return;
             const displayName = payload.username || payload.telephon;
-            const systemMsg = {
+            const systemMsg: SystemGroupMessage = {
                 MessageID: `system_${Date.now()}_${Math.random()}`,
                 GroupID: payload.groupID,
                 IsSystem: true,
@@ -636,33 +763,32 @@ export const DashboardProvider = ({ children }) => {
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
     useEffect(() => {
-        if (!selectedGroup?.ID || !isConnected) return;
-        sendGroupJoin(selectedGroup.ID);
+        const groupId = selectedGroup?.ID;
+        if (!groupId || !isConnected) return;
+        sendGroupJoin(groupId);
     }, [selectedGroup?.ID, isConnected, sendGroupJoin]);
 
     // manejar clicks sobre notificaciones (fuerza apertura de chat)
     useEffect(() => {
-        const handler = ({ telephon }) => {
+        const handler = (payload: NotificationClickPayload | CustomEvent<NotificationClickPayload>) => {
+            const telephon = extractNotificationTelephon(payload);
             if (!telephon) return;
             // intentar seleccionar contacto o grupo existente
-            const contact = contacts.find(c => c.Number === telephon);
-            const group = allChatGroups[telephon];
-            const sel = contact || group || { Number: telephon, Username: telephon, Status: 'unknown' };
-            setSelectedContact(sel);
+            setSelectedContact(resolveChatTarget(telephon, contacts, allChatGroups));
             setSidebarView('chats');
             setSidebarOpen(false);
         };
 
         onNotificationClick(handler);
         // algunas notificaciones se disparan como evento de ventana
-        window.addEventListener('notification-click', handler);
+        window.addEventListener('notification-click', handler as EventListener);
         return () => {
             offNotificationClick(handler);
-            window.removeEventListener('notification-click', handler);
+            window.removeEventListener('notification-click', handler as EventListener);
         };
     }, [contacts, allChatGroups, setSidebarView, setSidebarOpen, setSelectedContact]);
 
-    const value = {
+    const value: DashboardContextValue = {
         profile, setProfile,
         myAvatar, setMyAvatar,
         globalWallpaper, setGlobalWallpaper,

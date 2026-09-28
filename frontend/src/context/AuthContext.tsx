@@ -1,25 +1,52 @@
-import { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
+import {
+    createContext, useState, useContext, useEffect, useCallback, useMemo,
+    type ReactNode, type Dispatch, type SetStateAction,
+} from 'react';
 import api, { SESSION_EXPIRED_EVENT } from '../api/axios';
+import type { UserGet, UserLoginRequest } from '../types/api';
 
-const AuthContext = createContext(null);
+/** Perfil de sesión normalizado que expone AuthContext (derivado de UserGet). */
+export interface AuthUser {
+    username: string;
+    telephon: string;
+    avatar: string;
+}
 
-export const useAuth = () => useContext(AuthContext);
+export interface AuthContextValue {
+    user: AuthUser | null;
+    login: (username: string, password: string) => Promise<boolean>;
+    logout: () => Promise<void>;
+    loading: boolean;
+    updateUsername: (username: string) => void;
+    setUser: Dispatch<SetStateAction<AuthUser | null>>;
+    refreshUser: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export const useAuth = (): AuthContextValue => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};
 
 // El backend devuelve el perfil con claves Username / Telephon / avatar_url.
-const toUser = (data) => ({
-    username: data?.Username || '',
-    telephon: data?.Telephon || '',
-    avatar: data?.avatar_url || '',
+const toUser = (data: UserGet): AuthUser => ({
+    username: data.Username || '',
+    telephon: data.Telephon || '',
+    avatar: data.avatar_url || '',
 });
 
-export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+    const [user, setUser] = useState<AuthUser | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Restaurar la sesión desde la cookie HttpOnly al cargar
     useEffect(() => {
         let cancelled = false;
-        api.get('/api/v1/user')
+        api.get<UserGet>('/api/v1/user')
             .then(({ data }) => { if (!cancelled) setUser(toUser(data)); })
             .catch(() => { if (!cancelled) setUser(null); })
             .finally(() => { if (!cancelled) setLoading(false); });
@@ -36,12 +63,13 @@ export const AuthProvider = ({ children }) => {
 
     // Recarga el perfil del usuario autenticado (tras login o activación)
     const refreshUser = useCallback(async () => {
-        const { data } = await api.get('/api/v1/user');
+        const { data } = await api.get<UserGet>('/api/v1/user');
         setUser(toUser(data));
     }, []);
 
-    const login = useCallback(async (username, password) => {
-        await api.post('/api/v1/auth/login', { username, password });
+    const login = useCallback(async (username: string, password: string): Promise<boolean> => {
+        const body: UserLoginRequest = { username, password };
+        await api.post('/api/v1/auth/login', body);
         // Las cookies HttpOnly las establece el servidor
         await refreshUser();
         return true;
@@ -57,11 +85,11 @@ export const AuthProvider = ({ children }) => {
         }
     }, []);
 
-    const updateUsername = useCallback((username) => {
+    const updateUsername = useCallback((username: string) => {
         setUser((prev) => (prev ? { ...prev, username } : prev));
     }, []);
 
-    const value = useMemo(
+    const value = useMemo<AuthContextValue>(
         () => ({ user, login, logout, loading, updateUsername, setUser, refreshUser }),
         [user, login, logout, loading, updateUsername, refreshUser]
     );
