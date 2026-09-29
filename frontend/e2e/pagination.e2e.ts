@@ -1,9 +1,11 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
 import { openSession } from './support/session';
-import { openChat, messageText, uniqueText } from './support/chat';
+import { openChat, messageBubbles, messageText, uniqueText } from './support/chat';
 
 // La ventana más reciente es de 200 mensajes: con 230 los 30 primeros quedan en una página anterior.
 const SEED_COUNT = 230;
+// Desplazamiento máximo admitido del ancla al anteponer la página anterior.
+const TOLERANCIA_PX = 40;
 
 interface UserResponse {
   Telephon: string;
@@ -46,22 +48,35 @@ test('scroll hacia arriba en un chat largo carga mensajes anteriores sin saltar'
 
     // Ancla: el mensaje más antiguo cargado. Tras cargar la página anterior debe
     // seguir en pantalla (sin salto de scroll).
-    const bubbles = ana.page.locator('.whitespace-pre-wrap').filter({ hasText: new RegExp(`^${tag} #\\d{3}$`) });
+    const bubbles = messageBubbles(ana.page).filter({ hasText: new RegExp(`^${tag} #\\d{3}$`) });
     const anchor = bubbles.first();
     const anchorText = (await anchor.textContent()) ?? '';
     expect(anchorText).toContain(tag);
 
-    const container = anchor.locator('xpath=ancestor::div[contains(@class,"overflow-y-auto")][1]');
-    await container.evaluate((el) => {
-      el.scrollTop = 0;
-      el.dispatchEvent(new Event('scroll'));
+    const offsetOf = (loc: Locator) =>
+      loc.evaluate((el) => {
+        const scroller = el.closest('.overflow-y-auto');
+        if (!scroller) throw new Error('sin contenedor de scroll');
+        return el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      });
+
+    // Llega arriba y mide el ancla en el mismo paso síncrono, antes de que la carga anteponga nada.
+    const offsetAntes = await anchor.evaluate((el) => {
+      const scroller = el.closest('.overflow-y-auto');
+      if (!scroller) throw new Error('sin contenedor de scroll');
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event('scroll'));
+      return el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
     });
 
     await expect(messageText(ana.page, label(1))).toBeAttached({ timeout: 15_000 });
 
-    // El ancla sigue dentro del área visible del contenedor.
+    // El ancla conserva su posición relativa al contenedor (tolerancia pequeña por el layout).
     const anchorAfter = messageText(ana.page, anchorText);
     await expect(anchorAfter).toBeInViewport();
+    await expect
+      .poll(async () => Math.abs((await offsetOf(anchorAfter)) - offsetAntes), { timeout: 5_000 })
+      .toBeLessThanOrEqual(TOLERANCIA_PX);
   } finally {
     await ana.context.close();
     await marta.context.close();

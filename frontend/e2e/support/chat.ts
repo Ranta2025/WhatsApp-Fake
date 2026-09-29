@@ -44,16 +44,45 @@ export async function attachImage(page: Page): Promise<void> {
 
 export async function recordVoiceNote(page: Page): Promise<void> {
   await page.getByLabel('Grabar nota de voz').click();
-  // El micrófono falso necesita un instante para producir audio.
-  await page.waitForTimeout(2000);
-  await page.getByLabel('Detener y enviar nota de voz').click();
+  // Espera al estado observable de grabación (aparece el botón de detener) y deja una
+  // duración mínima para que el micrófono falso produzca un blob no vacío.
+  const stop = page.getByLabel('Detener y enviar nota de voz');
+  await expect(stop).toBeVisible();
+  await page.waitForTimeout(500);
+  await stop.click();
 }
 
-export function storageImages(page: Page): Locator {
-  return page.locator('img[src*="/storage/"]');
+interface UploadResponse {
+  url: string;
+}
+
+function isUploadResponse(value: unknown): value is UploadResponse {
+  return typeof value === 'object' && value !== null && typeof (value as { url?: unknown }).url === 'string';
+}
+
+// Ejecuta la acción y devuelve la URL de la subida (POST /api/v1/upload) que provocó.
+export async function uploadedUrlFrom(page: Page, action: () => Promise<void>): Promise<string> {
+  const response = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/upload',
+  );
+  await action();
+  const res = await response;
+  expect(res.ok()).toBeTruthy();
+  const body: unknown = await res.json();
+  if (!isUploadResponse(body)) throw new Error('POST /api/v1/upload sin "url"');
+  return body.url;
 }
 
 // Burbuja de mensaje con ese texto (excluye la vista previa del texto en la barra lateral).
 export function messageText(page: Page, text: string): Locator {
-  return page.locator('.whitespace-pre-wrap').getByText(text, { exact: true });
+  return messageBubbles(page).getByText(text, { exact: true });
+}
+
+export function messageBubbles(page: Page): Locator {
+  return page.locator('.whitespace-pre-wrap');
+}
+
+// Burbuja de mensaje de grupo con ese texto (el grupo usa otro marcado que el chat 1:1).
+export function groupMessageText(page: Page, text: string): Locator {
+  return page.locator('div.rounded-2xl.shadow-sm').getByText(text, { exact: true });
 }

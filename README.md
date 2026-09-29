@@ -365,7 +365,7 @@ npm run test:e2e                  # o, desde la raíz: make e2e
 - Informe HTML en `frontend/playwright-report/` (`npx playwright show-report`).
 - No ejecutes `go test -tags integration` contra este stack: hace `TRUNCATE` de las tablas.
 
-GitHub Actions (`.github/workflows/ci.yml`) ejecuta el job `unit` (`go test ./...` y lint, typecheck, test y build del frontend) y, si pasa, el job `e2e` (levanta el stack con Docker Compose, `make test-integration` y Playwright; sube el informe y los logs si falla).
+GitHub Actions (`.github/workflows/ci.yml`) ejecuta el job `unit` (`go test ./...` y lint, typecheck, test y build del frontend) y, si pasa, el job `e2e` (levanta el stack con Docker Compose, `make test-integration` y Playwright; sube siempre el informe de Playwright y, si falla o se cancela, los logs de Docker Compose).
 
 ---
 

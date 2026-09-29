@@ -2,11 +2,12 @@ import { test, expect } from '@playwright/test';
 import { openSession } from './support/session';
 import {
   attachImage,
+  groupMessageText,
   openGroup,
   recordVoiceNote,
   sendGroupText,
-  storageImages,
   uniqueText,
+  uploadedUrlFrom,
 } from './support/chat';
 
 test.describe('grupo "Equipo demo"', () => {
@@ -19,7 +20,7 @@ test.describe('grupo "Equipo demo"', () => {
 
       const texto = uniqueText('grupo');
       await sendGroupText(ana.page, texto);
-      await expect(marta.page.getByText(texto)).toBeVisible();
+      await expect(groupMessageText(marta.page, texto)).toBeVisible();
     } finally {
       await ana.context.close();
       await marta.context.close();
@@ -33,15 +34,12 @@ test.describe('grupo "Equipo demo"', () => {
       await openGroup(ana.page);
       await openGroup(marta.page);
 
-      // El estado es compartido: se compara contra lo que ya había, sin totales absolutos.
-      const imagenesAntes = await storageImages(marta.page).count();
-      const audiosAntes = await marta.page.locator('audio').count();
+      // La URL devuelta por la subida de Ana identifica su media: Marta debe recibir exactamente esa.
+      const imagenUrl = await uploadedUrlFrom(ana.page, () => attachImage(ana.page));
+      await expect(marta.page.locator(`img[src="${imagenUrl}"]`)).toBeVisible();
 
-      await attachImage(ana.page);
-      await expect(storageImages(marta.page)).not.toHaveCount(imagenesAntes);
-
-      await recordVoiceNote(ana.page);
-      await expect(marta.page.locator('audio')).not.toHaveCount(audiosAntes);
+      const audioUrl = await uploadedUrlFrom(ana.page, () => recordVoiceNote(ana.page));
+      await expect(marta.page.locator(`audio[src="${audioUrl}"]`)).toBeAttached();
     } finally {
       await ana.context.close();
       await marta.context.close();

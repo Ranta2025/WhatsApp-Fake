@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 import { openSession } from './support/session';
 import { uniqueText } from './support/chat';
 
+// Tope de estados a recorrer en el visor de Ana.
+const MAX_ESTADOS = 30;
+
 test('Ana publica un estado de texto y Luis lo ve', async ({ browser }) => {
   const ana = await openSession(browser, 'ana');
   const luis = await openSession(browser, 'luis');
@@ -18,7 +21,15 @@ test('Ana publica un estado de texto y Luis lo ve', async ({ browser }) => {
     await luis.page.getByRole('tab', { name: 'Estados' }).click();
     await luis.page.getByText('Ana', { exact: true }).first().click();
     const visor = luis.page.getByRole('dialog', { name: /Estado de/ });
-    await expect(visor.getByText(texto)).toBeVisible();
+    await expect(visor).toBeVisible();
+    // Los estados se acumulan entre ejecuciones: el visor puede abrir en uno anterior,
+    // así que se avanza (acotado) hasta el nuevo.
+    const objetivo = visor.getByText(texto);
+    for (let i = 0; i < MAX_ESTADOS && !(await objetivo.isVisible()); i++) {
+      await luis.page.keyboard.press('ArrowRight');
+      await expect(visor).toBeVisible();
+    }
+    await expect(objetivo).toBeVisible();
   } finally {
     await ana.context.close();
     await luis.context.close();
