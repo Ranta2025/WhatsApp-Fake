@@ -20,6 +20,7 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | group-read-receipts | `feat/group-read-receipts` | done | [group-read-receipts.md](group-read-receipts.md) |
 | message-search | `feat/message-search` | done | [message-search.md](message-search.md) |
 | observability | `feat/observability` | pending | [observability.md](observability.md) |
+| group-admin-permissions | `feat/group-admin-permissions` | pending | [group-admin-permissions.md](group-admin-permissions.md) |
 | reactions | `feat/reactions` | pending | [reactions.md](reactions.md) |
 | disappearing-messages | `feat/disappearing-messages` | pending | [disappearing-messages.md](disappearing-messages.md) |
 | pwa | `feat/pwa` | pending | [pwa.md](pwa.md) |
@@ -28,11 +29,12 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 
 ## Recommended order for the pending features (after message-search is closed)
 1. **observability** - backend-only, independent, low blast radius, and gives metrics/request ids to debug everything after it.
-2. **reactions** - touches the message schemas and history paths while the contract is still small; the disappearing-messages job must later clean reactions, so reactions first.
-3. **disappearing-messages** - builds on the search and reactions changes (read-path filtering, reaction cleanup); introduces the first hard-delete and MinIO cleanup.
-4. **pwa** - decides how the single service worker is built; must precede web-push.
-5. **web-push** - adds the `push` handler and click routing to the worker that `pwa` produced (iOS support also needs the installable PWA).
-6. **api-casing** - LAST: it renames the contract across backend, frontend and tests, so doing it before the others would force rebases of every branch and rewrite new features twice; the negotiated compatibility window also covers cached PWA bundles.
+2. **group-admin-permissions** - user-requested WhatsApp-style group roles/settings; introduces the persisted system-message discriminator (`Kind`) and typed permission errors on group paths, so reactions (no reactions on system messages) and disappearing-messages (expire/clean them) are designed against it instead of retrofitted; independent of both otherwise.
+3. **reactions** - touches the message schemas and history paths while the contract is still small; the disappearing-messages job must later clean reactions, so reactions first.
+4. **disappearing-messages** - builds on the search and reactions changes (read-path filtering, reaction cleanup); introduces the first hard-delete and MinIO cleanup.
+5. **pwa** - decides how the single service worker is built; must precede web-push.
+6. **web-push** - adds the `push` handler and click routing to the worker that `pwa` produced (iOS support also needs the installable PWA).
+7. **api-casing** - LAST: it renames the contract across backend, frontend and tests, so doing it before the others would force rebases of every branch and rewrite new features twice; the negotiated compatibility window also covers cached PWA bundles.
 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 

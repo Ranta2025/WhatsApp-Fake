@@ -1,0 +1,142 @@
+# Feature: group-admin-permissions
+
+## Objective
+WhatsApp-style group administration:
+- Admins can promote a member to admin ("Designar como admin") and dismiss an admin ("Descartar como admin").
+- Admins can remove participants; adding participants is admin-only or open to everyone, per group setting.
+- Admin-controlled group settings, each "todos los participantes" | "solo admins":
+  - "Enviar mensajes"
+  - "Editar info del grupo" (name, description, group avatar)
+  - "Agregar otros participantes"
+- Every change leaves a system message in the group history ("Ana designó a Luis como admin", "Ana cambió la configuración para que solo los admins puedan enviar mensajes", "Ana eliminó a Luis", "Ana añadió a Marta") and a WS event so every member's UI updates live (role badges, disabled composer with a banner, hidden edit/add controls).
+- Enforcement is server-side on EVERY path (REST and WS). Hiding controls in the UI is convenience, not security.
+
+## Problem / Why
+Today the "admin" role is cosmetic. It is stored and shown as a badge, but nothing checks it: any member can add members and change the group avatar, nobody can remove a member, nobody can be promoted or demoted, and there are no group settings at all. Group name and description cannot be edited after creation. Group events ("X añadió a Y", "X salió del grupo") exist only as client-side synthetic entries that vanish on reload.
+
+## Scope / Authorized
+The user requested this feature on 2026-09-29: "add a new feature ... the way WhatsApp works: in groups admins can make other members admins and remove admin; they can add or remove people; the group can be set so only admins can send messages, or so anyone can edit the group info or add anyone. Base it on how WhatsApp works."
+Scope is backend (model, repo, service, REST, WS enforcement, persisted system messages), frontend (state, members menu, settings panel, composer banner, info editing), Go e2e and Playwright.
+Out of scope (phase 2): "Aprobar nuevos participantes", invite links, per-user "who can add me" privacy, communities.
+
+## Current state (verified 2026-09-29 on branch feat/observability; re-verify at implementation time, another writer was active)
+Roles and model:
+- `GroupMember.Role` is `"admin" | "member"`, default `member` (`backend/models/group.go:30`). DB CHECK `chk_group_members_role` (`backend/database/postgres.go:275-281`). No owner concept beyond `Group.CreatorID` (`backend/models/group.go:17`), which is only used to return `CreatorTelephon` (`backend/services/serviceGroup.go:231,250`; `backend/schemas/schemaGroup.go:12`). `Group` has NO settings fields (`backend/models/group.go:12-21`).
+- Creator becomes admin in `CreateGroupWithMembers` (`backend/repos/groupData.go:32-60`, role at :46/:53); other members are `member`. Seed: Ana admin, Luis/Marta member (`backend/app/seed.go:108-118`).
+- Membership is soft-delete; unique partial index on `(group_id, user_id)` allows re-joining (`backend/models/group.go:24-25`, `backend/database/postgres.go:255`).
+- Last-admin rule ALREADY exists on leave: if no admin remains, the oldest remaining member by `created_at ASC` is promoted, in one transaction (`backend/repos/groupData.go:397-434`). It matches WhatsApp; needs a deterministic `id ASC` tie-break.
+- `GetMemberRole` exists but nothing calls it for authorization (`backend/repos/groupData.go:163-180`).
+
+Who can do what today (all "any active member"):
+- Add members: `POST /api/v1/group/:groupID/members` (`backend/routers/api/api.go:128`) -> `ServiceGroup.AddMembers` checks only `IsMember`; invitees must be the requester's accepted contacts (`backend/services/serviceGroup.go:140-172`, `resolveMemberTelephons` :421). Comment states "Cualquier miembro puede añadir" (`backend/handlers/handlerGroup.go:170-171`). Repo insert with `JoinedMessageID` snapshot: `backend/repos/groupData.go:63`.
+- Remove members: NOT POSSIBLE. Only self-leave: `DELETE /:groupID/member` (`backend/routers/api/api.go:129`; `HandleLeaveGroup` `backend/handlers/handlerGroup.go:496-530`; service :497; repo :397). Leave calls `LeaveRoomByTelephon` and broadcasts `group_member_left`.
+- Promote/demote: NOT POSSIBLE (no endpoint).
+- Group avatar: `PATCH /:groupID/avatar` (`backend/routers/api/api.go:130`) -> `UpdateGroupAvatar` checks only membership (`backend/services/serviceGroup.go:513-530`); broadcasts `group_avatar_update` (`backend/handlers/handlerGroup.go:455-490`). The upload itself is the generic `POST /api/v1/upload` (`frontend/.../GroupChatWindow.tsx:539-560`).
+- Name/description: set at creation only (`serviceGroup.go:102-137`, limits `maxGroupNameLen`/`maxGroupDescriptionLen`); NO update endpoint.
+- Group wallpaper: purely client-side and per user (`groupWallpapers` state in `GroupChatWindow.tsx:438-447`, section at :818-850). It is NOT group info and must NOT be gated.
+- Send: REST `POST /:groupID/message` (`api.go:133` -> `HandleSendGroupMessage`, `handlerGroup.go:236-269`) and WS `group_chat` (`backend/websocket/message_handlers.go:309-337`) both end in `ServiceGroup.SendGroupMessage`, which checks only `IsMember` (`serviceGroup.go:264-324`). One service-level check therefore covers both. REST maps every service error to 400 (`handlerGroup.go:250-257`).
+- Edit/delete message: author-only, plus `IsMember` (`serviceGroup.go:364-407`; WS `message_handlers.go:362-426`; REST `api.go:135,138`).
+- `group_typing`: forwarded if the sender is in the hub room; NO DB check (`message_handlers.go:341-358`, room check `hub.go:245`). `group_join` checks active membership via `GetMemberTelephons` (`message_handlers.go:430-458`).
+- Group detail: `GetGroupDetail` returns members with `Role` and the caller's `UserRole`; non-members get 403 (`serviceGroup.go:204-262`, `schemas/schemaGroup.go:9-52`, `handlerGroup.go:142-164`). `GroupResponse.UserRole` also comes from the list query (`repos/groupData.go:130-148`).
+
+Interplay features:
+- Read receipts: watermarks per active member; removed members are soft-deleted and excluded from eligibility; re-adding snapshots a fresh `JoinedMessageID` (`backend/repos/groupReceipts.go`, `backend/services/groupReceipts.go`, `groupData.go:63`). The group row lock `lockGroupRow` (RR6b) serializes inserts and joins; reuse it for role/removal transactions.
+- Search: group search requires an active membership row (`backend/repos/*earch*.go:100` `EXISTS (... deleted_at IS NULL)`, global search `groupMembership` const :29), so removed members lose search automatically. Add a regression test.
+- Hub rooms: leaving calls `LeaveRoomByTelephon` (`handlerGroup.go:~515`, `websocket/hub.go:231-243`). A remove-by-admin path MUST do the same or the removed member keeps receiving room broadcasts (`SendToGroup`).
+- System messages today are client-only synthetic `IsSystem` entries created in `DashboardContext.tsx:1053-1108` (`group_member_added` / `group_member_left`), rendered centered in `GroupChatWindow.tsx:199-201,262-270`; cursors ignore them (`DashboardContext.tsx:532`). Not persisted: gone after reload, differ between clients that were offline.
+- WS events today: `group_added`, `group_member_added`, `group_avatar_update`, `group_member_left` (`frontend/src/types/ws.ts:141-166`).
+- Client `left` state: `UserRole: 'left'` sentinel in `groups`/`selectedGroup` (`DashboardContext.tsx:72-80`, set in `GroupChatWindow.tsx:508-509`); composer shows "Ya no eres miembro de este grupo" (`GroupMessageInput.tsx:28-46`); search disabled (`GroupChatWindow.tsx:595`). "Eliminar grupo" is only leave + local removal (`GroupChatWindow.tsx:519-537`).
+
+Frontend admin UI today:
+- Sidebar "admin" badge from `g.UserRole` (`frontend/src/features/dashboard/components/Sidebar.tsx:427`); member row badge `m.Role === 'admin'` (`GroupChatWindow.tsx:908`).
+- Info panel: avatar menu with "Cambiar" available to any member (`GroupChatWindow.tsx:740-790`), read-only description (:805), wallpaper (:818-850), members list with an "Añadir" button for everyone (:872-880), member popover with only "Iniciar chat" and "Agregar a contactos" (:925-946), "Salir del grupo" (:955).
+- `AddMembersModal` (`GroupChatWindow.tsx:306+`), `CreateGroupModal.tsx` (creator implicitly admin; no change needed).
+- Types: `GroupRole` (`frontend/src/types/api.ts:31`), `UserRole` (:104), member `Role` (:112).
+- e2e: demo users `ana_demo` (admin of "Equipo demo"), `luis_demo`, `marta_demo` (`frontend/e2e/support/users.ts`); group specs in `frontend/e2e/group.e2e.ts`.
+
+## Decisions (orchestrator defaults; resolve "Open questions" before the first write)
+- **Roles.** Keep `admin | member`. `Group.CreatorID` stays informational. A WhatsApp group has NO protected owner: any admin can dismiss or remove any other admin, creator included (stated from product knowledge, not verifiable in this repo). Default: replicate that. The invariant instead is "the acting admin stays admin", so a group never drops to zero admins through promote/dismiss/remove; only leaving can, and the existing oldest-member auto-promotion (id tie-break) covers it.
+- **Actions and rules** (all require the actor to be an active admin):
+  - Promote: target must be an active `member`. Dismiss: target must be an active `admin` other than the actor (WhatsApp offers no self-dismiss; an admin who wants out just leaves). Remove: target must be another active member; admins can be removed directly. Self targets are rejected on remove (use leave) and on dismiss.
+  - A removed user can be added again later (role `member`, fresh `JoinedMessageID`).
+  - Concurrency: role/remove/leave run in one transaction under `lockGroupRow`, re-checking the actor's role inside the transaction (two admins dismissing each other must not leave zero admins).
+- **Settings** (columns on `groups`, all bool, default false = current behavior, so existing groups change nothing): `only_admins_can_send`, `only_admins_can_edit_info`, `only_admins_can_add_members`. Only admins may change settings. Exposed as flat PascalCase fields on `GroupResponse` (`OnlyAdminsCanSend`, `OnlyAdminsCanEditInfo`, `OnlyAdminsCanAddMembers`, no omitempty) per the cross-feature casing rule (inside an existing PascalCase schema). New endpoints/events are camelCase.
+- **Permission matrix (single pure function, mirrored on the client):**
+  - send / edit own message: admin always; member only if `!only_admins_can_send`.
+  - delete own message: any active member (WhatsApp lets restricted members delete their own history), open to change.
+  - edit info (name, description, avatar): admin, or member if `!only_admins_can_edit_info`.
+  - add members: admin, or member if `!only_admins_can_add_members`; invitee rules unchanged (requester's accepted contacts).
+  - promote / dismiss / remove / change settings: admin only, never configurable.
+  - typing: same as send.
+  - read/deliver acks, search, history, group_join: any active member (unchanged).
+- **New API** (camelCase bodies; all under `MiddlewareGroupID`, errors typed):
+  - `PUT /api/v1/group/:groupID/members/:telephon/role` `{ "role": "admin" | "member" }`.
+  - `DELETE /api/v1/group/:groupID/members/:telephon`.
+  - `PATCH /api/v1/group/:groupID/settings` with optional `onlyAdminsCanSend`, `onlyAdminsCanEditInfo`, `onlyAdminsCanAddMembers` (pointer bools; at least one required).
+  - `PATCH /api/v1/group/:groupID` with optional `name`, `description` (same validation as create).
+  - Existing `DELETE /:groupID/member` (self leave) and `POST /:groupID/members` and `PATCH /:groupID/avatar` keep their paths and gain checks.
+- **Errors.** Typed `ErrNotGroupAdmin`, `ErrGroupSendRestricted`, `ErrGroupEditRestricted`, `ErrGroupAddRestricted`, `ErrInvalidRoleChange` in `models`/`services` next to `ErrNotGroupMember`; handlers map them to 403 (permission) / 400 (invalid target) / 404 (target not a member). Existing not-member behavior (400 in some handlers) is unchanged. WS paths reply with `sendError` and never broadcast.
+- **System messages become server-persisted** (recommended): add to `GroupMessage` a `Kind` (`"" | "system"`), `SystemEvent` (`member_added`, `member_removed`, `member_left`, `admin_granted`, `admin_revoked`, `settings_changed`, plus `info_changed` for name/description/avatar) and `SystemTarget` telephons, stored structured, not as rendered text; `SenderID` = actor. The client renders per viewer ("Ana te designó como admin" vs "Ana designó a Luis como admin", "Tú eliminaste a Luis"), so it localizes and handles "you" without storing per-recipient strings. The system message is inserted in the SAME transaction as the state change, then broadcast inside the state event (`systemMessage` field) so the client applies state and appends the message atomically, no separate `group_chat`.
+  - Tradeoffs: persisted survives reload and is identical for every member (WhatsApp behavior) and ordered by id; costs: it consumes message ids (watermarks and `JoinedMessageID` stay valid because they are max-id based; receipts eligibility must skip `Kind=system` senders' ticks and Info), must be excluded from search (both scopes), reply, edit, delete, Info, ticks, media list and unread counts, and needs to be respected by reactions and disappearing-messages later. Client-only synthetic entries are cheaper but lose history and diverge across clients. Recommendation: persist, and migrate the existing add/leave synthetic entries to the same mechanism so there is one path.
+- **Events (camelCase, sent to all active members incl. actor's other tabs; the actor also gets the HTTP response):** `group_member_role` `{groupID, telephon, role, systemMessage}`; `group_member_removed` `{groupID, telephon, username, newMemberCount, systemMessage}` (removed user also gets it and moves to the `left` state; server calls `LeaveRoomByTelephon`); `group_settings` `{groupID, onlyAdminsCanSend, onlyAdminsCanEditInfo, onlyAdminsCanAddMembers, systemMessage}`; `group_info` `{groupID, name, description, systemMessage}` (avatar keeps `group_avatar_update`, gains `systemMessage`); existing `group_member_added` / `group_member_left` gain `systemMessage` (keep old fields for compatibility). Events go through the existing `notifyAllGroupMembers` (`handlerGroup.go:60-74`).
+- **Composer when restricted:** a non-admin sees the same disabled-composer pattern as `left` with the banner "Solo los admins pueden enviar mensajes" (attach, voice and emoji hidden, replying/editing cancelled). Admins are unaffected. The banner is reactive to role and settings changes while the group is open.
+- **Client permissions:** pure lib `frontend/src/features/dashboard/lib/groupPermissions.ts` (`canSend`, `canEditInfo`, `canAddMembers`, `canManageMembers`, `canChangeSettings`, `left` => all false) mirroring the backend matrix, used by the composer, panel and modals. Same runtime-guard principle for new WS payloads.
+- **Wallpaper** stays per-user and ungated. Approval of new participants is phase 2.
+
+## Constraints
+- Branch: `feat/group-admin-permissions`, created at implementation time from the LATEST feature branch in the chain (run `git branch --show-current` and `git status` first; per ROADMAP that is `feat/observability` if it is done).
+- TS strict with no `any`; runtime guards on network data. Never run `go test -tags integration` against the shared stack (`make test-integration` uses `-tags e2e`). Never `docker compose down -v`.
+- Commits: Conventional Commits, one work-unit commit per task with tests and docs, explicit pathspecs after `git reset -q`, per the repo rules in the ROADMAP.
+- Additive schema only: new columns with defaults through AutoMigrate; guard any new CHECK with `execMigration` like `postgres.go:275`. Existing groups must behave exactly as today until an admin changes a setting.
+- The 400-line figure is a planning heuristic only, not a task acceptance criterion. Forecast for the whole feature is above ~400 authored lines, so delivery follows `chained-pr` (one slice per backend/frontend/e2e group) and delivery strategy `ask-on-risk` (ask once for the chain strategy before the second slice).
+- Do not read or commit `.env*`.
+
+## TDD
+Strict TDD (session config). Runners:
+- `go test ./...` and `go vet ./...`
+- `cd frontend && npm run typecheck && npm run lint && npm run test && npm run build`
+- `make test-integration` (Go `-tags e2e`)
+- `cd frontend && npm run test:e2e` (Playwright against the running stack; rebuild first: `docker compose up -d --build app web`)
+
+## Tasks
+Route notation: delegated = one bounded Sonnet writer (per repo memory: Opus orchestrates, Sonnet implements); record trigger evidence per task.
+- [ ] GA1 Permission foundation (backend): add the three settings columns to `models.Group`; the pure permission matrix (`canSend/canEditInfo/canAddMembers/isAdmin`) and typed errors; `requireAdmin`/`requireCan*` service helpers using a single `GetMemberRole` + group-settings read; expose settings and the caller's role in `GroupResponse`/`GroupDetail` and the list query (`repos/groupData.go:130-148`); `id ASC` tie-break in the last-admin promotion (`groupData.go:426`). Tests: table-driven matrix (admin/member x each setting on/off, `left`/non-member denied), service tests with mocks, repo tests for tie-break and defaults on existing rows. Route: delegated.
+- [ ] GA2 Persisted system messages: `GroupMessage.Kind/SystemEvent/SystemTargets`, schema fields, a repo helper that inserts the system row inside the caller's transaction, `GroupMessageResponse` gains `Kind`/`SystemEvent`/`SystemTargets` (omitempty PascalCase). Convert the existing `AddMembers` and `LeaveGroup` to persist `member_added` / `member_left` and return the actually-added list from the service (today the handler infers it from `requested ∩ members`, `handlerGroup.go:190-213`). Exclude system rows from: search (`repos/*earch*.go`, group + global), message edit/delete/reply targets, receipts Info and tick eligibility, media list. Tests for every exclusion plus history pagination with system rows. Route: delegated.
+- [ ] GA3 Member management: promote/dismiss/remove endpoints and service/repo (single transaction under `lockGroupRow`, actor re-checked inside, invariants above), `LeaveRoomByTelephon` on removal, system messages (`admin_granted`, `admin_revoked`, `member_removed`), events `group_member_role` / `group_member_removed`. Tests: every invalid combination (non-admin actor, member->member, dismiss self, remove self, target not a member, target already admin/member, group with one admin cannot end with zero), rejoin after removal gets a fresh `JoinedMessageID`, removed member loses history/search/receipt access, hub room left, concurrent mutual dismissal (two goroutines against sqlite/pg per repo test style). Route: delegated.
+- [ ] GA4 Settings and enforcement on every path: `PATCH /settings`, `PATCH /:groupID` (name/description), event `group_settings` / `group_info`; enforce in `AddMembers` (`serviceGroup.go:140`), `UpdateGroupAvatar` (:513), new info update, `SendGroupMessage` (:264, covers REST and WS `group_chat`), `EditGroupMessage` (:364), and `HandleGroupTyping` (`message_handlers.go:341`, needs a cheap role/settings lookup; tradeoff: one indexed query per typing event, client already throttles; if too costly cache per client with invalidation on `group_settings`/`group_member_role`). Handlers map typed errors to 403. Tests: one enforcement test per protected path and per setting (REST and WS), WS forced-send from a restricted member replies `error` and broadcasts nothing, typing suppressed, admin unaffected, delete-own still allowed, settings change by non-admin rejected, unchanged settings produce no system message. Route: delegated.
+- [ ] GA5 Go e2e (`backend/integration`, `-tags e2e`, model on `e2e_group_receipts_test.go`): Ana creates a group with Luis and Marta; Luis (member) is forbidden (403) from remove/promote/settings/info edit; Ana promotes Luis; Luis removes Marta and Marta gets `group_member_removed`, can no longer fetch detail/history/search (403) and receives no further room messages; Ana sets only-admins-send: Marta REST send 403 and WS `group_chat` returns `error`, Luis (admin) still sends; Ana re-adds Marta; only-admins-add blocks a member add; last admin leaves and the oldest member is promoted; persisted system messages appear in the history in order. Route: delegated.
+- [ ] GA6 Frontend plumbing: types (`api.ts`, `ws.ts`) with guards for the new events and `Kind` messages, `groupApi.ts` calls, `lib/groupPermissions.ts`, DashboardContext handlers for `group_member_role` / `group_member_removed` / `group_settings` / `group_info` (update `groups[].UserRole`, `selectedGroup.Members[].Role`, settings, receipts marks via `removeMemberMark`, `left` state for the removed user, dedupe the persisted system message by id) and replace the synthetic `IsSystem` add/left entries with persisted ones (drop `GroupChatWindow.tsx:199-201` special case in favor of `Kind`). System message rendering with per-viewer wording (Tú/te). Tests: permissions matrix, each handler, dedupe, rendering wording, reload shows history. Route: delegated.
+- [ ] GA7 Frontend UI: member popover items "Designar como admin" / "Descartar como admin" / "Eliminar" (admin viewers, not on self, with confirm for remove); "Añadir" and avatar "Cambiar" hidden unless permitted; editable name/description in the info panel for permitted users; "Configuración del grupo" section (admin only, three toggles labelled "Enviar mensajes", "Editar info del grupo", "Agregar otros participantes" each todos / solo admins; non-admins see the current values read-only); composer banner "Solo los admins pueden enviar mensajes" in `GroupMessageInput.tsx`; removed user sees the `left` composer with wording "Un admin te eliminó de este grupo" (keep the `left` test ids). Component tests for each visibility rule and the banner. Route: delegated.
+- [ ] GA8 Playwright (new spec `frontend/e2e/group-admin.e2e.ts`, group created per test through the REST helper in `support/api.ts` so "Equipo demo" and reruns stay untouched): (1) Ana opens info, makes Luis admin (badge appears for all, system message visible and persists after reload); Luis removes Marta (Marta's UI switches to the removed state live, member count updates); Ana re-adds Marta. (2) Ana sets "Enviar mensajes: solo admins": Marta's composer becomes the banner live, Luis (admin) can still send; a forced WS send from Marta (raw WebSocket using her session token from `support/session.ts`, verify how auth is passed at implementation time) receives an `error` frame and Luis/Ana never see the message; switching back to "todos" re-enables Marta's composer. (3) "Editar info" and "Agregar participantes" toggles hide/show the controls for Marta. Two consecutive green runs. Route: delegated.
+- [ ] GA9 Close: full matrix (`go test ./...`, `go vet ./...`, frontend typecheck/lint/test/build, `make test-integration`, `npm run test:e2e` twice), update README/`docs` group section, update this document and the Engram mirror `odd/group-admin-permissions/tasks`, record reviewed commit ids per RDD.
+
+## Acceptance criteria
+- An admin can promote and dismiss admins and remove members; members cannot, and every attempt returns 403 on REST and an `error` frame on WS with no side effects.
+- Each of the three settings, when restricted, is enforced server-side on all protected paths (matrix above) and reflected live in every member's UI without reload; admins are unaffected.
+- With only-admins-send on, a non-admin cannot send by REST, by WS `group_chat`, edit a message or show typing, even with a hand-crafted client.
+- A removed member stops receiving room events, cannot read history or search, and can be re-added with a fresh receipt baseline. Read receipts and search behave as before for remaining members.
+- Existing groups behave as today (all settings default to open). The last-admin leave rule still promotes the oldest member deterministically.
+- Group events are persisted, ordered system messages that survive reload and render correctly per viewer; they do not appear in search, Info, ticks, replies, edits or media.
+- `go test ./...`, `go vet ./...`, typecheck, lint, test, build, `make test-integration` and `npm run test:e2e` (twice) are green, with no `any`.
+
+## Risks
+- Missing one enforcement path: mitigated by the matrix table plus one test per path; grep every `IsMember` call in `serviceGroup.go` and `websocket/` when reviewing.
+- System messages consume ids and touch receipts, search, pagination, unread counts and the sidebar last-message preview: each is an explicit GA2 exclusion with tests.
+- Race between concurrent role changes and leave: transaction plus `lockGroupRow` plus in-transaction re-check.
+- Typing enforcement adds a DB lookup on a hot path: throttled client, measure; cache only if needed.
+- REST handlers map many errors to 400 today; introducing 403 must not change the existing not-member responses that current tests assert.
+- Overlaps with `reactions` and `disappearing-messages` (both touch group message schemas and read paths): the `Kind` discriminator introduced here must be respected there.
+
+## Open questions (user decision; ask one at a time, recommended default in bold)
+1. Creator protection: WhatsApp has no protected owner (any admin can remove or dismiss any admin, including the creator). **Default: WhatsApp behavior, no owner protection.** Alternative: the creator cannot be removed or dismissed by others.
+2. System messages: **persist all group events server-side (structured)** and migrate the existing add/leave synthetic entries; alternative is client-only events for the new actions (cheaper, lost on reload, inconsistent between members).
+3. When "solo admins pueden enviar" is on, may a restricted member still delete their own old messages? **Default: yes; editing is blocked.**
+4. Defaults for new groups: **all three settings open** (unchanged from today). Alternative: WhatsApp-like "solo admins" for add participants.
+5. "Aprobar nuevos participantes": **phase 2**, not in this feature.
+6. Removed members: **keep the existing `left` UX (cached messages visible, composer replaced by a banner, server denies fresh fetches)** vs. remove the group from their list.
+
+## Progress / Evidence
+None yet. Document written 2026-09-29 (planning only; no code changed).
+
+## Next step
+Resolve the open questions with the user (one at a time), create `feat/group-admin-permissions` from the latest feature branch, create the Engram mirror `odd/group-admin-permissions/tasks`, then start GA1 (RED first).
