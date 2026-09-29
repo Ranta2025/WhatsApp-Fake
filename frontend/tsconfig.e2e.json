@@ -1,0 +1,19 @@
+{
+  // Suite Playwright (se ejecuta en Node, pero page.evaluate usa tipos del DOM).
+  // `npm run typecheck` la incluye; Vite/Vitest no la ven.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": ["playwright.config.ts", "e2e"]
+}

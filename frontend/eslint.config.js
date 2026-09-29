@@ -8,7 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 const allowExportNames = ['useAuth', 'useDashboard', 'useMessaging', 'useGroupMessaging', 'useStatus']
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'playwright-report', 'test-results', 'e2e/.auth']),
   {
     files: ['src/**/*.{ts,tsx}'],
     extends: [
@@ -36,6 +36,16 @@ export default defineConfig([
     files: ['vite.config.ts'],
     extends: [...tseslint.configs.recommended],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // Suite e2e de Playwright (Node): sin `any`
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    extends: [...tseslint.configs.recommended],
+    languageOptions: { globals: globals.node },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
   },
   {
     // Único JS restante: la configuración raíz (se ejecuta en Node)
