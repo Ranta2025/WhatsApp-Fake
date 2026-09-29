@@ -46,7 +46,7 @@ Approved roadmap item, plan only (not yet authorized to implement). Scope: metri
 Strict TDD (session config). Runners: `go test ./...` (metrics with `prometheus/testutil`, gin `httptest`, `slog` handler capturing to a buffer), `make test-integration` (Go `-tags e2e`, stack up), `cd frontend && npm run test`/`test:e2e` only if the bug-report id change is done. RED examples: request-id middleware test failing before the middleware exists; cardinality test that requests to 1000 different unmatched paths create one `route="unmatched"` series; `ws_messages_received_total` never gets a series for an arbitrary `type`.
 
 ## Tasks
-- [ ] OB1 Dependency + `backend/metrics` package: registry, Go/process collectors, HTTP/WS/message/dependency metric definitions, `Handler()`; verify library version. Unit tests with isolated registries. Route: delegated.
+- [x] OB1 Dependency + `backend/metrics` package: registry, Go/process collectors, HTTP/WS/message/dependency metric definitions, `Handler()`; verify library version. Unit tests with isolated registries. Route: delegated.
 - [ ] OB2 Request id + structured access log + custom recovery: middlewares, `logging.FromContext`, upgrade of `TimeMiddleware`, `newEngine` ordering, CORS expose header, nginx `X-Request-ID`. Tests: generated vs inbound valid vs inbound invalid id, header on response, id in the log record, 500 recovery keeps JSON shape and logs the panic. Route: delegated.
 - [ ] OB3 HTTP metrics middleware + separate metrics listener: `middlewareMetrics.go`, second `http.Server` in `App` with graceful shutdown, `METRICS_ADDR` handling (disabled when empty), nginx `location = /metrics` guard. Tests: labels use route templates, WS/healthz excluded, listener serves `/metrics` and only there. Route: delegated.
 - [ ] OB4 Hub/WS/message/dependency metrics: `Hub.Stats()`, counters in register/unregister/dispatch/send-drop, message counters in the 3 send paths, DB/Redis collectors, background dependency checker sharing code with `healthHandler`. Tests with a real `Hub` (see `websocket/hub_test.go`) and fakes. Route: delegated.
@@ -74,7 +74,12 @@ Strict TDD (session config). Runners: `go test ./...` (metrics with `prometheus/
 - **Open question (user decision):** Grafana in the default stack or only under the profile. Recommended: profile only.
 
 ## Progress / Evidence
-(not started)
+- OB1 (delegated writer): `backend/metrics` package with `NewRegistry()` (custom, isolated: no global default; Go + process collectors), `New(registry)` registering the HTTP/WS/message/dependency definitions, `Registry()` and `Handler()` (promhttp text exposition). Library `github.com/prometheus/client_golang v1.24.1` (latest stable at implementation time; its `go.mod` requires `go 1.25.0`, compatible with our `go 1.25.5`). Added as a direct require; `go mod tidy` bumped transitive shared deps (x/crypto, x/text, x/net, x/sys, ...) to the minimal versions the new module needs.
+  - RED observed (tests written first): `go test ./backend/metrics/` → `undefined: NewRegistry / New / KindDirect / KindGroup` (`FAIL gorm/backend/metrics [build failed]`), then, after the go.sum entries were resolved, the same undefined-symbol build failure.
+  - GREEN: `go test ./backend/metrics/` → `ok gorm/backend/metrics` (8 tests: Go + process collectors present; all 10 definitions registered; the default registry is not polluted; counters/gauges/histogram record; isolated registries are independent; `Handler()` serves Prometheus text with `go_goroutines` and `http_requests_in_flight`). `go test ./...` → all packages ok. `go vet ./...` → clean. `gofmt -l backend/metrics/` → clean.
+  - Mutation killed: removing the process collector from `NewRegistry()` → `TestNewRegistry_IncludesGoAndProcessCollectors` fails with `process_cpu_seconds_total` missing; reverted → green.
+  - Commit: see git log (`feat(metrics): add Prometheus metrics package with isolated registry`). Route: delegated.
+- OB1 decisions (scope, with reason): DB/Redis pool collectors (`collectors.NewDBStatsCollector`, redis `PoolStats`) and the Hub-backed gauges (`ws_connections`, `ws_rooms`, `ws_room_memberships`) were left to OB4 because they need live `*sql.DB`, redis client and `*Hub` instances; OB1 ships the registry, the Go/process collectors, every metric *definition* and `Handler()`. Metric field names/types are exported so OB2–OB4 can bind without importing prometheus into handlers.
 
 ## Next step
 Recommended to implement first (independent, low risk). First task: OB1.
