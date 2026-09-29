@@ -35,7 +35,7 @@ Strict TDD (session config). For e2e specs, RED means the spec fails meaningfull
 ## Tasks
 - [x] E1 Makefile: add `POSTGRES_PORT=5432` to `test-integration` and add an `e2e` target (Playwright). RED/GREEN via `make test-integration`. Route: delegated.
 - [x] E2 Playwright scaffold: dependency, config, global-setup storageState, `test:e2e` script, and exclusions (dockerignore, vitest, tsconfig, eslint). Route: delegated.
-- [ ] E3 Specs: login (valid + invalid), chat (Ana → Luis live), group (text with Marta + image + voice note seen by another member), status (Ana posts, Luis sees), pagination (scroll up in a seeded long chat loads older messages without jumping; seed via UI or API inside the spec, with a unique tag). Route: delegated.
+- [x] E3 Specs: login (valid + invalid), chat (Ana → Luis live), group (text with Marta + image + voice note seen by another member), status (Ana posts, Luis sees), pagination (scroll up in a seeded long chat loads older messages without jumping; seed via UI or API inside the spec, with a unique tag). Route: delegated.
 - [ ] E4 CI workflow `.github/workflows/ci.yml` (unit + e2e jobs) and a README section on running e2e locally. Validate with actionlint if installed, and otherwise with a YAML parse. Route: delegated.
 - [ ] E5 Close: full local run of the e2e suite twice (to check it is not flaky), then doc + mirror.
 
@@ -49,6 +49,7 @@ Strict TDD (session config). For e2e specs, RED means the spec fails meaningfull
 - Pre-check: the Go e2e suite passes with `POSTGRES_PORT=5432`, including the group media e2e (the pending GM1 follow-up).
 - E1: RED `make test-integration` failed with DSN `port=` empty; GREEN after adding POSTGRES_PORT=5432: `ok gorm/backend/integration 6.4s`. Added `e2e` target.
 - E2: RED smoke spec asserting a missing tab failed (auth via storageState worked); GREEN after restoring. typecheck/lint/test/build/test:e2e green; no `any`. Specs are named `*.e2e.ts` (Playwright testMatch) so Vitest ignores them; `tsconfig.e2e.json` is part of `npm run typecheck`.
+- E3: RED on first run (2 real failures: sidebar preview duplicated the message text; wrong assumption on the pagination window, which is 200 not 50; `/user` key is `Telephon`); GREEN 7/7 specs (auth x2, chat, group text, group image+voice, pagination, status), no retries. Pagination seeds 230 msgs ana->marta via REST. typecheck/lint/vitest(274)/build green, no `any`.
 
 ## Next step
 E1–E4 via one Sonnet writer, one commit per task.
