@@ -450,6 +450,10 @@ func convertGroupMembers(members []models.GroupMember) []schemas.GroupMemberResp
 			Username:  m.User.Username,
 			AvatarUrl: m.User.AvatarUrl,
 			Role:      m.Role,
+
+			JoinedMessageID:        m.JoinedMessageID,
+			LastDeliveredMessageID: m.LastDeliveredMessageID,
+			LastReadMessageID:      m.LastReadMessageID,
 		})
 	}
 	return result

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"net/http"
@@ -298,6 +299,36 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 			h.notifier.JoinRoomByTelephon(groupID.(uint), telephon.(string))
 		}
 		ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMore": hasMore})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/group/:groupID/message/:messageID/receipts
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleGetMessageReceipts devuelve quién leyó / recibió / no ha recibido un
+// mensaje de grupo. Solo el autor del mensaje puede consultarlo (403 si no).
+func (h *HandlerGroup) HandleGetMessageReceipts() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		messageID, exists3 := ctx.Get("messageID")
+		if !exists || !exists2 || !exists3 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		receipts, err := h.service.GetGroupMessageReceipts(telephon.(string), groupID.(uint), messageID.(uint), ctx)
+		switch {
+		case err == nil:
+			ctx.JSON(http.StatusOK, receipts)
+		case errors.Is(err, services.ErrNotMessageSender), errors.Is(err, services.ErrNotGroupMember):
+			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrGroupMessageNotFound):
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener los acuses"})
+		}
 	}
 }
 

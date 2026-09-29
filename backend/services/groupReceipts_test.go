@@ -107,12 +107,19 @@ func TestGetGroupMessageReceipts(t *testing.T) {
 		assert.True(t, errors.Is(err, ErrNotMessageSender))
 	})
 
+	t.Run("mensaje inexistente -> ErrGroupMessageNotFound", func(t *testing.T) {
+		svc, repo, _ := setup()
+		repo.On("GetGroupMessageByID", msgID, mock.Anything).Return(nil, models.ErrGroupMessageNotFound)
+		_, err := svc.GetGroupMessageReceipts(testSenderTel, testGroupID, msgID, t.Context())
+		assert.True(t, errors.Is(err, ErrGroupMessageNotFound))
+	})
+
 	t.Run("mensaje de otro grupo -> no encontrado", func(t *testing.T) {
 		svc, repo, _ := setup()
 		repo.On("GetGroupMessageByID", msgID, mock.Anything).
 			Return(&models.GroupMessage{Model: gorm.Model{ID: msgID}, GroupID: testGroupID + 1, SenderID: testSenderID}, nil)
 		_, err := svc.GetGroupMessageReceipts(testSenderTel, testGroupID, msgID, t.Context())
-		assert.Error(t, err)
+		assert.True(t, errors.Is(err, ErrGroupMessageNotFound))
 		assert.False(t, errors.Is(err, ErrNotMessageSender))
 	})
 
@@ -121,7 +128,7 @@ func TestGetGroupMessageReceipts(t *testing.T) {
 		contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
 		repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(false, nil)
 		_, err := svc.GetGroupMessageReceipts(testSenderTel, testGroupID, msgID, t.Context())
-		assert.Error(t, err)
+		assert.True(t, errors.Is(err, ErrNotGroupMember))
 		repo.AssertNotCalled(t, "GetGroupMessageByID", mock.Anything, mock.Anything)
 	})
 }
@@ -183,4 +190,25 @@ func TestAdvanceGroupReceipts(t *testing.T) {
 		assert.Nil(t, got)
 		repo.AssertNotCalled(t, "AdvanceMemberReceipts", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
+}
+
+func TestGetGroupDetail_MembersCarryWatermarks(t *testing.T) {
+	svc, repo, contacts := newGroupServiceForSend()
+	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
+	contacts.On("GetTelephonByID", uint(1), mock.Anything).Return("+1", nil)
+	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{Model: gorm.Model{ID: testGroupID}, CreatorID: 1}, nil)
+	repo.On("GetGroupMessages", testGroupID, 50, 0, mock.Anything).Return([]models.GroupMessage{}, nil)
+	repo.On("GetGroupMembers", testGroupID, mock.Anything).Return([]models.GroupMember{
+		member(2, "a", 4, 30, 20),
+	}, nil)
+
+	detail, err := svc.GetGroupDetail(testSenderTel, testGroupID, t.Context())
+	assert.NoError(t, err)
+	if assert.Len(t, detail.Members, 1) {
+		m := detail.Members[0]
+		assert.Equal(t, uint(4), m.JoinedMessageID)
+		assert.Equal(t, uint(30), m.LastDeliveredMessageID)
+		assert.Equal(t, uint(20), m.LastReadMessageID)
+	}
 }

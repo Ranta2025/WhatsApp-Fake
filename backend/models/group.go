@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -81,3 +82,6 @@ type GroupReceiptState struct {
 	DeliveredUpTo uint
 	ReadUpTo      uint
 }
+
+// ErrGroupMessageNotFound lo devuelve el repositorio cuando el mensaje de grupo no existe.
+var ErrGroupMessageNotFound = errors.New("mensaje no encontrado")

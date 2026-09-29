@@ -113,6 +113,20 @@ func MiddlewareGroupMessageDelete() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareGroupMessageID extrae el parámetro :messageID de la URL y lo convierte a uint.
+func MiddlewareGroupMessageID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("messageID"), 10, 64)
+		if err != nil || id == 0 {
+			c.JSON(400, gin.H{"error": "El ID del mensaje debe ser un número válido"})
+			c.Abort()
+			return
+		}
+		c.Set("messageID", uint(id))
+		c.Next()
+	}
+}
+
 // MiddlewareGroupID extrae el parámetro :groupID de la URL y lo convierte a uint.
 func MiddlewareGroupID() gin.HandlerFunc {
 	return func(c *gin.Context) {

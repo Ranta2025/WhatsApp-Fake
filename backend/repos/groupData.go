@@ -261,7 +261,7 @@ func (r *RepoGroup) GetGroupMessageByID(messageID uint, ctx context.Context) (*m
 	result := r.data.WithContext(c).Preload("Sender", selectUserBasic).First(&msg, messageID)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, errors.New("mensaje no encontrado")
+			return nil, models.ErrGroupMessageNotFound
 		}
 		return nil, result.Error
 	}

@@ -14,6 +14,12 @@ const (
 	StatusRead      = "visto"
 )
 
+// Errores tipados que los handlers traducen a códigos HTTP.
+var (
+	ErrGroupMessageNotFound = models.ErrGroupMessageNotFound
+	ErrNotGroupMember       = errors.New("no eres miembro de este grupo")
+)
+
 // ErrNotMessageSender indica que quien consulta los acuses no es el autor del mensaje.
 var ErrNotMessageSender = errors.New("solo el autor del mensaje puede ver sus acuses")
 
@@ -98,7 +104,7 @@ func (s *ServiceGroup) requireMember(telephon string, groupID uint, ctx context.
 	}
 	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
 	if err != nil || !isMember {
-		return 0, errors.New("no eres miembro de este grupo")
+		return 0, ErrNotGroupMember
 	}
 	return uint(userID), nil
 }
@@ -146,8 +152,11 @@ func (s *ServiceGroup) GetGroupMessageReceipts(telephon string, groupID, message
 		return nil, err
 	}
 	msg, err := s.repo.GetGroupMessageByID(messageID, ctx)
-	if err != nil || msg.GroupID != groupID {
-		return nil, errors.New("mensaje no encontrado")
+	if err != nil {
+		return nil, err
+	}
+	if msg.GroupID != groupID {
+		return nil, ErrGroupMessageNotFound
 	}
 	if msg.SenderID != userID {
 		return nil, ErrNotMessageSender

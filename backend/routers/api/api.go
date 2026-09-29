@@ -106,6 +106,7 @@ func (rt *RouterApiMessage) ApiCall() {
 //	GET    /api/v1/group/:groupID/message          → historial (paginado)
 //	PUT    /api/v1/group/:groupID/message          → editar mensaje
 //	DELETE /api/v1/group/:groupID/message          → eliminar mensaje
+//	GET    /api/v1/group/:groupID/message/:messageID/receipts → acuses (solo el autor)
 func (rt *RouterApiMessage) ApiGroup() {
 	g := rt.app.Group("group")
 	{
@@ -123,6 +124,7 @@ func (rt *RouterApiMessage) ApiGroup() {
 		g.POST("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessage(), rt.handlerGroup.HandleSendGroupMessage())
 		g.GET("/:groupID/message", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleGetGroupMessages())
 		g.PUT("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageEdit(), rt.handlerGroup.HandleEditGroupMessage())
+		g.GET("/:groupID/message/:messageID/receipts", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageID(), rt.handlerGroup.HandleGetMessageReceipts())
 		g.DELETE("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageDelete(), rt.handlerGroup.HandleDeleteGroupMessage())
 	}
 }

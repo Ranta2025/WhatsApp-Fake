@@ -22,6 +22,12 @@ type GroupMemberResponse struct {
 	AvatarUrl   string `json:"AvatarUrl,omitempty"`
 	Role        string `json:"Role"`                  // "admin" | "member"
 	ContactName string `json:"ContactName,omitempty"` // nombre personalizado (si lo tienen como contacto)
+
+	// Marcas de agua de acuses del miembro (ids de mensaje dentro de este grupo).
+	// Permiten al cliente derivar los ticks de cualquier página cargada.
+	JoinedMessageID        uint `json:"JoinedMessageID,omitempty"`
+	LastDeliveredMessageID uint `json:"LastDeliveredMessageID,omitempty"`
+	LastReadMessageID      uint `json:"LastReadMessageID,omitempty"`
 }
 
 // GroupMessageResponse es un mensaje de grupo serializado para la API y WebSocket.
