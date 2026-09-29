@@ -262,3 +262,11 @@
   border-radius: 0.75rem;
   animation: search-flash 1.8s ease-out;
 }
+
+/* Coincidencias de la búsqueda dentro de una burbuja. */
+mark.search-mark {
+  background-color: rgba(250, 204, 21, 0.85);
+  color: #0f172a;
+  border-radius: 0.2rem;
+  padding: 0 0.1rem;
+}

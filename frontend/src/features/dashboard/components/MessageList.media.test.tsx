@@ -37,6 +37,7 @@ describe('MessageList media rendering (1:1)', () => {
     const renderWith = (message: Message) => {
         mockUseDashboard.mockReturnValue({
             selected: { Number: '222' },
+            focusedChat: {},
             messagesByChat: { '222': [message] },
             chatPaging: {},
             loadOlderMessages: vi.fn(),

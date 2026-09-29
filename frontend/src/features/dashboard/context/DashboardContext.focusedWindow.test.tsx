@@ -324,6 +324,19 @@ describe('DashboardProvider detached windows', () => {
             expect(ctx!.focusedChat['B']).toBe(windowBefore);
         });
 
+        it('sending a message while detached returns to the latest so the user sees it', async () => {
+            chatHandler = () => around(40, 60);
+            await mount();
+            await act(async () => { await ctx!.openMessageAt({ kind: 'chat', key: 'B' }, 50); });
+
+            act(() => { handlerFor<Message>('message')({ ...chatMsg(500), SenderTelephon: 'B' }); });
+            expect(ctx!.focusedChat['B']).toBeDefined();
+
+            act(() => { handlerFor<Message>('message')({ ...chatMsg(501), SenderTelephon: '111', Receptor: 'B' }); });
+            expect(ctx!.focusedChat['B']).toBeUndefined();
+            expect(ids(ctx!.messagesByChat['B'])).toContain(501);
+        });
+
         it('edits, deletions and status changes reach the detached window too', async () => {
             const mine = (id: number, status: Message['Status']): Message => ({ ...chatMsg(id), SenderTelephon: '111', Receptor: 'B', Status: status });
             chatHandler = () => ({ data: [chatMsg(41), mine(42, 'enviado'), mine(43, 'entregado')], headers: {} });
@@ -410,6 +423,18 @@ describe('DashboardProvider detached windows', () => {
             await act(async () => { await ctx!.openMessageAt({ kind: 'group', id: 9 }, 5); });
             expect(ctx!.focusedGroup[9]).toBeDefined();
             act(() => { ctx!.returnToLatest({ kind: 'group', id: 9 }); });
+            expect(ctx!.focusedGroup[9]).toBeUndefined();
+        });
+
+        it('sending a group message while detached returns to the latest', async () => {
+            groupHandler = () => groupAround(40, 60);
+            await mount();
+            await act(async () => { await ctx!.openMessageAt({ kind: 'group', id: 9 }, 50); });
+
+            act(() => { handlerFor<GroupMessageResponse>('group_chat')(groupMsg(500)); });
+            expect(ctx!.focusedGroup[9]).toBeDefined();
+
+            act(() => { handlerFor<GroupMessageResponse>('group_chat')({ ...groupMsg(501), SenderTelephon: '111' }); });
             expect(ctx!.focusedGroup[9]).toBeUndefined();
         });
 

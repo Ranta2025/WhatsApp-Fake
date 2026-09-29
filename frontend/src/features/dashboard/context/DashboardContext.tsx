@@ -789,6 +789,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 if (alreadyExists) return prev;
                 return { ...prev, [contactNumber]: [...existing, messageData] };
             });
+            // Enviar un mensaje estando en una ventana desprendida vuelve a los últimos mensajes.
+            if (SenderTelephon === myTelephon) returnToLatest({ kind: 'chat', key: contactNumber });
             // Primer mensaje de alguien que aún no tenemos en la lista de chats
             setAllChatGroups(prev => {
                 if (prev[contactNumber]) return prev;
@@ -958,6 +960,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 if (existing.some(m => m.MessageID === msg.MessageID)) return prev;
                 return { ...prev, [msg.GroupID]: [...existing, msg] };
             });
+            // Enviar un mensaje estando en una ventana desprendida vuelve a los últimos mensajes.
+            if (msg.SenderTelephon === profileRef.current?.Telephon) returnToLatest({ kind: 'group', id: msg.GroupID });
             noteIncomingGroupMessage(msg.GroupID, msg.MessageID, msg.SenderTelephon);
         };
 
@@ -1158,7 +1162,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('group_member_left', handleGroupMemberLeft);
             off('group_receipt', handleGroupReceipt);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".

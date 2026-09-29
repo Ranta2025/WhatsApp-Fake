@@ -2,6 +2,8 @@ import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import { useLoadOlderOnScroll } from '../hooks/useLoadOlderOnScroll';
+import { composeFocusedMessages } from '../lib/focusedWindow';
+import HighlightedText from './HighlightedText';
 import { formatDaySeparator, formatTime } from '../../../utils/format';
 import MediaContent from '../../../components/MediaContent';
 import { isMediaUrl } from '../../../lib/mediaMessage';
@@ -32,10 +34,16 @@ const readChatWallpapers = (): Record<string, string> => {
     }
 };
 
-const MessageList = () => {
+interface MessageListProps {
+    /** Término de la búsqueda abierta: se resalta dentro de los mensajes. */
+    searchQuery?: string;
+}
+
+const MessageList = ({ searchQuery }: MessageListProps) => {
     const { 
         selected, messagesByChat, profile, globalWallpaper,
         chatPaging, loadOlderMessages,
+        focusedChat, loadOlderFocused, loadNewerFocused,
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
@@ -78,19 +86,42 @@ const MessageList = () => {
     // Scroll: al fondo al abrir un chat o cuando llega un mensaje nuevo al final de
     // ESTE chat; al llegar arriba se cargan mensajes anteriores sin saltar la vista.
     const selectedNumber = selected?.Number;
-    const currentMessages = selectedNumber ? messagesByChat[selectedNumber] : undefined;
+    const liveMessages = selectedNumber ? messagesByChat[selectedNumber] : undefined;
     const paging = selectedNumber ? chatPaging[selectedNumber] : undefined;
+    // Ventana desprendida (abierta desde una búsqueda): se muestra en lugar de los últimos mensajes.
+    const focused = selectedNumber ? focusedChat[selectedNumber] : undefined;
+    const currentMessages = useMemo(
+        () => (focused ? composeFocusedMessages(focused, liveMessages) : liveMessages),
+        [focused, liveMessages],
+    );
     const loadOlder = useCallback(() => {
-        if (selectedNumber) return loadOlderMessages(selectedNumber);
-    }, [selectedNumber, loadOlderMessages]);
+        if (!selectedNumber) return;
+        return focused
+            ? loadOlderFocused({ kind: 'chat', key: selectedNumber })
+            : loadOlderMessages(selectedNumber);
+    }, [selectedNumber, focused, loadOlderFocused, loadOlderMessages]);
+    const loadNewer = useCallback(() => {
+        if (selectedNumber) return loadNewerFocused({ kind: 'chat', key: selectedNumber });
+    }, [selectedNumber, loadNewerFocused]);
+    const focusedTargetId = focused?.targetId;
+    const focusedSeq = focused?.seq;
+    const scrollTarget = useMemo(
+        () => (focusedTargetId !== undefined && focusedSeq !== undefined ? { id: focusedTargetId, seq: focusedSeq } : null),
+        [focusedTargetId, focusedSeq],
+    );
     useLoadOlderOnScroll({
         containerRef: messagesContainerRef,
         chatKey: selectedNumber,
         firstKey: currentMessages?.[0]?.MessageID,
         lastKey: currentMessages?.[currentMessages.length - 1]?.MessageID,
-        hasMore: paging?.hasMore ?? false,
-        loadingOlder: paging?.loadingOlder ?? false,
+        hasMore: focused ? focused.hasMoreOlder : (paging?.hasMore ?? false),
+        loadingOlder: focused ? focused.loadingOlder : (paging?.loadingOlder ?? false),
         loadOlder,
+        detached: !!focused,
+        hasMoreNewer: focused?.hasMoreNewer ?? false,
+        loadingNewer: focused?.loadingNewer ?? false,
+        loadNewer,
+        scrollTarget,
     });
 
     interface MessageGroup {
@@ -102,7 +133,7 @@ const MessageList = () => {
     // Agrupación de mensajes por fecha
     const groupedMessages = useMemo((): MessageGroup[] => {
         if (!selected) return [];
-        const messages = (messagesByChat[selected.Number] || []) as MessageWithLegacyTimestamp[];
+        const messages = (currentMessages || []) as MessageWithLegacyTimestamp[];
         const groups: MessageGroup[] = [];
         let currentGroup: MessageGroup | null = null;
 
@@ -118,7 +149,7 @@ const MessageList = () => {
         });
 
         return groups;
-    }, [messagesByChat, selected]);
+    }, [currentMessages, selected]);
 
     if (!selected) return null;
 
@@ -261,7 +292,7 @@ const MessageList = () => {
                                                                 <button onClick={handleEditMessageSave} className="px-2 py-1 bg-white/20 rounded-md text-[10px] font-bold uppercase tracking-widest">Guardar</button>
                                                             </div>
                                                         </div>
-                                                    ) : m.Message}
+                                                    ) : <HighlightedText text={m.Message} query={searchQuery} />}
                                                 </div>
                                             )}
 
@@ -282,7 +313,7 @@ const MessageList = () => {
             ))}
             {/* Indicador de carga de mensajes anteriores: absoluto y al final del DOM
                 (fuera del flujo y sin margen de space-y) para no mover el contenido */}
-            {paging?.loadingOlder && (
+            {(focused ? focused.loadingOlder : paging?.loadingOlder) && (
                 <div className="absolute inset-x-0 top-2 mt-0! z-20 flex justify-center pointer-events-none">
                     <span role="status" className="px-3 py-1 glass rounded-full text-[11px] text-slate-300 shadow-lg">
                         Cargando mensajes anteriores…

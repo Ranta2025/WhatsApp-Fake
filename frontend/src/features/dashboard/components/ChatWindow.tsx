@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { MessagingProvider, useMessaging } from '../hooks/useMessaging';
 import MessageList from './MessageList';
+import ChatSearchBar from './ChatSearchBar';
+import { useChatSearch } from '../hooks/useChatSearch';
+import { searchChat } from '../api/searchApi';
 import MessageInput from './MessageInput';
 import AddContactModal from './AddContactModal';
 import ForwardMessageModal from './ForwardMessageModal';
@@ -9,7 +12,9 @@ import api from '../../../api/axios';
 import Avatar from '../../../components/ui/Avatar';
 import { ChatIcon, PhoneIcon as PhoneEmojiIcon, GroupIcon } from '../../../components/ui/icons';
 import { formatLastSeen } from '../../../utils/format';
-import type { CallType } from '../../../types/api';
+import type { CallType, SearchPage } from '../../../types/api';
+import type { SearchPageOptions } from '../api/searchApi';
+import type { FocusTarget } from '../context/DashboardContext';
 
 // Inner component: must live inside MessagingProvider to access useMessaging()
 const ForwardMessageModalWrapper = () => {
@@ -28,6 +33,8 @@ const ForwardMessageModalWrapper = () => {
 
 const PhoneIcon = 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z';
 const VideoIcon = 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z';
+const SearchGlyph = 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z';
+const ArrowDownGlyph = 'M19 9l-7 7-7-7';
 const TrashIcon = 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16';
 
 const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) => (
@@ -84,9 +91,22 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
     const {
         selected, setSelected, isConnected, avatarMap, onlineUsers, typingUsers,
         lastSeenMap, setMessagesByChat, contacts, addToast,
-        messagesByChat, fetchChatMessages, profile, allChatGroups, markAsRead
+        messagesByChat, fetchChatMessages, profile, allChatGroups, markAsRead,
+        focusedChat, openMessageAt, returnToLatest,
     } = useDashboard();
     const [showAddContactModal, setShowAddContactModal] = useState(false);
+
+    // Búsqueda dentro del chat (barra bajo la cabecera; salta a cada coincidencia)
+    const selectedNumber = selected?.Number;
+    const searchTarget = useMemo<FocusTarget | null>(
+        () => (selectedNumber ? { kind: 'chat', key: selectedNumber } : null),
+        [selectedNumber],
+    );
+    const searchMessages = useCallback(
+        (q: string, opts: SearchPageOptions): Promise<SearchPage> => searchChat(selectedNumber ?? '', q, opts),
+        [selectedNumber],
+    );
+    const chatSearch = useChatSearch({ target: searchTarget, search: searchMessages, openMessageAt });
 
     // Cargar mensajes al seleccionar un contacto si aún no están en cache.
     // Se lee la caché por ref: el efecto solo debe dispararse al cambiar de chat.
@@ -181,12 +201,17 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                     <button onClick={() => handleCallClick('video')} disabled={!isConnected} className="icon-btn" title="Videollamada" aria-label="Videollamada">
                         <Svg d={VideoIcon} />
                     </button>
+                    <button onClick={chatSearch.isOpen ? chatSearch.close : chatSearch.open} className="icon-btn" title="Buscar" aria-label="Buscar en el chat" aria-pressed={chatSearch.isOpen}>
+                        <Svg d={SearchGlyph} />
+                    </button>
                     <span className="w-px h-6 bg-white/10 mx-1" />
                     <button onClick={handleClearChat} className="icon-btn hover:!text-rose-400 hover:!bg-rose-500/10" title="Vaciar chat" aria-label="Vaciar chat">
                         <Svg d={TrashIcon} />
                     </button>
                 </div>
             </header>
+
+            {chatSearch.isOpen && <ChatSearchBar search={chatSearch} />}
 
             {/* Aviso para remitentes que no están en contactos */}
             {isUnknown && (
@@ -203,7 +228,19 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                 </div>
             )}
 
-            <MessageList />
+            <div className="relative flex-1 min-h-0 flex flex-col">
+                <MessageList searchQuery={chatSearch.activeQuery} />
+                {focusedChat[selected.Number] && (
+                    <button
+                        onClick={() => returnToLatest({ kind: 'chat', key: selected.Number })}
+                        className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-white/10 transition-colors"
+                        aria-label="Ir a los mensajes recientes"
+                    >
+                        <Svg d={ArrowDownGlyph} className="h-4 w-4" />
+                        Ir a los mensajes recientes
+                    </button>
+                )}
+            </div>
             <MessageInput />
 
             <AddContactModal

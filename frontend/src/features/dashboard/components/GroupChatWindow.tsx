@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { useDashboard, type SelectedGroup, type SystemGroupMessage, type GroupMessageEntry } from '../context/DashboardContext';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useDashboard, type SelectedGroup, type SystemGroupMessage, type GroupMessageEntry, type FocusTarget } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
-import { useLoadOlderOnScroll } from '../hooks/useLoadOlderOnScroll';
+import { useLoadOlderOnScroll, type ScrollTarget } from '../hooks/useLoadOlderOnScroll';
+import HighlightedText from './HighlightedText';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
@@ -14,8 +15,12 @@ import { groupReplySenderLabel } from '../lib/groupReply';
 import { parseGroupWallpapers, type GroupWallpapers } from '../lib/groupWallpapers';
 import MessageTicks from './MessageTicks';
 import GroupMessageInfoModal from './GroupMessageInfoModal';
+import ChatSearchBar from './ChatSearchBar';
+import { useChatSearch } from '../hooks/useChatSearch';
+import { searchGroup, type SearchPageOptions } from '../api/searchApi';
+import { composeFocusedMessages } from '../lib/focusedWindow';
 import { deriveGroupMessageStatus } from '../lib/groupReceipts';
-import type { GroupMessageResponse, MediaUploadResult, MessageStatus } from '../../../types/api';
+import type { GroupMessageResponse, MediaUploadResult, MessageStatus, SearchPage } from '../../../types/api';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -41,9 +46,11 @@ interface GroupMessageBubbleProps {
     status?: MessageStatus;
     /** Abre el "Info" del mensaje (entrada de menú solo en mensajes propios). */
     onInfo?: (msg: GroupMessageResponse) => void;
+    /** Término de la búsqueda abierta: se resalta dentro del texto. */
+    searchQuery?: string;
 }
 
-export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo }: GroupMessageBubbleProps) => {
+export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo, searchQuery }: GroupMessageBubbleProps) => {
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     const isMenuOpen = menuOpen === msg.MessageID;
@@ -78,7 +85,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
 
                     {/* Text (always show unless it's a pure media URL) */}
                     {msg.Message && !(msg.MediaType && msg.Message === msg.MediaUrl) && (
-                        <span>{msg.Message}</span>
+                        <span><HighlightedText text={msg.Message} query={searchQuery} /></span>
                     )}
 
                     {/* Footer: time + edited */}
@@ -179,13 +186,24 @@ interface GroupMessageListProps {
     hasMore: boolean;
     loadingOlder: boolean;
     onLoadOlder: () => void | Promise<void>;
+    /** Ventana desprendida (abierta desde una búsqueda): no baja al fondo y pide mensajes más recientes abajo. */
+    detached?: boolean;
+    hasMoreNewer?: boolean;
+    loadingNewer?: boolean;
+    onLoadNewer?: () => void | Promise<void>;
+    scrollTarget?: ScrollTarget | null;
+    /** Término de la búsqueda abierta: se resalta dentro de los mensajes. */
+    searchQuery?: string;
 }
 
 /** Locally injected "member added/left" entries carry `IsSystem`; backend messages don't. */
 const isSystemMessage = (msg: GroupMessageEntry): msg is SystemGroupMessage =>
     Boolean((msg as { IsSystem?: unknown }).IsSystem);
 
-export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupID, hasMore, loadingOlder, onLoadOlder }: GroupMessageListProps) => {
+export const GroupMessageList = ({
+    messages, myTelephon, activeWallpaper, groupID, hasMore, loadingOlder, onLoadOlder,
+    detached = false, hasMoreNewer = false, loadingNewer = false, onLoadNewer, scrollTarget = null, searchQuery,
+}: GroupMessageListProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const {
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
@@ -212,6 +230,11 @@ export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupI
         loadingOlder,
         loadOlder: onLoadOlder,
         smoothTail: true,
+        detached,
+        hasMoreNewer,
+        loadingNewer,
+        loadNewer: onLoadNewer,
+        scrollTarget,
     });
 
     const containerStyle = activeWallpaper
@@ -261,6 +284,7 @@ export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupI
                             ? deriveGroupMessageStatus(msg.MessageID, msg.SenderTelephon, groupID === undefined ? undefined : groupReceipts[groupID])
                             : undefined}
                         onInfo={openInfo}
+                        searchQuery={searchQuery}
                     />
                 );
             })}
@@ -382,6 +406,7 @@ const GroupChatWindowInner = () => {
         selectedGroup, setSelectedGroup,
         groupMessages, setGroupMessages, fetchGroupMessages, fetchGroupDetail,
         groupPaging, loadOlderGroupMessages,
+        focusedGroup, openMessageAt, returnToLatest, loadOlderFocused, loadNewerFocused,
         typingUsers, profile,
         contacts,
         setSelected,
@@ -543,7 +568,31 @@ const GroupChatWindowInner = () => {
     };
 
     const myTelephon = profile?.Telephon;
-    const messages   = (selectedGroup ? groupMessages[selectedGroup.ID] : undefined) || [];
+    const liveMessages = selectedGroup ? groupMessages[selectedGroup.ID] : undefined;
+    // Ventana desprendida (abierta desde una búsqueda): se muestra en lugar de los últimos mensajes.
+    const focused = selectedGroup ? focusedGroup[selectedGroup.ID] : undefined;
+    const messages: GroupMessageEntry[] = (focused ? composeFocusedMessages<GroupMessageEntry>(focused, liveMessages) : liveMessages) || [];
+
+    const focusedTargetId = focused?.targetId;
+    const focusedSeq = focused?.seq;
+    const scrollTarget = useMemo(
+        () => (focusedTargetId !== undefined && focusedSeq !== undefined ? { id: focusedTargetId, seq: focusedSeq } : null),
+        [focusedTargetId, focusedSeq],
+    );
+
+    // Búsqueda dentro del grupo (barra bajo la cabecera; salta a cada coincidencia)
+    const groupId = selectedGroup?.ID;
+    const searchTarget = useMemo<FocusTarget | null>(
+        () => (groupId !== undefined ? { kind: 'group', id: groupId } : null),
+        [groupId],
+    );
+    const searchMessages = useCallback(
+        (q: string, opts: SearchPageOptions): Promise<SearchPage> => searchGroup(groupId ?? 0, q, opts),
+        [groupId],
+    );
+    const chatSearch = useChatSearch({ target: searchTarget, search: searchMessages, openMessageAt });
+    // El backend solo busca para miembros activos: un grupo que ya abandonaste no se puede buscar.
+    const canSearch = selectedGroup?.UserRole !== 'left';
 
     // Group-specific typing keys: "group:<groupID>:<telephon>"
     const typingInGroup = selectedGroup
@@ -611,6 +660,15 @@ const GroupChatWindowInner = () => {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
+                    {canSearch && (
+                        <button onClick={chatSearch.isOpen ? chatSearch.close : chatSearch.open}
+                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+                                title="Buscar" aria-label="Buscar en el chat" aria-pressed={chatSearch.isOpen}>
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </button>
+                    )}
                     {/* More options kebab */}
                     <div className="relative" ref={optionsRef}>
                         <button onClick={() => setShowOptions(v => !v)}
@@ -651,6 +709,8 @@ const GroupChatWindowInner = () => {
                     </div>
                 </div>
             </div>
+
+            {chatSearch.isOpen && canSearch && <ChatSearchBar search={chatSearch} />}
 
             {/* ── Group info side panel (WhatsApp-style) ── */}
             {showMembers && (
@@ -926,15 +986,40 @@ const GroupChatWindowInner = () => {
             <style>{`@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
 
             {/* ── Message list ── */}
-            <GroupMessageList
-                messages={messages}
-                myTelephon={myTelephon}
-                activeWallpaper={activeWallpaper}
-                groupID={selectedGroup?.ID}
-                hasMore={selectedGroup ? (groupPaging[selectedGroup.ID]?.hasMore ?? false) : false}
-                loadingOlder={selectedGroup ? (groupPaging[selectedGroup.ID]?.loadingOlder ?? false) : false}
-                onLoadOlder={() => { if (selectedGroup) return loadOlderGroupMessages(selectedGroup.ID); }}
-            />
+            <div className="relative flex-1 min-h-0 flex flex-col">
+                <GroupMessageList
+                    messages={messages}
+                    myTelephon={myTelephon}
+                    activeWallpaper={activeWallpaper}
+                    groupID={selectedGroup?.ID}
+                    hasMore={focused ? focused.hasMoreOlder : (selectedGroup ? (groupPaging[selectedGroup.ID]?.hasMore ?? false) : false)}
+                    loadingOlder={focused ? focused.loadingOlder : (selectedGroup ? (groupPaging[selectedGroup.ID]?.loadingOlder ?? false) : false)}
+                    onLoadOlder={() => {
+                        if (!selectedGroup) return;
+                        return focused
+                            ? loadOlderFocused({ kind: 'group', id: selectedGroup.ID })
+                            : loadOlderGroupMessages(selectedGroup.ID);
+                    }}
+                    detached={!!focused}
+                    hasMoreNewer={focused?.hasMoreNewer ?? false}
+                    loadingNewer={focused?.loadingNewer ?? false}
+                    onLoadNewer={() => { if (selectedGroup) return loadNewerFocused({ kind: 'group', id: selectedGroup.ID }); }}
+                    scrollTarget={scrollTarget}
+                    searchQuery={chatSearch.activeQuery}
+                />
+                {focused && selectedGroup && (
+                    <button
+                        onClick={() => returnToLatest({ kind: 'group', id: selectedGroup.ID })}
+                        className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-white/10 transition-colors"
+                        aria-label="Ir a los mensajes recientes"
+                    >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                        Ir a los mensajes recientes
+                    </button>
+                )}
+            </div>
 
             {/* ── Input ── */}
             <GroupMessageInput />
