@@ -62,6 +62,23 @@ func (c *e2eClient) do(method, path string, body interface{}) (int, map[string]i
 	return resp.StatusCode, out
 }
 
+type rawResponse struct {
+	status int
+	header http.Header
+	body   []byte
+}
+
+// raw hace una petición GET/DELETE sin cuerpo y devuelve estado, cabeceras y cuerpo tal cual.
+func (c *e2eClient) raw(method, path string) rawResponse {
+	req, err := http.NewRequest(method, c.base+path, nil)
+	require.NoError(c.t, err)
+	resp, err := c.http.Do(req)
+	require.NoError(c.t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return rawResponse{status: resp.StatusCode, header: resp.Header, body: body}
+}
+
 func (c *e2eClient) ws(query string) *websocket.Conn {
 	u, _ := url.Parse(c.base)
 	wsURL := "ws://" + u.Host + "/api/v1/ws" + query

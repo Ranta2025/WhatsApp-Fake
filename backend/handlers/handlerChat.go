@@ -67,6 +67,33 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
+		// Ventanas para "ir al mensaje" (búsqueda): around=<id> devuelve una
+		// ventana centrada y after=<id> los mensajes posteriores. El cuerpo sigue
+		// siendo un array; los flags viajan en X-Has-More-Older/Newer.
+		if around, ok := parsePositiveID(ctx.Query("around")); ok {
+			_, limit := parseSearchPaging(ctx)
+			msgs, hasOlder, hasNewer, err := hd.service.ServiceGetMessagesAround(telephon.(string), contact.(string), around, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			ctx.Header("X-Has-More-Older", strconv.FormatBool(hasOlder))
+			ctx.Header("X-Has-More-Newer", strconv.FormatBool(hasNewer))
+			ctx.IndentedJSON(http.StatusOK, msgs)
+			return
+		}
+		if after, ok := parsePositiveID(ctx.Query("after")); ok {
+			_, limit := parseSearchPaging(ctx)
+			msgs, hasNewer, err := hd.service.ServiceGetMessagesAfter(telephon.(string), contact.(string), after, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			ctx.Header("X-Has-More-Newer", strconv.FormatBool(hasNewer))
+			ctx.IndentedJSON(http.StatusOK, msgs)
+			return
+		}
+
 		// Paginación opcional: sin before ni limit válidos, limit=0 conserva el
 		// comportamiento histórico (últimos 200). Con cualquiera, la página
 		// por defecto es de 50 (el servicio acota el máximo).

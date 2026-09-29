@@ -272,6 +272,82 @@ func (app *ApiContact) GetMessagesPage(id_user uint, id_contact uint, before uin
 	return messages, hasMore, nil
 }
 
+// conversationVisibility es el predicado de visibilidad de la conversación
+// userID<->contactID: excluye los mensajes borrados "para mí" por cada parte.
+const conversationVisibility = "((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))"
+
+func (app *ApiContact) visibleConversation(c context.Context, userID, contactID uint) *gorm.DB {
+	return app.data.Model(&models.Message{}).WithContext(c).
+		Where(conversationVisibility, userID, contactID, false, contactID, userID, false)
+}
+
+// GetMessagesAround devuelve una ventana cronológica centrada en el mensaje
+// around: hasta limit/2 mensajes anteriores, el objetivo y hasta limit/2
+// posteriores (solo los visibles para el usuario). hasOlder/hasNewer indican si
+// hay más mensajes fuera de la ventana. Si el objetivo no existe o no es
+// visible devuelve models.ErrMessageNotFound.
+func (app *ApiContact) GetMessagesAround(userID, contactID, around uint, limit int, ctx context.Context) ([]models.Message, bool, bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	half := limit / 2
+	if half < 1 {
+		half = 1
+	}
+
+	var target models.Message
+	res := app.visibleConversation(c, userID, contactID).Where("id = ?", around).Limit(1).Scan(&target)
+	if res.Error != nil {
+		return nil, false, false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, false, false, models.ErrMessageNotFound
+	}
+
+	var older []models.Message
+	if err := app.visibleConversation(c, userID, contactID).Where("id < ?", around).
+		Order("id DESC").Limit(half + 1).Scan(&older).Error; err != nil {
+		return nil, false, false, err
+	}
+	var newer []models.Message
+	if err := app.visibleConversation(c, userID, contactID).Where("id > ?", around).
+		Order("id ASC").Limit(half + 1).Scan(&newer).Error; err != nil {
+		return nil, false, false, err
+	}
+	hasOlder := len(older) > half
+	if hasOlder {
+		older = older[:half]
+	}
+	hasNewer := len(newer) > half
+	if hasNewer {
+		newer = newer[:half]
+	}
+
+	out := make([]models.Message, 0, len(older)+1+len(newer))
+	for i := len(older) - 1; i >= 0; i-- {
+		out = append(out, older[i])
+	}
+	out = append(out, target)
+	out = append(out, newer...)
+	return out, hasOlder, hasNewer, nil
+}
+
+// GetMessagesAfter devuelve hasta limit mensajes visibles con id > after en
+// orden cronológico; hasNewer indica si quedan más posteriores.
+func (app *ApiContact) GetMessagesAfter(userID, contactID, after uint, limit int, ctx context.Context) ([]models.Message, bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var msgs []models.Message
+	if err := app.visibleConversation(c, userID, contactID).Where("id > ?", after).
+		Order("id ASC").Limit(limit + 1).Scan(&msgs).Error; err != nil {
+		return nil, false, err
+	}
+	hasNewer := len(msgs) > limit
+	if hasNewer {
+		msgs = msgs[:limit]
+	}
+	return msgs, hasNewer, nil
+}
+
 // PutStatusMessageDelivered marca como 'entregado' los mensajes con estado 'enviado'
 // cuyo receptor coincide con id_message (id del receptor).
 func (app *ApiContact) PutStatusMessageDelivered(id_message uint, ctx context.Context) error {

@@ -104,6 +104,16 @@ func (m *MockGroupRepo) SearchGroupMessages(groupID, userID uint, q string, befo
 	return args.Get(0).([]models.SearchRow), args.Bool(1), args.Error(2)
 }
 
+func (m *MockGroupRepo) GetGroupMessagesAround(groupID, around uint, limit int, ctx context.Context) ([]models.GroupMessage, bool, bool, error) {
+	args := m.Called(groupID, around, limit, ctx)
+	return args.Get(0).([]models.GroupMessage), args.Bool(1), args.Bool(2), args.Error(3)
+}
+
+func (m *MockGroupRepo) GetGroupMessagesAfter(groupID, after uint, limit int, ctx context.Context) ([]models.GroupMessage, bool, error) {
+	args := m.Called(groupID, after, limit, ctx)
+	return args.Get(0).([]models.GroupMessage), args.Bool(1), args.Error(2)
+}
+
 // MockGroupContactRepo implementa GroupContactRepoInterface.
 type MockGroupContactRepo struct {
 	mock.Mock

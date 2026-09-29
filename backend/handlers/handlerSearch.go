@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"gorm/backend/models"
 	"gorm/backend/services"
 	"net/http"
 	"strconv"
@@ -29,6 +30,28 @@ func parseSearchPaging(ctx *gin.Context) (before uint, limit int) {
 		limit = l
 	}
 	return before, limit
+}
+
+// parsePositiveID lee un id > 0 (ausente o inválido devuelve false).
+func parsePositiveID(raw string) (uint, bool) {
+	v, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil || v == 0 {
+		return 0, false
+	}
+	return uint(v), true
+}
+
+// respondWindowError traduce los errores de las ventanas around/after:
+// mensaje no visible/inexistente 404, no miembro 403, resto 500.
+func respondWindowError(ctx *gin.Context, err error) {
+	switch {
+	case errors.Is(err, models.ErrMessageNotFound), errors.Is(err, models.ErrGroupMessageNotFound):
+		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrNotGroupMember):
+		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+	default:
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
 }
 
 // respondSearchError traduce los errores de búsqueda a códigos HTTP.

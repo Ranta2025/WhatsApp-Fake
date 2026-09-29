@@ -274,6 +274,71 @@ func (r *RepoGroup) GetGroupMessagesPage(groupID, before uint, limit, offset int
 	return messages, hasMore, nil
 }
 
+// GetGroupMessagesAround devuelve una ventana cronológica (más antiguo primero)
+// centrada en around: hasta limit/2 mensajes anteriores, el objetivo y hasta
+// limit/2 posteriores. Si el mensaje no existe, está borrado o es de otro grupo
+// devuelve models.ErrGroupMessageNotFound.
+func (r *RepoGroup) GetGroupMessagesAround(groupID, around uint, limit int, ctx context.Context) ([]models.GroupMessage, bool, bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	half := limit / 2
+	if half < 1 {
+		half = 1
+	}
+	base := func() *gorm.DB {
+		return r.data.WithContext(c).Preload("Sender", selectUserBasic).Where("group_id = ?", groupID)
+	}
+
+	var target models.GroupMessage
+	if err := base().Where("id = ?", around).First(&target).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, false, false, models.ErrGroupMessageNotFound
+		}
+		return nil, false, false, err
+	}
+	var older, newer []models.GroupMessage
+	if err := base().Where("id < ?", around).Order("id DESC").Limit(half + 1).Find(&older).Error; err != nil {
+		return nil, false, false, err
+	}
+	if err := base().Where("id > ?", around).Order("id ASC").Limit(half + 1).Find(&newer).Error; err != nil {
+		return nil, false, false, err
+	}
+	hasOlder := len(older) > half
+	if hasOlder {
+		older = older[:half]
+	}
+	hasNewer := len(newer) > half
+	if hasNewer {
+		newer = newer[:half]
+	}
+	out := make([]models.GroupMessage, 0, len(older)+1+len(newer))
+	for i := len(older) - 1; i >= 0; i-- {
+		out = append(out, older[i])
+	}
+	out = append(out, target)
+	out = append(out, newer...)
+	return out, hasOlder, hasNewer, nil
+}
+
+// GetGroupMessagesAfter devuelve hasta limit mensajes con id > after en orden
+// cronológico; hasNewer indica si quedan más posteriores.
+func (r *RepoGroup) GetGroupMessagesAfter(groupID, after uint, limit int, ctx context.Context) ([]models.GroupMessage, bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var msgs []models.GroupMessage
+	err := r.data.WithContext(c).Preload("Sender", selectUserBasic).
+		Where("group_id = ? AND id > ?", groupID, after).
+		Order("id ASC").Limit(limit + 1).Find(&msgs).Error
+	if err != nil {
+		return nil, false, err
+	}
+	hasNewer := len(msgs) > limit
+	if hasNewer {
+		msgs = msgs[:limit]
+	}
+	return msgs, hasNewer, nil
+}
+
 // GetGroupMessageByID obtiene un mensaje de grupo por su ID.
 func (r *RepoGroup) GetGroupMessageByID(messageID uint, ctx context.Context) (*models.GroupMessage, error) {
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)

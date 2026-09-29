@@ -30,6 +30,8 @@ type ChatServicer interface {
 	ServiceClearChat(telephonUser string, telephonContact string, ctx context.Context) error
 	ServiceDeleteMessageForMe(telephonUser string, messageID uint, ctx context.Context) (schemas.Message, error)
 	ServiceSearchMessages(telephonUser, telephonContact, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error)
+	ServiceGetMessagesAround(telephonUser, telephonContact string, around uint, limit int, ctx context.Context) ([]schemas.Message, bool, bool, error)
+	ServiceGetMessagesAfter(telephonUser, telephonContact string, after uint, limit int, ctx context.Context) ([]schemas.Message, bool, error)
 }
 
 type ChatRepoInterface interface {
@@ -50,6 +52,8 @@ type ChatRepoInterface interface {
 	DeleteMessageForSender(messageID uint, senderID uint, ctx context.Context) (*models.Message, error)
 	ClearChatForUser(userID uint, contactID uint, ctx context.Context) error
 	SearchMessages(userID, contactID uint, q string, before uint, limit int, ctx context.Context) ([]models.SearchRow, bool, error)
+	GetMessagesAround(userID, contactID, around uint, limit int, ctx context.Context) ([]models.Message, bool, bool, error)
+	GetMessagesAfter(userID, contactID, after uint, limit int, ctx context.Context) ([]models.Message, bool, error)
 }
 
 type ServiceChat struct {
@@ -401,4 +405,56 @@ func (rp *ServiceChat) ServiceDeleteMessageForMe(telephonUser string, messageID 
 	}
 
 	return messageToSchema(msgDB, senderTelephon, receptorTelephon), nil
+}
+
+const (
+	windowDefaultLimit = 50  // tamaño por defecto de una ventana around/after
+	windowMaxLimit     = 100 // máximo de mensajes por ventana around/after
+)
+
+func clampWindowLimit(limit int) int {
+	if limit <= 0 {
+		return windowDefaultLimit
+	}
+	if limit > windowMaxLimit {
+		return windowMaxLimit
+	}
+	return limit
+}
+
+// ServiceGetMessagesAround devuelve una ventana cronológica centrada en el
+// mensaje around (hasta limit/2 por lado) y si hay más mensajes antes/después.
+// models.ErrMessageNotFound si el mensaje no es visible para el usuario.
+func (rp *ServiceChat) ServiceGetMessagesAround(telephonUser, telephonContact string, around uint, limit int, ctx context.Context) ([]schemas.Message, bool, bool, error) {
+	idUser, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	idContact, err := rp.repo.GetIdByTelephon(telephonContact, ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	msgs, hasOlder, hasNewer, err := rp.repo.GetMessagesAround(uint(idUser), uint(idContact), around, clampWindowLimit(limit), ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return convertMessagesToSchemas(msgs, telephonUser, telephonContact, idUser), hasOlder, hasNewer, nil
+}
+
+// ServiceGetMessagesAfter devuelve hasta limit mensajes posteriores a after en
+// orden cronológico y si quedan más.
+func (rp *ServiceChat) ServiceGetMessagesAfter(telephonUser, telephonContact string, after uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
+	idUser, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	idContact, err := rp.repo.GetIdByTelephon(telephonContact, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	msgs, hasNewer, err := rp.repo.GetMessagesAfter(uint(idUser), uint(idContact), after, clampWindowLimit(limit), ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return convertMessagesToSchemas(msgs, telephonUser, telephonContact, idUser), hasNewer, nil
 }

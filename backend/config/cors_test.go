@@ -44,3 +44,23 @@ func TestCorsExposesHasMoreHeader(t *testing.T) {
 		t.Errorf("Access-Control-Expose-Headers = %q, want X-Has-More", got)
 	}
 }
+
+// El frontend lee los flags de las ventanas around/after (chat 1:1) cross-origin.
+func TestCorsExposesWindowHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Cors())
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	got := w.Header().Get("Access-Control-Expose-Headers")
+	for _, h := range []string{"X-Has-More-Older", "X-Has-More-Newer"} {
+		if !strings.Contains(got, h) {
+			t.Errorf("Access-Control-Expose-Headers = %q, want %s", got, h)
+		}
+	}
+}

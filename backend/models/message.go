@@ -2,10 +2,15 @@ package models
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// ErrMessageNotFound lo devuelve el repositorio cuando el mensaje no existe o no
+// es visible para el usuario que lo consulta.
+var ErrMessageNotFound = errors.New("mensaje no encontrado")
 
 type Message struct {
 	gorm.Model

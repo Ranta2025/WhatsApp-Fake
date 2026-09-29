@@ -41,6 +41,8 @@ type GroupServicer interface {
 	AdvanceGroupRead(telephon string, groupID, upToMessageID uint, ctx context.Context) (*schemas.GroupReceiptUpdate, error)
 	GetGroupMessageReceipts(telephon string, groupID, messageID uint, ctx context.Context) (*schemas.GroupMessageReceipts, error)
 	SearchGroupMessages(telephon string, groupID uint, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error)
+	GetGroupMessagesAround(telephon string, groupID, around uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, bool, error)
+	GetGroupMessagesAfter(telephon string, groupID, after uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, error)
 }
 
 // GroupRepoInterface define las operaciones de persistencia que necesita el servicio.
@@ -62,6 +64,8 @@ type GroupRepoInterface interface {
 	UpdateGroupAvatar(groupID uint, avatarUrl string, ctx context.Context) error
 	AdvanceMemberReceipts(groupID, userID, deliveredUpTo, readUpTo uint, ctx context.Context) (models.GroupReceiptState, bool, error)
 	SearchGroupMessages(groupID, userID uint, q string, before uint, limit int, ctx context.Context) ([]models.SearchRow, bool, error)
+	GetGroupMessagesAround(groupID, around uint, limit int, ctx context.Context) ([]models.GroupMessage, bool, bool, error)
+	GetGroupMessagesAfter(groupID, after uint, limit int, ctx context.Context) ([]models.GroupMessage, bool, error)
 }
 
 // GroupContactRepoInterface es el subconjunto del repo de contactos que necesita
@@ -527,4 +531,47 @@ func (s *ServiceGroup) UpdateGroupAvatar(telephon string, groupID uint, avatarUr
 // GetUsernameByTelephon retorna el username de un usuario por su número de teléfono.
 func (s *ServiceGroup) GetUsernameByTelephon(telephon string, ctx context.Context) (string, error) {
 	return s.contactRepo.GetUsernameByTelephon(telephon, ctx)
+}
+
+// requireGroupMember resuelve al usuario y exige que sea miembro activo del
+// grupo (ErrNotGroupMember en otro caso).
+func (s *ServiceGroup) requireGroupMember(telephon string, groupID uint, ctx context.Context) error {
+	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
+	if err != nil {
+		return errors.New("usuario no encontrado")
+	}
+	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return ErrNotGroupMember
+	}
+	return nil
+}
+
+// GetGroupMessagesAround devuelve una ventana cronológica (más antiguo primero)
+// centrada en el mensaje around y si hay más mensajes antes/después.
+func (s *ServiceGroup) GetGroupMessagesAround(telephon string, groupID, around uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, bool, error) {
+	if err := s.requireGroupMember(telephon, groupID, ctx); err != nil {
+		return nil, false, false, err
+	}
+	msgs, hasOlder, hasNewer, err := s.repo.GetGroupMessagesAround(groupID, around, clampWindowLimit(limit), ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return convertGroupMessages(msgs), hasOlder, hasNewer, nil
+}
+
+// GetGroupMessagesAfter devuelve hasta limit mensajes posteriores a after en
+// orden cronológico y si quedan más.
+func (s *ServiceGroup) GetGroupMessagesAfter(telephon string, groupID, after uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, error) {
+	if err := s.requireGroupMember(telephon, groupID, ctx); err != nil {
+		return nil, false, err
+	}
+	msgs, hasNewer, err := s.repo.GetGroupMessagesAfter(groupID, after, clampWindowLimit(limit), ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return convertGroupMessages(msgs), hasNewer, nil
 }

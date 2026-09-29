@@ -259,6 +259,13 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 	}
 }
 
+// joinGroupRoom une al usuario a la room WS del grupo si hay notificador.
+func (h *HandlerGroup) joinGroupRoom(groupID uint, telephon string) {
+	if h.notifier != nil {
+		h.notifier.JoinRoomByTelephon(groupID, telephon)
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/v1/group/:groupID/message
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,6 +279,30 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 		groupID, exists2 := ctx.Get("groupID")
 		if !exists || !exists2 {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		// Ventanas para "ir al mensaje" (búsqueda): cronológicas (más antiguo primero).
+		if around, ok := parsePositiveID(ctx.Query("around")); ok {
+			_, limit := parseSearchPaging(ctx)
+			messages, hasOlder, hasNewer, err := h.service.GetGroupMessagesAround(telephon.(string), groupID.(uint), around, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			h.joinGroupRoom(groupID.(uint), telephon.(string))
+			ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMore": hasOlder, "hasMoreOlder": hasOlder, "hasMoreNewer": hasNewer})
+			return
+		}
+		if after, ok := parsePositiveID(ctx.Query("after")); ok {
+			_, limit := parseSearchPaging(ctx)
+			messages, hasNewer, err := h.service.GetGroupMessagesAfter(telephon.(string), groupID.(uint), after, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			h.joinGroupRoom(groupID.(uint), telephon.(string))
+			ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMoreNewer": hasNewer})
 			return
 		}
 
@@ -295,9 +326,7 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 			return
 		}
 		// Auto-unir al usuario a la room del WS al cargar mensajes (auto-recuperación).
-		if h.notifier != nil {
-			h.notifier.JoinRoomByTelephon(groupID.(uint), telephon.(string))
-		}
+		h.joinGroupRoom(groupID.(uint), telephon.(string))
 		ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMore": hasMore})
 	}
 }
