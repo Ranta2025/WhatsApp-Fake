@@ -204,6 +204,14 @@ func TestE2E(t *testing.T) {
 	ev = waitFor(t, wsBob, "group_chat")
 	assert.Equal(t, "hola grupo", ev["payload"].(map[string]interface{})["Message"])
 
+	// Media en grupo: ida y vuelta con mediaUrl/mediaType y rechazo de URL peligrosa
+	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "", "mediaUrl": up["url"], "mediaType": "image"}}))
+	ev = waitFor(t, wsBob, "group_chat")
+	assert.Equal(t, up["url"], ev["payload"].(map[string]interface{})["MediaUrl"])
+	assert.Equal(t, "image", ev["payload"].(map[string]interface{})["MediaType"])
+	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "x", "mediaUrl": "javascript:alert(1)", "mediaType": "document"}}))
+	waitFor(t, wsAlice, "error")
+
 	code, groups := cb.do("GET", "/api/v1/group", nil)
 	require.Equal(t, 200, code)
 	assert.Len(t, groups["groups"], 1)
