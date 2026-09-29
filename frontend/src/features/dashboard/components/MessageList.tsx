@@ -2,10 +2,11 @@ import { useRef, useEffect, useMemo, useState } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import { formatDaySeparator, formatTime } from '../../../utils/format';
-import AudioPlayer from '../../../components/AudioPlayer';
+import MediaContent from '../../../components/MediaContent';
+import { isMediaUrl } from '../../../lib/mediaMessage';
 import Popover from '../../../components/ui/Popover';
 import { useRefMap } from '../../../hooks/useRefMap';
-import type { Message, MessageStatus, MediaType } from '../../../types/api';
+import type { Message, MessageStatus } from '../../../types/api';
 
 /**
  * MessageList Component
@@ -111,25 +112,6 @@ const MessageList = () => {
 
     if (!selected) return null;
 
-    /**
-     * Detecta si el contenido de m.Message es una URL de media (archivo adjunto).
-     * Retorna true si el mensaje no debe mostrarse como texto plano.
-     */
-    const isMediaUrl = (m: Message) => {
-        const text = m.Message || '';
-        // Si tiene MediaType y MediaUrl, el texto es redundante si coincide con la URL
-        if (m.MediaType && m.MediaUrl) return true;
-        // Si tiene MediaType y el mensaje es la URL
-        if (m.MediaType && text.startsWith('http')) return true;
-        // Detectar URLs de media en el texto del mensaje
-        if (text.match(/^https?:\/\/.+\/(media|upload)\/.+\.(jpg|jpeg|png|gif|webp|mp4|webm|ogg|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt)(\?.*)?$/i)) return true;
-        // Detectar rutas de media del backend (/media/images/, /media/audio/, etc.)
-        if (text.match(/^https?:\/\/.+\/media\/(images|audio|videos|docs)\//i)) return true;
-        // Detectar si el texto es exactamente una URL y hay media renderizada
-        if (m.MediaType && text.trim() === (m.MediaUrl || '').trim()) return true;
-        return false;
-    };
-
     const getStatusIcon = (status: MessageStatus) => {
         // Stroke-based ticks: the second check is shifted right so both marks stay distinct
         const strokeProps = {
@@ -179,65 +161,6 @@ const MessageList = () => {
                 <path d="M12 7v5l3 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
         );
-    };
-
-    const renderMedia = (m: Message, isMine: boolean) => {
-        let mediaType: MediaType | undefined = m.MediaType;
-        let mediaUrl = m.MediaUrl;
-        const text = m.Message || '';
-
-        if (!mediaType && text.includes('/media/')) {
-            mediaUrl = text;
-            if (text.includes('/audio/')) mediaType = 'audio';
-            else if (text.includes('/images/')) mediaType = 'image';
-            else if (text.includes('/videos/')) mediaType = 'video';
-            else if (text.includes('/docs/')) mediaType = 'document';
-        }
-
-        if (!mediaType || !mediaUrl) return null;
-        
-        switch (mediaType) {
-            case 'image':
-                return (
-                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
-                        <img 
-                            src={mediaUrl} 
-                            alt="Imagen adjunta" 
-                            loading="lazy"
-                            className="w-full h-auto object-cover max-h-80 cursor-pointer hover:opacity-90 transition-opacity" 
-                            onClick={() => window.open(mediaUrl, '_blank')} 
-                        />
-                    </div>
-                );
-            case 'video':
-                return (
-                    <div className="mb-2 rounded-xl overflow-hidden max-w-sm bg-slate-800/50">
-                        <video src={mediaUrl} controls className="w-full max-h-80 bg-black/20" />
-                    </div>
-                );
-            case 'audio':
-                return (
-                    <div className="mb-1 w-full min-w-[240px]">
-                        <AudioPlayer src={mediaUrl} isMine={isMine} />
-                    </div>
-                );
-            case 'document':
-                return (
-                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-2 flex items-center gap-3 p-3 bg-black/20 hover:bg-black/30 rounded-xl transition-all border border-white/5 group">
-                        <div className="w-11 h-11 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-white truncate">Documento</div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300/60">Clic para descargar</div>
-                        </div>
-                    </a>
-                );
-            default:
-                return null;
-        }
     };
 
     // Wallpaper priority: per-chat > global > default pattern
@@ -358,7 +281,7 @@ const MessageList = () => {
                                             )}
 
                                             {/* Media */}
-                                            {renderMedia(m, isMine)}
+                                            <MediaContent message={m} isMine={isMine} />
 
                                             {/* Texto del mensaje - Ocultar si es una URL de media */}
                                             {m.Message && !isMediaUrl(m) && (

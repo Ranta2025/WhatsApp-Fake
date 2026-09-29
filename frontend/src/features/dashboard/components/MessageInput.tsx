@@ -2,8 +2,7 @@ import { useState, useRef, type ChangeEvent, type KeyboardEvent } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import MediaUploadMenu from '../../../components/MediaUploadMenu';
-import api from '../../../api/axios';
-import type { MediaUploadResult } from '../../../types/api';
+import { useVoiceRecorder, formatRecordingTime } from '../../../hooks/useVoiceRecorder';
 import { replySenderLabel } from '../lib/replyLabel';
 
 const MessageInput = () => {
@@ -18,12 +17,12 @@ const MessageInput = () => {
     } = useMessaging();
 
     const [showAttachMenu, setShowAttachMenu] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingTime, setRecordingTime] = useState(0);
     const attachButtonRef = useRef<HTMLButtonElement>(null);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
-    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useVoiceRecorder({
+        onRecorded: (url) => handleMediaUploadSuccess(url, 'audio'),
+        onUploadError: () => addToast({ type: 'error', message: 'No se pudo enviar la nota de voz' }),
+    });
 
     const currentDraft = selected ? (drafts[selected.Number] || '') : '';
 
@@ -41,74 +40,6 @@ const MessageInput = () => {
 
     const handleSend = () => {
         messagingHandleSend(currentDraft);
-    };
-
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-
-            mediaRecorder.ondataavailable = (e: BlobEvent) => {
-                if (e.data.size > 0) audioChunksRef.current.push(e.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const formData = new FormData();
-                formData.append('file', audioBlob, 'voice_note.webm');
-                try {
-                    // El cuerpo puede llegar vacío/null; guard `response.data &&`
-                    // restaura la tolerancia de la versión JS.
-                    const response = await api.post<MediaUploadResult | null>('/api/v1/upload', formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                    if (response.data && response.data.url) {
-                        handleMediaUploadSuccess(response.data.url, 'audio');
-                    }
-                } catch (error) {
-                    console.error('Error uploading voice note:', error);
-                    addToast({ type: 'error', message: 'No se pudo enviar la nota de voz' });
-                }
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorder.start();
-            setIsRecording(true);
-            setRecordingTime(0);
-            recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-        } catch (err) {
-            console.error('Error accessing microphone:', err);
-            alert('No se pudo acceder al micrófono.');
-        }
-    };
-
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            clearInterval(recordingTimerRef.current || undefined);
-        }
-    };
-
-    const cancelRecording = () => {
-        const recorder = mediaRecorderRef.current;
-        if (recorder && isRecording) {
-            recorder.onstop = () => {
-                recorder.stream.getTracks().forEach(track => track.stop());
-            };
-            recorder.stop();
-            setIsRecording(false);
-            clearInterval(recordingTimerRef.current || undefined);
-            setRecordingTime(0);
-        }
-    };
-
-    const formatRecordingTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     if (!selected) return null;
