@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeLatestWindow, prependOlder, oldestRealMessageId } from './mergeMessages';
+import { mergeLatestWindow, prependOlder, oldestRealMessageId, isContiguousWindow } from './mergeMessages';
 
 interface Entry { MessageID: number | string; Time: string; Message?: string }
 
@@ -86,5 +86,35 @@ describe('mergeLatestWindow', () => {
 
     it('works from an undefined previous list', () => {
         expect(ids(mergeLatestWindow(undefined, [e(2, '2024-01-01T00:00:02Z'), e(1, '2024-01-01T00:00:01Z')]))).toEqual([1, 2]);
+    });
+});
+
+describe('mergeLatestWindow contiguity (no silent gaps)', () => {
+    const old = [e(1, '2024-01-01T00:00:01Z'), e(2, '2024-01-01T00:00:02Z'), e(3, '2024-01-01T00:00:03Z')];
+    const gapped = [e(10, '2024-01-01T00:00:10Z'), e(11, '2024-01-01T00:00:11Z')];
+
+    it('drops the older block when the fresh window does not overlap it', () => {
+        expect(ids(mergeLatestWindow(old, gapped))).toEqual([10, 11]);
+    });
+
+    it('drops older synthetic entries too when not contiguous', () => {
+        const prev = [sys('system_old', '2024-01-01T00:00:01Z'), ...old];
+        expect(ids(mergeLatestWindow(prev, gapped))).toEqual([10, 11]);
+    });
+
+    it('keeps the older block when the fresh window overlaps or touches it', () => {
+        expect(ids(mergeLatestWindow(old, [e(3, '2024-01-01T00:00:03Z'), e(4, '2024-01-01T00:00:04Z')]))).toEqual([1, 2, 3, 4]);
+    });
+
+    it('keeps older entries when the fresh window is the complete history (hasMore=false)', () => {
+        expect(ids(mergeLatestWindow(old, gapped, false))).toEqual([1, 2, 3, 10, 11]);
+    });
+
+    it('isContiguousWindow: empty/undefined prev is contiguous; overlap yes; gap no', () => {
+        expect(isContiguousWindow(undefined, gapped)).toBe(true);
+        expect(isContiguousWindow([], gapped)).toBe(true);
+        expect(isContiguousWindow(old, gapped)).toBe(false);
+        expect(isContiguousWindow([...old, e(10, '2024-01-01T00:00:10Z')], gapped)).toBe(true);
+        expect(isContiguousWindow(old, gapped, false)).toBe(true);
     });
 });

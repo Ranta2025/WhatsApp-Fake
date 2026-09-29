@@ -207,6 +207,44 @@ describe('DashboardProvider message pagination', () => {
             expect(ids(ctx?.messagesByChat['B'])).toEqual(range(1, 100));
             expect(ctx?.chatPaging['B']?.hasMore).toBe(false);
         });
+
+        it('a gapped fetchChatMessages re-sync drops the stale block and resumes paging from the fresh window', async () => {
+            chatHandler = () => ({ data: range(51, 100).map(chatMsg), headers: { 'x-has-more': 'true' } });
+            await mount();
+            await act(async () => { await ctx!.fetchChatMessages('B'); });
+            chatHandler = () => ({ data: range(1, 50).map(chatMsg), headers: { 'x-has-more': 'false' } });
+            await act(async () => { await ctx!.loadOlderMessages('B'); });
+            expect(ctx?.chatPaging['B']).toMatchObject({ olderLoaded: true, hasMore: false });
+
+            // 300 messages arrived while away: fresh window 351..550 does not touch 1..100.
+            chatHandler = () => ({ data: range(351, 550).map(chatMsg), headers: { 'x-has-more': 'true' } });
+            await act(async () => { await ctx!.fetchChatMessages('B'); });
+            expect(ids(ctx?.messagesByChat['B'])).toEqual(range(351, 550));
+            expect(ctx?.chatPaging['B']).toMatchObject({ hasMore: true, olderLoaded: false });
+
+            chatHandler = () => ({ data: range(301, 350).map(chatMsg), headers: { 'x-has-more': 'true' } });
+            await act(async () => { await ctx!.loadOlderMessages('B'); });
+            expect(mockGet).toHaveBeenLastCalledWith('/api/v1/chat/B', { params: { before: 351, limit: 50 } });
+        });
+
+        it('a gapped fetchAllChats re-sync resets paging to the fresh window', async () => {
+            chatHandler = () => ({ data: range(51, 100).map(chatMsg), headers: { 'x-has-more': 'true' } });
+            await mount();
+            await act(async () => { await ctx!.fetchChatMessages('B'); });
+            chatHandler = () => ({ data: range(1, 50).map(chatMsg), headers: { 'x-has-more': 'false' } });
+            await act(async () => { await ctx!.loadOlderMessages('B'); });
+
+            chatsHandler = () => ({
+                data: [{
+                    ContactTelephon: 'B', ContactUsername: 'bea', ContactName: 'Bea', ContactAvatarUrl: '',
+                    IsContact: true, Messages: range(351, 550).map(chatMsg),
+                }],
+            });
+            await act(async () => { await ctx!.fetchAllChats(); });
+
+            expect(ids(ctx?.messagesByChat['B'])).toEqual(range(351, 550));
+            expect(ctx?.chatPaging['B']).toMatchObject({ hasMore: true, olderLoaded: false });
+        });
     });
 
     describe('group chat', () => {
@@ -256,6 +294,29 @@ describe('DashboardProvider message pagination', () => {
             await act(async () => { await ctx!.fetchGroupMessages(9); });
             expect(ids(ctx?.groupMessages[9])).toEqual(range(1, 101));
             expect(ctx?.groupPaging[9]?.hasMore).toBe(false);
+        });
+
+        it('a gapped fetchGroupMessages / fetchGroupDetail re-sync resets group paging to the fresh window', async () => {
+            mockGetGroupMessages.mockResolvedValue({ data: { messages: desc(51, 100), hasMore: true } });
+            await mount();
+            await act(async () => { await ctx!.fetchGroupMessages(9); });
+            mockGetGroupMessages.mockResolvedValue({ data: { messages: desc(1, 50), hasMore: false } });
+            await act(async () => { await ctx!.loadOlderGroupMessages(9); });
+
+            mockGetGroupMessages.mockResolvedValue({ data: { messages: desc(201, 250), hasMore: true } });
+            await act(async () => { await ctx!.fetchGroupMessages(9); });
+            expect(ids(ctx?.groupMessages[9])).toEqual(range(201, 250));
+            expect(ctx?.groupPaging[9]).toMatchObject({ hasMore: true, olderLoaded: false });
+
+            mockGetGroupMessages.mockResolvedValue({ data: { messages: desc(151, 200), hasMore: true } });
+            await act(async () => { await ctx!.loadOlderGroupMessages(9); });
+            expect(mockGetGroupMessages).toHaveBeenLastCalledWith(9, 50, 0, 201);
+            expect(ctx?.groupPaging[9]).toMatchObject({ olderLoaded: true });
+
+            mockGetGroupDetail.mockResolvedValue({ data: { ID: 9, Members: [], Messages: desc(401, 450) } });
+            await act(async () => { await ctx!.fetchGroupDetail(9); });
+            expect(ids(ctx?.groupMessages[9])).toEqual(range(401, 450));
+            expect(ctx?.groupPaging[9]).toMatchObject({ hasMore: true, olderLoaded: false });
         });
 
         it('an empty older group page ends pagination even if hasMore is true', async () => {

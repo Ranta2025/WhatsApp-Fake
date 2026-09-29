@@ -59,15 +59,42 @@ export function prependOlder<T extends MergeableMessage>(prev: readonly T[] | un
 }
 
 /**
+ * True when merging `fresh` (the latest window) onto `prev` cannot leave a hole.
+ * Contiguous when: there is nothing loaded yet; the server window is the complete
+ * history (`windowHasMore === false`, nothing older can be missing); or `prev`
+ * holds a real id >= the window's oldest real id (the ranges overlap/touch, so the
+ * window covers everything from its oldest id up). Otherwise more messages
+ * arrived than one window holds and older loaded pages are separated from it.
+ */
+export function isContiguousWindow(
+    prev: readonly MergeableMessage[] | undefined,
+    fresh: readonly MergeableMessage[],
+    windowHasMore = true,
+): boolean {
+    if (!prev || prev.length === 0 || fresh.length === 0 || !windowHasMore) return true;
+    const freshOldestId = oldestRealMessageId(fresh);
+    if (freshOldestId === null) return true;
+    return prev.some(m => isRealId(m.MessageID) && m.MessageID >= freshOldestId);
+}
+
+/**
  * Applies a fresh "latest window" from the server without wiping older pages
  * that were already loaded: inside the window the server is the truth (edits
  * refresh, server-side deletions disappear); entries older than the window are
- * kept. An empty window means an empty history.
+ * kept ONLY when `isContiguousWindow` holds. If not, the older block is dropped
+ * (result = fresh window) so no id range is silently skipped; callers must then
+ * reset paging (see `isContiguousWindow`). `windowHasMore=false` marks the window
+ * as the full history. An empty window means an empty history.
  */
-export function mergeLatestWindow<T extends MergeableMessage>(prev: readonly T[] | undefined, fresh: readonly T[]): T[] {
+export function mergeLatestWindow<T extends MergeableMessage>(
+    prev: readonly T[] | undefined,
+    fresh: readonly T[],
+    windowHasMore = true,
+): T[] {
     if (fresh.length === 0) return [];
     const freshOldestId = oldestRealMessageId(fresh);
     if (freshOldestId === null || !prev || prev.length === 0) return dedupeAndSort([...fresh]);
+    if (!isContiguousWindow(prev, fresh, windowHasMore)) return dedupeAndSort([...fresh]);
 
     const freshOldestTime = Math.min(...fresh.map(m => Date.parse(m.Time)).filter(Number.isFinite));
     const kept = prev.filter(m => (

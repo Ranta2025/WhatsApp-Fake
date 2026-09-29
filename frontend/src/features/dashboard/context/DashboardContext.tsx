@@ -21,7 +21,7 @@ import {
     normalizeChatMessagesResponse, normalizeHasMore,
 } from '../lib/normalizeResponses';
 import {
-    mergeLatestWindow, prependOlder, oldestRealMessageId, DEFAULT_PAGING, type PagingState,
+    mergeLatestWindow, isContiguousWindow, prependOlder, oldestRealMessageId, DEFAULT_PAGING, type PagingState,
 } from '../lib/mergeMessages';
 import { useNotificationClick } from '../hooks/useNotificationClick';
 
@@ -166,8 +166,8 @@ export const useDashboard = (): DashboardContextValue => {
  * Paging state after a "latest window" fetch: if older pages were already
  * loaded their hasMore stays authoritative; otherwise use the fetched value.
  */
-const windowPaging = (prev: PagingState | undefined, hasMore: boolean): PagingState => (
-    prev?.olderLoaded
+const windowPaging = (prev: PagingState | undefined, hasMore: boolean, contiguous = true): PagingState => (
+    prev?.olderLoaded && contiguous
         ? prev
         : { hasMore, loadingOlder: prev?.loadingOlder ?? false, olderLoaded: false }
 );
@@ -375,17 +375,26 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 }
             });
             // Mezclar con lo ya cargado: las páginas antiguas no se pierden al re-sincronizar.
+            // Si llegaron más mensajes que una ventana, el bloque antiguo se descarta
+            // y el paginado se reinicia desde la ventana nueva (sin huecos).
+            const loadedChats = messagesByChatRef.current;
+            const windowMore: Record<string, boolean> = {};
+            const contiguousChats: Record<string, boolean> = {};
+            Object.entries(msgMap).forEach(([key, fresh]) => {
+                windowMore[key] = fresh.length >= CHAT_LATEST_WINDOW;
+                contiguousChats[key] = isContiguousWindow(loadedChats[key], fresh, windowMore[key]);
+            });
             setMessagesByChat(prev => {
                 const merged: Record<string, Message[]> = {};
                 Object.entries(msgMap).forEach(([key, fresh]) => {
-                    merged[key] = mergeLatestWindow(prev[key], fresh);
+                    merged[key] = mergeLatestWindow(prev[key], fresh, windowMore[key]);
                 });
                 return merged;
             });
             setChatPaging(prev => {
                 const next: Record<string, PagingState> = {};
-                Object.entries(msgMap).forEach(([key, fresh]) => {
-                    next[key] = windowPaging(prev[key], fresh.length >= CHAT_LATEST_WINDOW);
+                Object.entries(msgMap).forEach(([key]) => {
+                    next[key] = windowPaging(prev[key], windowMore[key] ?? false, contiguousChats[key]);
                 });
                 return next;
             });
@@ -403,8 +412,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const { data, headers } = await api.get<unknown>(`/api/v1/chat/${contactNumber}`);
             const messages = normalizeChatMessagesResponse(data);
             const hasMore = readHasMoreHeader(headers) ?? messages.length >= CHAT_LATEST_WINDOW;
-            setMessagesByChat(prev => ({ ...prev, [contactNumber]: mergeLatestWindow(prev[contactNumber], messages) }));
-            setChatPaging(prev => ({ ...prev, [contactNumber]: windowPaging(prev[contactNumber], hasMore) }));
+            const contiguous = isContiguousWindow(messagesByChatRef.current[contactNumber], messages, hasMore);
+            setMessagesByChat(prev => ({ ...prev, [contactNumber]: mergeLatestWindow(prev[contactNumber], messages, hasMore) }));
+            setChatPaging(prev => ({ ...prev, [contactNumber]: windowPaging(prev[contactNumber], hasMore, contiguous) }));
         } catch (err) {
             console.error(`Error fetching messages for ${contactNumber}:`, err);
         }
@@ -451,8 +461,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const { data } = await getGroupMessages(groupID);
             const messages = normalizeGroupMessagesResponse(data);
             const hasMore = normalizeHasMore(data) ?? messages.length >= GROUP_DETAIL_WINDOW;
-            setGroupMessages(prev => ({ ...prev, [groupID]: mergeLatestWindow<GroupMessageEntry>(prev[groupID], messages) }));
-            setGroupPaging(prev => ({ ...prev, [groupID]: windowPaging(prev[groupID], hasMore) }));
+            const contiguous = isContiguousWindow(groupMessagesRef.current[groupID], messages, hasMore);
+            setGroupMessages(prev => ({ ...prev, [groupID]: mergeLatestWindow<GroupMessageEntry>(prev[groupID], messages, hasMore) }));
+            setGroupPaging(prev => ({ ...prev, [groupID]: windowPaging(prev[groupID], hasMore, contiguous) }));
         } catch (err) {
             console.error(`Error fetching messages for group ${groupID}:`, err);
         }
@@ -495,13 +506,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Pre-populate message cache if backend returned messages
             const detailMessages = normalizeGroupDetailMessages(data);
             if (detailMessages.length > 0) {
+                const hasMore = detailMessages.length >= GROUP_DETAIL_WINDOW;
+                const contiguous = isContiguousWindow(groupMessagesRef.current[groupID], detailMessages, hasMore);
                 setGroupMessages(prev => ({
                     ...prev,
-                    [groupID]: mergeLatestWindow<GroupMessageEntry>(prev[groupID], detailMessages),
+                    [groupID]: mergeLatestWindow<GroupMessageEntry>(prev[groupID], detailMessages, hasMore),
                 }));
                 setGroupPaging(prev => ({
                     ...prev,
-                    [groupID]: windowPaging(prev[groupID], detailMessages.length >= GROUP_DETAIL_WINDOW),
+                    [groupID]: windowPaging(prev[groupID], hasMore, contiguous),
                 }));
             }
         } catch (err) {
