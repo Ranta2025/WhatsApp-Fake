@@ -96,6 +96,16 @@ func initClient(hub *Hub, client *Client, chatService services.ChatServicer, gro
 		}
 		for _, g := range groups {
 			hub.JoinRoom(g.ID, client)
+			// 4. Al conectar se da por entregado todo lo pendiente del grupo
+			// (equivalente al bulk de los chats 1:1) y se avisa a los demás.
+			update, err := groupService.AdvanceGroupDelivered(telephon, g.ID, allGroupMessages, ctx)
+			if err != nil {
+				log.Printf("[WS] Error marcando grupo %d como entregado para %s: %v", g.ID, telephon, err)
+				continue
+			}
+			if update != nil {
+				publishGroupReceipt(hub, update)
+			}
 		}
 	}
 }

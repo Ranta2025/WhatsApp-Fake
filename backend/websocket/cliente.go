@@ -85,6 +85,8 @@ func (c *Client) buildRouter() map[string]func(*MessageHandler) {
 		"group_edit_message":   (*MessageHandler).HandleGroupEditMessage,
 		"group_delete_message": (*MessageHandler).HandleGroupDeleteMessage,
 		"group_join":           (*MessageHandler).HandleGroupJoin,
+		"group_delivered":      (*MessageHandler).HandleGroupDelivered,
+		"group_read":           (*MessageHandler).HandleGroupRead,
 	}
 }
 

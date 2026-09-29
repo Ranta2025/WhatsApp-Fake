@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"gorm/backend/models"
+	"gorm/backend/schemas"
 	"log"
 	"time"
 )
@@ -442,6 +443,70 @@ func (mh *MessageHandler) HandleGroupJoin() {
 		}
 	}
 	log.Printf("[WS-GROUP] %s no es miembro del grupo %d — join denegado", mh.Client.Telephon, payload.GroupID)
+}
+
+// allGroupMessages pide avanzar la marca hasta el último mensaje del grupo;
+// el repositorio la acota al máximo id existente.
+const allGroupMessages = ^uint(0)
+
+// publishGroupReceipt avisa a los miembros conectados del grupo (salvo a quien
+// originó el acuse) de que sus marcas de agua avanzaron. Los clientes solo lo
+// usan para pintar los ticks de sus propios mensajes.
+func publishGroupReceipt(hub *Hub, update *schemas.GroupReceiptUpdate) {
+	msg, err := json.Marshal(map[string]interface{}{
+		"type":    "group_receipt",
+		"payload": update,
+	})
+	if err != nil {
+		log.Printf("[WS-GROUP] Error serializando group_receipt: %v", err)
+		return
+	}
+	hub.SendToGroup(update.GroupID, update.Telephon, msg)
+}
+
+// HandleGroupDelivered registra que el cliente recibió mensajes del grupo hasta
+// `messageID` (acuse de entrega). Exige membresía; los fallos solo se registran
+// en el log porque es un acuse automático, sin feedback al usuario.
+func (mh *MessageHandler) HandleGroupDelivered() {
+	var payload struct {
+		GroupID   uint `json:"groupID"`
+		MessageID uint `json:"messageID"`
+	}
+	if err := json.Unmarshal(mh.Payload, &payload); err != nil || payload.GroupID == 0 || payload.MessageID == 0 {
+		return
+	}
+	ctx, cancel := mh.context()
+	defer cancel()
+	update, err := mh.Client.ServiceGroup.AdvanceGroupDelivered(mh.Client.Telephon, payload.GroupID, payload.MessageID, ctx)
+	if err != nil {
+		log.Printf("[WS-GROUP] group_delivered rechazado (%s, grupo %d): %v", mh.Client.Telephon, payload.GroupID, err)
+		return
+	}
+	if update != nil {
+		publishGroupReceipt(mh.Hub, update)
+	}
+}
+
+// HandleGroupRead registra que el cliente leyó el grupo hasta `upToMessageID`
+// (implica entregado). Misma política de errores que HandleGroupDelivered.
+func (mh *MessageHandler) HandleGroupRead() {
+	var payload struct {
+		GroupID       uint `json:"groupID"`
+		UpToMessageID uint `json:"upToMessageID"`
+	}
+	if err := json.Unmarshal(mh.Payload, &payload); err != nil || payload.GroupID == 0 || payload.UpToMessageID == 0 {
+		return
+	}
+	ctx, cancel := mh.context()
+	defer cancel()
+	update, err := mh.Client.ServiceGroup.AdvanceGroupRead(mh.Client.Telephon, payload.GroupID, payload.UpToMessageID, ctx)
+	if err != nil {
+		log.Printf("[WS-GROUP] group_read rechazado (%s, grupo %d): %v", mh.Client.Telephon, payload.GroupID, err)
+		return
+	}
+	if update != nil {
+		publishGroupReceipt(mh.Hub, update)
+	}
 }
 
 // sendError es un helper para enviar mensajes de error al cliente WebSocket.
