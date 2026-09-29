@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useDashboard, type SelectedGroup, type SystemGroupMessage, type GroupMessageEntry } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
 import MediaContent from '../../../components/MediaContent';
-import { useEscapeToClose, isEscapeHandled } from '../../../hooks/useEscapeToClose';
+import GroupMessageInput from './GroupMessageInput';
+import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { useRefMap } from '../../../hooks/useRefMap';
 import { getResponseError } from '../../../lib/errors';
 import { groupReplySenderLabel } from '../lib/groupReply';
@@ -142,140 +143,6 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                         Eliminar para mí
                     </button>
                 </Popover>
-            </div>
-        </div>
-    );
-};
-
-// ── GroupMessageInput ─────────────────────────────────────────────────────────
-
-const GroupMessageInput = () => {
-    const [text, setText] = useState('');
-    const inputRef = useRef<HTMLTextAreaElement>(null);
-    const {
-        handleSend, handleTyping,
-        editingMessageId, editingMessageText, handleEditMessageChange,
-        handleEditMessageSave, handleEditMessageCancel,
-        replyingTo, cancelReply,
-    } = useGroupMessaging();
-
-    const { isConnected, selectedGroup } = useDashboard();
-
-    // If the user has left the group, show a read-only banner
-    if (selectedGroup?.UserRole === 'left') {
-        return (
-            <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
-                Ya no eres miembro de este grupo
-            </div>
-        );
-    }
-
-    const onSend = () => {
-        if (!text.trim()) return;
-        handleSend(text.trim());
-        setText('');
-    };
-
-    const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            if (editingMessageId) {
-                handleEditMessageSave();
-            } else {
-                onSend();
-            }
-        }
-        if (e.key === 'Escape') {
-            // Si alguna capa de overlay (modal/popover, incluido este mismo
-            // panel de grupo) ya manejó este Escape vía useEscapeToClose, no
-            // cancelar también la respuesta/edición en la misma pulsación
-            // (ver R3-escape-capture-swallows-unregistered-handlers): el
-            // hook ya no usa stopPropagation, así que sin este chequeo
-            // cerrar un popover ajeno y cancelar la edición ocurrirían a la
-            // vez con una sola tecla.
-            if (isEscapeHandled(e)) return;
-            if (editingMessageId) handleEditMessageCancel();
-            if (replyingTo) cancelReply();
-        }
-    };
-
-    // Switch between edit mode and regular mode
-    const inputValue   = editingMessageId ? editingMessageText : text;
-    const inputOnChange = editingMessageId
-        ? handleEditMessageChange
-        : (e: ChangeEvent<HTMLTextAreaElement>) => { setText(e.target.value); handleTyping(); };
-
-    return (
-        <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md">
-            {/* Reply banner */}
-            {replyingTo && !editingMessageId && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-900/30 border-b border-indigo-500/20">
-                    <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-indigo-400">
-                            Respondiendo a {replyingTo.SenderUsername || replyingTo.SenderTelephon}
-                        </div>
-                        <div className="text-xs text-slate-400 truncate">{replyingTo.Message}</div>
-                    </div>
-                    <button onClick={cancelReply} className="text-slate-500 hover:text-white transition-colors">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-            )}
-
-            {/* Edit banner */}
-            {editingMessageId && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-amber-900/20 border-b border-amber-500/20">
-                    <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    <span className="text-xs text-amber-300 flex-1">Editando mensaje</span>
-                    <button onClick={handleEditMessageCancel} className="text-slate-500 hover:text-white transition-colors">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-            )}
-
-            {/* Input row */}
-            <div className="flex items-end gap-2 px-3 py-3">
-                <textarea
-                    ref={inputRef}
-                    rows={1}
-                    value={inputValue}
-                    onChange={inputOnChange}
-                    onKeyDown={onKeyDown}
-                    disabled={!isConnected}
-                    placeholder={isConnected ? 'Escribe un mensaje en el grupo...' : 'Sin conexión...'}
-                    className="flex-1 resize-none bg-slate-800 border border-white/10 rounded-2xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto transition-all"
-                    style={{ height: 'auto', minHeight: '42px' }}
-                    onInput={e => {
-                        const el = e.currentTarget;
-                        el.style.height = 'auto';
-                        el.style.height = Math.min(el.scrollHeight, 144) + 'px';
-                    }}
-                />
-                <button
-                    onClick={editingMessageId ? handleEditMessageSave : onSend}
-                    disabled={!isConnected || !(editingMessageId ? editingMessageText.trim() : text.trim())}
-                    className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg"
-                    aria-label="Enviar"
-                >
-                    {editingMessageId ? (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                    ) : (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                        </svg>
-                    )}
-                </button>
             </div>
         </div>
     );
