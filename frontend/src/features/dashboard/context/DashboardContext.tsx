@@ -527,10 +527,14 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 if (prev?.ID !== groupID) return prev;
                 return { ...prev, ...data };
             });
-            setGroupReceipts(prev => ({
-                ...prev,
-                [groupID]: mergeMarks(prev[groupID], marksFromMembers(data?.Members)),
-            }));
+            // Sin lista de miembros (null/ausente) no se toca lo ya conocido.
+            const detailMembers = data?.Members;
+            if (Array.isArray(detailMembers)) {
+                setGroupReceipts(prev => ({
+                    ...prev,
+                    [groupID]: mergeMarks(prev[groupID], marksFromMembers(detailMembers)),
+                }));
+            }
             // Pre-populate message cache if backend returned messages
             const detailMessages = normalizeGroupDetailMessages(data);
             if (detailMessages.length > 0) {

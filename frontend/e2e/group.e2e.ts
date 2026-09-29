@@ -66,12 +66,19 @@ test.describe('grupo "Equipo demo"', () => {
       // Solo Luis lo abre: sigue "entregado" (falta Marta) y Info separa lectores de pendientes de lectura.
       await openGroup(luis.page);
       await expect(groupMessageText(luis.page, texto)).toBeVisible();
-      const parcial = await openGroupMessageInfo(ana.page, texto);
-      await expect(infoSection(parcial, 'Leído por')).toContainText(USERS.luis.username);
-      await expect(infoSection(parcial, 'Entregado a')).toContainText(USERS.marta.username);
+      // El ack de lectura de Luis va con throttle (500 ms) + ida y vuelta por WS: se reabre
+      // Info hasta que refleje su lectura (sin sleeps fijos; acotado a 10 s).
+      await expect(async () => {
+        const parcial = await openGroupMessageInfo(ana.page, texto);
+        try {
+          await expect(infoSection(parcial, 'Leído por')).toContainText(USERS.luis.username, { timeout: 1_000 });
+          await expect(infoSection(parcial, 'Entregado a')).toContainText(USERS.marta.username, { timeout: 1_000 });
+        } finally {
+          await ana.page.keyboard.press('Escape');
+          await expect(parcial).toBeHidden();
+        }
+      }).toPass({ timeout: 10_000 });
       await expect(groupTick(ana.page, texto, 'Visto')).toHaveCount(0);
-      await ana.page.keyboard.press('Escape');
-      await expect(parcial).toBeHidden();
 
       // Marta también lo abre: doble check azul en vivo.
       await openGroup(marta.page);

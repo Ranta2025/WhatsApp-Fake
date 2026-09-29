@@ -131,6 +131,16 @@ func TestGetGroupMessageReceipts(t *testing.T) {
 		assert.True(t, errors.Is(err, ErrNotGroupMember))
 		repo.AssertNotCalled(t, "GetGroupMessageByID", mock.Anything, mock.Anything)
 	})
+
+	t.Run("error de infraestructura en IsMember no es 403", func(t *testing.T) {
+		svc, repo, contacts := newGroupServiceForSend()
+		contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
+		dbErr := errors.New("db caída")
+		repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(false, dbErr)
+		_, err := svc.GetGroupMessageReceipts(testSenderTel, testGroupID, msgID, t.Context())
+		assert.True(t, errors.Is(err, dbErr))
+		assert.False(t, errors.Is(err, ErrNotGroupMember))
+	})
 }
 
 func TestAdvanceGroupReceipts(t *testing.T) {

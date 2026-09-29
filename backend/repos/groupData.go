@@ -70,6 +70,10 @@ func (r *RepoGroup) AddMembers(groupID uint, members []models.GroupMember, ctx c
 	// El snapshot del máximo id y el alta van en la misma transacción para que
 	// el miembro nuevo no cuente en los acuses de mensajes anteriores a su alta.
 	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		// Bloqueo del grupo: espera a los inserts de mensajes en vuelo (ver CreateGroupMessage).
+		if err := lockGroupRow(tx, groupID); err != nil {
+			return err
+		}
 		joinedAt, err := maxGroupMessageID(tx, groupID)
 		if err != nil {
 			return err
@@ -212,7 +216,25 @@ func (r *RepoGroup) GetMemberCount(groupID uint, ctx context.Context) (int, erro
 func (r *RepoGroup) CreateGroupMessage(msg *models.GroupMessage, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return r.data.WithContext(c).Create(msg).Error
+	// Se serializa con AddMembers bloqueando la fila del grupo: así el snapshot
+	// joined_message_id (MAX(id)) nunca omite un id ya asignado pero sin commit.
+	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		if err := lockGroupRow(tx, msg.GroupID); err != nil {
+			return err
+		}
+		return tx.Create(msg).Error
+	})
+}
+
+// lockGroupRow toma un bloqueo exclusivo de la fila del grupo hasta el fin de la
+// transacción (SELECT ... FOR UPDATE).
+func lockGroupRow(tx *gorm.DB, groupID uint) error {
+	var id uint
+	return tx.Model(&models.Group{}).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", groupID).
+		Select("id").
+		Scan(&id).Error
 }
 
 // GetGroupMessages devuelve el historial de mensajes de un grupo con paginación,

@@ -192,7 +192,14 @@ export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupI
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
     const { selectedGroup, groupReceipts } = useDashboard();
-    const [infoMessage, setInfoMessage] = useState<GroupMessageResponse | null>(null);
+    // El Info se ata al grupo en que se abrió: si cambia el grupo o el mensaje
+    // ya no está en la lista (borrado), se descarta durante el render.
+    const [info, setInfo] = useState<{ groupID: number | undefined; message: GroupMessageResponse } | null>(null);
+    if (info && (info.groupID !== groupID || !messages?.some(m => m.MessageID === info.message.MessageID))) {
+        setInfo(null);
+    }
+    const infoMessage = info?.message ?? null;
+    const openInfo = (message: GroupMessageResponse) => setInfo({ groupID, message });
 
     // Al fondo al abrir un grupo o al llegar un mensaje nuevo al final; al llegar
     // arriba se cargan mensajes anteriores sin saltar la vista.
@@ -253,11 +260,11 @@ export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupI
                         status={msg.SenderTelephon === myTelephon
                             ? deriveGroupMessageStatus(msg.MessageID, msg.SenderTelephon, groupID === undefined ? undefined : groupReceipts[groupID])
                             : undefined}
-                        onInfo={setInfoMessage}
+                        onInfo={openInfo}
                     />
                 );
             })}
-            {infoMessage && <GroupMessageInfoModal message={infoMessage} onClose={() => setInfoMessage(null)} />}
+            {infoMessage && <GroupMessageInfoModal message={infoMessage} onClose={() => setInfo(null)} />}
             {/* Indicador de carga: absoluto y sin margen de space-y (no mueve el contenido) */}
             {loadingOlder && (
                 <div className="absolute inset-x-0 top-2 mt-0! z-20 flex justify-center pointer-events-none">

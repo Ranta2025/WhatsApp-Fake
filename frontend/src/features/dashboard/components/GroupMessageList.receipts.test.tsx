@@ -43,13 +43,13 @@ describe('GroupMessageList receipts', () => {
             handleDeleteMessageForMe: noop, handleReplyToMessage: noop,
         } as unknown as UseGroupMessagingResult);
     };
-    const renderList = () => act(() => {
+    const renderList = (messages: GroupMessageResponse[] = [msg(10, '111'), msg(11, '222'), msg(12, '111')], groupID = 5) => act(() => {
         root.render(
             <GroupMessageList
-                messages={[msg(10, '111'), msg(11, '222'), msg(12, '111')]}
+                messages={messages}
                 myTelephon="111"
                 activeWallpaper={null}
-                groupID={5}
+                groupID={groupID}
                 hasMore={false}
                 loadingOlder={false}
                 onLoadOlder={noop}
@@ -103,5 +103,35 @@ describe('GroupMessageList receipts', () => {
         expect(mockGetReceipts).toHaveBeenCalledWith(5, 10);
         expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain('Leído por');
         expect(document.body.textContent).toContain('luis');
+    });
+
+    const openInfo = async () => {
+        await act(async () => {
+            Array.from(document.body.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Info')?.click();
+        });
+    };
+
+    it('closes the Info modal when the group changes', async () => {
+        mockContext({}, 10);
+        renderList();
+        await openInfo();
+        expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+
+        renderList([msg(10, '111')], 6);
+        expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+
+        // going back must not resurrect the stale modal
+        renderList([msg(10, '111')], 5);
+        expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it('closes the Info modal when the inspected message disappears', async () => {
+        mockContext({}, 10);
+        renderList();
+        await openInfo();
+        expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+
+        renderList([msg(11, '222'), msg(12, '111')]);
+        expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     });
 });

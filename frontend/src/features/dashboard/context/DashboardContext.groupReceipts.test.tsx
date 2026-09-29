@@ -124,6 +124,21 @@ describe('DashboardProvider group receipts', () => {
         });
     });
 
+    it('keeps the group marks when a later detail response carries no Members array', async () => {
+        await mount();
+        await openGroup();
+        const before = ctx?.groupReceipts[9];
+        expect(before?.['222']).toEqual({ joined: 0, delivered: 10, read: 4 });
+
+        mockGetGroupDetail.mockResolvedValue({ data: { ...detail(), Members: null } });
+        await act(async () => { await ctx!.fetchGroupDetail(9); });
+        expect(ctx?.groupReceipts[9]).toEqual(before);
+
+        mockGetGroupDetail.mockResolvedValue({ data: { ID: 9, Name: 'Equipo' } });
+        await act(async () => { await ctx!.fetchGroupDetail(9); });
+        expect(ctx?.groupReceipts[9]).toEqual(before);
+    });
+
     it('advances marks on group_receipt and ignores malformed or stale payloads', async () => {
         await mount();
         await openGroup();

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 )
@@ -103,7 +104,11 @@ func (s *ServiceGroup) requireMember(telephon string, groupID uint, ctx context.
 		return 0, errors.New("usuario no encontrado")
 	}
 	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
-	if err != nil || !isMember {
+	if err != nil {
+		// Fallo de infraestructura: no es una denegación (el handler responde 500).
+		return 0, fmt.Errorf("comprobar pertenencia al grupo: %w", err)
+	}
+	if !isMember {
 		return 0, ErrNotGroupMember
 	}
 	return uint(userID), nil
