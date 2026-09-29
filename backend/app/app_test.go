@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"gorm/backend/metrics"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +66,7 @@ func (f *fakeStatusService) DeleteStatus(telephon string, statusID uint, ctx con
 // resolviendo el preflight CORS pese a que RequestID/Recovery van antes de Cors.
 func TestNewEngineSetsRequestIDAndKeepsCorsPreflight(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine, err := newEngine()
+	engine, err := newEngine(newTestMetrics())
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
@@ -80,6 +82,63 @@ func TestNewEngineSetsRequestIDAndKeepsCorsPreflight(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, pw.Code, "el preflight CORS no debe romperse con el nuevo orden")
 	assert.Equal(t, "http://localhost:5173", pw.Header().Get("Access-Control-Allow-Origin"))
 	assert.NotEmpty(t, pw.Header().Get("X-Request-ID"), "el preflight también lleva el id")
+}
+
+// ==================== OB3-metrics ====================
+
+// newTestMetrics devuelve métricas con un registry aislado para los tests.
+func newTestMetrics() *metrics.Metrics {
+	return metrics.New(metrics.NewRegistry())
+}
+
+// newEngine debe insertar el middleware Metrics: una petición queda registrada.
+func TestNewEngineRecordsHTTPMetrics(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	m := newTestMetrics()
+	engine, err := newEngine(m)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.HTTPRequestsTotal.WithLabelValues("GET", "/", "200")))
+}
+
+// El listener de métricas sirve /metrics y responde 404 en cualquier otra ruta
+// (nunca la SPA ni la API).
+func TestMetricsHandlerServesMetricsOnly(t *testing.T) {
+	handler := metricsHandler(newTestMetrics())
+
+	t.Run("sirve /metrics", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest("GET", "/metrics", nil))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "http_requests_in_flight")
+	})
+
+	for _, path := range []string{"/", "/metrics/", "/healthz", "/api/v1/ws"} {
+		t.Run("404 "+path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+
+			assert.Equal(t, http.StatusNotFound, w.Code)
+		})
+	}
+}
+
+// METRICS_ADDR vacío deshabilita el listener (runs sin compose); con dirección
+// se construye el segundo server.
+func TestNewMetricsServerDisabledWhenAddrEmpty(t *testing.T) {
+	m := newTestMetrics()
+
+	assert.Nil(t, newMetricsServer("", m), "sin METRICS_ADDR no hay listener de métricas")
+
+	srv := newMetricsServer("127.0.0.1:9090", m)
+	require.NotNil(t, srv)
+	assert.Equal(t, "127.0.0.1:9090", srv.Addr)
+	assert.NotNil(t, srv.Handler)
 }
 
 // ==================== R3-cleanup-loop-untested ====================

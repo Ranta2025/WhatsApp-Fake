@@ -10,6 +10,7 @@ import (
 	"gorm/backend/config"
 	"gorm/backend/database"
 	"gorm/backend/handlers"
+	"gorm/backend/metrics"
 	"gorm/backend/middleware"
 	"gorm/backend/repos"
 	"gorm/backend/routers"
@@ -30,6 +31,7 @@ import (
 // App contiene el servidor HTTP y los recursos que hay que cerrar al apagar.
 type App struct {
 	server              *http.Server
+	metricsServer       *http.Server
 	db                  *gorm.DB
 	redis               *redis.Client
 	cancelStatusCleanup context.CancelFunc
@@ -43,7 +45,9 @@ func New() (*App, error) {
 	}
 	seedDemoData(db)
 
-	engine, err := newEngine()
+	backendMetrics := metrics.New(metrics.NewRegistry())
+
+	engine, err := newEngine(backendMetrics)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +65,9 @@ func New() (*App, error) {
 			IdleTimeout:    120 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		},
+		// Listener interno de métricas: se habilita solo con METRICS_ADDR
+		// (compose lo setea; en runs locales queda deshabilitado).
+		metricsServer:       newMetricsServer(os.Getenv("METRICS_ADDR"), backendMetrics),
 		db:                  db,
 		redis:               rd,
 		cancelStatusCleanup: cancelStatusCleanup,
@@ -104,7 +111,7 @@ func healthHandler(db *gorm.DB, rd *redis.Client) gin.HandlerFunc {
 }
 
 // newEngine crea el motor de Gin con los middlewares globales.
-func newEngine() (*gin.Engine, error) {
+func newEngine(m *metrics.Metrics) (*gin.Engine, error) {
 	if os.Getenv("ENV") == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -113,11 +120,12 @@ func newEngine() (*gin.Engine, error) {
 	// con esto, la cancelación/timeout de la petición llega hasta la BD.
 	engine.ContextWithFallback = true
 	// Orden de middlewares: RequestID primero (todo log/respuesta lleva id),
-	// luego Recovery, después Métricas (OB3, aún no existe) y CORS; el access
-	// log va al final para registrar el estado real de la respuesta.
+	// luego Recovery, después Métricas y CORS; el access log va al final para
+	// registrar el estado real de la respuesta.
 	engine.Use(
 		middleware.RequestID(),
 		middleware.Recovery(),
+		middleware.Metrics(m),
 		config.Cors(),
 		middleware.TimeMiddleware(),
 	)
@@ -139,6 +147,34 @@ func newEngine() (*gin.Engine, error) {
 		c.JSON(http.StatusOK, gin.H{"message": "Welcome"})
 	})
 	return engine, nil
+}
+
+// metricsHandler sirve GET /metrics en el listener interno y responde 404 en
+// cualquier otra ruta: este listener solo expone las métricas, nunca la SPA ni
+// la API.
+func metricsHandler(m *metrics.Metrics) http.Handler {
+	metricsEndpoint := m.Handler()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/metrics" {
+			http.NotFound(w, r)
+			return
+		}
+		metricsEndpoint.ServeHTTP(w, r)
+	})
+}
+
+// newMetricsServer construye el segundo http.Server (listener de métricas).
+// Devuelve nil cuando addr está vacío: METRICS_ADDR vacío = métricas
+// deshabilitadas (runs locales y tests; compose lo setea en OB6).
+func newMetricsServer(addr string, m *metrics.Metrics) *http.Server {
+	if addr == "" {
+		return nil
+	}
+	return &http.Server{
+		Addr:              addr,
+		Handler:           metricsHandler(m),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 }
 
 // trustedProxies lee TRUSTED_PROXIES (lista separada por comas) o usa por
@@ -250,8 +286,23 @@ func (a *App) Run(ctx context.Context) error {
 		close(errCh)
 	}()
 
+	// El listener de métricas solo existe si METRICS_ADDR no está vacío. Cuando
+	// no existe, metricsErrCh queda nil: su case nunca se dispara.
+	var metricsErrCh chan error
+	if a.metricsServer != nil {
+		metricsErrCh = make(chan error, 1)
+		go func() {
+			log.Printf("[APP] Métricas escuchando en %s", a.metricsServer.Addr)
+			if err := a.metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				metricsErrCh <- err
+			}
+		}()
+	}
+
 	select {
 	case err := <-errCh:
+		return err
+	case err := <-metricsErrCh:
 		return err
 	case <-ctx.Done():
 	}
@@ -263,6 +314,11 @@ func (a *App) Run(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	err := a.server.Shutdown(shutdownCtx)
+	if a.metricsServer != nil {
+		if metricsErr := a.metricsServer.Shutdown(shutdownCtx); metricsErr != nil && err == nil {
+			err = metricsErr
+		}
+	}
 
 	if sqlDB, dbErr := a.db.DB(); dbErr == nil {
 		sqlDB.Close()
