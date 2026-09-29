@@ -49,3 +49,28 @@ type GroupDetail struct {
 	Members  []GroupMemberResponse  `json:"Members"`
 	Messages []GroupMessageResponse `json:"Messages"`
 }
+
+// GroupReceiptUpdate es el evento `group_receipt` (WS) que avisa a los miembros
+// de que las marcas de agua de `Telephon` avanzaron en el grupo.
+type GroupReceiptUpdate struct {
+	GroupID       uint   `json:"groupID"`
+	Telephon      string `json:"telephon"`
+	DeliveredUpTo uint   `json:"deliveredUpTo"`
+	ReadUpTo      uint   `json:"readUpTo"`
+}
+
+// GroupMemberBrief es la ficha mínima de un miembro en la lista de acuses.
+type GroupMemberBrief struct {
+	Telephon  string `json:"telephon"`
+	Username  string `json:"username"`
+	AvatarUrl string `json:"avatarUrl,omitempty"`
+}
+
+// GroupMessageReceipts reparte a los miembros elegibles según el acuse de un
+// mensaje: ReadBy (leído), DeliveredTo (entregado pero no leído) y Pending
+// (aún sin entregar). Solo lo puede consultar el autor del mensaje.
+type GroupMessageReceipts struct {
+	ReadBy      []GroupMemberBrief `json:"readBy"`
+	DeliveredTo []GroupMemberBrief `json:"deliveredTo"`
+	Pending     []GroupMemberBrief `json:"pending"`
+}

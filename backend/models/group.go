@@ -29,6 +29,15 @@ type GroupMember struct {
 	Role      string `gorm:"size:20;not null;default:'member'"` // "admin" | "member"
 	AddedByID uint   `gorm:"not null"`
 
+	// Acuses de recibo por miembro (marcas de agua). Los ids de mensaje son
+	// seriales globales: solo son comparables dentro de un mismo grupo.
+	// Solo avanzan (nunca retroceden) y quedan acotados al máximo id del grupo.
+	JoinedMessageID        uint `gorm:"not null;default:0"` // max id de mensaje del grupo al unirse (0 = miembros previos)
+	LastDeliveredMessageID uint `gorm:"not null;default:0"`
+	LastReadMessageID      uint `gorm:"not null;default:0"`
+	LastDeliveredAt        *time.Time
+	LastReadAt             *time.Time
+
 	Group   Group        `gorm:"foreignKey:GroupID;references:ID"`
 	User    UserDataBase `gorm:"foreignKey:UserID;references:ID"`
 	AddedBy UserDataBase `gorm:"foreignKey:AddedByID;references:ID"`
@@ -64,4 +73,11 @@ type UserGroupRow struct {
 	UserRole        string
 	MemberCount     int
 	CreatorTelephon string
+}
+
+// GroupReceiptState son las marcas de agua de acuse de un miembro en un grupo:
+// hasta qué id de mensaje ha recibido y hasta cuál ha leído.
+type GroupReceiptState struct {
+	DeliveredUpTo uint
+	ReadUpTo      uint
 }

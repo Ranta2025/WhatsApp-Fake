@@ -67,14 +67,21 @@ func (r *RepoGroup) AddMembers(groupID uint, members []models.GroupMember, ctx c
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	for i := range members {
-		members[i].GroupID = groupID
-	}
-	// ON CONFLICT DO NOTHING: si el miembro ya existe activo (índice único
-	// parcial idx_group_member_active), no falla toda la inserción.
-	return r.data.WithContext(c).
-		Clauses(clause.OnConflict{DoNothing: true}).
-		Create(&members).Error
+	// El snapshot del máximo id y el alta van en la misma transacción para que
+	// el miembro nuevo no cuente en los acuses de mensajes anteriores a su alta.
+	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		joinedAt, err := maxGroupMessageID(tx, groupID)
+		if err != nil {
+			return err
+		}
+		for i := range members {
+			members[i].GroupID = groupID
+			members[i].JoinedMessageID = joinedAt
+		}
+		// ON CONFLICT DO NOTHING: si el miembro ya existe activo (índice único
+		// parcial idx_group_member_active), no falla toda la inserción.
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&members).Error
+	})
 }
 
 // GetGroupByID obtiene los datos de un grupo por su ID.

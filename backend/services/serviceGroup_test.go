@@ -94,6 +94,11 @@ func (m *MockGroupRepo) UpdateGroupAvatar(groupID uint, avatarUrl string, ctx co
 	return m.Called(groupID, avatarUrl, ctx).Error(0)
 }
 
+func (m *MockGroupRepo) AdvanceMemberReceipts(groupID, userID, deliveredUpTo, readUpTo uint, ctx context.Context) (models.GroupReceiptState, bool, error) {
+	args := m.Called(groupID, userID, deliveredUpTo, readUpTo, ctx)
+	return args.Get(0).(models.GroupReceiptState), args.Bool(1), args.Error(2)
+}
+
 // MockGroupContactRepo implementa GroupContactRepoInterface.
 type MockGroupContactRepo struct {
 	mock.Mock

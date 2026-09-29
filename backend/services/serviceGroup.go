@@ -37,6 +37,9 @@ type GroupServicer interface {
 	LeaveGroup(telephon string, groupID uint, ctx context.Context) error
 	UpdateGroupAvatar(telephon string, groupID uint, avatarUrl string, ctx context.Context) error
 	GetUsernameByTelephon(telephon string, ctx context.Context) (string, error)
+	AdvanceGroupDelivered(telephon string, groupID, upToMessageID uint, ctx context.Context) (*schemas.GroupReceiptUpdate, error)
+	AdvanceGroupRead(telephon string, groupID, upToMessageID uint, ctx context.Context) (*schemas.GroupReceiptUpdate, error)
+	GetGroupMessageReceipts(telephon string, groupID, messageID uint, ctx context.Context) (*schemas.GroupMessageReceipts, error)
 }
 
 // GroupRepoInterface define las operaciones de persistencia que necesita el servicio.
@@ -56,6 +59,7 @@ type GroupRepoInterface interface {
 	DeleteGroupMessage(groupID, messageID, senderID uint, ctx context.Context) error
 	LeaveGroup(groupID, userID uint, ctx context.Context) error
 	UpdateGroupAvatar(groupID uint, avatarUrl string, ctx context.Context) error
+	AdvanceMemberReceipts(groupID, userID, deliveredUpTo, readUpTo uint, ctx context.Context) (models.GroupReceiptState, bool, error)
 }
 
 // GroupContactRepoInterface es el subconjunto del repo de contactos que necesita
