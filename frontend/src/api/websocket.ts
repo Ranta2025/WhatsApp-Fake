@@ -447,6 +447,16 @@ class WebSocketManager {
         return this._send('group_join', { groupID });
     }
 
+    /** Acuse de entrega de mensajes de grupo hasta `messageID` (false si no hay conexión). */
+    sendGroupDelivered(groupID: number, messageID: number): boolean {
+        return this._send('group_delivered', { groupID, messageID });
+    }
+
+    /** Acuse de lectura del grupo hasta `upToMessageID` (false si no hay conexión). */
+    sendGroupRead(groupID: number, upToMessageID: number): boolean {
+        return this._send('group_read', { groupID, upToMessageID });
+    }
+
     isConnected(): boolean {
         return Boolean(this.ws && this.ws.readyState === WebSocket.OPEN);
     }

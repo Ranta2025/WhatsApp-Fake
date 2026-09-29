@@ -179,6 +179,50 @@ describe('wsManager dispatch (remapped listener contract)', () => {
 // reconnect con backoff. La rama 401 se detecta de forma ESTRUCTURAL
 // (`error.response?.status === 401`, igual que el JS original) y no debe
 // exigir que el error sea una instancia real de AxiosError.
+describe('group receipt frames', () => {
+    beforeEach(() => {
+        vi.resetModules();
+        FakeWebSocket.instances = [];
+        vi.stubGlobal('WebSocket', FakeWebSocket);
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.clearAllMocks();
+    });
+
+    it('sendGroupDelivered / sendGroupRead emit the frames the backend router expects', async () => {
+        const { wsManager, socket } = await connectAndOpen();
+
+        expect(wsManager.sendGroupDelivered(7, 12)).toBe(true);
+        expect(wsManager.sendGroupRead(7, 15)).toBe(true);
+
+        expect(socket.sent.map((raw) => JSON.parse(raw) as unknown)).toEqual([
+            { type: 'group_delivered', payload: { groupID: 7, messageID: 12 } },
+            { type: 'group_read', payload: { groupID: 7, upToMessageID: 15 } },
+        ]);
+        wsManager.disconnect();
+    });
+
+    it('does not send (and reports false) while disconnected', async () => {
+        const { default: wsManager } = await import('./websocket');
+        expect(wsManager.sendGroupDelivered(7, 12)).toBe(false);
+        expect(wsManager.sendGroupRead(7, 12)).toBe(false);
+    });
+
+    it('routes group_receipt pushes to the group_receipt listener untouched', async () => {
+        const { wsManager, socket } = await connectAndOpen();
+        const handler = vi.fn();
+        wsManager.on('group_receipt', handler);
+        const payload = { groupID: 7, telephon: '+1', deliveredUpTo: 12, readUpTo: 9 };
+
+        emit(socket, { type: 'group_receipt', payload });
+
+        expect(handler).toHaveBeenCalledWith(payload);
+        wsManager.disconnect();
+    });
+});
+
 describe('wsManager.connect() failure paths', () => {
     beforeEach(() => {
         vi.resetModules();

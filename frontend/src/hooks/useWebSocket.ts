@@ -136,6 +136,14 @@ export function useWebSocket() {
         return wsManager.sendGroupJoin(groupID);
     }, []);
 
+    const sendGroupDelivered = useCallback((groupID: number, messageID: number) => {
+        return wsManager.sendGroupDelivered(groupID, messageID);
+    }, []);
+
+    const sendGroupRead = useCallback((groupID: number, upToMessageID: number) => {
+        return wsManager.sendGroupRead(groupID, upToMessageID);
+    }, []);
+
     // Cleanup de handlers al desmontar
     useEffect(() => {
         const registered = handlersRef.current;
@@ -168,5 +176,7 @@ export function useWebSocket() {
         sendGroupEditMessage,
         sendGroupDeleteMessage,
         sendGroupJoin,
+        sendGroupDelivered,
+        sendGroupRead,
     };
 }

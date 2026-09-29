@@ -164,6 +164,16 @@ export interface WsGroupMemberLeft {
   payload: { groupID: number; telephon: string; username: string };
 }
 
+/**
+ * Avance de los acuses de un miembro (`deliveredUpTo`/`readUpTo` = mayor id de
+ * mensaje del grupo entregado/leído). Se envía a los miembros conectados salvo
+ * a quien originó el acuse (message_handlers.go publishGroupReceipt). camelCase.
+ */
+export interface WsGroupReceipt {
+  type: 'group_receipt';
+  payload: { groupID: number; telephon: string; deliveredUpTo: number; readUpTo: number };
+}
+
 export interface WsStatusNew {
   type: 'status_new';
   payload: { owner: StatusOwnerBrief; status: StatusItem };
@@ -221,6 +231,7 @@ export type WsEvent =
   | WsGroupMemberAdded
   | WsGroupAvatarUpdate
   | WsGroupMemberLeft
+  | WsGroupReceipt
   | WsStatusNew
   | WsStatusViewed
   | WsStatusDeleted
@@ -328,6 +339,18 @@ export interface WsSendGroupJoin {
   payload: { groupID: number };
 }
 
+/** Acuse de entrega: recibí los mensajes del grupo hasta `messageID`. */
+export interface WsSendGroupDelivered {
+  type: 'group_delivered';
+  payload: { groupID: number; messageID: number };
+}
+
+/** Acuse de lectura: leí el grupo hasta `upToMessageID` (implica entregado). */
+export interface WsSendGroupRead {
+  type: 'group_read';
+  payload: { groupID: number; upToMessageID: number };
+}
+
 /** Todo mensaje que el frontend puede enviar por WebSocket. */
 export type WsClientMessage =
   | WsPing
@@ -344,6 +367,8 @@ export type WsClientMessage =
   | WsSendGroupTyping
   | WsSendGroupEditMessage
   | WsSendGroupDeleteMessage
-  | WsSendGroupJoin;
+  | WsSendGroupJoin
+  | WsSendGroupDelivered
+  | WsSendGroupRead;
 
 export type WsClientMessageType = WsClientMessage['type'];

@@ -111,6 +111,10 @@ export interface GroupMemberResponse {
   AvatarUrl?: string;
   Role: GroupRole;
   ContactName?: string;
+  /** Marcas de agua de acuses (ids de mensaje dentro del grupo); ausentes = 0. */
+  JoinedMessageID?: number;
+  LastDeliveredMessageID?: number;
+  LastReadMessageID?: number;
 }
 
 export interface GroupMessageResponse {

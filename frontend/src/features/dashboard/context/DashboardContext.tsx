@@ -24,6 +24,11 @@ import {
     mergeLatestWindow, isContiguousWindow, prependOlder, oldestRealMessageId, DEFAULT_PAGING, type PagingState,
 } from '../lib/mergeMessages';
 import { useNotificationClick } from '../hooks/useNotificationClick';
+import { useGroupReceiptAcks } from '../hooks/useGroupReceiptAcks';
+import {
+    marksFromMembers, mergeMarks, parseGroupReceipt, applyReceiptEvent, latestRealMessageId,
+    addMemberMark, removeMemberMark, type GroupReceiptsState,
+} from '../lib/groupReceipts';
 
 /** Mensajes por página al cargar historial antiguo (scroll hacia arriba). */
 const OLDER_PAGE_SIZE = 50;
@@ -148,6 +153,8 @@ export interface DashboardContextValue {
     sendGroupEditMessage: ReturnType<typeof useWebSocket>['sendGroupEditMessage'];
     sendGroupDeleteMessage: ReturnType<typeof useWebSocket>['sendGroupDeleteMessage'];
     sendGroupJoin: ReturnType<typeof useWebSocket>['sendGroupJoin'];
+    /** groupID -> telephon -> receipt watermarks (fed by group detail and `group_receipt`). */
+    groupReceipts: GroupReceiptsState;
     user: AuthContextValue['user'];
     logout: AuthContextValue['logout'];
 }
@@ -187,7 +194,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         isConnected, on, off,
         sendMessage, sendReadConfirmation, sendTypingIndicator,
         sendGroupMessage, sendGroupTyping, sendGroupEditMessage, sendGroupDeleteMessage,
-        sendGroupJoin,
+        sendGroupJoin, sendGroupDelivered, sendGroupRead,
     } = useWebSocket();
 
     // Profile & User State
@@ -213,6 +220,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const [groups, setGroups] = useState<LocalGroup[]>([]);
     const [groupMessages, setGroupMessages] = useState<Record<number, GroupMessageEntry[]>>({}); // { [groupID]: GroupMessageResponse[] }
     const [groupPaging, setGroupPaging] = useState<Record<number, PagingState>>({});
+    const [groupReceipts, setGroupReceipts] = useState<GroupReceiptsState>({});
     const [selectedGroup, setSelectedGroupState] = useState<SelectedGroup | null>(null);
 
     /**
@@ -312,6 +320,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => { groupMessagesRef.current = groupMessages; }, [groupMessages]);
     useEffect(() => { chatPagingRef.current = chatPaging; }, [chatPaging]);
     useEffect(() => { groupPagingRef.current = groupPaging; }, [groupPaging]);
+    // Acuses de grupo del cliente: entrega (agrupada) y lectura (throttled) del grupo abierto.
+    const { noteIncomingGroupMessage } = useGroupReceiptAcks({
+        selfTelephon: user?.telephon,
+        isConnected,
+        openGroupId: selectedGroup && selectedGroup.UserRole !== 'left' ? selectedGroup.ID : null,
+        openGroupMessages: selectedGroup ? groupMessages[selectedGroup.ID] : undefined,
+        sendGroupDelivered,
+        sendGroupRead,
+    });
     // Cargas de páginas antiguas en curso (evita peticiones duplicadas por scroll repetido).
     const loadingOlderRef = useRef<Set<string>>(new Set());
 
@@ -510,6 +527,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 if (prev?.ID !== groupID) return prev;
                 return { ...prev, ...data };
             });
+            setGroupReceipts(prev => ({
+                ...prev,
+                [groupID]: mergeMarks(prev[groupID], marksFromMembers(data?.Members)),
+            }));
             // Pre-populate message cache if backend returned messages
             const detailMessages = normalizeGroupDetailMessages(data);
             if (detailMessages.length > 0) {
@@ -722,6 +743,14 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 if (existing.some(m => m.MessageID === msg.MessageID)) return prev;
                 return { ...prev, [msg.GroupID]: [...existing, msg] };
             });
+            noteIncomingGroupMessage(msg.GroupID, msg.MessageID, msg.SenderTelephon);
+        };
+
+        /** A member's delivered/read watermarks advanced (only used to draw our own ticks). */
+        const handleGroupReceipt = (payload: WsHandlerMap['group_receipt']) => {
+            const event = parseGroupReceipt(payload);
+            if (!event) return;
+            setGroupReceipts(prev => applyReceiptEvent(prev, event));
         };
 
         /** Someone in a group is typing. */
@@ -813,6 +842,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 const msgs = prev[payload.groupID] || [];
                 return { ...prev, [payload.groupID]: [...msgs, ...systemMsgs] };
             });
+            const latestKnownId = latestRealMessageId(groupMessagesRef.current[payload.groupID]);
+            setGroupReceipts(prev => payload.addedMembers.reduce(
+                (acc, m) => addMemberMark(acc, payload.groupID, m.telephon, latestKnownId),
+                prev,
+            ));
             setGroups(prev => prev.map(g =>
                 g.ID === payload.groupID
                     ? { ...g, MemberCount: payload.newMemberCount ?? g.MemberCount }
@@ -850,6 +884,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 const msgs = prev[payload.groupID] || [];
                 return { ...prev, [payload.groupID]: [...msgs, systemMsg] };
             });
+            setGroupReceipts(prev => removeMemberMark(prev, payload.groupID, payload.telephon));
             // Update member count and remove from members list
             setGroups(prev => prev.map(g =>
                 g.ID === payload.groupID
@@ -884,6 +919,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         on('group_avatar_update', handleGroupAvatarUpdate);
         on('group_member_added', handleGroupMemberAdded);
         on('group_member_left', handleGroupMemberLeft);
+        on('group_receipt', handleGroupReceipt);
 
         return () => {
             off('message', handleIncomingMessage);
@@ -901,8 +937,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('group_avatar_update', handleGroupAvatarUpdate);
             off('group_member_added', handleGroupMemberAdded);
             off('group_member_left', handleGroupMemberLeft);
+            off('group_receipt', handleGroupReceipt);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
@@ -965,6 +1002,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         sendGroupEditMessage,
         sendGroupDeleteMessage,
         sendGroupJoin,
+        groupReceipts,
         // Auth passthrough
         user,
         logout
