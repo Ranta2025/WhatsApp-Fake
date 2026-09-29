@@ -76,6 +76,12 @@ jobs:
       - name: Validate the observability compose profile
         run: docker compose --profile observability config -q
 
+      - name: Lint Prometheus config and rules
+        run: |
+          IMAGE=$(docker compose --profile observability config --images | grep '^prom/prometheus:')
+          docker run --rm --entrypoint promtool -v "$PWD/docker/observability:/etc/prometheus:ro" "$IMAGE" check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint promtool -v "$PWD/docker/observability:/etc/prometheus:ro" "$IMAGE" check rules /etc/prometheus/alerts.yml
+
       - name: Start the stack
         run: docker compose up -d --build --wait
 

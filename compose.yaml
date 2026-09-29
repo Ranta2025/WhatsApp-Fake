@@ -32,8 +32,9 @@ services:
       SECRETKEY: ${SECRETKEY:-local-dev-secret-key-please-change-0123456789}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
       # Listener interno de métricas Prometheus: NO se publica en el host (solo
-      # lo alcanza Prometheus por la red de compose). Vacío = deshabilitado.
-      METRICS_ADDR: ${METRICS_ADDR:-0.0.0.0:9090}
+      # lo alcanza Prometheus por la red de compose). Sin definir = 0.0.0.0:9090;
+      # definida y vacía (METRICS_ADDR=) = deshabilitado (sin ':-').
+      METRICS_ADDR: ${METRICS_ADDR-0.0.0.0:9090}
       # Base de datos y caché
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"

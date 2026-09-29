@@ -56,12 +56,19 @@ func TestE2E_RequestIDOnHealthz(t *testing.T) {
 			assert.Equal(t, http.StatusOK, status)
 			assert.NotEmpty(t, h.Get("X-Request-ID"), "id generado")
 
-			_, h, _ = getRaw(t, root+"/healthz", map[string]string{"X-Request-ID": "e2e-valid.id_1"})
+			status, h, _ = getRaw(t, root+"/healthz", map[string]string{"X-Request-ID": "e2e-valid.id_1"})
+			assert.Equal(t, http.StatusOK, status)
 			if name == "api" {
 				assert.Equal(t, "e2e-valid.id_1", h.Get("X-Request-ID"), "id válido se conserva")
+			} else {
+				// nginx pisa el id entrante con su propio $request_id (docker/nginx.conf):
+				// el id del borde es la fuente de verdad, no el del cliente.
+				assert.NotEmpty(t, h.Get("X-Request-ID"))
+				assert.NotEqual(t, "e2e-valid.id_1", h.Get("X-Request-ID"), "nginx reemplaza el id entrante")
 			}
 
-			_, h, _ = getRaw(t, root+"/healthz", map[string]string{"X-Request-ID": "inválido con espacios!"})
+			status, h, _ = getRaw(t, root+"/healthz", map[string]string{"X-Request-ID": "inválido con espacios!"})
+			assert.Equal(t, http.StatusOK, status)
 			assert.NotEqual(t, "inválido con espacios!", h.Get("X-Request-ID"))
 			assert.NotEmpty(t, h.Get("X-Request-ID"))
 		})

@@ -30,7 +30,7 @@ Variables (todas opcionales, con valores por defecto para desarrollo local):
 
 | Variable | Por defecto | Uso |
 |----------|-------------|-----|
-| `METRICS_ADDR` | `0.0.0.0:9090` (compose) | Listener interno de métricas; vacío = deshabilitado (runs locales sin compose) |
+| `METRICS_ADDR` | `0.0.0.0:9090` (compose) | Listener interno de métricas; sin definir usa el valor por defecto; definida y vacía (`METRICS_ADDR=`) = deshabilitado (también en runs locales sin compose) |
 | `GRAFANA_ADMIN_USER` | `admin` | Usuario admin de Grafana |
 | `GRAFANA_ADMIN_PASSWORD` | `admin` | **Solo local**: cámbiala si el host es accesible por otros |
 | `GRAFANA_PORT` / `PROMETHEUS_PORT` | `3000` / `9090` | Puertos en `127.0.0.1` |
