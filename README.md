@@ -345,6 +345,28 @@ go test -v ./backend/services/...
 
 Ver: [docs/TESTS_INSTRUCTIONS.md](docs/TESTS_INSTRUCTIONS.md)
 
+### Tests e2e (navegador y API) e integración continua
+
+Con el stack levantado (`make up`, usuarios demo incluidos):
+
+```bash
+# e2e de API/WebSocket en Go (-tags e2e)
+make test-integration
+
+# e2e de navegador con Playwright (login, chat, grupo con media, estados, paginación)
+cd frontend && npm ci
+npx playwright install chromium   # solo la primera vez
+npm run test:e2e                  # o, desde la raíz: make e2e
+```
+
+- Base URL por defecto `http://localhost`; se cambia con `E2E_BASE_URL`.
+- El global setup inicia sesión una vez con `ana_demo`, `luis_demo` y `marta_demo` y guarda el estado en `frontend/e2e/.auth/` (ignorado por git).
+- Los specs usan texto único y no asumen conteos absolutos: pueden repetirse sobre una BD con datos previos.
+- Informe HTML en `frontend/playwright-report/` (`npx playwright show-report`).
+- No ejecutes `go test -tags integration` contra este stack: hace `TRUNCATE` de las tablas.
+
+GitHub Actions (`.github/workflows/ci.yml`) ejecuta el job `unit` (`go test ./...` y lint, typecheck, test y build del frontend) y, si pasa, el job `e2e` (levanta el stack con Docker Compose, `make test-integration` y Playwright; sube el informe y los logs si falla).
+
 ---
 
 ## 🌐 Variables de Entorno
