@@ -38,6 +38,8 @@ describe('MessageList media rendering (1:1)', () => {
         mockUseDashboard.mockReturnValue({
             selected: { Number: '222' },
             messagesByChat: { '222': [message] },
+            chatPaging: {},
+            loadOlderMessages: vi.fn(),
             profile: { Telephon: '111' },
             globalWallpaper: null,
         } as unknown as DashboardContextValue);

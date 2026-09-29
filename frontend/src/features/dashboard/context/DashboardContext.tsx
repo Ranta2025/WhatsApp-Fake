@@ -424,7 +424,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 params: { before, limit: OLDER_PAGE_SIZE },
             });
             const older = normalizeChatMessagesResponse(data);
-            const hasMore = readHasMoreHeader(headers) ?? older.length >= OLDER_PAGE_SIZE;
+            const hasMore = older.length > 0 && (readHasMoreHeader(headers) ?? older.length >= OLDER_PAGE_SIZE);
             setMessagesByChat(prev => ({ ...prev, [contactNumber]: prependOlder(prev[contactNumber], older) }));
             setChatPaging(prev => ({ ...prev, [contactNumber]: { hasMore, loadingOlder: false, olderLoaded: true } }));
         } catch (err) {
@@ -471,7 +471,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         try {
             const { data } = await getGroupMessages(groupID, OLDER_PAGE_SIZE, 0, before);
             const older = normalizeGroupMessagesResponse(data);
-            const hasMore = normalizeHasMore(data) ?? older.length >= OLDER_PAGE_SIZE;
+            const hasMore = older.length > 0 && (normalizeHasMore(data) ?? older.length >= OLDER_PAGE_SIZE);
             setGroupMessages(prev => ({ ...prev, [groupID]: prependOlder<GroupMessageEntry>(prev[groupID], older) }));
             setGroupPaging(prev => ({ ...prev, [groupID]: { hasMore, loadingOlder: false, olderLoaded: true } }));
         } catch (err) {

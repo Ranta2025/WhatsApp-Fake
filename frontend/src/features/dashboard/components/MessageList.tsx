@@ -1,6 +1,7 @@
-import { useRef, useEffect, useMemo, useState } from 'react';
+import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
+import { useLoadOlderOnScroll } from '../hooks/useLoadOlderOnScroll';
 import { formatDaySeparator, formatTime } from '../../../utils/format';
 import MediaContent from '../../../components/MediaContent';
 import { isMediaUrl } from '../../../lib/mediaMessage';
@@ -32,7 +33,8 @@ const readChatWallpapers = (): Record<string, string> => {
 
 const MessageList = () => {
     const { 
-        selected, messagesByChat, profile, globalWallpaper 
+        selected, messagesByChat, profile, globalWallpaper,
+        chatPaging, loadOlderMessages,
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
@@ -72,16 +74,23 @@ const MessageList = () => {
     // R2 — el menú ya no depende del hover del padre para mantenerse visible).
     const getMenuTriggerRef = useRefMap();
 
-    // Scroll al final al abrir un chat o cuando llega un mensaje nuevo a ESTE
-    // chat (antes saltaba con cualquier cambio en cualquier conversación).
-    const messageCount = selected ? (messagesByChat[selected.Number]?.length || 0) : 0;
-    useEffect(() => {
-        const container = messagesContainerRef.current;
-        if (!container) return;
-        requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
-        });
-    }, [selected?.Number, messageCount]);
+    // Scroll: al fondo al abrir un chat o cuando llega un mensaje nuevo al final de
+    // ESTE chat; al llegar arriba se cargan mensajes anteriores sin saltar la vista.
+    const selectedNumber = selected?.Number;
+    const currentMessages = selectedNumber ? messagesByChat[selectedNumber] : undefined;
+    const paging = selectedNumber ? chatPaging[selectedNumber] : undefined;
+    const loadOlder = useCallback(() => {
+        if (selectedNumber) return loadOlderMessages(selectedNumber);
+    }, [selectedNumber, loadOlderMessages]);
+    useLoadOlderOnScroll({
+        containerRef: messagesContainerRef,
+        chatKey: selectedNumber,
+        firstKey: currentMessages?.[0]?.MessageID,
+        lastKey: currentMessages?.[currentMessages.length - 1]?.MessageID,
+        hasMore: paging?.hasMore ?? false,
+        loadingOlder: paging?.loadingOlder ?? false,
+        loadOlder,
+    });
 
     interface MessageGroup {
         date: string;
@@ -179,7 +188,8 @@ const MessageList = () => {
         <div 
             ref={messagesContainerRef}
             className={`flex-1 overflow-y-auto px-3 sm:px-6 lg:px-10 py-4 space-y-4 relative ${activeWallpaper ? '' : 'chat-surface'}`}
-            style={containerStyle}
+            // overflow-anchor: none => el reajuste de scroll al anteponer es solo nuestro
+            style={{ ...containerStyle, overflowAnchor: 'none' }}
         >
             {/* Overlay oscuro sobre wallpaper para legibilidad */}
             {activeWallpaper && (
@@ -319,6 +329,15 @@ const MessageList = () => {
                     </div>
                 </div>
             ))}
+            {/* Indicador de carga de mensajes anteriores: absoluto y al final del DOM
+                (fuera del flujo y sin margen de space-y) para no mover el contenido */}
+            {paging?.loadingOlder && (
+                <div className="absolute inset-x-0 top-2 mt-0! z-20 flex justify-center pointer-events-none">
+                    <span role="status" className="px-3 py-1 glass rounded-full text-[11px] text-slate-300 shadow-lg">
+                        Cargando mensajes anteriores…
+                    </span>
+                </div>
+            )}
         </div>
     );
 };

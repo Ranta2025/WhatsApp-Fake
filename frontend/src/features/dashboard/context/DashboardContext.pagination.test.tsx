@@ -152,6 +152,17 @@ describe('DashboardProvider message pagination', () => {
             expect(ids(ctx?.messagesByChat['B'])).toEqual(range(51, 100));
         });
 
+        it('an empty older page ends pagination even if the header says hasMore (no request loop)', async () => {
+            chatHandler = () => ({ data: range(51, 100).map(chatMsg), headers: { 'x-has-more': 'true' } });
+            await mount();
+            await act(async () => { await ctx!.fetchChatMessages('B'); });
+
+            chatHandler = () => ({ data: [], headers: { 'x-has-more': 'true' } });
+            await act(async () => { await ctx!.loadOlderMessages('B'); });
+
+            expect(ctx?.chatPaging['B']).toMatchObject({ hasMore: false, loadingOlder: false });
+        });
+
         it('re-syncing the chats list keeps pages that were already loaded', async () => {
             chatHandler = () => ({ data: range(51, 100).map(chatMsg), headers: { 'x-has-more': 'true' } });
             await mount();
@@ -245,6 +256,17 @@ describe('DashboardProvider message pagination', () => {
             await act(async () => { await ctx!.fetchGroupMessages(9); });
             expect(ids(ctx?.groupMessages[9])).toEqual(range(1, 101));
             expect(ctx?.groupPaging[9]?.hasMore).toBe(false);
+        });
+
+        it('an empty older group page ends pagination even if hasMore is true', async () => {
+            mockGetGroupMessages.mockResolvedValue({ data: { messages: desc(51, 100), hasMore: true } });
+            await mount();
+            await act(async () => { await ctx!.fetchGroupMessages(9); });
+
+            mockGetGroupMessages.mockResolvedValue({ data: { messages: [], hasMore: true } });
+            await act(async () => { await ctx!.loadOlderGroupMessages(9); });
+
+            expect(ctx?.groupPaging[9]).toMatchObject({ hasMore: false, loadingOlder: false });
         });
 
         it('a null/garbage older page is tolerated and stops further loading only via hasMore', async () => {
