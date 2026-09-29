@@ -37,7 +37,7 @@ Strict TDD (session config). For e2e specs, RED means the spec fails meaningfull
 - [x] E2 Playwright scaffold: dependency, config, global-setup storageState, `test:e2e` script, and exclusions (dockerignore, vitest, tsconfig, eslint). Route: delegated.
 - [x] E3 Specs: login (valid + invalid), chat (Ana → Luis live), group (text with Marta + image + voice note seen by another member), status (Ana posts, Luis sees), pagination (scroll up in a seeded long chat loads older messages without jumping; seed via UI or API inside the spec, with a unique tag). Route: delegated.
 - [x] E4 CI workflow `.github/workflows/ci.yml` (unit + e2e jobs) and a README section on running e2e locally. Validate with actionlint if installed, and otherwise with a YAML parse. Route: delegated.
-- [ ] E5 Close: full local run of the e2e suite twice (to check it is not flaky), then doc + mirror.
+- [x] E5 Close: full local run of the e2e suite twice (to check it is not flaky), then doc + mirror.
 
 ## Acceptance criteria
 - `npm run test:e2e` passes against a running stack, twice in a row.
@@ -52,6 +52,15 @@ Strict TDD (session config). For e2e specs, RED means the spec fails meaningfull
 - E3: RED on first run (2 real failures: sidebar preview duplicated the message text; wrong assumption on the pagination window, which is 200 not 50; `/user` key is `Telephon`); GREEN 7/7 specs (auth x2, chat, group text, group image+voice, pagination, status), no retries. Pagination seeds 230 msgs ana->marta via REST. typecheck/lint/vitest(274)/build green, no `any`.
 - E4: `actionlint` (via `go run github.com/rhysd/actionlint/cmd/actionlint@latest`) clean on ci.yml. Steps mirror local runs: `go test ./...`, npm ci/lint/typecheck/test/build, `make test-integration`, `npx playwright install`, `npm run test:e2e`. Root `.gitignore` had `*.github`, which ignored `.github/`; added `!.github/`. Not exercised locally: `docker compose up --wait` cold start, playwright `--with-deps`, artifact upload.
 - E4b (review hardening): specs now prove delivery (group media asserted by the exact upload URL from `POST /api/v1/upload`, no count baselines; status viewer advances a bounded loop to the unique text; voice note waits on the stop button; group text uses a scoped bubble helper; pagination asserts anchor offset within 40px). RED: wrong URL suffix and tolerance -1 both failed (offset 0.125px), restored to GREEN. CI: compose logs on `failure() || cancelled()`, curl `--max-time 5 --connect-timeout 2`, `cancel-in-progress` only on pull_request; README aligned; actionlint clean. typecheck/lint/vitest(274) green; test:e2e twice 7/7, no retries.
+- Reviews (per commit, all approved + acknowledged): 7056099, e67e5db, 9fe5f3f, 99f4b0e, 1dce31b. The 4-lens reviews needed the new `finish` helper in `.git/rdd-state/cycle.zsh`, which captures every collect slot concurrently. 7056099 was reviewed with the Playwright artifacts moved out, because its tree predates their .gitignore entry.
+- E5: `npm run test:e2e` ran twice in a row after E3 (7/7, 1.3m and 1.0m, no retries) and twice again after E4b (7/7, no retries). `make test-integration` is green. FEATURE CLOSED locally. The workflow itself only runs on GitHub after a push, which is the user's decision.
+- Follow-ups (not fixed):
+  - The status spec caps viewer navigation at 30 statuses on a long-lived stack.
+  - The voice note waits a fixed 500ms after the stop button.
+  - The group bubble selector relies on Tailwind classes; a data-testid would be better.
+  - The pagination spec adds 230 msgs per run to the shared DB.
+  - Actions are pinned to major tags, not SHAs.
+  - There is no buildx cache and mailpit is unpinned.
 
 ## Next step
-E1–E4 via one Sonnet writer, one commit per task.
+Feature closed. Next queued: group-read-receipts.
