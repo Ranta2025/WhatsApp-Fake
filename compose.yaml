@@ -10,6 +10,9 @@
 # No hace falta .env: todas las variables tienen valores por defecto para uso
 # local. Si existe un .env en la raíz, sus valores tienen prioridad.
 # Túnel público opcional (Cloudflare): docker compose --profile tunnel up -d
+# Observabilidad opcional (Prometheus + Grafana): docker compose --profile observability up -d
+#   Grafana ......... http://localhost:3000     (admin / admin por defecto; cambia GRAFANA_ADMIN_PASSWORD)
+#   Prometheus ...... http://localhost:9090     (solo 127.0.0.1)
 
 name: whatsapp-fake
 
@@ -28,6 +31,9 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}     # local por HTTP
       SECRETKEY: ${SECRETKEY:-local-dev-secret-key-please-change-0123456789}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      # Listener interno de métricas Prometheus: NO se publica en el host (solo
+      # lo alcanza Prometheus por la red de compose). Vacío = deshabilitado.
+      METRICS_ADDR: ${METRICS_ADDR:-0.0.0.0:9090}
       # Base de datos y caché
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
@@ -148,7 +154,46 @@ services:
     depends_on:
       - web
 
+  # Observabilidad (solo con --profile observability)
+  prometheus:
+    <<: *restart
+    image: prom/prometheus:v3.15.0
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - app
+
+  grafana:
+    <<: *restart
+    image: grafana/grafana:13.2.3
+    profiles: ["observability"]
+    environment:
+      # Solo desarrollo local: define GRAFANA_ADMIN_PASSWORD fuera de local.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
+  prometheus_data:
+  grafana_data:

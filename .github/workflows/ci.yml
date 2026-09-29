@@ -73,6 +73,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Validate the observability compose profile
+        run: docker compose --profile observability config -q
+
       - name: Start the stack
         run: docker compose up -d --build --wait
 

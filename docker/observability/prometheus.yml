@@ -1,0 +1,14 @@
+# Prometheus (perfil `observability` de compose). Solo scrapea el listener
+# interno de métricas de la app (app:9090), que no se publica en el host.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: backend
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:9090"]

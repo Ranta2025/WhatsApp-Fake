@@ -384,6 +384,7 @@ imprescindibles son `SECRETKEY` (≥ 32 caracteres), la base de datos (`DATABASE
 | Documento | Descripción |
 |-----------|-------------|
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Despliegue gratuito (Render + Vercel) |
+| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Métricas Prometheus, request id, Grafana (perfil `observability`) |
 | [docs/WEBSOCKET_GUIDE.md](docs/WEBSOCKET_GUIDE.md) | Protocolo WebSocket detallado |
 | [docs/BUG_REPORT_SYSTEM.md](docs/BUG_REPORT_SYSTEM.md) | Sistema de reportes a GitHub |
 | [scripts/setup-cloudflare.ps1](scripts/setup-cloudflare.ps1) | Obtener URL pública con Cloudflare (Windows) |
