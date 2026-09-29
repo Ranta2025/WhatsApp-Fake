@@ -18,7 +18,7 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | message-pagination | `feat/message-pagination` | done | [message-pagination.md](message-pagination.md) |
 | e2e-ci | `feat/e2e-ci` | done (workflow only runs on GitHub after a push) | [e2e-ci.md](e2e-ci.md) |
 | group-read-receipts | `feat/group-read-receipts` | done | [group-read-receipts.md](group-read-receipts.md) |
-| message-search | `feat/message-search` | in progress (another writer is on it; do not touch) | [message-search.md](message-search.md) |
+| message-search | `feat/message-search` | done | [message-search.md](message-search.md) |
 | observability | `feat/observability` | pending | [observability.md](observability.md) |
 | reactions | `feat/reactions` | pending | [reactions.md](reactions.md) |
 | disappearing-messages | `feat/disappearing-messages` | pending | [disappearing-messages.md](disappearing-messages.md) |
