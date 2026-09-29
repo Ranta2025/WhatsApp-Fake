@@ -323,6 +323,36 @@ func Conection() (*gorm.DB, error) {
 		END IF;
 	END $$;`)
 
+	setupMessageSearch(data)
+
 	log.Println("[DB] Conexión con PostgreSQL establecida")
 	return data, nil
+}
+
+// setupMessageSearch prepara la búsqueda de mensajes: extensiones pg_trgm y
+// unaccent, la función IMMUTABLE norm(text) = lower(unaccent(text)) y los
+// índices GIN trigram parciales (solo mensajes de texto no borrados) sobre
+// messages y group_messages. En hosts donde no se pueden crear las extensiones
+// se omite todo y la capa de repos cae a ILIKE (ver repos/searchData.go).
+func setupMessageSearch(data *gorm.DB) {
+	for _, ext := range []string{"pg_trgm", "unaccent"} {
+		if err := data.Exec("CREATE EXTENSION IF NOT EXISTS " + ext).Error; err != nil {
+			log.Printf("[DB] Búsqueda de mensajes: extensión %s no disponible (%v); se usará ILIKE", ext, err)
+			return
+		}
+	}
+	// unaccent() es STABLE; el wrapper se declara IMMUTABLE (el diccionario es
+	// fijo) para poder usarlo en índices de expresión.
+	if err := data.Exec(`CREATE OR REPLACE FUNCTION norm(text) RETURNS text
+		LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+		AS $$ SELECT lower(public.unaccent('public.unaccent'::regdictionary, $1)) $$`).Error; err != nil {
+		log.Printf("[DB] Búsqueda de mensajes: no se pudo crear norm() (%v); se usará ILIKE", err)
+		return
+	}
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_search_trgm
+		ON messages USING gin (norm(message) gin_trgm_ops)
+		WHERE deleted_at IS NULL AND COALESCE(media_type,'') = ''`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_messages_search_trgm
+		ON group_messages USING gin (norm(message) gin_trgm_ops)
+		WHERE deleted_at IS NULL AND COALESCE(media_type,'') = ''`)
 }
