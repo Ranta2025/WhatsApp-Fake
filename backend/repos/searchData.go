@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"errors"
 	"gorm/backend/models"
 	"gorm/backend/utils"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -37,24 +39,60 @@ func SearchMatchSQL(useNorm bool) string {
 	return `message ILIKE '%' || ? || '%' ESCAPE '\'`
 }
 
-var (
-	searchNormOnce sync.Once
-	searchNormOK   bool
-)
+// normProbeTimeout acota la sonda de norm(); un fallo por timeout es transitorio.
+const normProbeTimeout = 3 * time.Second
 
-// useSearchNorm detecta una sola vez si norm() está disponible y lo registra.
-func useSearchNorm(db *gorm.DB) bool {
-	searchNormOnce.Do(func() {
+// normDetector cachea si norm() está disponible, pero solo con un resultado
+// definitivo (sonda correcta o "función inexistente"). Un error transitorio
+// (red, timeout, contexto cancelado) no se cachea: esa llamada usa ILIKE y la
+// siguiente vuelve a sondear.
+type normDetector struct {
+	mu      sync.Mutex
+	decided bool
+	ok      bool
+}
+
+var searchNorm = &normDetector{}
+
+func (d *normDetector) resolve(ctx context.Context, probe func(context.Context) (string, error)) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.decided {
+		return d.ok
+	}
+	c, cancel := context.WithTimeout(ctx, normProbeTimeout)
+	defer cancel()
+	out, err := probe(c)
+	switch {
+	case err == nil:
+		d.decided, d.ok = true, out == "a"
+	case isUndefinedFunction(err):
+		d.decided, d.ok = true, false
+	default:
+		log.Printf("[DB] Búsqueda de mensajes: sonda de norm() fallida (%v); ILIKE en esta consulta, se reintentará", err)
+		return false
+	}
+	if d.ok {
+		log.Println("[DB] Búsqueda de mensajes: pg_trgm + unaccent")
+	} else {
+		log.Printf("[DB] Búsqueda de mensajes: norm() no disponible (%v); se usa ILIKE sin ignorar acentos", err)
+	}
+	return d.ok
+}
+
+// isUndefinedFunction reconoce SQLSTATE 42883 (undefined_function).
+func isUndefinedFunction(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "42883"
+}
+
+// useSearchNorm indica si la búsqueda puede usar norm().
+func useSearchNorm(ctx context.Context, db *gorm.DB) bool {
+	return searchNorm.resolve(ctx, func(c context.Context) (string, error) {
 		var out string
-		err := db.Raw("SELECT norm('Á')").Scan(&out).Error
-		searchNormOK = err == nil && out == "a"
-		if searchNormOK {
-			log.Println("[DB] Búsqueda de mensajes: pg_trgm + unaccent")
-		} else {
-			log.Printf("[DB] Búsqueda de mensajes: norm() no disponible (%v); se usa ILIKE sin ignorar acentos", err)
-		}
+		err := db.WithContext(c).Raw("SELECT norm('Á')").Scan(&out).Error
+		return out, err
 	})
-	return searchNormOK
 }
 
 // SearchMessages busca mensajes de texto en la conversación con contactID
@@ -70,7 +108,7 @@ func (app *ApiContact) SearchMessages(userID, contactID uint, q string, before u
 		Select(`id, "time", message`).
 		Where(searchVisibleText).
 		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", userID, contactID, false, contactID, userID, false).
-		Where(SearchMatchSQL(useSearchNorm(app.data)), utils.EscapeLike(q))
+		Where(SearchMatchSQL(useSearchNorm(c, app.data)), utils.EscapeLike(q))
 	if before > 0 {
 		db = db.Where("id < ?", before)
 	}
@@ -98,7 +136,7 @@ func (r *RepoGroup) SearchGroupMessages(groupID, userID uint, q string, before u
 		Where(searchVisibleText).
 		Where("group_id = ?", groupID).
 		Where("EXISTS (SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND deleted_at IS NULL)", groupID, userID).
-		Where(SearchMatchSQL(useSearchNorm(r.data)), utils.EscapeLike(q))
+		Where(SearchMatchSQL(useSearchNorm(c, r.data)), utils.EscapeLike(q))
 	if before > 0 {
 		db = db.Where("id < ?", before)
 	}
@@ -146,7 +184,7 @@ func buildGlobalSearchSQL(from, chat, visible string, useNorm bool) string {
 func (app *ApiContact) SearchMessagesGlobal(userID uint, q string, perChat, maxChats int, ctx context.Context) ([]models.GlobalSearchRow, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	sql := buildGlobalSearchSQL("messages", "CASE WHEN id_user = "+"?"+" THEN id_receptor ELSE id_user END", directVisibility, useSearchNorm(app.data))
+	sql := buildGlobalSearchSQL("messages", "CASE WHEN id_user = "+"?"+" THEN id_receptor ELSE id_user END", directVisibility, useSearchNorm(c, app.data))
 	var rows []models.GlobalSearchRow
 	// Orden de parámetros: CASE, visibilidad x2, término, maxChats, perChat.
 	err := app.data.WithContext(c).Raw(sql, userID, userID, userID, utils.EscapeLike(q), maxChats, perChat).Scan(&rows).Error
@@ -158,7 +196,7 @@ func (app *ApiContact) SearchMessagesGlobal(userID uint, q string, perChat, maxC
 func (r *RepoGroup) SearchGroupMessagesGlobal(userID uint, q string, perChat, maxChats int, ctx context.Context) ([]models.GlobalSearchRow, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	sql := buildGlobalSearchSQL("group_messages", "group_id", groupMembership, useSearchNorm(r.data))
+	sql := buildGlobalSearchSQL("group_messages", "group_id", groupMembership, useSearchNorm(c, r.data))
 	var rows []models.GlobalSearchRow
 	err := r.data.WithContext(c).Raw(sql, userID, utils.EscapeLike(q), maxChats, perChat).Scan(&rows).Error
 	return rows, err

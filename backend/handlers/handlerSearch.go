@@ -61,6 +61,8 @@ func respondSearchError(ctx *gin.Context, err error) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrNotGroupMember):
 		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+	case errors.Is(err, models.ErrUserNotFound):
+		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	default:
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}

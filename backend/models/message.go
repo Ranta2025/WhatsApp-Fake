@@ -12,6 +12,10 @@ import (
 // es visible para el usuario que lo consulta.
 var ErrMessageNotFound = errors.New("mensaje no encontrado")
 
+// ErrUserNotFound lo devuelve el repositorio cuando no existe ningún usuario con
+// el teléfono consultado (distinto de un fallo de infraestructura).
+var ErrUserNotFound = errors.New("id usuario no encontrado")
+
 type Message struct {
 	gorm.Model
 	IdUser     uint      `gorm:"index"`

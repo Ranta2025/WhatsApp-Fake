@@ -104,6 +104,32 @@ func TestServiceSearchMessages_InvalidQueryDoesNotHitRepo(t *testing.T) {
 	assert.False(t, repo.called)
 }
 
+type failingIDChatRepo struct {
+	stubSearchChatRepo
+	err error
+}
+
+func (r *failingIDChatRepo) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	if telephon == "user" {
+		return 1, nil
+	}
+	return -1, r.err
+}
+
+func TestServiceSearchMessages_UnknownContactKeepsTypedError(t *testing.T) {
+	repo := &failingIDChatRepo{err: models.ErrUserNotFound}
+	_, err := InitServiceMessage(repo).ServiceSearchMessages("user", "nadie", "hola", 0, 0, context.Background())
+	assert.ErrorIs(t, err, models.ErrUserNotFound)
+	assert.False(t, repo.called)
+}
+
+func TestServiceSearchMessages_InfraErrorIsNotUserNotFound(t *testing.T) {
+	repo := &failingIDChatRepo{err: errors.New("connection refused")}
+	_, err := InitServiceMessage(repo).ServiceSearchMessages("user", "x", "hola", 0, 0, context.Background())
+	assert.Error(t, err)
+	assert.NotErrorIs(t, err, models.ErrUserNotFound)
+}
+
 // ── Grupos ──────────────────────────────────────────────────────────────────
 
 type stubSearchGroupRepo struct {

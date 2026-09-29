@@ -71,3 +71,6 @@ Strict TDD, per session config. Runners:
 
 ## Next step
 Closed on 2026-09-29. Next feature in the roadmap: observability (`feat/observability`).
+
+## Follow-up fixes (post-close)
+- Norm probe + unknown contact (branch `feat/observability`): `norm()` detection now caches only a definitive result (probe success or SQLSTATE 42883) with a 3 s timeout ctx, and retries transient errors on later calls (RED: `normDetector` tests failed to compile; GREEN `repos` tests; mutation "cache on transient error" fails 5 assertions). Unknown `:contact` telephone: repo returns `models.ErrUserNotFound` (real DB errors stay wrapped), `respondSearchError` maps it to 404 (RED: handler tests failed to compile; GREEN handler/service tests + HTTP e2e 404 in `TestE2ESearchAPI`).

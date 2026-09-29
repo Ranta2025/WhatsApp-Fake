@@ -526,8 +526,11 @@ func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (in
 	defer cancel()
 	var id int
 	result := app.data.Model(&models.UserDataBase{}).WithContext(c).Select("id").Where("telephon = ?", telephon).Scan(&id)
-	if result.Error != nil || id == 0 {
-		return -1, errors.New("id usuario no encontrado")
+	if result.Error != nil {
+		return -1, fmt.Errorf("buscar id de usuario: %w", result.Error)
+	}
+	if id == 0 {
+		return -1, models.ErrUserNotFound
 	}
 
 	// 3. Guardar en Redis para futuras consultas (TTL 24h)

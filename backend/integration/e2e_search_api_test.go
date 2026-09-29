@@ -71,6 +71,10 @@ func TestE2ESearchAPI(t *testing.T) {
 		require.Equal(t, 200, code)
 		assert.Empty(t, out["results"])
 
+		// contacto inexistente: 404 (no 500)
+		code, _ = ca.do("GET", "/api/v1/chat/+5699999999999/search?q=cancion", nil)
+		assert.Equal(t, 404, code)
+
 		// carol no ve la conversación alice-bob
 		code, out = cc.do("GET", "/api/v1/chat/"+bob.Telephon+"/search?q=cancion", nil)
 		require.Equal(t, 200, code)

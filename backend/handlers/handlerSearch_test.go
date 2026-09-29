@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
+	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"gorm/backend/services"
 	"net/http"
@@ -59,6 +61,8 @@ func TestHandlerSearchChat_ErrorMapping(t *testing.T) {
 		want int
 	}{
 		{"consulta inválida", services.ErrInvalidSearchQuery, http.StatusBadRequest},
+		{"contacto desconocido", models.ErrUserNotFound, http.StatusNotFound},
+		{"contacto desconocido envuelto", fmt.Errorf("x: %w", models.ErrUserNotFound), http.StatusNotFound},
 		{"error interno", errors.New("db"), http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
