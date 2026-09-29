@@ -97,7 +97,7 @@ func (h *Hub) Run() {
 func (h *Hub) RegisterClient(c *Client) {
 	h.mu.Lock()
 	if oldClient, exists := h.Clients[c.Telephon]; exists && oldClient != c {
-		log.Printf("[HUB] Reemplazando conexión antigua (tel: %s)", c.Telephon)
+		oldClient.log().Info("ws conexión reemplazada")
 		h.closeClientLocked(oldClient)
 		// Limpiar las rooms del cliente viejo; el nuevo las reobtiene en initClient.
 		h.leaveAllRoomsLocked(c.Telephon)
@@ -108,7 +108,7 @@ func (h *Hub) RegisterClient(c *Client) {
 	if h.metrics != nil {
 		h.metrics.WSConnectionsTotal.Inc()
 	}
-	log.Printf("[HUB] Usuario registrado (tel: %s). Total clientes: %d", c.Telephon, total)
+	c.log().Info("ws conectado", "total", total)
 	// Notificar a los contactos que este usuario está online (sin bloquear)
 	go h.NotifyContactsOnline(c.Telephon)
 }
@@ -131,7 +131,7 @@ func (h *Hub) UnregisterClient(c *Client) {
 	}
 
 	if current {
-		log.Printf("[HUB] Usuario desconectado (tel: %s). Total clientes: %d", c.Telephon, total)
+		c.log().Info("ws desconectado", "total", total)
 		// Notificar a los contactos que este usuario está offline (sin bloquear)
 		go h.NotifyContactsOffline(c.Telephon)
 	}

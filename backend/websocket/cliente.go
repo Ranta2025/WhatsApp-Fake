@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"gorm/backend/models"
 	"gorm/backend/services"
-	"log"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -26,7 +26,10 @@ const (
 )
 
 type Client struct {
-	Telephon       string // Identificador único (inmutable)
+	Telephon string // Identificador único (inmutable)
+	// ConnID identifica la conexión en los logs: es el request id del upgrade HTTP
+	// (vacío si no hay). No contiene datos personales.
+	ConnID         string
 	Conn           *websocket.Conn
 	Send           chan []byte
 	ServiceChat    services.ChatServicer
@@ -51,6 +54,14 @@ func NewClient(username, telephon string, conn *websocket.Conn) *Client {
 	}
 	c.username.Store(username)
 	return c
+}
+
+// log devuelve el logger de la conexión (atributo conn_id si hay ConnID).
+func (c *Client) log() *slog.Logger {
+	if c.ConnID == "" {
+		return slog.Default()
+	}
+	return slog.Default().With("conn_id", c.ConnID)
 }
 
 // Username devuelve el nombre de usuario actual (para mostrar en la UI).
@@ -124,7 +135,7 @@ func (c *Client) readPump(hub *Hub) {
 		_, messageBytes, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("[WS] Error de conexión (tel: %s): %v", c.Telephon, err)
+				c.log().Warn("ws error de conexión", "err", err)
 			}
 			break
 		}
@@ -132,7 +143,7 @@ func (c *Client) readPump(hub *Hub) {
 		// 2. Decodificar encabezado (Type)
 		var baseMsg models.BaseMessage
 		if err := json.Unmarshal(messageBytes, &baseMsg); err != nil {
-			log.Println("[WS] Error formato JSON:", err)
+			c.log().Warn("ws formato JSON inválido", "err", err)
 			continue
 		}
 
@@ -152,7 +163,7 @@ func (c *Client) readPump(hub *Hub) {
 			handler := NewMessageHandler(c, hub, baseMsg.Payload)
 			handlerFunc(handler)
 		} else {
-			log.Printf("[WS] Tipo de mensaje desconocido: %q", baseMsg.Type)
+			c.log().Warn("ws tipo de mensaje desconocido", "type", baseMsg.Type)
 		}
 	}
 }

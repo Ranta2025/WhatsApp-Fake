@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"gorm/backend/config"
+	"gorm/backend/logging"
 	"gorm/backend/services"
-	"log"
 	"net/http"
 	"time"
 
@@ -37,11 +37,12 @@ func HandleWebSocket(hub *Hub, chatService services.ChatServicer, contactService
 
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			log.Printf("[WS] Upgrade failed: %v", err)
+			logging.FromContext(c.Request.Context()).Warn("ws upgrade fallido", "err", err)
 			return
 		}
 
 		client := NewClient(username.(string), telephon.(string), conn)
+		client.ConnID = logging.RequestID(c.Request.Context())
 		client.ServiceChat = chatService
 		client.ServiceContact = contactService
 		client.ServiceCall = callService
@@ -76,7 +77,7 @@ func initClient(hub *Hub, client *Client, chatService services.ChatServicer, gro
 	// 2. Marcar mensajes 1:1 pendientes como "entregado" y notificar remitentes
 	senders, err := chatService.ServiceGetSendersAndMarkDelivered(telephon, ctx)
 	if err != nil {
-		log.Printf("[WS] Error marcando mensajes como entregados al conectar: %v", err)
+		client.log().Error("ws error marcando mensajes como entregados al conectar", "err", err)
 	} else if len(senders) > 0 {
 		deliveredMsg, _ := json.Marshal(map[string]interface{}{
 			"type": "message_delivered",
@@ -91,7 +92,7 @@ func initClient(hub *Hub, client *Client, chatService services.ChatServicer, gro
 	if groupService != nil {
 		groups, err := groupService.GetUserGroups(telephon, ctx)
 		if err != nil {
-			log.Printf("[WS] Error obteniendo grupos de %s: %v", telephon, err)
+			client.log().Error("ws error obteniendo grupos del usuario", "err", err)
 			return
 		}
 		for _, g := range groups {
@@ -100,7 +101,7 @@ func initClient(hub *Hub, client *Client, chatService services.ChatServicer, gro
 			// (equivalente al bulk de los chats 1:1) y se avisa a los demás.
 			update, err := groupService.AdvanceGroupDelivered(telephon, g.ID, allGroupMessages, ctx)
 			if err != nil {
-				log.Printf("[WS] Error marcando grupo %d como entregado para %s: %v", g.ID, telephon, err)
+				client.log().Error("ws error marcando grupo como entregado", "group_id", g.ID, "err", err)
 				continue
 			}
 			if update != nil {

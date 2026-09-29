@@ -6,7 +6,7 @@ import (
 	"gorm/backend/metrics"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -47,7 +47,7 @@ func (mh *MessageHandler) sendEvent(to string, eventType string, payload interfa
 		"payload": payload,
 	})
 	if err != nil {
-		log.Printf("[WS] Error serializando evento %s: %v", eventType, err)
+		mh.Client.log().Error("ws error serializando evento", "type", eventType, "err", err)
 		return
 	}
 	mh.Hub.SendTo(to, msg)
@@ -57,7 +57,7 @@ func (mh *MessageHandler) sendEvent(to string, eventType string, payload interfa
 func (mh *MessageHandler) HandleChatMessage() {
 	var msgGet models.MessageGet
 	if err := json.Unmarshal(mh.Payload, &msgGet); err != nil {
-		log.Println("[WS] Error al deserializar mensaje de chat:", err)
+		mh.Client.log().Warn("ws error al deserializar mensaje", "type", "chat", "err", err)
 		return
 	}
 
@@ -76,7 +76,7 @@ func (mh *MessageHandler) HandleChatMessage() {
 	defer cancel()
 	messageSaved, err := mh.Client.ServiceChat.ServiceCreatMessageWithStatus(messageCreat, status, ctx)
 	if err != nil {
-		log.Println("[WS] Error al guardar mensaje:", err)
+		mh.Client.log().Error("ws error al guardar mensaje", "type", "chat", "err", err)
 		mh.Hub.messageFailed(metrics.KindDirect)
 		mh.sendError("Error al enviar mensaje: " + err.Error())
 		return
@@ -99,7 +99,7 @@ func (mh *MessageHandler) HandleChatMessage() {
 func (mh *MessageHandler) HandleReadMessage() {
 	var msgRead models.MessageRead
 	if err := json.Unmarshal(mh.Payload, &msgRead); err != nil || msgRead.From == "" {
-		log.Println("[WS] Error al deserializar mensaje read:", err)
+		mh.Client.log().Warn("ws error al deserializar mensaje", "type", "read", "err", err)
 		return
 	}
 
@@ -107,7 +107,7 @@ func (mh *MessageHandler) HandleReadMessage() {
 	ctx, cancel := mh.context()
 	defer cancel()
 	if err := mh.Client.ServiceChat.ServicePutMessageStatusDelivered(msgRead.From, mh.Client.Telephon, ctx); err != nil {
-		log.Println("[WS] Error al actualizar mensajes a visto:", err)
+		mh.Client.log().Error("ws error al actualizar mensajes a visto", "type", "read", "err", err)
 		return
 	}
 
@@ -132,7 +132,7 @@ func (mh *MessageHandler) HandleTypingIndicator() {
 func (mh *MessageHandler) HandleEditMessage() {
 	var msgEdit models.MessageEdit
 	if err := json.Unmarshal(mh.Payload, &msgEdit); err != nil {
-		log.Println("[WS] Error al deserializar mensaje de edición:", err)
+		mh.Client.log().Warn("ws error al deserializar mensaje", "type", "edit_message", "err", err)
 		return
 	}
 
@@ -140,7 +140,7 @@ func (mh *MessageHandler) HandleEditMessage() {
 	defer cancel()
 	updatedMsg, err := mh.Client.ServiceChat.ServiceEditMessage(mh.Client.Telephon, msgEdit.MessageID, msgEdit.Message, ctx)
 	if err != nil {
-		log.Println("[WS] Error al editar mensaje:", err)
+		mh.Client.log().Error("ws error al editar mensaje", "type", "edit_message", "err", err)
 		mh.sendError("Error al editar mensaje: " + err.Error())
 		return
 	}
@@ -162,7 +162,7 @@ func (mh *MessageHandler) HandleEditMessage() {
 func (mh *MessageHandler) HandleDeleteMessage() {
 	var msgDel models.MessageDelete
 	if err := json.Unmarshal(mh.Payload, &msgDel); err != nil {
-		log.Println("[WS] Error al deserializar mensaje de eliminación:", err)
+		mh.Client.log().Warn("ws error al deserializar mensaje", "type", "delete_message", "err", err)
 		return
 	}
 
@@ -170,7 +170,7 @@ func (mh *MessageHandler) HandleDeleteMessage() {
 	defer cancel()
 	deletedMsg, err := mh.Client.ServiceChat.ServiceDeleteMessage(mh.Client.Telephon, msgDel.MessageID, ctx)
 	if err != nil {
-		log.Println("[WS] Error al eliminar mensaje:", err)
+		mh.Client.log().Error("ws error al eliminar mensaje", "type", "delete_message", "err", err)
 		mh.sendError("Error al eliminar mensaje: " + err.Error())
 		return
 	}
@@ -193,7 +193,7 @@ func (mh *MessageHandler) HandleDeleteMessage() {
 func (mh *MessageHandler) HandleCallOffer() {
 	var callOffer models.CallOffer
 	if err := json.Unmarshal(mh.Payload, &callOffer); err != nil || callOffer.To == "" || callOffer.RoomID == "" {
-		log.Println("[WS] call_offer inválido:", err)
+		mh.Client.log().Warn("ws mensaje inválido", "type", "call_offer", "err", err)
 		return
 	}
 
@@ -203,7 +203,7 @@ func (mh *MessageHandler) HandleCallOffer() {
 		err := mh.Client.ServiceCall.CreateCallLog(mh.Client.Telephon, callOffer.To, callOffer.RoomID, callOffer.CallType, ctx)
 		cancel()
 		if err != nil {
-			log.Printf("[WS] Error registrando llamada: %v", err)
+			mh.Client.log().Error("ws error registrando llamada", "type", "call_offer", "err", err)
 			mh.sendError("No se pudo iniciar la llamada: " + err.Error())
 			return
 		}
@@ -232,7 +232,7 @@ func (mh *MessageHandler) HandleCallOffer() {
 		if caller.ServiceCall != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), handlerTimeout)
 			if err := caller.ServiceCall.MarkCallUnavailable(offer.RoomID, caller.Telephon, ctx); err != nil {
-				log.Printf("[WS] Error marcando llamada como no disponible: %v", err)
+				caller.log().Error("ws error marcando llamada como no disponible", "type", "call_offer", "err", err)
 			}
 			cancel()
 		}
@@ -252,7 +252,7 @@ func (mh *MessageHandler) HandleCallOffer() {
 func (mh *MessageHandler) forwardCallEvent(eventType string, update func(roomID, telephon string, ctx context.Context) error) {
 	var callResp models.CallResponse
 	if err := json.Unmarshal(mh.Payload, &callResp); err != nil || callResp.To == "" || callResp.RoomID == "" {
-		log.Printf("[WS] %s inválido: %v", eventType, err)
+		mh.Client.log().Warn("ws mensaje inválido", "type", eventType, "err", err)
 		return
 	}
 
@@ -262,7 +262,7 @@ func (mh *MessageHandler) forwardCallEvent(eventType string, update func(roomID,
 		cancel()
 		if err != nil {
 			// El usuario no participa en esa llamada (o no existe): no reenviar
-			log.Printf("[WS] %s rechazado para %s (sala %s): %v", eventType, mh.Client.Telephon, callResp.RoomID, err)
+			mh.Client.log().Warn("ws evento de llamada rechazado", "type", eventType, "room_id", callResp.RoomID, "err", err)
 			return
 		}
 	}
@@ -309,7 +309,7 @@ func (mh *MessageHandler) HandleCallEnd() {
 func (mh *MessageHandler) HandleGroupChatMessage() {
 	var msgSend models.GroupMessageSend
 	if err := json.Unmarshal(mh.Payload, &msgSend); err != nil {
-		log.Println("[WS-GROUP] Error al deserializar group_chat:", err)
+		mh.Client.log().Warn("ws error al deserializar mensaje", "type", "group_chat", "err", err)
 		return
 	}
 
@@ -317,7 +317,7 @@ func (mh *MessageHandler) HandleGroupChatMessage() {
 	defer cancel()
 	savedMsg, err := mh.Client.ServiceGroup.SendGroupMessage(mh.Client.Telephon, msgSend, ctx)
 	if err != nil {
-		log.Printf("[WS-GROUP] Error al guardar mensaje de grupo: %v", err)
+		mh.Client.log().Error("ws error al guardar mensaje de grupo", "type", "group_chat", "err", err)
 		mh.Hub.messageFailed(metrics.KindGroup)
 		mh.sendError("Error al enviar mensaje al grupo: " + err.Error())
 		return
@@ -365,7 +365,7 @@ func (mh *MessageHandler) HandleGroupEditMessage() {
 		GroupID uint `json:"groupID"`
 	}
 	if err := json.Unmarshal(mh.Payload, &payload); err != nil {
-		log.Println("[WS-GROUP] Error al deserializar group_edit_message:", err)
+		mh.Client.log().Warn("ws error al deserializar mensaje", "type", "group_edit_message", "err", err)
 		return
 	}
 	if payload.MessageID == 0 || payload.GroupID == 0 {
@@ -377,7 +377,7 @@ func (mh *MessageHandler) HandleGroupEditMessage() {
 	defer cancel()
 	updatedMsg, err := mh.Client.ServiceGroup.EditGroupMessage(mh.Client.Telephon, payload.GroupID, payload.GroupMessageEdit, ctx)
 	if err != nil {
-		log.Printf("[WS-GROUP] Error al editar mensaje de grupo: %v", err)
+		mh.Client.log().Error("ws error al editar mensaje de grupo", "type", "group_edit_message", "err", err)
 		mh.sendError("Error al editar mensaje: " + err.Error())
 		return
 	}
@@ -398,7 +398,7 @@ func (mh *MessageHandler) HandleGroupDeleteMessage() {
 		GroupID uint `json:"groupID"`
 	}
 	if err := json.Unmarshal(mh.Payload, &payload); err != nil {
-		log.Println("[WS-GROUP] Error al deserializar group_delete_message:", err)
+		mh.Client.log().Warn("ws error al deserializar mensaje", "type", "group_delete_message", "err", err)
 		return
 	}
 	if payload.MessageID == 0 || payload.GroupID == 0 {
@@ -409,7 +409,7 @@ func (mh *MessageHandler) HandleGroupDeleteMessage() {
 	ctx, cancel := mh.context()
 	defer cancel()
 	if err := mh.Client.ServiceGroup.DeleteGroupMessage(mh.Client.Telephon, payload.GroupID, payload.GroupMessageDelete, ctx); err != nil {
-		log.Printf("[WS-GROUP] Error al eliminar mensaje de grupo: %v", err)
+		mh.Client.log().Error("ws error al eliminar mensaje de grupo", "type", "group_delete_message", "err", err)
 		mh.sendError("Error al eliminar mensaje: " + err.Error())
 		return
 	}
@@ -447,7 +447,7 @@ func (mh *MessageHandler) HandleGroupJoin() {
 			return
 		}
 	}
-	log.Printf("[WS-GROUP] %s no es miembro del grupo %d — join denegado", mh.Client.Telephon, payload.GroupID)
+	mh.Client.log().Warn("ws join denegado: no es miembro del grupo", "type", "group_join", "group_id", payload.GroupID)
 }
 
 // allGroupMessages pide avanzar la marca hasta el último mensaje del grupo;
@@ -463,7 +463,7 @@ func publishGroupReceipt(hub *Hub, update *schemas.GroupReceiptUpdate) {
 		"payload": update,
 	})
 	if err != nil {
-		log.Printf("[WS-GROUP] Error serializando group_receipt: %v", err)
+		slog.Error("ws error serializando group_receipt", "type", "group_receipt", "err", err)
 		return
 	}
 	hub.SendToGroup(update.GroupID, update.Telephon, msg)
@@ -484,7 +484,7 @@ func (mh *MessageHandler) HandleGroupDelivered() {
 	defer cancel()
 	update, err := mh.Client.ServiceGroup.AdvanceGroupDelivered(mh.Client.Telephon, payload.GroupID, payload.MessageID, ctx)
 	if err != nil {
-		log.Printf("[WS-GROUP] group_delivered rechazado (%s, grupo %d): %v", mh.Client.Telephon, payload.GroupID, err)
+		mh.Client.log().Warn("ws group_delivered rechazado", "type", "group_delivered", "group_id", payload.GroupID, "err", err)
 		return
 	}
 	if update != nil {
@@ -506,7 +506,7 @@ func (mh *MessageHandler) HandleGroupRead() {
 	defer cancel()
 	update, err := mh.Client.ServiceGroup.AdvanceGroupRead(mh.Client.Telephon, payload.GroupID, payload.UpToMessageID, ctx)
 	if err != nil {
-		log.Printf("[WS-GROUP] group_read rechazado (%s, grupo %d): %v", mh.Client.Telephon, payload.GroupID, err)
+		mh.Client.log().Warn("ws group_read rechazado", "type", "group_read", "group_id", payload.GroupID, "err", err)
 		return
 	}
 	if update != nil {
