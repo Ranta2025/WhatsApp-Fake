@@ -6,6 +6,8 @@ const DEFAULT_TOP_THRESHOLD = 80;
 const DEFAULT_BOTTOM_THRESHOLD = 80;
 /** Duración (ms) del resaltado temporal del mensaje al que se salta. */
 export const FLASH_MS = 1800;
+/** Tras saltar a un mensaje, ventana (ms) en la que se mantiene centrado si cargan imágenes/audios y mueven el layout. */
+export const SETTLE_MS = 3000;
 /** Atributo que marca el mensaje resaltado (el estilo vive en index.css). */
 const FLASH_ATTR = 'data-search-flash';
 
@@ -88,6 +90,8 @@ export function useLoadOlderOnScroll({
     const pendingTarget = useRef<ScrollTarget | null>(null);
     const handledTarget = useRef('');
     const flash = useRef<{ node: HTMLElement; timer: ReturnType<typeof setTimeout> } | null>(null);
+    // Mensaje que se mantiene centrado mientras cargan medios (hasta `until` o hasta que el usuario haga scroll).
+    const settling = useRef<{ id: number; until: number } | null>(null);
 
     const hasItems = firstKey !== undefined;
 
@@ -106,6 +110,30 @@ export function useLoadOlderOnScroll({
         el.addEventListener('scroll', onScroll, { passive: true });
         return () => el.removeEventListener('scroll', onScroll);
     }, [containerRef, chatKey, hasItems, topThreshold, bottomThreshold]);
+
+    // Las imágenes/audios cargan después del salto y cambian las alturas: se recentra el mensaje
+    // objetivo hasta que pasa la ventana o el usuario toma el control (rueda, tacto, teclado, ratón).
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const recenter = () => {
+            const cur = settling.current;
+            if (!cur) return;
+            if (Date.now() > cur.until) { settling.current = null; return; }
+            centerOnMessage(el, cur.id);
+            metrics.current = { top: el.scrollTop, height: el.scrollHeight };
+        };
+        const cancel = () => { settling.current = null; };
+        el.addEventListener('load', recenter, true);
+        el.addEventListener('loadedmetadata', recenter, true);
+        const userEvents = ['wheel', 'touchstart', 'keydown', 'mousedown'] as const;
+        userEvents.forEach(name => el.addEventListener(name, cancel, { passive: true }));
+        return () => {
+            el.removeEventListener('load', recenter, true);
+            el.removeEventListener('loadedmetadata', recenter, true);
+            userEvents.forEach(name => el.removeEventListener(name, cancel));
+        };
+    }, [containerRef, chatKey, hasItems]);
 
     // El resaltado no sobrevive al desmontaje del hook (temporizador y atributo).
     useEffect(() => () => {
@@ -141,6 +169,7 @@ export function useLoadOlderOnScroll({
                 const node = centerOnMessage(el, pending.id);
                 if (node) {
                     pendingTarget.current = null;
+                    settling.current = { id: pending.id, until: Date.now() + SETTLE_MS };
                     if (flash.current) {
                         clearTimeout(flash.current.timer);
                         flash.current.node.removeAttribute(FLASH_ATTR);
@@ -167,6 +196,7 @@ export function useLoadOlderOnScroll({
 
         pendingTarget.current = null;
         handledTarget.current = '';
+        settling.current = null;
 
         if (chatChanged || tailChanged || reattached) {
             const toBottom = () => {

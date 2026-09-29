@@ -72,7 +72,7 @@ describe('MessageSearchResults', () => {
 
         const marks = Array.from(host.querySelectorAll('mark')).map(m => m.textContent);
         expect(marks).toEqual(['CANCIÓN', 'canción', 'canción']);
-        expect(host.querySelectorAll('button[data-message-id]')).toHaveLength(3);
+        expect(host.querySelectorAll('button[data-result-id]')).toHaveLength(3);
     });
 
     it('notes how many more matches a chat has beyond the ones listed', () => {
@@ -84,11 +84,11 @@ describe('MessageSearchResults', () => {
 
     it('clicking a result opens that chat at that message', () => {
         render('ready', [direct, group]);
-        const second = host.querySelector('button[data-message-id="7"]') as HTMLButtonElement;
+        const second = host.querySelector('button[data-result-id="7"]') as HTMLButtonElement;
         act(() => { second.click(); });
         expect(onOpen).toHaveBeenCalledWith(direct, 7);
 
-        const groupHit = host.querySelector('button[data-message-id="30"]') as HTMLButtonElement;
+        const groupHit = host.querySelector('button[data-result-id="30"]') as HTMLButtonElement;
         act(() => { groupHit.click(); });
         expect(onOpen).toHaveBeenLastCalledWith(group, 30);
     });

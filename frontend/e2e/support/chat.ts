@@ -114,3 +114,18 @@ export async function openGroupMessageInfo(page: Page, text: string): Promise<Lo
 export function infoSection(dialog: Locator, heading: string): Locator {
   return dialog.locator('section').filter({ has: dialog.page().getByRole('heading', { name: heading, exact: true }) });
 }
+
+// Burbuja (1:1 o grupo) que contiene ese texto; con la búsqueda abierta el texto se parte en <mark>,
+// por eso se filtra por el texto concatenado de la burbuja (que lleva data-message-id).
+export function bubbleWithText(page: Page, text: string | RegExp): Locator {
+  return page.locator('[data-message-id]').filter({ hasText: text });
+}
+
+export async function openChatSearch(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: 'Buscar en el chat' }).click();
+  const input = page.getByPlaceholder('Buscar', { exact: true });
+  await expect(input).toBeFocused();
+  return input;
+}
+
+export const RETURN_TO_LATEST = 'Ir a los mensajes recientes';

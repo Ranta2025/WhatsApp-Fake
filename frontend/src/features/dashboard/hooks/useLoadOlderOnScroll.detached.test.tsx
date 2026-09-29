@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useLoadOlderOnScroll, FLASH_MS } from './useLoadOlderOnScroll';
+import { useLoadOlderOnScroll, FLASH_MS, SETTLE_MS } from './useLoadOlderOnScroll';
 
 // message-search (MS4): detached mode of useLoadOlderOnScroll - no tail scroll, loadNewer at the
 // bottom, scroll-to-target (+ temporary highlight) and return to the bottom when re-attached.
@@ -185,6 +185,36 @@ describe('useLoadOlderOnScroll detached mode', () => {
     it('attached mode is unchanged: opens at the bottom and ignores scrollTarget', () => {
         render({ detached: false, scrollTarget: null });
         expect(el.scrollTop).toBe(5000);
+    });
+
+    it('keeps the target centered when late media loads shift the layout, until the user takes over', () => {
+        render();
+        expect(el.scrollTop).toBe(820);
+
+        // A tall image above the target finishes loading: the target moved 300px down.
+        const shift = 300;
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            const id = this.getAttribute('data-message-id');
+            const top = id === null ? 0 : Number(id) * 100 + shift - (this.parentElement?.scrollTop ?? 0);
+            const h = id === null ? CLIENT_HEIGHT : ITEM_HEIGHT;
+            return { top, bottom: top + h, left: 0, right: 0, width: 0, height: h, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+        });
+        act(() => { el.querySelector('[data-message-id="8"]')?.dispatchEvent(new Event('load')); });
+        expect(el.scrollTop).toBe(1120);
+
+        // After the user scrolls by hand, later loads no longer move the view.
+        act(() => { el.dispatchEvent(new Event('wheel')); });
+        el.scrollTop = 50;
+        act(() => { el.querySelector('[data-message-id="8"]')?.dispatchEvent(new Event('load')); });
+        expect(el.scrollTop).toBe(50);
+    });
+
+    it('stops re-centering once the settle window has passed', () => {
+        render();
+        act(() => { vi.advanceTimersByTime(SETTLE_MS + 10); });
+        el.scrollTop = 10;
+        act(() => { el.querySelector('[data-message-id="8"]')?.dispatchEvent(new Event('load')); });
+        expect(el.scrollTop).toBe(10);
     });
 
     it('clears the flash timer on unmount without throwing', () => {

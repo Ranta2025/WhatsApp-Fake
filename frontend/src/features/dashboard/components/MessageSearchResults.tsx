@@ -47,7 +47,7 @@ const MessageSearchResults = ({ status, chats, onOpen }: MessageSearchResultsPro
                                 <li key={result.messageID}>
                                     <button
                                         type="button"
-                                        data-message-id={result.messageID}
+                                        data-result-id={result.messageID}
                                         onClick={() => onOpen(chat, result.messageID)}
                                         className="w-full text-left flex items-baseline justify-between gap-2 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors"
                                     >

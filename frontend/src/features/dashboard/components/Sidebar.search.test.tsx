@@ -126,7 +126,7 @@ describe('Sidebar global message search', () => {
     it('opening a 1:1 result selects the chat and jumps to the message', async () => {
         renderSidebar();
         await type('cancion');
-        const hit = container.querySelector('button[data-message-id="11"]') as HTMLButtonElement;
+        const hit = container.querySelector('button[data-result-id="11"]') as HTMLButtonElement;
         act(() => { hit.click(); });
         expect(setSelected).toHaveBeenCalledWith(luis);
         expect(openMessageAt).toHaveBeenCalledWith({ kind: 'chat', key: '222' }, 11);
@@ -135,7 +135,7 @@ describe('Sidebar global message search', () => {
     it('opening a chat that is not in the contact list selects a placeholder entry', async () => {
         renderSidebar({ contacts: [] });
         await type('cancion');
-        act(() => { (container.querySelector('button[data-message-id="11"]') as HTMLButtonElement).click(); });
+        act(() => { (container.querySelector('button[data-result-id="11"]') as HTMLButtonElement).click(); });
         expect(setSelected).toHaveBeenCalledWith(expect.objectContaining({ Number: '222', Status: 'unknown' }));
         expect(openMessageAt).toHaveBeenCalledWith({ kind: 'chat', key: '222' }, 11);
     });
@@ -143,7 +143,7 @@ describe('Sidebar global message search', () => {
     it('opening a group result selects the group, closes the sidebar and jumps to the message', async () => {
         renderSidebar();
         await type('cancion');
-        act(() => { (container.querySelector('button[data-message-id="30"]') as HTMLButtonElement).click(); });
+        act(() => { (container.querySelector('button[data-result-id="30"]') as HTMLButtonElement).click(); });
         expect(setSelectedGroup).toHaveBeenCalledWith(groupEquipo);
         expect(setSidebarOpen).toHaveBeenCalledWith(false);
         expect(openMessageAt).toHaveBeenCalledWith({ kind: 'group', id: 9 }, 30);
@@ -152,7 +152,7 @@ describe('Sidebar global message search', () => {
     it('a group result whose group is no longer in the list toasts instead of opening', async () => {
         renderSidebar({ groups: [] });
         await type('cancion');
-        act(() => { (container.querySelector('button[data-message-id="30"]') as HTMLButtonElement).click(); });
+        act(() => { (container.querySelector('button[data-result-id="30"]') as HTMLButtonElement).click(); });
         expect(setSelectedGroup).not.toHaveBeenCalled();
         expect(openMessageAt).not.toHaveBeenCalled();
         expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
