@@ -60,7 +60,9 @@ export function useLoadOlderOnScroll({
         previous.current = { chatKey, firstKey, lastKey };
         if (!el) return;
 
-        const chatChanged = !prev || prev.chatKey !== chatKey;
+        // Primera población de un chat (antes vacío) cuenta como abrirlo: salto instantáneo,
+        // nunca un scroll suave que emita eventos cerca del tope y dispare loadOlder.
+        const chatChanged = !prev || prev.chatKey !== chatKey || (prev.lastKey === undefined && lastKey !== undefined);
         const tailChanged = !prev || prev.lastKey !== lastKey;
         const record = () => { metrics.current = { top: el.scrollTop, height: el.scrollHeight }; };
 

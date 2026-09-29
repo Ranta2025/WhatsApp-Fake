@@ -435,6 +435,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             });
             const older = normalizeChatMessagesResponse(data);
             const hasMore = older.length > 0 && (readHasMoreHeader(headers) ?? older.length >= OLDER_PAGE_SIZE);
+            // Refs al día en el acto: el guard se libera en `finally` antes de que el
+            // efecto los refresque y un segundo scroll repetiría el mismo cursor.
+            messagesByChatRef.current = { ...messagesByChatRef.current, [contactNumber]: prependOlder(messagesByChatRef.current[contactNumber], older) };
+            chatPagingRef.current = { ...chatPagingRef.current, [contactNumber]: { hasMore, loadingOlder: false, olderLoaded: true } };
             setMessagesByChat(prev => ({ ...prev, [contactNumber]: prependOlder(prev[contactNumber], older) }));
             setChatPaging(prev => ({ ...prev, [contactNumber]: { hasMore, loadingOlder: false, olderLoaded: true } }));
         } catch (err) {
@@ -483,6 +487,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const { data } = await getGroupMessages(groupID, OLDER_PAGE_SIZE, 0, before);
             const older = normalizeGroupMessagesResponse(data);
             const hasMore = older.length > 0 && (normalizeHasMore(data) ?? older.length >= OLDER_PAGE_SIZE);
+            // Refs al día en el acto (ver loadOlderMessages).
+            groupMessagesRef.current = { ...groupMessagesRef.current, [groupID]: prependOlder<GroupMessageEntry>(groupMessagesRef.current[groupID], older) };
+            groupPagingRef.current = { ...groupPagingRef.current, [groupID]: { hasMore, loadingOlder: false, olderLoaded: true } };
             setGroupMessages(prev => ({ ...prev, [groupID]: prependOlder<GroupMessageEntry>(prev[groupID], older) }));
             setGroupPaging(prev => ({ ...prev, [groupID]: { hasMore, loadingOlder: false, olderLoaded: true } }));
         } catch (err) {

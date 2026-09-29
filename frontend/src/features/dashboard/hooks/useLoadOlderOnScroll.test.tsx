@@ -128,4 +128,17 @@ describe('useLoadOlderOnScroll', () => {
         render({ smoothTail: true, lastKey: 7 });
         expect(spy).toHaveBeenCalledWith({ top: 600, behavior: 'smooth' });
     });
+
+    it('la primera carga de mensajes de un chat vacío baja al fondo al instante, sin scroll suave ni loadOlder', () => {
+        const loadOlder = vi.fn();
+        render({ loadOlder, smoothTail: true, firstKey: undefined, lastKey: undefined });
+        const spy = vi.fn();
+        el.scrollTo = spy as unknown as typeof el.scrollTo;
+        height = 3000;
+        render({ loadOlder, smoothTail: true, firstKey: 5, lastKey: 60 });
+
+        expect(el.scrollTop).toBe(3000);
+        expect(spy).not.toHaveBeenCalled();
+        expect(loadOlder).not.toHaveBeenCalled();
+    });
 });

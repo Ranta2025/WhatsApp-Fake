@@ -152,6 +152,24 @@ describe('DashboardProvider message pagination', () => {
             expect(ids(ctx?.messagesByChat['B'])).toEqual(range(51, 100));
         });
 
+        it('a second loadOlder right after the first resolves (before the commit) does not repeat the same cursor', async () => {
+            chatHandler = () => ({ data: range(51, 100).map(chatMsg), headers: { 'x-has-more': 'true' } });
+            await mount();
+            await act(async () => { await ctx!.fetchChatMessages('B'); });
+            mockGet.mockClear();
+
+            chatHandler = (config) => (config?.params?.before === 51
+                ? { data: range(1, 50).map(chatMsg), headers: { 'x-has-more': 'false' } }
+                : { data: [], headers: { 'x-has-more': 'false' } });
+            await act(async () => {
+                await ctx!.loadOlderMessages('B');
+                await ctx!.loadOlderMessages('B');
+            });
+
+            const befores = mockGet.mock.calls.map(c => (c[1] as { params: { before: number } }).params.before);
+            expect(befores.filter(b => b === 51)).toHaveLength(1);
+        });
+
         it('an empty older page ends pagination even if the header says hasMore (no request loop)', async () => {
             chatHandler = () => ({ data: range(51, 100).map(chatMsg), headers: { 'x-has-more': 'true' } });
             await mount();
@@ -317,6 +335,24 @@ describe('DashboardProvider message pagination', () => {
             await act(async () => { await ctx!.fetchGroupDetail(9); });
             expect(ids(ctx?.groupMessages[9])).toEqual(range(401, 450));
             expect(ctx?.groupPaging[9]).toMatchObject({ hasMore: true, olderLoaded: false });
+        });
+
+        it('a second loadOlderGroupMessages right after the first resolves does not repeat the same cursor', async () => {
+            mockGetGroupMessages.mockResolvedValue({ data: { messages: range(51, 100).map(groupMsg), hasMore: true } });
+            await mount();
+            await act(async () => { await ctx!.fetchGroupMessages(9); });
+            mockGetGroupMessages.mockClear();
+
+            mockGetGroupMessages.mockImplementation((_id: number, _l: number, _o: number, before?: number) => Promise.resolve(
+                before === 51 ? { data: { messages: range(1, 50).map(groupMsg), hasMore: false } } : { data: { messages: [], hasMore: false } },
+            ));
+            await act(async () => {
+                await ctx!.loadOlderGroupMessages(9);
+                await ctx!.loadOlderGroupMessages(9);
+            });
+
+            const befores = mockGetGroupMessages.mock.calls.map(c => c[3]);
+            expect(befores.filter(x => x === 51)).toHaveLength(1);
         });
 
         it('an empty older group page ends pagination even if hasMore is true', async () => {
