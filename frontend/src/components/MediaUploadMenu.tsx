@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback, type RefObject } from 'react';
-import axios, { type AxiosProgressEvent } from 'axios';
+import { type AxiosProgressEvent } from 'axios';
 import api from '../api/axios';
 import Popover from './ui/Popover';
-import type { ApiErrorBody, MediaType, MediaUploadResult } from '../types/api';
+import { getErrorName, getErrorMessage } from '../lib/errors';
+import type { MediaType, MediaUploadResult } from '../types/api';
 
 /**
  * `'video'` is never actually set by this component today (no button calls
@@ -20,15 +21,6 @@ interface MediaUploadMenuProps {
     onUploadError: (message: string) => void;
     onClose: () => void;
     anchorRef: RefObject<HTMLElement | null>;
-}
-
-/** Lee un mensaje de error legible de una respuesta de axios, o cae a `fallback` (mismo comportamiento que la versión JS). */
-function getErrorMessage(error: unknown, fallback: string): string {
-    if (axios.isAxiosError<ApiErrorBody>(error)) {
-        return error.response?.data?.error || error.message || fallback;
-    }
-    if (error instanceof Error) return error.message || fallback;
-    return fallback;
 }
 
 /**
@@ -126,8 +118,10 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                 stream = await navigator.mediaDevices.getUserMedia(constraint);
                 break;
             } catch (err) {
-                // getUserMedia rechaza con un DOMException; narrowed via `unknown`, no `any`.
-                const name = err instanceof DOMException ? err.name : undefined;
+                // getUserMedia normally rejects with a DOMException, but that is
+                // not guaranteed (test doubles, polyfills, wrapped errors), so
+                // read `.name` structurally instead of narrowing to DOMException.
+                const name = getErrorName(err);
                 if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
                     throw new Error(
                         'Permiso de cámara denegado. Permite el acceso a la cámara en tu navegador e intenta de nuevo.'
@@ -143,7 +137,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                 }
                 // Si es el último intento, propagar el error
                 if (constraint === constraints[constraints.length - 1]) {
-                    const message = err instanceof Error ? err.message : undefined;
+                    const message = getErrorMessage(err, '');
                     throw new Error('No se pudo acceder a la cámara: ' + (message || name));
                 }
             }
@@ -190,6 +184,12 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
             canvas.height = video.videoHeight || 480;
             const ctx = canvas.getContext('2d');
             if (!ctx) {
+                // Sin contexto 2D no se puede capturar: detener la cámara antes
+                // de rendirse para no dejar el stream (y la luz del dispositivo)
+                // encendidos en un preview que ya no sirve.
+                cameraStream.getTracks().forEach(track => track.stop());
+                setCameraStream(null);
+                setShowCameraPreview(false);
                 onUploadError('Error al capturar la foto.');
                 return;
             }

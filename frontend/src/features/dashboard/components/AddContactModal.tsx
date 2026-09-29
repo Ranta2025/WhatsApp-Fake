@@ -1,11 +1,12 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import axios from 'axios';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { validatePhone } from '../../../utils/phoneValidation';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { getErrorMessage } from '../../../lib/errors';
+import { resolveCountryFields } from '../lib/phoneCountry';
 import type { ContactChat } from '../../../types/api';
 import type { DashboardChatGroupEntry } from '../lib/chatSelection';
 
@@ -113,19 +114,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                 setIsLoading(false);
             }
         } catch (err) {
-            let msg = 'Error al agregar';
-            if (axios.isAxiosError(err)) {
-                const d: unknown = err.response?.data;
-                if (typeof d === 'string') {
-                    msg = d;
-                } else if (d && typeof d === 'object') {
-                    const obj = d as { message?: unknown; error?: unknown };
-                    msg = (typeof obj.message === 'string' && obj.message)
-                        || (typeof obj.error === 'string' && obj.error)
-                        || msg;
-                }
-            }
-            setAddMsg(msg);
+            setAddMsg(getErrorMessage(err, 'Error al agregar'));
             setIsLoading(false);
         }
     };
@@ -166,10 +155,11 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                                     searchPlaceholder="Buscar por país..."
                                     value={`+${phoneDialCode}`}
                                     onChange={(_phone, countryData) => {
-                                        // El tipo del paquete declara `CountryData | {}` (el `{}` sale
-                                        // cuando aún no se seleccionó país) — narrowed con `in`.
-                                        const code = ('dialCode' in countryData && countryData.dialCode) || phoneDialCode;
-                                        const iso = ('countryCode' in countryData && countryData.countryCode) || phoneCountryIso;
+                                        // `countryData` puede ser `{}` (o null/undefined) antes de
+                                        // elegir país; se lee de forma estructural con fallback al
+                                        // dial/ISO actual en vez del `in` (que rompía con null).
+                                        const { dialCode: code, countryCode: iso } =
+                                            resolveCountryFields(countryData, phoneDialCode, phoneCountryIso);
                                         setPhoneDialCode(code);
                                         setPhoneCountryIso(iso);
                                         const full = buildPhoneE164(code, phoneLocalNumber);

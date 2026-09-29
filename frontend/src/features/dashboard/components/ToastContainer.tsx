@@ -254,10 +254,11 @@ const ToastContainer = () => {
     // R3 (M6): antes caía directo a `allChatGroups[notif.telephon]` — esa
     // entrada tiene `ContactTelephon`, no `Number`, rompiendo silenciosamente
     // toda comparación posterior con `selected.Number` (mismo bug que
-    // `resolveChatTarget`, M4, arregló para el mismo patrón). `notif.telephon`
-    // es un campo hoy muerto (ver `DisplayToast`), así que se degrada a ''.
+    // `resolveChatTarget`, M4, arregló para el mismo patrón). M6b: se pasa
+    // además `notif.senderName` para que el fallback final restaure el
+    // `ContactName: notif.senderName` del JS original (M6 lo había perdido).
     const handleOpen = (notif: DisplayToast) => {
-        const target = resolveChatTarget(notif.telephon || '', contacts, allChatGroups);
+        const target = resolveChatTarget(notif.telephon || '', contacts, allChatGroups, notif.senderName);
         setSelected(target);
         setSidebarOpen(false);
         dismissToast(notif.id);

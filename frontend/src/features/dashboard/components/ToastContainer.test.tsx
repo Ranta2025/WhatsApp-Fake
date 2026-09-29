@@ -3,14 +3,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import ToastContainer from './ToastContainer';
-import { useDashboard, type DashboardContextValue } from '../context/DashboardContext';
+import { useDashboard, type DashboardContextValue, type Toast } from '../context/DashboardContext';
 import type { SelectedChatTarget } from '../lib/chatSelection';
+import type { ContactChat } from '../../../types/api';
 
 // R3 (M6): `ToastContainer`'s `handleOpen` had the same fallback-shape bug
 // fixed in M4's `resolveChatTarget` (features/dashboard/lib/chatSelection.ts)
 // — falling back directly to an `allChatGroups` entry, which has
 // `ContactTelephon` but no `Number` field, silently breaking every later
 // `selected.Number` comparison. Fixed by delegating to `resolveChatTarget`.
+// M6b item 4: the M6 refactor dropped the original
+// `ContactName: notif.senderName` from the last-resort fallback; now passed
+// through as `resolveChatTarget`'s fallbackName.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,6 +23,27 @@ vi.mock('../context/DashboardContext', () => ({
 }));
 
 const mockUseDashboard = vi.mocked(useDashboard);
+
+type TestToast = Toast & { telephon?: string; senderName?: string };
+
+const makeToast = (overrides: Partial<TestToast> = {}): TestToast => ({
+    id: 1,
+    type: 'info',
+    message: 'hola',
+    createdAt: Date.now(),
+    ...overrides,
+});
+
+const makeContact = (overrides: Partial<ContactChat> = {}): ContactChat => ({
+    Username: 'bob',
+    Number: '555',
+    Status: 'accepted',
+    ContactName: 'Contact Bob',
+    last_seen: null,
+    avatar_url: '',
+    wallpaper_url: '',
+    ...overrides,
+});
 
 describe('ToastContainer handleOpen', () => {
     let container: HTMLDivElement;
@@ -39,21 +64,14 @@ describe('ToastContainer handleOpen', () => {
         container.remove();
     });
 
-    it('selects a target with Number set when falling back to an allChatGroups entry (no matching contact)', async () => {
-        // `telephon` on the toast is dead today per M4's notes (no `addToast`
-        // call site ever sets it) — synthesized here to exercise the wiring
-        // as if a future caller did populate it.
+    const renderWith = async (props: Partial<DashboardContextValue>) => {
         mockUseDashboard.mockReturnValue({
-            toasts: [{ id: 1, type: 'info', message: 'hola', createdAt: Date.now(), telephon: '555', senderName: 'Bob' }],
             dismissToast,
             setSelected,
             setSidebarOpen,
             contacts: [],
-            allChatGroups: {
-                '555': { ContactTelephon: '555', ContactUsername: 'bob', ContactName: 'Bob', IsContact: true },
-            },
-            // Solo los campos que ToastContainer realmente lee — el resto de
-            // DashboardContextValue no importa para este test.
+            allChatGroups: {},
+            ...props,
         } as unknown as DashboardContextValue);
 
         await act(async () => {
@@ -65,9 +83,46 @@ describe('ToastContainer handleOpen', () => {
         await act(async () => {
             card!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
+    };
 
-        expect(setSelected).toHaveBeenCalledTimes(1);
-        const target = setSelected.mock.calls[0]?.[0] as SelectedChatTarget;
-        expect(target.Number).toBe('555');
+    const selectedTarget = () => setSelected.mock.calls[0]?.[0] as SelectedChatTarget;
+
+    it('selects the matching contact when the telephon is a known contact', async () => {
+        const contact = makeContact({ Number: '555', ContactName: 'Contact Bob' });
+        await renderWith({ toasts: [makeToast({ telephon: '555', senderName: 'Bob' })], contacts: [contact] });
+
+        expect(selectedTarget()).toBe(contact);
+        expect(setSidebarOpen).toHaveBeenCalledWith(false);
+        expect(dismissToast).toHaveBeenCalledTimes(1);
+    });
+
+    it('selects a Number-bearing target from allChatGroups when there is no contact match', async () => {
+        await renderWith({
+            toasts: [makeToast({ telephon: '555', senderName: 'Bob' })],
+            allChatGroups: {
+                '555': { ContactTelephon: '555', ContactUsername: 'bob', ContactName: 'Bob', IsContact: true },
+            },
+        });
+
+        expect(selectedTarget().Number).toBe('555');
+        expect(selectedTarget().ContactName).toBe('Bob');
+        expect(setSidebarOpen).toHaveBeenCalledWith(false);
+    });
+
+    it('restores senderName as ContactName when neither contact nor chat group match', async () => {
+        await renderWith({ toasts: [makeToast({ telephon: '777', senderName: 'Unknown Sender' })] });
+
+        expect(selectedTarget().Number).toBe('777');
+        expect(selectedTarget().ContactName).toBe('Unknown Sender');
+        expect(setSidebarOpen).toHaveBeenCalledWith(false);
+    });
+
+    it('still names the target when the toast has no telephon', async () => {
+        await renderWith({ toasts: [makeToast({ senderName: 'Unknown Sender' })] });
+
+        expect(selectedTarget().Number).toBe('');
+        expect(selectedTarget().ContactName).toBe('Unknown Sender');
+        expect(setSidebarOpen).toHaveBeenCalledWith(false);
+        expect(dismissToast).toHaveBeenCalledWith(1);
     });
 });

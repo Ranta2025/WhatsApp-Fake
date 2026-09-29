@@ -1,8 +1,8 @@
 import { useState, useMemo, type FormEvent } from 'react';
-import axios from 'axios';
 import { useDashboard } from '../context/DashboardContext';
 import { createGroup } from '../../../api/groupApi';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { getErrorMessage } from '../../../lib/errors';
 
 interface CreateGroupModalProps {
     isOpen: boolean;
@@ -71,8 +71,7 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
             handleClose();
         } catch (err) {
             console.error('[CreateGroupModal] Error:', err);
-            const msg = (axios.isAxiosError<{ error?: string }>(err) && err.response?.data?.error) || 'Error al crear el grupo';
-            addToast({ type: 'error', message: msg });
+            addToast({ type: 'error', message: getErrorMessage(err, 'Error al crear el grupo') });
         } finally {
             setLoading(false);
         }

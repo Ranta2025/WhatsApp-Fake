@@ -1,22 +1,15 @@
 import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
-import axios, { type AxiosProgressEvent } from 'axios';
+import { type AxiosProgressEvent } from 'axios';
 import api from '../../../api/axios';
 import { useStatus } from '../context/StatusContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { getErrorMessage } from '../../../lib/errors';
+import { resolveStatusMediaType } from '../lib/statusType';
 import type { MediaUploadResult, StatusType } from '../../../types/api';
 
 type ComposerMode = 'text' | 'media' | null;
 type FileKind = 'image' | 'video' | null;
-
-/** Mismo comportamiento que otros catches de axios del proyecto (ver MediaUploadMenu.tsx). */
-function getErrorMessage(err: unknown, fallback: string): string {
-    if (axios.isAxiosError<{ error?: string }>(err)) {
-        return err.response?.data?.error || err.message || fallback;
-    }
-    if (err instanceof Error) return err.message || fallback;
-    return fallback;
-}
 
 const TEXT_MAX = 700;
 const CAPTION_MAX = 700;
@@ -159,10 +152,12 @@ export default function StatusComposer() {
             });
             if (!data?.url) throw new Error('Respuesta del servidor inválida.');
             // `MediaUploadResult.mediaType` (MediaType | 'document') es más
-            // ancho que `StatusType` ('text'|'image'|'video') — el input solo
-            // acepta image/*,video/*, así que en la práctica siempre calza;
-            // se narrowa explícitamente en vez de mentirle al tipo con un cast.
-            const mediaType: StatusType = data.mediaType === 'image' || data.mediaType === 'video' ? data.mediaType : fileKind;
+            // ancho que `StatusType` ('text'|'image'|'video') — el helper
+            // conserva el mediaType del servidor solo si es image/video y
+            // guarda el resto cayendo al kind derivado del MIME del archivo
+            // (misma semántica `data.mediaType || fileKind` del JS original,
+            // sin inventar un tipo inválido).
+            const mediaType: StatusType = resolveStatusMediaType(data.mediaType, fileKind);
             await publishStatus({
                 type: mediaType,
                 mediaUrl: data.url,

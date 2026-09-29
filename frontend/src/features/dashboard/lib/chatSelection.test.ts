@@ -51,4 +51,22 @@ describe('resolveChatTarget', () => {
 
         expect(result).toEqual({ Number: '333', Username: '333', Status: 'unknown' });
     });
+
+    it('uses the provided fallback name as ContactName when neither contact nor chat group exist', () => {
+        // Original ToastContainer.jsx: `... || { Number: notif.telephon,
+        // ContactName: notif.senderName }` — the M6 refactor dropped
+        // senderName, so an unknown sender showed as their raw number.
+        const result = resolveChatTarget('333', [], {}, 'Sender Name');
+
+        expect(result.Number).toBe('333');
+        expect(result.ContactName).toBe('Sender Name');
+    });
+
+    it('does not use the fallback name when a contact or chat group matches', () => {
+        const contact = makeContact({ Number: '111', ContactName: 'Contact Name' });
+        expect(resolveChatTarget('111', [contact], {}, 'Fallback').ContactName).toBe('Contact Name');
+
+        const group = makeGroupEntry({ ContactName: 'Group Contact Name' });
+        expect(resolveChatTarget('222', [], { '222': group }, 'Fallback').ContactName).toBe('Group Contact Name');
+    });
 });

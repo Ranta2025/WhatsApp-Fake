@@ -1,30 +1,14 @@
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
-import axios from 'axios';
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { getErrorMessage } from '../../../lib/errors';
 import type { MediaUploadResult } from '../../../types/api';
 
 interface ProfileModalProps {
     isOpen: boolean;
     onClose: () => void;
-}
-
-/** Mismo comportamiento que la versión JS: `d` puede ser un string plano o un objeto con `message`/`error`. */
-function extractErrorMessage(err: unknown, fallback: string): string {
-    if (axios.isAxiosError(err)) {
-        const d: unknown = err.response?.data;
-        if (typeof d === 'string') return d;
-        if (d && typeof d === 'object') {
-            const obj = d as { message?: unknown; error?: unknown };
-            if (typeof obj.message === 'string' && obj.message) return obj.message;
-            if (typeof obj.error === 'string' && obj.error) return obj.error;
-        }
-        return err.message || fallback;
-    }
-    if (err instanceof Error) return err.message || fallback;
-    return fallback;
 }
 
 const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
@@ -142,7 +126,7 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
             setNewAvatarFile(null);
             setNewAvatarPreview(null);
         } catch (err) {
-            setStatus(extractErrorMessage(err, 'Error al actualizar'));
+            setStatus(getErrorMessage(err, 'Error al actualizar'));
         } finally {
             setUploadingAvatar(false);
         }

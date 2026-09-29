@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import api from '../api/axios';
+import { getErrorName } from '../lib/errors';
 import type { CallType } from '../types/api';
 
 interface CallRoomProps {
@@ -53,8 +54,10 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                     preStream.getTracks().forEach(t => t.stop());
                     console.log('[CallRoom] Media permissions granted');
                 } catch (mediaErr) {
-                    // getUserMedia rejects with a DOMException in browsers; narrowed via `unknown` (catch is typed `unknown` under strict), no `any`.
-                    const mediaErrName = mediaErr instanceof DOMException ? mediaErr.name : undefined;
+                    // getUserMedia normally rejects with a DOMException, but that
+                    // is not guaranteed (test doubles, polyfills, wrapped errors),
+                    // so read `.name` structurally instead of narrowing.
+                    const mediaErrName = getErrorName(mediaErr);
                     console.warn('[CallRoom] Media permission issue:', mediaErrName);
                     if (mediaErrName === 'NotAllowedError' || mediaErrName === 'PermissionDeniedError') {
                         setErrorMsg(

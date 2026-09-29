@@ -38,7 +38,8 @@ export interface SelectedChatTarget {
 export function resolveChatTarget(
     telephon: string,
     contacts: ContactChat[],
-    allChatGroups: Record<string, DashboardChatGroupEntry>
+    allChatGroups: Record<string, DashboardChatGroupEntry>,
+    fallbackName?: string
 ): SelectedChatTarget {
     const contact = contacts.find((c) => c.Number === telephon);
     if (contact) return contact;
@@ -53,5 +54,7 @@ export function resolveChatTarget(
         };
     }
 
-    return { Number: telephon, Username: telephon, Status: 'unknown' };
+    // `fallbackName` (p.ej. el `senderName` de una notificación) only applies to
+    // the last resort, where there is no contact/group data to name the target.
+    return { Number: telephon, Username: telephon, ContactName: fallbackName, Status: 'unknown' };
 }
