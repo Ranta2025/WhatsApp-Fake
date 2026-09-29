@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { DashboardProvider, useDashboard } from './context/DashboardContext';
+import { DashboardProvider, useDashboard, type CallState } from './context/DashboardContext';
 import { StatusProvider } from '../status/context/StatusContext';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
@@ -7,6 +7,7 @@ import GroupChatWindow from './components/GroupChatWindow';
 import ProfileModal from './components/ProfileModal';
 import ContactDetails from './components/ContactDetails';
 import NotificationBanner from './components/NotificationBanner';
+import ToastContainer from './components/ToastContainer';
 import AddContactModal from './components/AddContactModal';
 import CreateGroupModal from './components/CreateGroupModal';
 import StatusComposer from '../status/components/StatusComposer';
@@ -24,40 +25,49 @@ const CallRoom = lazy(() => import('../../components/CallRoom'));
  * CallingOverlay - Muestra el estado "Llamando..." mientras espera que el receptor conteste.
  * Reproduce un tono de llamada saliente y muestra el nombre/número del contacto.
  */
-const CallingOverlay = ({ callState, onEndCall }) => {
+interface CallingOverlayProps {
+    callState: CallState;
+    onEndCall: () => void;
+}
+
+const CallingOverlay = ({ callState, onEndCall }: CallingOverlayProps) => {
     const [elapsed, setElapsed] = useState(0);
 
     // Reproducir tono de llamada saliente (beep sintetizado)
     useEffect(() => {
-        let audioCtx;
-        let oscillator;
-        let gainNode;
-        let intervalId;
-        let elapsedTimer;
+        let audioCtx: AudioContext | undefined;
+        let intervalId: ReturnType<typeof setInterval> | undefined;
+        let elapsedTimer: ReturnType<typeof setInterval> | undefined;
 
         try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            gainNode = audioCtx.createGain();
-            gainNode.connect(audioCtx.destination);
+            // Safari-only vendor-prefixed constructor; no d.ts for it, narrowed via `unknown` instead of `any`.
+            const AudioContextCtor = window.AudioContext
+                || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+            const ctx = new AudioContextCtor!();
+            audioCtx = ctx;
+            // Narrowed once into locals: the closure below can't keep TS's
+            // narrowing on the outer `let audioCtx`.
+            const gainNode = ctx.createGain();
+            gainNode.connect(ctx.destination);
             gainNode.gain.value = 0;
 
             // Generar tono de llamada: 440Hz por 1s, silencio 3s, repetir
             const playRingTone = () => {
-                oscillator = audioCtx.createOscillator();
+                const oscillator = ctx.createOscillator();
                 oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+                oscillator.frequency.setValueAtTime(440, ctx.currentTime);
                 oscillator.connect(gainNode);
 
                 // Fade in
-                gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.05);
+                gainNode.gain.setValueAtTime(0, ctx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
 
                 // Sustain then fade out
-                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime + 0.9);
-                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.0);
+                gainNode.gain.setValueAtTime(0.15, ctx.currentTime + 0.9);
+                gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.0);
 
-                oscillator.start(audioCtx.currentTime);
-                oscillator.stop(audioCtx.currentTime + 1.0);
+                oscillator.start(ctx.currentTime);
+                oscillator.stop(ctx.currentTime + 1.0);
             };
 
             playRingTone();
@@ -78,7 +88,7 @@ const CallingOverlay = ({ callState, onEndCall }) => {
         };
     }, []);
 
-    const formatTime = (s) => {
+    const formatTime = (s: number) => {
         const mins = Math.floor(s / 60);
         const secs = s % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -140,7 +150,7 @@ const DashboardContent = () => {
     const [showContactDetails, setShowContactDetails] = useState(false);
     const [showAddContactModal, setShowAddContactModal] = useState(false);
     const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
-    const [viewImage, setViewImage] = useState(null);
+    const [viewImage, setViewImage] = useState<string | null>(null);
 
     useEscapeToClose(() => setViewImage(null), !!viewImage);
 
@@ -196,6 +206,7 @@ const DashboardContent = () => {
             />
 
             <NotificationBanner />
+            <ToastContainer />
 
             <StatusComposer />
             <StatusViewer />

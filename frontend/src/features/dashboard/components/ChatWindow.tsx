@@ -9,6 +9,7 @@ import api from '../../../api/axios';
 import Avatar from '../../../components/ui/Avatar';
 import { ChatIcon, PhoneIcon as PhoneEmojiIcon, GroupIcon } from '../../../components/ui/icons';
 import { formatLastSeen } from '../../../utils/format';
+import type { CallType } from '../../../types/api';
 
 // Inner component: must live inside MessagingProvider to access useMessaging()
 const ForwardMessageModalWrapper = () => {
@@ -29,14 +30,14 @@ const PhoneIcon = 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.
 const VideoIcon = 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z';
 const TrashIcon = 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16';
 
-const Svg = ({ d, className = 'h-5 w-5' }) => (
+const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d={d} />
     </svg>
 );
 
 /** Pantalla de bienvenida (escritorio) cuando no hay chat abierto */
-const WelcomePane = ({ isConnected }) => (
+const WelcomePane = ({ isConnected }: { isConnected: boolean }) => (
     <div className="hidden lg:flex flex-1 flex-col min-h-0 min-w-0 chat-surface relative">
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-fade-in">
             <div className="relative mb-8">
@@ -74,7 +75,12 @@ const WelcomePane = ({ isConnected }) => (
     </div>
 );
 
-const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
+interface ChatWindowProps {
+    onShowContactDetails: () => void;
+    onStartCall?: (callType?: CallType) => void;
+}
+
+const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
     const {
         selected, setSelected, isConnected, avatarMap, onlineUsers, typingUsers,
         lastSeenMap, setMessagesByChat, contacts, addToast,
@@ -127,7 +133,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }) => {
         }
     };
 
-    const handleCallClick = (type) => {
+    const handleCallClick = (type: CallType) => {
         if (!isConnected) {
             addToast({ type: 'error', message: 'Sin conexión con el servidor' });
             return;

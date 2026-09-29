@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 import api from '../api/axios';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
-import PhoneInput from 'react-phone-input-2';
+import PhoneInput, { type CountryData } from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { validatePhone } from '../utils/phoneValidation';
+import { getErrorMessage } from '../lib/errors';
 
 export default function Register() {
     const [formData, setFormData] = useState({
@@ -23,25 +24,29 @@ export default function Register() {
     const [phoneDialCode, setPhoneDialCode] = useState('53');
     const navigate = useNavigate();
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+    const updateField = (name: string, value: string) => {
+        setFormData({ ...formData, [name]: value });
     };
 
-    const buildPhoneE164 = (dialCode, localNumber) => {
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+        updateField(e.target.name, e.target.value);
+    };
+
+    const buildPhoneE164 = (dialCode: string, localNumber: string) => {
         const codeDigits = String(dialCode || '').replace(/\D/g, '');
         const localDigits = String(localNumber || '').replace(/\D/g, '');
         if (!codeDigits && !localDigits) return '';
         return `+${codeDigits}${localDigits}`;
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
 
         const phoneResult = validatePhone(formData.numero);
         if (!phoneResult.valid) {
-            setError(phoneResult.error);
-            setPhoneError(phoneResult.error);
+            setError(phoneResult.error ?? '');
+            setPhoneError(phoneResult.error ?? '');
             return;
         }
         // Usar el número formateado E.164 limpio
@@ -56,10 +61,7 @@ export default function Register() {
             // La cookie HttpOnly se setió automáticamente por el servidor
             navigate('/activate', { state: { username: formData.username, gmail: formData.email } });
         } catch (err) {
-            const data = err?.response?.data;
-            const msg = (typeof data === 'string')
-                ? data
-                : data?.error || data?.message || err?.message || 'Error al registrar usuario. Verifica los requisitos.';
+            const msg = getErrorMessage(err, 'Error al registrar usuario. Verifica los requisitos.');
             setError(msg);
         }
     };
@@ -136,12 +138,15 @@ export default function Register() {
                                 searchPlaceholder="Buscar por país..."
                                 value={`+${phoneDialCode}`}
                                 onChange={(phone, countryData) => {
-                                    const code = countryData?.dialCode || phoneDialCode;
-                                    const iso = countryData?.countryCode || phoneCountryIso;
+                                    // react-phone-input-2 types this as `{} | CountryData`; at
+                                    // runtime it can be empty/absent, hence the Partial + guards.
+                                    const country = (countryData ?? {}) as Partial<CountryData>;
+                                    const code = country.dialCode || phoneDialCode;
+                                    const iso = country.countryCode || phoneCountryIso;
                                     setPhoneDialCode(code);
                                     setPhoneCountryIso(iso);
                                     const full = buildPhoneE164(code, phoneLocalNumber);
-                                    handleChange({ target: { name: 'numero', value: full } });
+                                    updateField('numero', full);
                                 }}
                                 inputProps={{
                                     name: 'numero',
@@ -172,10 +177,10 @@ export default function Register() {
                                 setPhoneLocalNumber(local);
                                 setError('');
                                 const full = buildPhoneE164(phoneDialCode, local);
-                                handleChange({ target: { name: 'numero', value: full } });
+                                updateField('numero', full);
                                 if (full && full.length > 3) {
                                     const result = validatePhone(full);
-                                    setPhoneError(result.valid ? '' : result.error);
+                                    setPhoneError(result.valid ? '' : (result.error ?? ''));
                                 } else {
                                     setPhoneError('');
                                 }

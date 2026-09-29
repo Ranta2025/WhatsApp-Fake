@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import api from '../api/axios';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
+import { getErrorMessage } from '../lib/errors';
 
 export default function UnblockAccount() {
     const [step, setStep] = useState(1);
-    const [gmail, setGmail] = useState('');
+    // Si viene desde el login con email pre-cargado
+    const location = useLocation();
+    const preloadedEmail: string = location.state?.gmail || '';
+    const [gmail, setGmail] = useState(preloadedEmail);
     const [code, setCode] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -14,19 +18,9 @@ export default function UnblockAccount() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
-    const location = useLocation();
-
-    // Si viene desde el login con email pre-cargado
-    const preloadedEmail = location.state?.gmail || '';
-
-    useState(() => {
-        if (preloadedEmail) {
-            setGmail(preloadedEmail);
-        }
-    }, []);
 
     // STEP 1: Solicitar código de desbloqueo
-    const handleStep1 = async (e) => {
+    const handleStep1 = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
         
@@ -42,10 +36,7 @@ export default function UnblockAccount() {
             });
             setStep(2);
         } catch (err) {
-            const data = err?.response?.data;
-            const msg = (typeof data === 'string')
-                ? data
-                : data?.message || data?.error || 'Email no encontrado o error al enviar código';
+            const msg = getErrorMessage(err, 'Email no encontrado o error al enviar código', { prefer: 'message', fallbackToErrorMessage: false });
             setError(msg);
         } finally {
             setLoading(false);
@@ -53,7 +44,7 @@ export default function UnblockAccount() {
     };
 
     // STEP 2: Verificar código
-    const handleStep2 = (e) => {
+    const handleStep2 = (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
         
@@ -65,7 +56,7 @@ export default function UnblockAccount() {
     };
 
     // STEP 3: Cambiar contraseña y desbloquear
-    const handleStep3 = async (e) => {
+    const handleStep3 = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
         
@@ -112,10 +103,7 @@ export default function UnblockAccount() {
             alert('¡Cuenta desbloqueada exitosamente! Ya puedes iniciar sesión con tu nueva contraseña.');
             navigate('/login');
         } catch (err) {
-            const data = err?.response?.data;
-            const msg = (typeof data === 'string')
-                ? data
-                : data?.message || data?.error || 'Error al desbloquear cuenta';
+            const msg = getErrorMessage(err, 'Error al desbloquear cuenta', { prefer: 'message', fallbackToErrorMessage: false });
             setError(msg);
         } finally {
             setLoading(false);
@@ -196,7 +184,7 @@ export default function UnblockAccount() {
                                 onChange={(e) => setCode(e.target.value)}
                                 className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200 text-center tracking-widest text-lg"
                                 placeholder="000000"
-                                maxLength="20"
+                                maxLength={20}
                             />
                         </div>
                         <p className="text-indigo-300/80 text-xs mt-2 ml-1">

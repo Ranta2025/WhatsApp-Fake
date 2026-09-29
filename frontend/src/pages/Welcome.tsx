@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ComponentType } from 'react';
 import BugReportModal from '../components/BugReportModal';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -23,18 +23,28 @@ const STEPS = [
 ];
 
 /** Maqueta de la app para el hero */
+interface MockupChat {
+    name: string;
+    gradient: string;
+    preview: string;
+    PreviewIcon?: ComponentType<{ className?: string }>;
+    active: boolean;
+}
+
+const MOCKUP_CHATS: MockupChat[] = [
+    { name: 'Laura', gradient: 'from-amber-500 to-rose-500', preview: '¿Nos vemos a las 8?', active: true },
+    { name: 'Equipo', gradient: 'from-indigo-500 to-purple-500', preview: 'Ana: ¡listo!', PreviewIcon: ArrowTrendingUpIcon, active: false },
+    { name: 'Marcos', gradient: 'from-sky-500 to-indigo-500', preview: 'Nota de voz', active: false },
+];
+
 const AppMockup = () => (
     <div className="relative w-full max-w-xl mx-auto">
         <div className="absolute -inset-6 bg-gradient-to-r from-indigo-500/25 to-purple-500/25 blur-3xl rounded-full" aria-hidden="true" />
         <div className="relative glass rounded-3xl overflow-hidden shadow-2xl shadow-black/50 flex h-[340px] sm:h-[380px]">
             <div className="hidden sm:flex flex-col w-44 border-r border-white/[0.06] bg-slate-900/60 p-3 gap-1.5">
-                {[
-                    ['Laura', 'from-amber-500 to-rose-500', '¿Nos vemos a las 8?', null, true],
-                    ['Equipo', 'from-indigo-500 to-purple-500', 'Ana: ¡listo!', ArrowTrendingUpIcon, false],
-                    ['Marcos', 'from-sky-500 to-indigo-500', 'Nota de voz', null, false],
-                ].map(([name, gradient, preview, PreviewIcon, active]) => (
+                {MOCKUP_CHATS.map(({ name, gradient, preview, PreviewIcon, active }) => (
                     <div key={name} className={`flex items-center gap-2 rounded-xl p-2 ${active ? 'bg-indigo-500/10 ring-1 ring-indigo-500/20' : ''}`}>
-                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-xs font-semibold`}>{name[0]}</div>
+                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-xs font-semibold`}>{name.charAt(0)}</div>
                         <div className="min-w-0">
                             <div className="text-xs font-semibold truncate">{name}</div>
                             <div className="text-[10px] text-slate-400 truncate flex items-center gap-1">
@@ -72,7 +82,7 @@ export default function Welcome() {
     const { user } = useAuth();
     const [isScrolled, setIsScrolled] = useState(false);
     const [isBugReportOpen, setIsBugReportOpen] = useState(false);
-    const containerRef = useRef(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const container = containerRef.current;

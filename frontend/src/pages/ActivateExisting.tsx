@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import api from '../api/axios';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
+import { getErrorMessage } from '../lib/errors';
 
 export default function ActivateExisting() {
     const location = useLocation();
@@ -10,7 +11,7 @@ export default function ActivateExisting() {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
         
@@ -26,10 +27,7 @@ export default function ActivateExisting() {
             });
             navigate('/activate', { state: { username } });
         } catch (err) {
-            const data = err?.response?.data;
-            const msg = (typeof data === 'string')
-                ? data
-                : data?.message || data?.error || 'Username no encontrado o cuenta ya activa';
+            const msg = getErrorMessage(err, 'Username no encontrado o cuenta ya activa', { prefer: 'message', fallbackToErrorMessage: false });
             setError(msg);
         } finally {
             setLoading(false);

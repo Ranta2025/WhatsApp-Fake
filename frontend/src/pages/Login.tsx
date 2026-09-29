@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
+import { getErrorMessage } from '../lib/errors';
 
 export default function Login() {
     const [username, setUsername] = useState('');
@@ -12,7 +13,7 @@ export default function Login() {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!username.trim() || !password) {
             setError('Completa usuario y contraseña');
@@ -25,10 +26,7 @@ export default function Login() {
             navigate('/dashboard');
         } catch (err) {
             setLoading(false);
-            const data = err?.response?.data;
-            const msg = (typeof data === 'string')
-                ? data
-                : data?.error || data?.message || err?.message || 'Credenciales inválidas o error de conexión';
+            const msg = getErrorMessage(err, 'Credenciales inválidas o error de conexión');
             
             // Si el usuario está bloqueado, redirigir a la página de desbloqueo
             if (msg.toLowerCase().includes('bloqueado')) {
