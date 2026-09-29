@@ -6,7 +6,9 @@ import CallHistory from '../../../components/CallHistory';
 import Avatar from '../../../components/ui/Avatar';
 import StatusList from '../../status/components/StatusList';
 import { formatChatTimestamp, formatLastSeen, previewMessage } from '../../../utils/format';
-import type { ContactChat, Message } from '../../../types/api';
+import MessageSearchResults from './MessageSearchResults';
+import { useGlobalMessageSearch } from '../hooks/useGlobalMessageSearch';
+import type { ContactChat, GlobalSearchChat, Message } from '../../../types/api';
 import type { LocalGroup } from '../context/DashboardContext';
 import type { SidebarView } from '../context/DashboardContext';
 import type { DashboardChatGroupEntry } from '../lib/chatSelection';
@@ -133,6 +135,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
         lastSeenMap, avatarMap, isConnected, myAvatar, profile,
         messagesByChat, allChatGroups, logout,
         groups, selectedGroup, setSelectedGroup,
+        openMessageAt, addToast,
     } = useDashboard();
     const { user } = useAuth();
     const { hasUnseen: hasUnseenStatuses } = useStatus();
@@ -144,6 +147,9 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
         const timer = setTimeout(() => setQuery(searchQuery.trim().toLowerCase()), 200);
         return () => clearTimeout(timer);
     }, [searchQuery]);
+
+    // Búsqueda de mensajes en todos los chats y grupos (solo en la pestaña Chats)
+    const messageSearch = useGlobalMessageSearch({ term: searchQuery, enabled: sidebarView === 'chats' });
 
     const contactByNumber = useMemo(() => {
         const map = new Map<string, ContactChat>();
@@ -202,6 +208,30 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
             ContactName: chat.group?.ContactName || null,
             Status: 'unknown',
         });
+    };
+
+    // Abre el chat/grupo del resultado y salta al mensaje (ventana desprendida en el contexto).
+    const openSearchHit = (chat: GlobalSearchChat, messageID: number) => {
+        if (chat.kind === 'direct') {
+            const group = allChatGroups[chat.key];
+            setSelected(contactByNumber.get(chat.key) || {
+                Number: chat.key,
+                Username: group?.ContactUsername || chat.name,
+                ContactName: group?.ContactName || null,
+                Status: 'unknown',
+            });
+            void openMessageAt({ kind: 'chat', key: chat.key }, messageID);
+            return;
+        }
+        const groupId = Number(chat.key);
+        const target = (groups || []).find(g => g.ID === groupId);
+        if (!target) {
+            addToast({ type: 'error', message: 'No se pudo abrir el grupo' });
+            return;
+        }
+        setSelectedGroup(target);
+        setSidebarOpen(false);
+        void openMessageAt({ kind: 'group', id: groupId }, messageID);
     };
 
     return (
@@ -295,32 +325,35 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
 
             <div className="flex-1 overflow-y-auto px-2 pb-4">
                 {sidebarView === 'chats' && (
-                    chats.length === 0 ? (
-                        <EmptyState
-                            icon={Icon.chat}
-                            title={query ? 'No se encontraron chats' : 'Aún no tienes conversaciones'}
-                            action={!query ? 'Agregar un contacto' : null}
-                            onAction={onAddContact}
-                        />
-                    ) : (
-                        <div className="space-y-0.5 pt-1">
-                            {chats.map(chat => (
-                                <ListItem
-                                    key={chat.number}
-                                    active={selected?.Number === chat.number}
-                                    onClick={() => openChat(chat)}
-                                    avatar={<Avatar src={avatarMap[chat.number]} name={chat.name} size="lg" online={onlineUsers.has(chat.number)} />}
-                                    title={chat.name}
-                                    badge={chat.group && !chat.group.IsContact && !chat.contact && (
-                                        <span className="text-[10px] font-medium bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded-md">nuevo</span>
-                                    )}
-                                    subtitle={chat.last ? previewMessage(chat.last) : 'Toca para empezar a chatear'}
-                                    meta={chat.last ? formatChatTimestamp(chat.last.Time) : ''}
-                                    unread={chat.unread}
-                                />
-                            ))}
-                        </div>
-                    )
+                    <>
+                        {chats.length === 0 ? (
+                            <EmptyState
+                                icon={Icon.chat}
+                                title={query ? 'No se encontraron chats' : 'Aún no tienes conversaciones'}
+                                action={!query ? 'Agregar un contacto' : null}
+                                onAction={onAddContact}
+                            />
+                        ) : (
+                            <div className="space-y-0.5 pt-1">
+                                {chats.map(chat => (
+                                    <ListItem
+                                        key={chat.number}
+                                        active={selected?.Number === chat.number}
+                                        onClick={() => openChat(chat)}
+                                        avatar={<Avatar src={avatarMap[chat.number]} name={chat.name} size="lg" online={onlineUsers.has(chat.number)} />}
+                                        title={chat.name}
+                                        badge={chat.group && !chat.group.IsContact && !chat.contact && (
+                                            <span className="text-[10px] font-medium bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded-md">nuevo</span>
+                                        )}
+                                        subtitle={chat.last ? previewMessage(chat.last) : 'Toca para empezar a chatear'}
+                                        meta={chat.last ? formatChatTimestamp(chat.last.Time) : ''}
+                                        unread={chat.unread}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                        <MessageSearchResults status={messageSearch.status} chats={messageSearch.chats} onOpen={openSearchHit} />
+                    </>
                 )}
 
                 {sidebarView === 'calls' && (
