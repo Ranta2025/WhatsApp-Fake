@@ -73,4 +73,22 @@ describe('ProfileModal error extraction', () => {
         expect(mockPut).toHaveBeenCalled();
         expect(container.textContent).toContain('profile boom');
     });
+
+    it('prefers response.data.message over response.data.error when a body carries both (original precedence)', async () => {
+        mockPut.mockRejectedValue({ response: { data: { error: 'generic err', message: 'specific msg' } } });
+
+        await act(async () => { root.render(<ProfileModal isOpen onClose={vi.fn()} />); });
+
+        const usernameInput = container.querySelector('input[placeholder="Tu nombre visible"]') as HTMLInputElement;
+        await act(async () => { setInputValue(usernameInput, 'newname'); });
+
+        const submit = Array.from(container.querySelectorAll('button')).find(b => (b.textContent || '').includes('Guardar Cambios'));
+        await act(async () => {
+            submit!.click();
+            await Promise.resolve();
+        });
+
+        expect(container.textContent).toContain('specific msg');
+        expect(container.textContent).not.toContain('generic err');
+    });
 });

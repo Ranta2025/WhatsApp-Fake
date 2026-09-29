@@ -114,7 +114,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                 setIsLoading(false);
             }
         } catch (err) {
-            setAddMsg(getErrorMessage(err, 'Error al agregar'));
+            setAddMsg(getErrorMessage(err, 'Error al agregar', { prefer: 'message', fallbackToErrorMessage: false }));
             setIsLoading(false);
         }
     };

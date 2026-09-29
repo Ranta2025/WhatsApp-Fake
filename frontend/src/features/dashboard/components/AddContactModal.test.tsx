@@ -62,4 +62,42 @@ describe('AddContactModal error extraction', () => {
         expect(mockPost).toHaveBeenCalled();
         expect(container.textContent).toContain('server says no');
     });
+
+    it('prefers response.data.message over response.data.error when a body carries both (original precedence)', async () => {
+        mockPost.mockRejectedValue({ response: { data: { error: 'generic err', message: 'specific msg' } } });
+
+        await act(async () => {
+            root.render(
+                <AddContactModal isOpen onClose={vi.fn()} initialNumber="+5355555555" initialName="Ann" />
+            );
+        });
+
+        const submit = Array.from(container.querySelectorAll('button')).find(b => (b.textContent || '').includes('Añadir'));
+        await act(async () => {
+            submit!.click();
+            await Promise.resolve();
+        });
+
+        expect(container.textContent).toContain('specific msg');
+        expect(container.textContent).not.toContain('generic err');
+    });
+
+    it('falls to the generic copy (not err.message) when the rejection has no response body (original behavior)', async () => {
+        mockPost.mockRejectedValue(new Error('Network Error'));
+
+        await act(async () => {
+            root.render(
+                <AddContactModal isOpen onClose={vi.fn()} initialNumber="+5355555555" initialName="Ann" />
+            );
+        });
+
+        const submit = Array.from(container.querySelectorAll('button')).find(b => (b.textContent || '').includes('Añadir'));
+        await act(async () => {
+            submit!.click();
+            await Promise.resolve();
+        });
+
+        expect(container.textContent).toContain('Error al agregar');
+        expect(container.textContent).not.toContain('Network Error');
+    });
 });

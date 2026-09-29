@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getErrorName, getErrorMessage } from './errors';
+import { getErrorName, getErrorMessage, getResponseError } from './errors';
 
 // These helpers restore the pre-TypeScript structural reads (`err.name`,
 // `err.response?.data?.error`, `err.message`) that typing had narrowed to
@@ -41,6 +41,20 @@ describe('getErrorMessage', () => {
 
     it('prefers response.data.error over response.data.message', () => {
         expect(getErrorMessage({ response: { data: { error: 'err', message: 'msg' } } }, 'fallback')).toBe('err');
+        expect(getErrorMessage({ response: { data: { error: 'err', message: 'msg' } } }, 'fallback', { prefer: 'error' })).toBe('err');
+    });
+
+    it('prefers data.message over data.error with { prefer: "message" }, and still falls back to the other field', () => {
+        expect(getErrorMessage({ response: { data: { error: 'err', message: 'msg' } } }, 'fallback', { prefer: 'message' })).toBe('msg');
+        expect(getErrorMessage({ response: { data: { error: 'err' } } }, 'fallback', { prefer: 'message' })).toBe('err');
+        expect(getErrorMessage({ response: { data: { message: 'msg' } } }, 'fallback', { prefer: 'error' })).toBe('msg');
+    });
+
+    it('skips err.message with { fallbackToErrorMessage: false } (falls to the generic copy)', () => {
+        expect(getErrorMessage(new Error('Network Error'), 'fallback', { fallbackToErrorMessage: false })).toBe('fallback');
+        expect(getErrorMessage({ message: 'top', response: { data: {} } }, 'fallback', { fallbackToErrorMessage: false })).toBe('fallback');
+        expect(getErrorMessage({ response: { data: { message: 'msg' } } }, 'fallback', { prefer: 'message', fallbackToErrorMessage: false })).toBe('msg');
+        expect(getErrorMessage({ response: { data: 'plain' }, message: 'top' }, 'fallback', { fallbackToErrorMessage: false })).toBe('plain');
     });
 
     it('reads a plain string response body', () => {
@@ -73,5 +87,25 @@ describe('getErrorMessage', () => {
     it('ignores non-string structural fields', () => {
         expect(getErrorMessage({ response: { data: { error: { nested: true } } }, message: 'm' }, 'fallback')).toBe('m');
         expect(getErrorMessage({ message: 7 }, 'fallback')).toBe('fallback');
+    });
+});
+
+describe('getResponseError', () => {
+    it('reads only response.data.error', () => {
+        expect(getResponseError({ response: { data: { error: 'boom' } } })).toBe('boom');
+    });
+
+    it('ignores data.message, string bodies and err.message (original `data?.error || generic` shape)', () => {
+        expect(getResponseError({ response: { data: { message: 'msg' } } })).toBeUndefined();
+        expect(getResponseError({ response: { data: 'plain' } })).toBeUndefined();
+        expect(getResponseError(new Error('native'))).toBeUndefined();
+    });
+
+    it('is safe on null / non-object / empty values', () => {
+        expect(getResponseError(null)).toBeUndefined();
+        expect(getResponseError(undefined)).toBeUndefined();
+        expect(getResponseError('x')).toBeUndefined();
+        expect(getResponseError({ response: null })).toBeUndefined();
+        expect(getResponseError({ response: { data: { error: '' } } })).toBeUndefined();
     });
 });

@@ -126,7 +126,7 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
             setNewAvatarFile(null);
             setNewAvatarPreview(null);
         } catch (err) {
-            setStatus(getErrorMessage(err, 'Error al actualizar'));
+            setStatus(getErrorMessage(err, 'Error al actualizar', { prefer: 'message' }));
         } finally {
             setUploadingAvatar(false);
         }

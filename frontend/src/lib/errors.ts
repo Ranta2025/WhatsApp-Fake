@@ -24,12 +24,45 @@ export function getErrorName(error: unknown): string | undefined {
 }
 
 /**
+ * Only `response.data.error` (string), or `undefined`. For call sites whose
+ * pre-TypeScript code was `err?.response?.data?.error || '<generic copy>'`
+ * and never surfaced `err.message`, a string body or `data.message`.
+ */
+export function getResponseError(error: unknown): string | undefined {
+    if (typeof error !== 'object' || error === null) return undefined;
+    const response = (error as { response?: unknown }).response;
+    if (typeof response !== 'object' || response === null) return undefined;
+    return readStringField((response as { data?: unknown }).data, 'error') || undefined;
+}
+
+export interface ErrorMessageOptions {
+    /**
+     * Which body field wins when `response.data` carries both. Defaults to
+     * `'error'` (StatusComposer, MediaUploadMenu, CreateGroupModal originals);
+     * ProfileModal and AddContactModal originally preferred `'message'`.
+     */
+    prefer?: 'error' | 'message';
+    /**
+     * Whether the thrown value's own `.message` (e.g. axios' "Network Error")
+     * is used when the body has no usable text. Defaults to `true`; the
+     * activation/recovery pages originally fell straight to their generic copy.
+     */
+    fallbackToErrorMessage?: boolean;
+}
+
+/**
  * Best-effort human-readable message from an `unknown` thrown value, mirroring
  * the project's pre-TypeScript `err?.response?.data?.error || err?.message ||
  * fallback` chains (plus the `response.data` string/`message` variants already
  * used by the dashboard modals). Never throws, never returns an empty value.
  */
-export function getErrorMessage(error: unknown, fallback: string): string {
+export function getErrorMessage(
+    error: unknown,
+    fallback: string,
+    options: ErrorMessageOptions = {},
+): string {
+    const order: ('error' | 'message')[] =
+        options.prefer === 'message' ? ['message', 'error'] : ['error', 'message'];
     if (typeof error === 'object' && error !== null) {
         const response = (error as { response?: unknown }).response;
         const data = response && typeof response === 'object'
@@ -37,13 +70,15 @@ export function getErrorMessage(error: unknown, fallback: string): string {
             : undefined;
 
         if (typeof data === 'string' && data) return data;
-        const dataError = readStringField(data, 'error');
-        if (dataError) return dataError;
-        const dataMessage = readStringField(data, 'message');
-        if (dataMessage) return dataMessage;
+        for (const key of order) {
+            const value = readStringField(data, key);
+            if (value) return value;
+        }
 
-        const message = readStringField(error, 'message');
-        if (message) return message;
+        if (options.fallbackToErrorMessage !== false) {
+            const message = readStringField(error, 'message');
+            if (message) return message;
+        }
     }
     return fallback;
 }
