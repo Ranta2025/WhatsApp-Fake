@@ -6,6 +6,7 @@ import (
 	"gorm/backend/services"
 	"gorm/backend/websocket"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -66,7 +67,23 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		message, err := hd.service.ServiceGetMessages(telephon.(string), contact.(string), ctx)
+		// Paginación opcional: sin before ni limit válidos, limit=0 conserva el
+		// comportamiento histórico (últimos 200). Con cualquiera, la página
+		// por defecto es de 50 (el servicio acota el máximo).
+		var before uint
+		hasBefore := false
+		if b, err := strconv.ParseUint(ctx.Query("before"), 10, 32); err == nil && b > 0 {
+			before = uint(b)
+			hasBefore = true
+		}
+		limit := 0
+		if l, err := strconv.Atoi(ctx.Query("limit")); err == nil && l > 0 {
+			limit = l
+		} else if hasBefore {
+			limit = 50
+		}
+
+		message, hasMore, err := hd.service.ServiceGetMessagesPage(telephon.(string), contact.(string), before, limit, ctx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
@@ -74,6 +91,7 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
+		ctx.Header("X-Has-More", strconv.FormatBool(hasMore))
 		ctx.IndentedJSON(http.StatusOK, message)
 	}
 }

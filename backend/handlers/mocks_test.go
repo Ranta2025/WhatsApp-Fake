@@ -88,6 +88,11 @@ func (m *MockChatRepo) GetMessages(id1, id2 uint, ctx context.Context) ([]models
 	return args.Get(0).([]models.Message), args.Error(1)
 }
 
+func (m *MockChatRepo) GetMessagesPage(id1, id2, before uint, limit int, ctx context.Context) ([]models.Message, bool, error) {
+	args := m.Called(id1, id2, before, limit, ctx)
+	return args.Get(0).([]models.Message), args.Bool(1), args.Error(2)
+}
+
 type MockContactRepo struct {
 	mock.Mock
 }
@@ -186,6 +191,11 @@ func (m *MockChatService) ServiceCreatMessageWithStatus(message models.MessageCr
 func (m *MockChatService) ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error) {
 	args := m.Called(telephonUser, telephonContact, ctx)
 	return args.Get(0).([]schemas.Message), args.Error(1)
+}
+
+func (m *MockChatService) ServiceGetMessagesPage(telephonUser string, telephonContact string, before uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
+	args := m.Called(telephonUser, telephonContact, before, limit, ctx)
+	return args.Get(0).([]schemas.Message), args.Bool(1), args.Error(2)
 }
 
 func (m *MockChatService) ServicePutMessageStatusDelivered(telephonSender string, telephonReceiver string, ctx context.Context) error {

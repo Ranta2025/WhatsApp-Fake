@@ -13,10 +13,14 @@ import (
 // por conversación en el listado de chats (mismo límite que GetMessages).
 const chatListMessagesPerChat = 200
 
+// maxChatMessagesPage es el máximo de mensajes por página al paginar con cursor.
+const maxChatMessagesPage = 100
+
 type ChatServicer interface {
 	ServiceCreatMessage(message models.MessageCreat, ctx context.Context) (schemas.Message, error)
 	ServiceCreatMessageWithStatus(message models.MessageCreat, status string, ctx context.Context) (schemas.Message, error)
 	ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error)
+	ServiceGetMessagesPage(telephonUser string, telephonContact string, before uint, limit int, ctx context.Context) ([]schemas.Message, bool, error)
 	ServicePutMessageStatusDelivered(telephonSender string, telephonReceiver string, ctx context.Context) error
 	ServicePutAllMessageStatusDelivered(telephon string, ctx context.Context) error
 	ServiceGetSendersAndMarkDelivered(telephon string, ctx context.Context) ([]string, error)
@@ -31,6 +35,7 @@ type ChatRepoInterface interface {
 	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
 	CreateMessage(msg *models.Message, ctx context.Context) error
 	GetMessages(id1, id2 uint, ctx context.Context) ([]models.Message, error)
+	GetMessagesPage(id1, id2, before uint, limit int, ctx context.Context) ([]models.Message, bool, error)
 	GetTelephonByID(id uint, ctx context.Context) (string, error)
 	PutStatusMessageSeenByContact(senderID, receiverID uint, ctx context.Context) error
 	PutStatusMessageDelivered(userID uint, ctx context.Context) error
@@ -132,22 +137,35 @@ func messageToSchema(msg *models.Message, senderTelephon, receptorTelephon strin
 }
 
 // ServiceGetMessages devuelve los mensajes entre dos usuarios (por telephon)
-// excluyendo los eliminados por cada parte.
+// excluyendo los eliminados por cada parte (últimos 200).
 func (rp *ServiceChat) ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error) {
+	messages, _, err := rp.ServiceGetMessagesPage(telephonUser, telephonContact, 0, 0, ctx)
+	return messages, err
+}
+
+// ServiceGetMessagesPage devuelve una página de la conversación en orden
+// cronológico. before > 0 activa el cursor por id (solo mensajes anteriores).
+// limit <= 0 conserva el comportamiento histórico (últimos 200); un limit
+// explícito se acota a maxChatMessagesPage. hasMore indica si quedan más antiguos.
+func (rp *ServiceChat) ServiceGetMessagesPage(telephonUser string, telephonContact string, before uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
 	id_user, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	id_contact, err := rp.repo.GetIdByTelephon(telephonContact, ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	messagesDB, err := rp.repo.GetMessages(uint(id_user), uint(id_contact), ctx)
+	if limit <= 0 {
+		limit = chatListMessagesPerChat
+	} else if limit > maxChatMessagesPage {
+		limit = maxChatMessagesPage
+	}
+	messagesDB, hasMore, err := rp.repo.GetMessagesPage(uint(id_user), uint(id_contact), before, limit, ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	messagesSchemas := convertMessagesToSchemas(messagesDB, telephonUser, telephonContact, id_user)
-	return messagesSchemas, nil
+	return convertMessagesToSchemas(messagesDB, telephonUser, telephonContact, id_user), hasMore, nil
 }
 
 // convertMessagesToSchemas transforma una lista de modelos Message en schemas,

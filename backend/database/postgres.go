@@ -168,6 +168,14 @@ func Conection() (*gorm.DB, error) {
 		ON messages (id_receptor, id_user, time)
 		WHERE deleted_at IS NULL`)
 
+	// Índices para paginación por cursor (id < before ORDER BY id DESC) del chat 1:1.
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_conv_cursor
+		ON messages (id_user, id_receptor, id)
+		WHERE deleted_at IS NULL`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_conv_cursor_rev
+		ON messages (id_receptor, id_user, id)
+		WHERE deleted_at IS NULL`)
+
 	// Índice parcial para consulta de mensajes pendientes de entrega
 	// (usado al reconectarse para marcar como "entregado")
 	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_pending

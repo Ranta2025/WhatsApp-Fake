@@ -236,26 +236,40 @@ func (app *ApiContact) CreateMessage(message *models.Message, ctx context.Contex
 }
 
 // GetMessages obtiene los mensajes entre dos usuarios excluyendo los borrados por cada parte.
-// Limitado a los últimos 200 mensajes por conversación (paginación por cursor pendiente).
+// Devuelve los últimos 200 mensajes de la conversación (primera página sin cursor).
 func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Context) ([]models.Message, error) {
+	messages, _, err := app.GetMessagesPage(id_user, id_contact, 0, 200, ctx)
+	return messages, err
+}
+
+// GetMessagesPage devuelve hasta limit mensajes de la conversación en orden
+// cronológico (más antiguo primero), excluyendo los borrados por cada parte.
+// Si before > 0 solo incluye mensajes con id < before (cursor por id, estable
+// con timestamps repetidos). hasMore indica si existen mensajes más antiguos;
+// se calcula pidiendo limit+1 filas.
+func (app *ApiContact) GetMessagesPage(id_user uint, id_contact uint, before uint, limit int, ctx context.Context) ([]models.Message, bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var messages []models.Message
-	// Consultar en DESC LIMIT 200 para obtener los más recientes, luego invertir
-	// para devolver en orden cronológico (más antiguo primero) sin cambiar la interfaz.
-	result := app.data.Model(&models.Message{}).WithContext(c).
-		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false).
-		Order("time DESC").
-		Limit(200).
-		Scan(&messages)
+	q := app.data.Model(&models.Message{}).WithContext(c).
+		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false)
+	if before > 0 {
+		q = q.Where("id < ?", before)
+	}
+	// DESC + LIMIT para obtener los más recientes de la página; luego se invierte.
+	result := q.Order("id DESC").Limit(limit + 1).Scan(&messages)
 	if result.Error != nil {
-		return nil, result.Error
+		return nil, false, result.Error
+	}
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
 	}
 	// Invertir para devolver en orden cronológico (más antiguo primero)
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
-	return messages, nil
+	return messages, hasMore, nil
 }
 
 // PutStatusMessageDelivered marca como 'entregado' los mensajes con estado 'enviado'
