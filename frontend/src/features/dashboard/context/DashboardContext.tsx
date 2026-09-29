@@ -11,7 +11,7 @@ import {
 } from '../../../utils/notifications';
 import type { WsHandlerMap } from '../../../api/websocket';
 import type {
-    UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupDetail, GroupMessageResponse, CallType,
+    UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupRole, GroupDetail, GroupMessageResponse, CallType,
 } from '../../../types/api';
 import {
     resolveChatTarget, type DashboardChatGroupEntry, type SelectedChatTarget,
@@ -41,14 +41,15 @@ export interface CallState {
 
 /**
  * `GroupResponse.UserRole` is `GroupRole` ('admin'|'member') per the backend
- * contract (types/api.ts). `GroupChatWindow.jsx`'s "leave group" flow also
+ * contract (types/api.ts). `GroupChatWindow.tsx`'s "leave group" flow also
  * writes the client-only sentinel `'left'` into this same field on `groups`/
- * `selectedGroup` (keeps the group visible, read-only, without an extra
- * state slot). That caller stays untyped JS (`checkJs:false`), so this
- * quirk isn't reflected in `GroupRole` here — documented, not typed, per
- * M1's "types document the contract as-is" policy.
+ * `selectedGroup` (keeps the group visible, read-only, without an extra state
+ * slot). The backend contract type stays untouched (M1's policy); the
+ * client-side state widens it explicitly here so that write is typed, not cast.
  */
-export type SelectedGroup = GroupResponse & Partial<Pick<GroupDetail, 'Members' | 'Messages'>>;
+export type LocalGroupRole = GroupRole | 'left';
+export type LocalGroup = Omit<GroupResponse, 'UserRole'> & { UserRole: LocalGroupRole };
+export type SelectedGroup = LocalGroup & Partial<Pick<GroupDetail, 'Members' | 'Messages'>>;
 
 /** System message injected locally for "member added"/"member left" (not sent by the backend). */
 export interface SystemGroupMessage {
@@ -107,8 +108,8 @@ export interface DashboardContextValue {
     fetchAllChats: () => Promise<void>;
     fetchChatMessages: (contactNumber: string) => Promise<void>;
     markAsRead: (contactNumber: string) => void;
-    groups: GroupResponse[];
-    setGroups: Dispatch<SetStateAction<GroupResponse[]>>;
+    groups: LocalGroup[];
+    setGroups: Dispatch<SetStateAction<LocalGroup[]>>;
     groupMessages: Record<number, GroupMessageEntry[]>;
     setGroupMessages: Dispatch<SetStateAction<Record<number, GroupMessageEntry[]>>>;
     selectedGroup: SelectedGroup | null;
@@ -168,7 +169,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const [drafts, setDrafts] = useState<Record<string, string>>({});
 
     // Groups
-    const [groups, setGroups] = useState<GroupResponse[]>([]);
+    const [groups, setGroups] = useState<LocalGroup[]>([]);
     const [groupMessages, setGroupMessages] = useState<Record<number, GroupMessageEntry[]>>({}); // { [groupID]: GroupMessageResponse[] }
     const [selectedGroup, setSelectedGroupState] = useState<SelectedGroup | null>(null);
 

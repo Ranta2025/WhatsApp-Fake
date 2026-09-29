@@ -6,7 +6,8 @@ import CallHistory from '../../../components/CallHistory';
 import Avatar from '../../../components/ui/Avatar';
 import StatusList from '../../status/components/StatusList';
 import { formatChatTimestamp, formatLastSeen, previewMessage } from '../../../utils/format';
-import type { ContactChat, Message, GroupResponse } from '../../../types/api';
+import type { ContactChat, Message } from '../../../types/api';
+import type { LocalGroup } from '../context/DashboardContext';
 import type { SidebarView } from '../context/DashboardContext';
 import type { DashboardChatGroupEntry } from '../lib/chatSelection';
 
@@ -187,7 +188,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
         .sort((a, b) => (a.ContactName || a.Username || '').localeCompare(b.ContactName || b.Username || '')),
     [contacts, query]);
 
-    const filteredGroups = useMemo((): GroupResponse[] => (groups || [])
+    const filteredGroups = useMemo((): LocalGroup[] => (groups || [])
         .filter(g => !query || (g.Name || '').toLowerCase().includes(query)),
     [groups, query]);
 

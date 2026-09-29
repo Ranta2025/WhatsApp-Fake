@@ -1,23 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useDashboard, type SelectedGroup, type SystemGroupMessage, type GroupMessageEntry } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
 import { useEscapeToClose, isEscapeHandled } from '../../../hooks/useEscapeToClose';
 import { useRefMap } from '../../../hooks/useRefMap';
+import { getResponseError } from '../../../lib/errors';
+import { groupReplySenderLabel } from '../lib/groupReply';
+import { parseGroupWallpapers, type GroupWallpapers } from '../lib/groupWallpapers';
+import type { GroupMessageResponse, MediaUploadResult } from '../../../types/api';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
-const formatTime = (iso) => {
+const formatTime = (iso: string | null | undefined) => {
     if (!iso) return '';
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 // ── GroupMessageBubble ────────────────────────────────────────────────────────
 
-const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen }) => {
-    const triggerRef = useRef(null);
+interface GroupMessageBubbleProps {
+    msg: GroupMessageResponse;
+    isMine: boolean;
+    /** Resolved name for the replied-to message's sender (see lib/groupReply.ts). */
+    replySender: string;
+    onEdit: (msg: GroupMessageResponse) => void;
+    onDelete: (msg: GroupMessageResponse) => void;
+    onReply: (msg: GroupMessageResponse) => void;
+    onDeleteForMe: (msg: GroupMessageResponse) => void;
+    menuOpen: number | null;
+    setMenuOpen: (id: number | null) => void;
+}
+
+const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen }: GroupMessageBubbleProps) => {
+    const triggerRef = useRef<HTMLButtonElement>(null);
 
     const renderMedia = () => {
         if (!msg.MediaType) return null;
@@ -62,7 +79,7 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
                 {msg.ReplyToMessage && (
                     <div className={`text-xs px-2 py-1 rounded-lg mb-1 border-l-2 ${isMine ? 'bg-indigo-800/40 border-indigo-400 self-end' : 'bg-slate-700/60 border-slate-500 self-start'}`}>
                         <span className="font-medium text-slate-300 truncate block max-w-[200px]">
-                            {msg.ReplyToSender}
+                            {replySender}
                         </span>
                         <span className="text-slate-400 truncate block max-w-[200px]">{msg.ReplyToMessage}</span>
                     </div>
@@ -167,7 +184,7 @@ const GroupMessageBubble = ({ msg, isMine, onEdit, onDelete, onReply, onDeleteFo
 
 const GroupMessageInput = () => {
     const [text, setText] = useState('');
-    const inputRef = useRef(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const {
         handleSend, handleTyping,
         editingMessageId, editingMessageText, handleEditMessageChange,
@@ -195,7 +212,7 @@ const GroupMessageInput = () => {
         setText('');
     };
 
-    const onKeyDown = (e) => {
+    const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             if (editingMessageId) {
@@ -222,7 +239,7 @@ const GroupMessageInput = () => {
     const inputValue   = editingMessageId ? editingMessageText : text;
     const inputOnChange = editingMessageId
         ? handleEditMessageChange
-        : (e) => { setText(e.target.value); handleTyping(); };
+        : (e: ChangeEvent<HTMLTextAreaElement>) => { setText(e.target.value); handleTyping(); };
 
     return (
         <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md">
@@ -271,8 +288,9 @@ const GroupMessageInput = () => {
                     className="flex-1 resize-none bg-slate-800 border border-white/10 rounded-2xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto transition-all"
                     style={{ height: 'auto', minHeight: '42px' }}
                     onInput={e => {
-                        e.target.style.height = 'auto';
-                        e.target.style.height = Math.min(e.target.scrollHeight, 144) + 'px';
+                        const el = e.currentTarget;
+                        el.style.height = 'auto';
+                        el.style.height = Math.min(el.scrollHeight, 144) + 'px';
                     }}
                 />
                 <button
@@ -298,12 +316,23 @@ const GroupMessageInput = () => {
 
 // ── GroupMessageList ──────────────────────────────────────────────────────────
 
-const GroupMessageList = ({ messages, myTelephon, activeWallpaper }) => {
-    const bottomRef = useRef(null);
+interface GroupMessageListProps {
+    messages: GroupMessageEntry[] | undefined;
+    myTelephon: string | undefined;
+    activeWallpaper: string | null;
+}
+
+/** Locally injected "member added/left" entries carry `IsSystem`; backend messages don't. */
+const isSystemMessage = (msg: GroupMessageEntry): msg is SystemGroupMessage =>
+    Boolean((msg as { IsSystem?: unknown }).IsSystem);
+
+const GroupMessageList = ({ messages, myTelephon, activeWallpaper }: GroupMessageListProps) => {
+    const bottomRef = useRef<HTMLDivElement>(null);
     const {
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
+    const { selectedGroup } = useDashboard();
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -326,7 +355,7 @@ const GroupMessageList = ({ messages, myTelephon, activeWallpaper }) => {
     return (
         <div className={`flex-1 overflow-y-auto py-3 px-2 sm:px-6 lg:px-10 space-y-0.5 ${surfaceClass}`} style={containerStyle}>
             {messages.map((msg) => {
-                if (msg.IsSystem) {
+                if (isSystemMessage(msg)) {
                     return (
                         <div key={msg.MessageID} className="flex justify-center py-1 px-4">
                             <span className="bg-black/40 backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
@@ -340,6 +369,7 @@ const GroupMessageList = ({ messages, myTelephon, activeWallpaper }) => {
                         key={msg.MessageID}
                         msg={msg}
                         isMine={msg.SenderTelephon === myTelephon}
+                        replySender={groupReplySenderLabel(msg.ReplyToTelephon, myTelephon, selectedGroup?.Members)}
                         onEdit={handleEditMessage}
                         onDelete={handleDeleteMessage}
                         onReply={handleReplyToMessage}
@@ -356,9 +386,15 @@ const GroupMessageList = ({ messages, myTelephon, activeWallpaper }) => {
 
 // ── AddMembersModal ────────────────────────────────────────────────────────────
 
-const AddMembersModal = ({ isOpen, onClose, group }) => {
+interface AddMembersModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    group: SelectedGroup;
+}
+
+const AddMembersModal = ({ isOpen, onClose, group }: AddMembersModalProps) => {
     const { contacts, addToast, fetchUserGroups } = useDashboard();
-    const [selected, setSelected] = useState(new Set());
+    const [selected, setSelected] = useState<Set<string>>(new Set());
     const [search, setSearch]     = useState('');
     const [loading, setLoading]   = useState(false);
 
@@ -371,9 +407,10 @@ const AddMembersModal = ({ isOpen, onClose, group }) => {
          c.Number.includes(search))
     );
 
-    const toggle = (num) => setSelected(prev => {
+    const toggle = (num: string) => setSelected(prev => {
         const next = new Set(prev);
-        next.has(num) ? next.delete(num) : next.add(num);
+        if (next.has(num)) next.delete(num);
+        else next.add(num);
         return next;
     });
 
@@ -387,7 +424,7 @@ const AddMembersModal = ({ isOpen, onClose, group }) => {
             await fetchUserGroups();
             onClose();
         } catch (err) {
-            addToast({ type: 'error', message: err?.response?.data?.error || 'Error al añadir miembros' });
+            addToast({ type: 'error', message: getResponseError(err) || 'Error al añadir miembros' });
         } finally {
             setLoading(false);
         }
@@ -470,43 +507,46 @@ const GroupChatWindowInner = () => {
     const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
     const [showAvatarMenu, setShowAvatarMenu]     = useState(false);
     const [viewAvatarOpen, setViewAvatarOpen]     = useState(false);
-    const [memberMenuOpen, setMemberMenuOpen]     = useState(null);
+    const [memberMenuOpen, setMemberMenuOpen]     = useState<string | null>(null);
     const [addContactOpen, setAddContactOpen]     = useState(false);
     const [addContactTarget, setAddContactTarget] = useState({ number: '', username: '' });
-    const optionsRef                               = useRef(null);
-    const avatarInputRef                           = useRef(null);
-    const avatarTriggerRef                         = useRef(null); // disparador del menú de avatar (Popover)
-    const getMemberTriggerRef                      = useRefMap();  // disparador del menú de cada miembro, por telephon (Popover)
+    const optionsRef                               = useRef<HTMLDivElement>(null);
+    const avatarInputRef                           = useRef<HTMLInputElement>(null);
+    const avatarTriggerRef                         = useRef<HTMLButtonElement>(null); // disparador del menú de avatar (Popover)
+    const getMemberTriggerRef                      = useRefMap<HTMLDivElement>();  // disparador del menú de cada miembro, por telephon (Popover)
 
     // Per-group wallpapers from localStorage
-    const [groupWallpapers, setGroupWallpapers] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('group_wallpapers') || '{}'); } catch { return {}; }
+    const [groupWallpapers, setGroupWallpapers] = useState<GroupWallpapers>(() => {
+        try { return parseGroupWallpapers(localStorage.getItem('group_wallpapers')); } catch { return {}; }
     });
     useEffect(() => {
-        const onCustom = (e) => setGroupWallpapers(e.detail || {});
+        const onCustom = (e: Event) => setGroupWallpapers(parseGroupWallpapers((e as CustomEvent<unknown>).detail));
         window.addEventListener('group-wallpaper-changed', onCustom);
         return () => window.removeEventListener('group-wallpaper-changed', onCustom);
     }, []);
 
     const activeWallpaper = (selectedGroup && groupWallpapers[selectedGroup.ID]) || globalWallpaper || null;
 
-    const handleGroupWallpaperUpload = async (e) => {
+    const handleGroupWallpaperUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !selectedGroup?.ID) return;
         setUploadingWallpaper(true);
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const { data } = await api.post('/api/v1/upload', formData, {
+            const { data } = await api.post<MediaUploadResult | null>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            const newWps = { ...groupWallpapers, [selectedGroup.ID]: data.url };
+            // TODO(types): a body without `url` still reports success (pre-existing;
+            // the entry is just not stored) — no toast/behavior change in this migration.
+            const url = data?.url;
+            const newWps: GroupWallpapers = url ? { ...groupWallpapers, [selectedGroup.ID]: url } : { ...groupWallpapers };
             setGroupWallpapers(newWps);
             localStorage.setItem('group_wallpapers', JSON.stringify(newWps));
             window.dispatchEvent(new CustomEvent('group-wallpaper-changed', { detail: newWps }));
             addToast({ type: 'success', message: 'Fondo del grupo actualizado' });
         } catch (err) {
-            addToast({ type: 'error', message: err?.response?.data?.error || 'Error al subir el fondo' });
+            addToast({ type: 'error', message: getResponseError(err) || 'Error al subir el fondo' });
         } finally {
             setUploadingWallpaper(false);
             e.target.value = '';
@@ -524,20 +564,22 @@ const GroupChatWindowInner = () => {
 
     // Close options dropdown when clicking outside
     useEffect(() => {
-        const handler = (e) => {
-            if (optionsRef.current && !optionsRef.current.contains(e.target)) setShowOptions(false);
+        const handler = (e: MouseEvent) => {
+            if (optionsRef.current && !(e.target instanceof Node && optionsRef.current.contains(e.target))) setShowOptions(false);
         };
         if (showOptions) document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, [showOptions]);
 
     const handleClearChat = () => {
+        if (!selectedGroup) return;
         setGroupMessages(prev => ({ ...prev, [selectedGroup.ID]: [] }));
         setConfirmClear(false);
         setShowOptions(false);
     };
 
     const handleLeaveGroup = async () => {
+        if (!selectedGroup) return;
         setLoadingLeave(true);
         try {
             const { leaveGroup } = await import('../../../api/groupApi');
@@ -548,7 +590,7 @@ const GroupChatWindowInner = () => {
             setSelectedGroup(prev => prev ? { ...prev, UserRole: 'left' } : prev);
             addToast({ type: 'success', message: 'Has salido del grupo' });
         } catch (err) {
-            addToast({ type: 'error', message: err?.response?.data?.error || 'Error al salir del grupo' });
+            addToast({ type: 'error', message: getResponseError(err) || 'Error al salir del grupo' });
         } finally {
             setLoadingLeave(false);
             setConfirmLeave(false);
@@ -556,6 +598,7 @@ const GroupChatWindowInner = () => {
     };
 
     const handleDeleteGroup = async () => {
+        if (!selectedGroup) return;
         setLoadingLeave(true);
         const gid = selectedGroup.ID;
         // Remove from local state immediately — UI closes right away
@@ -568,13 +611,13 @@ const GroupChatWindowInner = () => {
         try {
             const { leaveGroup } = await import('../../../api/groupApi');
             await leaveGroup(gid);
-        } catch (_) {
+        } catch {
             // Ignore — local state already cleaned up
         }
         addToast({ type: 'success', message: 'Grupo eliminado de tu lista' });
     };
 
-    const handleGroupAvatarChange = async (e) => {
+    const handleGroupAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !selectedGroup?.ID) return;
         setUploadingAvatar(true);
@@ -582,7 +625,7 @@ const GroupChatWindowInner = () => {
             // 1. Upload image to MinIO
             const formData = new FormData();
             formData.append('file', file);
-            const uploadRes = await api.post('/api/v1/upload', formData, {
+            const uploadRes = await api.post<MediaUploadResult | null>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             const avatarUrl = uploadRes.data?.url;
@@ -598,7 +641,7 @@ const GroupChatWindowInner = () => {
             setSelectedGroup(prev => prev ? { ...prev, AvatarUrl: avatarUrl } : prev);
             addToast({ type: 'success', message: 'Foto del grupo actualizada' });
         } catch (err) {
-            addToast({ type: 'error', message: err?.response?.data?.error || 'Error al actualizar la foto' });
+            addToast({ type: 'error', message: getResponseError(err) || 'Error al actualizar la foto' });
         } finally {
             setUploadingAvatar(false);
             e.target.value = '';
@@ -606,7 +649,7 @@ const GroupChatWindowInner = () => {
     };
 
     const myTelephon = profile?.Telephon;
-    const messages   = groupMessages[selectedGroup?.ID] || [];
+    const messages   = (selectedGroup ? groupMessages[selectedGroup.ID] : undefined) || [];
 
     // Group-specific typing keys: "group:<groupID>:<telephon>"
     const typingInGroup = selectedGroup
