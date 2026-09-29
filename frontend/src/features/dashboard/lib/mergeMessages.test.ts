@@ -1,0 +1,90 @@
+import { describe, it, expect } from 'vitest';
+import { mergeLatestWindow, prependOlder, oldestRealMessageId } from './mergeMessages';
+
+interface Entry { MessageID: number | string; Time: string; Message?: string }
+
+const e = (id: number, iso: string, Message = `m${id}`): Entry => ({ MessageID: id, Time: iso, Message });
+const sys = (id: string, iso: string): Entry => ({ MessageID: id, Time: iso, Message: 'sistema' });
+const ids = (list: Entry[]) => list.map(m => m.MessageID);
+
+describe('oldestRealMessageId', () => {
+    it('returns null for an empty list', () => {
+        expect(oldestRealMessageId([])).toBeNull();
+        expect(oldestRealMessageId(undefined)).toBeNull();
+    });
+
+    it('ignores synthetic (string id) entries and picks the smallest numeric id', () => {
+        const list = [sys('system_1', '2024-01-01T00:00:00Z'), e(9, '2024-01-01T00:00:09Z'), e(4, '2024-01-01T00:00:04Z')];
+        expect(oldestRealMessageId(list)).toBe(4);
+    });
+
+    it('returns null when only synthetic entries exist', () => {
+        expect(oldestRealMessageId([sys('system_1', '2024-01-01T00:00:00Z')])).toBeNull();
+    });
+});
+
+describe('prependOlder', () => {
+    it('places older messages before the loaded ones, chronologically', () => {
+        const prev = [e(5, '2024-01-01T00:00:05Z'), e(6, '2024-01-01T00:00:06Z')];
+        const older = [e(3, '2024-01-01T00:00:03Z'), e(4, '2024-01-01T00:00:04Z')];
+        expect(ids(prependOlder(prev, older))).toEqual([3, 4, 5, 6]);
+    });
+
+    it('dedupes by MessageID keeping the already-loaded copy', () => {
+        const prev = [e(5, '2024-01-01T00:00:05Z', 'editado')];
+        const older = [e(5, '2024-01-01T00:00:05Z', 'viejo'), e(4, '2024-01-01T00:00:04Z')];
+        const merged = prependOlder(prev, older);
+        expect(ids(merged)).toEqual([4, 5]);
+        expect(merged[1]?.Message).toBe('editado');
+    });
+
+    it('breaks timestamp ties by numeric id', () => {
+        const t = '2024-01-01T00:00:00Z';
+        const merged = prependOlder([e(12, t), e(11, t)], [e(10, t)]);
+        expect(ids(merged)).toEqual([10, 11, 12]);
+    });
+
+    it('keeps synthetic entries in place', () => {
+        const prev = [e(5, '2024-01-01T00:00:05Z'), sys('system_x', '2024-01-01T00:00:06Z')];
+        const merged = prependOlder(prev, [e(4, '2024-01-01T00:00:04Z')]);
+        expect(ids(merged)).toEqual([4, 5, 'system_x']);
+    });
+
+    it('handles an undefined previous list', () => {
+        expect(ids(prependOlder(undefined, [e(1, '2024-01-01T00:00:01Z')]))).toEqual([1]);
+    });
+});
+
+describe('mergeLatestWindow', () => {
+    it('keeps already-loaded pages older than the fresh window', () => {
+        const prev = [e(1, '2024-01-01T00:00:01Z'), e(2, '2024-01-01T00:00:02Z'), e(5, '2024-01-01T00:00:05Z'), e(6, '2024-01-01T00:00:06Z')];
+        const fresh = [e(5, '2024-01-01T00:00:05Z'), e(6, '2024-01-01T00:00:06Z'), e(7, '2024-01-01T00:00:07Z')];
+        expect(ids(mergeLatestWindow(prev, fresh))).toEqual([1, 2, 5, 6, 7]);
+    });
+
+    it('takes server truth inside the window (drops messages deleted server-side, refreshes edits)', () => {
+        const prev = [e(5, '2024-01-01T00:00:05Z', 'a'), e(6, '2024-01-01T00:00:06Z', 'b'), e(7, '2024-01-01T00:00:07Z', 'c')];
+        const fresh = [e(5, '2024-01-01T00:00:05Z', 'a2'), e(7, '2024-01-01T00:00:07Z', 'c')];
+        const merged = mergeLatestWindow(prev, fresh);
+        expect(ids(merged)).toEqual([5, 7]);
+        expect(merged[0]?.Message).toBe('a2');
+    });
+
+    it('returns [] when the server window is empty (chat cleared)', () => {
+        expect(mergeLatestWindow([e(1, '2024-01-01T00:00:01Z')], [])).toEqual([]);
+    });
+
+    it('drops in-window synthetic entries but keeps ones older than the window', () => {
+        const prev = [
+            sys('system_old', '2024-01-01T00:00:01Z'),
+            e(5, '2024-01-01T00:00:05Z'),
+            sys('system_new', '2024-01-01T00:00:06Z'),
+        ];
+        const fresh = [e(5, '2024-01-01T00:00:05Z'), e(6, '2024-01-01T00:00:06Z')];
+        expect(ids(mergeLatestWindow(prev, fresh))).toEqual(['system_old', 5, 6]);
+    });
+
+    it('works from an undefined previous list', () => {
+        expect(ids(mergeLatestWindow(undefined, [e(2, '2024-01-01T00:00:02Z'), e(1, '2024-01-01T00:00:01Z')]))).toEqual([1, 2]);
+    });
+});

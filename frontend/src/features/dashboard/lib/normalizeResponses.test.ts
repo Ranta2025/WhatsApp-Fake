@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     normalizeGroupsResponse, normalizeGroupMessagesResponse, normalizeGroupDetailMessages,
+    normalizeChatMessagesResponse, normalizeHasMore,
 } from './normalizeResponses';
 
 // R3-dashboard-null-body-guards-removed: fetchUserGroups/fetchGroupMessages/
@@ -56,5 +57,31 @@ describe('normalizeGroupDetailMessages', () => {
     it('returns Messages when present', () => {
         const Messages = [{ MessageID: 'a' }];
         expect(normalizeGroupDetailMessages({ Messages })).toBe(Messages);
+    });
+});
+
+describe('normalizeChatMessagesResponse', () => {
+    it('returns [] for null, undefined and non-array bodies', () => {
+        expect(normalizeChatMessagesResponse(null)).toEqual([]);
+        expect(normalizeChatMessagesResponse(undefined)).toEqual([]);
+        expect(normalizeChatMessagesResponse({ messages: [] })).toEqual([]);
+    });
+
+    it('drops entries without a numeric MessageID (they cannot be cursors or dedupe keys)', () => {
+        const ok = { MessageID: 3, Message: 'hola' };
+        expect(normalizeChatMessagesResponse([ok, null, 'x', { MessageID: '4' }, {}])).toEqual([ok]);
+    });
+});
+
+describe('normalizeHasMore', () => {
+    it('reads a boolean hasMore off an object body', () => {
+        expect(normalizeHasMore({ hasMore: true })).toBe(true);
+        expect(normalizeHasMore({ hasMore: false })).toBe(false);
+    });
+
+    it('returns undefined when absent or not a boolean', () => {
+        expect(normalizeHasMore(null)).toBeUndefined();
+        expect(normalizeHasMore({})).toBeUndefined();
+        expect(normalizeHasMore({ hasMore: 'true' })).toBeUndefined();
     });
 });

@@ -31,6 +31,15 @@ describe('groupApi URL/method/body mapping', () => {
         });
     });
 
+    it('getGroupMessages adds the `before` cursor only when given', async () => {
+        mockApi.get.mockClear();
+        await getGroupMessages(7, 30, 0, 90);
+
+        expect(mockApi.get).toHaveBeenCalledWith('/api/v1/group/7/message', {
+            params: { limit: 30, offset: 0, before: 90 },
+        });
+    });
+
     it('editGroupMessage PUTs only messageID/message (no groupID in body, per backend schema)', async () => {
         await editGroupMessage(7, 42, 'nuevo texto');
 

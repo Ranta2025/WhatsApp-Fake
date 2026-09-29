@@ -83,18 +83,20 @@ export const sendGroupMessageRest = (
 };
 
 /**
- * Get paginated messages for a group.
+ * Get paginated messages for a group (newest first).
  * @param groupID
  * @param limit  - default 50
  * @param offset - default 0
+ * @param before - cursor: only messages with id < before (older page); omitted when undefined
  */
 export const getGroupMessages = (
     groupID: number,
     limit = 50,
-    offset = 0
-): Promise<AxiosResponse<{ messages: GroupMessageResponse[] }>> =>
-    api.get<{ messages: GroupMessageResponse[] }>(`/api/v1/group/${groupID}/message`, {
-        params: { limit, offset },
+    offset = 0,
+    before?: number
+): Promise<AxiosResponse<{ messages: GroupMessageResponse[]; hasMore?: boolean }>> =>
+    api.get<{ messages: GroupMessageResponse[]; hasMore?: boolean }>(`/api/v1/group/${groupID}/message`, {
+        params: before === undefined ? { limit, offset } : { limit, offset, before },
     });
 
 /**

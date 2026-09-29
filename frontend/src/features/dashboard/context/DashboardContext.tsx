@@ -18,8 +18,21 @@ import {
 } from '../lib/chatSelection';
 import {
     normalizeGroupsResponse, normalizeGroupMessagesResponse, normalizeGroupDetailMessages,
+    normalizeChatMessagesResponse, normalizeHasMore,
 } from '../lib/normalizeResponses';
+import {
+    mergeLatestWindow, prependOlder, oldestRealMessageId, DEFAULT_PAGING, type PagingState,
+} from '../lib/mergeMessages';
 import { useNotificationClick } from '../hooks/useNotificationClick';
+
+/** Mensajes por página al cargar historial antiguo (scroll hacia arriba). */
+const OLDER_PAGE_SIZE = 50;
+/** Ventana inicial de /api/v1/chats y del GET /chat/:contact sin parámetros. */
+const CHAT_LATEST_WINDOW = 200;
+/** Ventana inicial que devuelve el detalle de grupo. */
+const GROUP_DETAIL_WINDOW = 50;
+
+export type { PagingState };
 
 export type SidebarView = 'chats' | 'groups' | 'contacts' | 'estados' | 'calls';
 
@@ -107,6 +120,10 @@ export interface DashboardContextValue {
     fetchProfile: () => Promise<void>;
     fetchAllChats: () => Promise<void>;
     fetchChatMessages: (contactNumber: string) => Promise<void>;
+    /** Estado de paginación por chat 1:1 (hasMore / loadingOlder). */
+    chatPaging: Record<string, PagingState>;
+    /** Carga la página anterior de un chat 1:1 (cursor = id del mensaje más antiguo). */
+    loadOlderMessages: (contactNumber: string) => Promise<void>;
     markAsRead: (contactNumber: string) => void;
     groups: LocalGroup[];
     setGroups: Dispatch<SetStateAction<LocalGroup[]>>;
@@ -119,6 +136,10 @@ export interface DashboardContextValue {
     fetchUserGroups: () => Promise<void>;
     fetchGroupMessages: (groupID: number) => Promise<void>;
     fetchGroupDetail: (groupID: number) => Promise<void>;
+    /** Estado de paginación por grupo (hasMore / loadingOlder). */
+    groupPaging: Record<number, PagingState>;
+    /** Carga la página anterior de un grupo (cursor = id del mensaje real más antiguo). */
+    loadOlderGroupMessages: (groupID: number) => Promise<void>;
     isConnected: boolean;
     sendMessage: ReturnType<typeof useWebSocket>['sendMessage'];
     sendTypingIndicator: ReturnType<typeof useWebSocket>['sendTypingIndicator'];
@@ -139,6 +160,25 @@ export const useDashboard = (): DashboardContextValue => {
         throw new Error('useDashboard must be used within a DashboardProvider');
     }
     return context;
+};
+
+/**
+ * Paging state after a "latest window" fetch: if older pages were already
+ * loaded their hasMore stays authoritative; otherwise use the fetched value.
+ */
+const windowPaging = (prev: PagingState | undefined, hasMore: boolean): PagingState => (
+    prev?.olderLoaded
+        ? prev
+        : { hasMore, loadingOlder: prev?.loadingOlder ?? false, olderLoaded: false }
+);
+
+/** `X-Has-More: true|false` (backend 1:1 history); undefined when absent (e.g. not exposed). */
+const readHasMoreHeader = (headers: unknown): boolean | undefined => {
+    if (!headers || typeof headers !== 'object') return undefined;
+    const raw = (headers as Record<string, unknown>)['x-has-more'];
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    return undefined;
 };
 
 export const DashboardProvider = ({ children }: { children: ReactNode }) => {
@@ -167,10 +207,12 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
     const [allChatGroups, setAllChatGroups] = useState<Record<string, DashboardChatGroupEntry>>({});
     const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [chatPaging, setChatPaging] = useState<Record<string, PagingState>>({});
 
     // Groups
     const [groups, setGroups] = useState<LocalGroup[]>([]);
     const [groupMessages, setGroupMessages] = useState<Record<number, GroupMessageEntry[]>>({}); // { [groupID]: GroupMessageResponse[] }
+    const [groupPaging, setGroupPaging] = useState<Record<number, PagingState>>({});
     const [selectedGroup, setSelectedGroupState] = useState<SelectedGroup | null>(null);
 
     /**
@@ -261,6 +303,17 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => { allChatGroupsRef.current = allChatGroups; }, [allChatGroups]);
     const avatarMapRef = useRef<Record<string, string>>({});
     useEffect(() => { avatarMapRef.current = avatarMap; }, [avatarMap]);
+    // Cursor/estado de paginación leídos por loadOlder* sin recrear los callbacks.
+    const messagesByChatRef = useRef<Record<string, Message[]>>({});
+    const groupMessagesRef = useRef<Record<number, GroupMessageEntry[]>>({});
+    const chatPagingRef = useRef<Record<string, PagingState>>({});
+    const groupPagingRef = useRef<Record<number, PagingState>>({});
+    useEffect(() => { messagesByChatRef.current = messagesByChat; }, [messagesByChat]);
+    useEffect(() => { groupMessagesRef.current = groupMessages; }, [groupMessages]);
+    useEffect(() => { chatPagingRef.current = chatPaging; }, [chatPaging]);
+    useEffect(() => { groupPagingRef.current = groupPaging; }, [groupPaging]);
+    // Cargas de páginas antiguas en curso (evita peticiones duplicadas por scroll repetido).
+    const loadingOlderRef = useRef<Set<string>>(new Set());
 
     // Fetch initial data
     const fetchProfile = useCallback(async () => {
@@ -321,7 +374,21 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
             });
-            setMessagesByChat(msgMap);
+            // Mezclar con lo ya cargado: las páginas antiguas no se pierden al re-sincronizar.
+            setMessagesByChat(prev => {
+                const merged: Record<string, Message[]> = {};
+                Object.entries(msgMap).forEach(([key, fresh]) => {
+                    merged[key] = mergeLatestWindow(prev[key], fresh);
+                });
+                return merged;
+            });
+            setChatPaging(prev => {
+                const next: Record<string, PagingState> = {};
+                Object.entries(msgMap).forEach(([key, fresh]) => {
+                    next[key] = windowPaging(prev[key], fresh.length >= CHAT_LATEST_WINDOW);
+                });
+                return next;
+            });
             setAllChatGroups(groupMap);
             // Merge avatares de chats al avatarMap (contactos tienen prioridad, no sobreescribir)
             setAvatarMap(prev => ({ ...chatAvatarMap, ...prev }));
@@ -333,11 +400,38 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     // Cargar mensajes de un contacto específico (bajo demanda)
     const fetchChatMessages = useCallback(async (contactNumber: string) => {
         try {
-            const { data } = await api.get<Message[]>(`/api/v1/chat/${contactNumber}`);
-            const messages = Array.isArray(data) ? data : [];
-            setMessagesByChat(prev => ({ ...prev, [contactNumber]: messages }));
+            const { data, headers } = await api.get<unknown>(`/api/v1/chat/${contactNumber}`);
+            const messages = normalizeChatMessagesResponse(data);
+            const hasMore = readHasMoreHeader(headers) ?? messages.length >= CHAT_LATEST_WINDOW;
+            setMessagesByChat(prev => ({ ...prev, [contactNumber]: mergeLatestWindow(prev[contactNumber], messages) }));
+            setChatPaging(prev => ({ ...prev, [contactNumber]: windowPaging(prev[contactNumber], hasMore) }));
         } catch (err) {
             console.error(`Error fetching messages for ${contactNumber}:`, err);
+        }
+    }, []);
+
+    // Cargar la página anterior de un chat 1:1 (scroll hacia arriba).
+    const loadOlderMessages = useCallback(async (contactNumber: string) => {
+        const guardKey = `chat:${contactNumber}`;
+        const paging = chatPagingRef.current[contactNumber];
+        const before = oldestRealMessageId(messagesByChatRef.current[contactNumber]);
+        if (!paging?.hasMore || before === null || loadingOlderRef.current.has(guardKey)) return;
+
+        loadingOlderRef.current.add(guardKey);
+        setChatPaging(prev => ({ ...prev, [contactNumber]: { ...(prev[contactNumber] ?? DEFAULT_PAGING), loadingOlder: true } }));
+        try {
+            const { data, headers } = await api.get<unknown>(`/api/v1/chat/${contactNumber}`, {
+                params: { before, limit: OLDER_PAGE_SIZE },
+            });
+            const older = normalizeChatMessagesResponse(data);
+            const hasMore = readHasMoreHeader(headers) ?? older.length >= OLDER_PAGE_SIZE;
+            setMessagesByChat(prev => ({ ...prev, [contactNumber]: prependOlder(prev[contactNumber], older) }));
+            setChatPaging(prev => ({ ...prev, [contactNumber]: { hasMore, loadingOlder: false, olderLoaded: true } }));
+        } catch (err) {
+            console.error(`Error loading older messages for ${contactNumber}:`, err);
+            setChatPaging(prev => ({ ...prev, [contactNumber]: { ...(prev[contactNumber] ?? DEFAULT_PAGING), loadingOlder: false } }));
+        } finally {
+            loadingOlderRef.current.delete(guardKey);
         }
     }, []);
 
@@ -356,10 +450,35 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         try {
             const { data } = await getGroupMessages(groupID);
             const messages = normalizeGroupMessagesResponse(data);
-            const sorted = [...messages].sort((a, b) => new Date(a.Time).getTime() - new Date(b.Time).getTime());
-            setGroupMessages(prev => ({ ...prev, [groupID]: sorted }));
+            const hasMore = normalizeHasMore(data) ?? messages.length >= GROUP_DETAIL_WINDOW;
+            setGroupMessages(prev => ({ ...prev, [groupID]: mergeLatestWindow<GroupMessageEntry>(prev[groupID], messages) }));
+            setGroupPaging(prev => ({ ...prev, [groupID]: windowPaging(prev[groupID], hasMore) }));
         } catch (err) {
             console.error(`Error fetching messages for group ${groupID}:`, err);
+        }
+    }, []);
+
+    // Cargar la página anterior de un grupo (scroll hacia arriba). Las entradas
+    // sintéticas (IsSystem) nunca son cursor: oldestRealMessageId las ignora.
+    const loadOlderGroupMessages = useCallback(async (groupID: number) => {
+        const guardKey = `group:${groupID}`;
+        const paging = groupPagingRef.current[groupID];
+        const before = oldestRealMessageId(groupMessagesRef.current[groupID]);
+        if (!paging?.hasMore || before === null || loadingOlderRef.current.has(guardKey)) return;
+
+        loadingOlderRef.current.add(guardKey);
+        setGroupPaging(prev => ({ ...prev, [groupID]: { ...(prev[groupID] ?? DEFAULT_PAGING), loadingOlder: true } }));
+        try {
+            const { data } = await getGroupMessages(groupID, OLDER_PAGE_SIZE, 0, before);
+            const older = normalizeGroupMessagesResponse(data);
+            const hasMore = normalizeHasMore(data) ?? older.length >= OLDER_PAGE_SIZE;
+            setGroupMessages(prev => ({ ...prev, [groupID]: prependOlder<GroupMessageEntry>(prev[groupID], older) }));
+            setGroupPaging(prev => ({ ...prev, [groupID]: { hasMore, loadingOlder: false, olderLoaded: true } }));
+        } catch (err) {
+            console.error(`Error loading older messages for group ${groupID}:`, err);
+            setGroupPaging(prev => ({ ...prev, [groupID]: { ...(prev[groupID] ?? DEFAULT_PAGING), loadingOlder: false } }));
+        } finally {
+            loadingOlderRef.current.delete(guardKey);
         }
     }, []);
 
@@ -376,10 +495,13 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Pre-populate message cache if backend returned messages
             const detailMessages = normalizeGroupDetailMessages(data);
             if (detailMessages.length > 0) {
-                const sorted = [...detailMessages].sort((a, b) => new Date(a.Time).getTime() - new Date(b.Time).getTime());
                 setGroupMessages(prev => ({
                     ...prev,
-                    [groupID]: sorted,
+                    [groupID]: mergeLatestWindow<GroupMessageEntry>(prev[groupID], detailMessages),
+                }));
+                setGroupPaging(prev => ({
+                    ...prev,
+                    [groupID]: windowPaging(prev[groupID], detailMessages.length >= GROUP_DETAIL_WINDOW),
                 }));
             }
         } catch (err) {
@@ -393,21 +515,17 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const wasConnectedRef = useRef(false);
     useEffect(() => {
         if (!user) return;
-        /* eslint-disable react-hooks/set-state-in-effect -- carga de datos asíncrona */
         fetchProfile();
         fetchContacts();
         fetchAllChats();
         fetchUserGroups();
-        /* eslint-enable react-hooks/set-state-in-effect */
     }, [user, fetchProfile, fetchContacts, fetchAllChats, fetchUserGroups]);
 
     useEffect(() => {
         if (!isConnected) return;
         if (wasConnectedRef.current) {
-            /* eslint-disable react-hooks/set-state-in-effect -- carga de datos asíncrona */
             fetchAllChats();
             fetchUserGroups();
-            /* eslint-enable react-hooks/set-state-in-effect */
         }
         wasConnectedRef.current = true;
     }, [isConnected, fetchAllChats, fetchUserGroups]);
@@ -806,6 +924,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         fetchProfile,
         fetchAllChats,
         fetchChatMessages,
+        chatPaging,
+        loadOlderMessages,
         markAsRead,
         // Groups
         groups, setGroups,
@@ -814,6 +934,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         fetchUserGroups,
         fetchGroupMessages,
         fetchGroupDetail,
+        groupPaging,
+        loadOlderGroupMessages,
         // WebSocket state & actions
         isConnected,
         sendMessage,
