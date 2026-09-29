@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import FullScreenLoader from './components/ui/FullScreenLoader';
 
@@ -13,7 +13,7 @@ const RecoverPassword = lazy(() => import('./pages/RecoverPassword'));
 const ActivateExisting = lazy(() => import('./pages/ActivateExisting'));
 const UnblockAccount = lazy(() => import('./pages/UnblockAccount'));
 
-const PrivateRoute = ({ children }) => {
+const PrivateRoute = ({ children }: { children: ReactNode }) => {
     const { user, loading } = useAuth();
     
     if (loading) return <FullScreenLoader />;

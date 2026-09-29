@@ -10,33 +10,7 @@ const allowExportNames = ['useAuth', 'useDashboard', 'useMessaging', 'useGroupMe
 export default defineConfig([
   globalIgnores(['dist']),
   {
-    files: ['**/*.{js,jsx}'],
-    extends: [
-      js.configs.recommended,
-      reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
-    ],
-    languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
-      parserOptions: {
-        ecmaVersion: 'latest',
-        ecmaFeatures: { jsx: true },
-        sourceType: 'module',
-      },
-    },
-    rules: {
-      'no-unused-vars': ['error', {
-        varsIgnorePattern: '^[A-Z_]',
-        argsIgnorePattern: '^_',
-        caughtErrors: 'none',
-      }],
-      // Los contextos exportan su hook junto al Provider (patrón habitual).
-      'react-refresh/only-export-components': ['error', { allowExportNames }],
-    },
-  },
-  {
-    files: ['**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
     extends: [
       ...tseslint.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -58,8 +32,31 @@ export default defineConfig([
     },
   },
   {
-    // Archivos de configuración que se ejecutan en Node
-    files: ['vite.config.js', 'vite.config.ts', 'scripts/**/*.{js,mjs}', 'eslint.config.js'],
+    // vite.config.ts se ejecuta en Node
+    files: ['vite.config.ts'],
+    extends: [...tseslint.configs.recommended],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    // Único JS restante: la configuración raíz (se ejecuta en Node)
+    files: ['eslint.config.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.node,
+      parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    },
+    rules: {
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^[A-Z_]',
+        argsIgnorePattern: '^_',
+        caughtErrors: 'none',
+      }],
+    },
+  },
+  {
+    // Scripts de utilidad (Node), sin reglas recomendadas como antes
+    files: ['scripts/**/*.{js,mjs}'],
     languageOptions: { globals: globals.node },
   },
 ])
