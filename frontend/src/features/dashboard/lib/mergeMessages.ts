@@ -62,9 +62,10 @@ export function prependOlder<T extends MergeableMessage>(prev: readonly T[] | un
  * True when merging `fresh` (the latest window) onto `prev` cannot leave a hole.
  * Contiguous when: there is nothing loaded yet; the server window is the complete
  * history (`windowHasMore === false`, nothing older can be missing); or `prev`
- * holds a real id >= the window's oldest real id (the ranges overlap/touch, so the
- * window covers everything from its oldest id up). Otherwise more messages
- * arrived than one window holds and older loaded pages are separated from it.
+ * already holds the window's oldest real id (the ranges overlap, so the window
+ * covers everything from that id up). Any other newer id in `prev` is not enough:
+ * a live message received after a reconnect sits above a possible hole. Ids are
+ * global serials, so adjacency cannot be inferred from id values alone.
  */
 export function isContiguousWindow(
     prev: readonly MergeableMessage[] | undefined,
@@ -74,7 +75,7 @@ export function isContiguousWindow(
     if (!prev || prev.length === 0 || fresh.length === 0 || !windowHasMore) return true;
     const freshOldestId = oldestRealMessageId(fresh);
     if (freshOldestId === null) return true;
-    return prev.some(m => isRealId(m.MessageID) && m.MessageID >= freshOldestId);
+    return prev.some(m => m.MessageID === freshOldestId);
 }
 
 /**

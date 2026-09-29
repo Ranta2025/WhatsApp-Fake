@@ -117,4 +117,11 @@ describe('mergeLatestWindow contiguity (no silent gaps)', () => {
         expect(isContiguousWindow([...old, e(10, '2024-01-01T00:00:10Z')], gapped)).toBe(true);
         expect(isContiguousWindow(old, gapped, false)).toBe(true);
     });
+
+    it('isContiguousWindow: a newer realtime id alone does not bridge a gap', () => {
+        // Reconnect: a live message (12) landed before the resync; ids 4..9 are missing.
+        const prev = [...old, e(12, '2024-01-01T00:00:12Z')];
+        expect(isContiguousWindow(prev, gapped)).toBe(false);
+        expect(ids(mergeLatestWindow(prev, gapped))).toEqual([10, 11]);
+    });
 });
