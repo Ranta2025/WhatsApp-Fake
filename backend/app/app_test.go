@@ -179,3 +179,61 @@ func TestStatusCleanupLoopRunsAtStartupThenPerTickSurvivesErrorsAndStopsOnCancel
 	case <-time.After(interval + 200*time.Millisecond):
 	}
 }
+
+// ==================== OB4-dependency-health ====================
+
+// runDependencyCheck refleja el resultado del chequeo en dependency_up y lo
+// ejecuta con un timeout, para no colgar el checker si una dependencia no responde.
+func TestRunDependencyCheckSetsGaugesWithTimeout(t *testing.T) {
+	m := newTestMetrics()
+	var timeout time.Duration
+	check := func(ctx context.Context) (bool, bool) {
+		if deadline, ok := ctx.Deadline(); ok {
+			timeout = time.Until(deadline)
+		}
+		return false, true
+	}
+
+	runDependencyCheck(context.Background(), m, check, 2*time.Second)
+
+	assert.Equal(t, 0.0, testutil.ToFloat64(m.DependencyUp.WithLabelValues("postgres")))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.DependencyUp.WithLabelValues("redis")))
+	assert.InDelta(t, 2.0, timeout.Seconds(), 0.5, "el chequeo debe correr con timeout")
+}
+
+// El checker corre una vez al arrancar (sin esperar el primer tick), sigue en
+// cada tick y se detiene cuando se cancela el contexto.
+func TestDependencyCheckLoopRunsAtStartupThenPerTickAndStopsOnCancel(t *testing.T) {
+	m := newTestMetrics()
+	calls := make(chan struct{}, 16)
+	check := func(context.Context) (bool, bool) {
+		calls <- struct{}{}
+		return true, true
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go dependencyCheckLoop(ctx, m, check, 100*time.Millisecond, time.Second)
+
+	select {
+	case <-calls:
+	case <-time.After(80 * time.Millisecond):
+		t.Fatal("no ejecutó el chequeo inicial al arrancar")
+	}
+
+	select {
+	case <-calls:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("no ejecutó el chequeo en el siguiente tick")
+	}
+
+	cancel()
+	for len(calls) > 0 {
+		<-calls
+	}
+	select {
+	case <-calls:
+		t.Fatal("siguió chequeando después de cancelar el contexto")
+	case <-time.After(250 * time.Millisecond):
+	}
+}

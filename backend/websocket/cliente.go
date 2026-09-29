@@ -90,6 +90,17 @@ func (c *Client) buildRouter() map[string]func(*MessageHandler) {
 	}
 }
 
+// messageMetricType restringe la etiqueta de ws_messages_received_total a los
+// tipos conocidos de buildRouter(). Cualquier otro valor (types arbitrarios
+// enviados por el cliente, "ping", cadena vacía...) colapsa a "unknown" para
+// que un cliente no pueda explotar la cardinalidad de la métrica.
+func messageMetricType(router map[string]func(*MessageHandler), msgType string) string {
+	if _, known := router[msgType]; known {
+		return msgType
+	}
+	return "unknown"
+}
+
 // readPump lee mensajes entrantes del WebSocket, los enruta al handler
 // correspondiente y cierra la conexión al terminar.
 func (c *Client) readPump(hub *Hub) {
@@ -125,7 +136,12 @@ func (c *Client) readPump(hub *Hub) {
 			continue
 		}
 
-		// 3. Ping tiene respuesta directa, no necesita handler
+		// 3. Contabilizar por tipo acotado (ver messageMetricType)
+		if hub.metrics != nil {
+			hub.metrics.WSMessageReceived(messageMetricType(router, baseMsg.Type))
+		}
+
+		// 4. Ping tiene respuesta directa, no necesita handler
 		if baseMsg.Type == "ping" {
 			hub.SendToClient(c, []byte(`{"type":"pong"}`))
 			continue

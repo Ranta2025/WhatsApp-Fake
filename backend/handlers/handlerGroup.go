@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"gorm/backend/metrics"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"net/http"
@@ -24,11 +25,13 @@ type GroupHubNotifier interface {
 type HandlerGroup struct {
 	service  services.GroupServicer
 	notifier GroupHubNotifier // puede ser nil si el Hub no está disponible
+	metrics  *metrics.Metrics // puede ser nil: no se contabiliza nada
 }
 
-// InitHandlerGroup crea el handler de grupos con su servicio y el notificador del Hub.
-func InitHandlerGroup(service services.GroupServicer, notifier GroupHubNotifier) *HandlerGroup {
-	return &HandlerGroup{service: service, notifier: notifier}
+// InitHandlerGroup crea el handler de grupos con su servicio, el notificador del
+// Hub y las métricas (m puede ser nil).
+func InitHandlerGroup(service services.GroupServicer, notifier GroupHubNotifier, m *metrics.Metrics) *HandlerGroup {
+	return &HandlerGroup{service: service, notifier: notifier, metrics: m}
 }
 
 // notifyGroupMembers envía el mensaje WS a cada teléfono de la lista,
@@ -246,8 +249,14 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 
 		msg, err := h.service.SendGroupMessage(telephon.(string), msgData, ctx)
 		if err != nil {
+			if h.metrics != nil {
+				h.metrics.MessageFailed(metrics.KindGroup)
+			}
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+		if h.metrics != nil {
+			h.metrics.MessageSent(metrics.KindGroup)
 		}
 		// Difundir en tiempo real al resto de miembros conectados (igual que por WS)
 		if h.notifier != nil {

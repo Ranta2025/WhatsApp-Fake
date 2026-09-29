@@ -1,6 +1,10 @@
 package metrics
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,9 +12,26 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// stubConnector/stubDriver permiten abrir un *sql.DB sin conexión real: el
+// colector de pool solo llama a db.Stats(), así que alcanza para los tests.
+type stubConnector struct{}
+
+func (stubConnector) Connect(context.Context) (driver.Conn, error) {
+	return nil, errors.New("stub: sin conexión real")
+}
+
+func (stubConnector) Driver() driver.Driver { return stubDriver{} }
+
+type stubDriver struct{}
+
+func (stubDriver) Open(string) (driver.Conn, error) {
+	return nil, errors.New("stub: sin conexión real")
+}
 
 // gatherNames devuelve el conjunto de nombres de familia que expone un Gatherer.
 func gatherNames(t *testing.T, gatherer prometheus.Gatherer) map[string]struct{} {
@@ -140,4 +161,75 @@ func TestHandler_ServesRegistryInPrometheusFormat(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), "go_goroutines")
 	assert.Contains(t, string(body), "http_requests_in_flight")
+}
+
+// ==================== OB4 ====================
+
+func TestRegisterHubStatsExposesCollectionGauges(t *testing.T) {
+	m := New(prometheus.NewRegistry())
+	stats := HubStats{Connections: 3, Rooms: 2, RoomMemberships: 5}
+	require.NoError(t, m.RegisterHubStats(func() HubStats { return stats }))
+
+	assert.Equal(t, 3.0, testutil.ToFloat64(m.WSConnections))
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.WSRooms))
+	assert.Equal(t, 5.0, testutil.ToFloat64(m.WSRoomMemberships))
+
+	names := gatherNames(t, m.Registry())
+	for _, name := range []string{"ws_connections", "ws_rooms", "ws_room_memberships"} {
+		assert.Contains(t, names, name)
+	}
+}
+
+func TestRegisterDBStatsExposesSQLPool(t *testing.T) {
+	m := New(prometheus.NewRegistry())
+	db := sql.OpenDB(stubConnector{})
+	defer db.Close()
+
+	require.NoError(t, m.RegisterDBStats(db, "postgres"))
+
+	names := gatherNames(t, m.Registry())
+	assert.Contains(t, names, "go_sql_max_open_connections")
+	assert.Contains(t, names, "go_sql_open_connections")
+}
+
+func TestRegisterRedisPoolStatsExposesPoolGauges(t *testing.T) {
+	m := New(prometheus.NewRegistry())
+	stats := &redis.PoolStats{Hits: 4, Misses: 1, Timeouts: 2, TotalConns: 7, IdleConns: 3, StaleConns: 1}
+	require.NoError(t, m.RegisterRedisPoolStats(func() *redis.PoolStats { return stats }))
+
+	assert.Equal(t, 4.0, testutil.ToFloat64(m.RedisPoolHits))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.RedisPoolMisses))
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.RedisPoolTimeouts))
+	assert.Equal(t, 7.0, testutil.ToFloat64(m.RedisPoolTotalConns))
+	assert.Equal(t, 3.0, testutil.ToFloat64(m.RedisPoolIdleConns))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.RedisPoolStaleConns))
+
+	names := gatherNames(t, m.Registry())
+	for _, name := range []string{
+		"redis_pool_hits", "redis_pool_misses", "redis_pool_timeouts",
+		"redis_pool_total_conns", "redis_pool_idle_conns", "redis_pool_stale_conns",
+	} {
+		assert.Contains(t, names, name)
+	}
+}
+
+func TestMessageHelpersIncrementCounters(t *testing.T) {
+	m := New(prometheus.NewRegistry())
+	m.MessageSent(KindDirect)
+	m.MessageSent(KindDirect)
+	m.MessageSent(KindGroup)
+	m.MessageFailed(KindGroup)
+
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.MessagesSentTotal.WithLabelValues(KindDirect)))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.MessagesSentTotal.WithLabelValues(KindGroup)))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.MessagesFailedTotal.WithLabelValues(KindGroup)))
+}
+
+func TestSetDependencyUp(t *testing.T) {
+	m := New(prometheus.NewRegistry())
+	m.SetDependencyUp("postgres", false)
+	m.SetDependencyUp("redis", true)
+
+	assert.Equal(t, 0.0, testutil.ToFloat64(m.DependencyUp.WithLabelValues("postgres")))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.DependencyUp.WithLabelValues("redis")))
 }

@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"gorm/backend/metrics"
 	"gorm/backend/repos"
 	"log"
 	"sync"
@@ -21,10 +22,12 @@ type Hub struct {
 	Remove    chan *Client
 	Broadcast chan []byte
 	repo      *repos.ApiContact
+	metrics   *metrics.Metrics
 }
 
-// NewHub crea e inicializa un Hub de WebSocket con el repositorio de datos.
-func NewHub(repo *repos.ApiContact) *Hub {
+// NewHub crea e inicializa un Hub de WebSocket con el repositorio de datos y el
+// conjunto de métricas (m puede ser nil: no se contabiliza nada).
+func NewHub(repo *repos.ApiContact, m *metrics.Metrics) *Hub {
 	return &Hub{
 		Clients:   make(map[string]*Client),
 		rooms:     make(map[uint]map[string]*Client),
@@ -32,6 +35,39 @@ func NewHub(repo *repos.ApiContact) *Hub {
 		Remove:    make(chan *Client),
 		Broadcast: make(chan []byte),
 		repo:      repo,
+		metrics:   m,
+	}
+}
+
+// Stats devuelve una foto consistente de las colecciones del Hub: conexiones
+// activas, rooms con al menos un miembro y total de membresías. Se lee bajo
+// RLock para no bloquear a los pumps; los gauges la consultan solo en scrape.
+func (h *Hub) Stats() metrics.HubStats {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	memberships := 0
+	for _, room := range h.rooms {
+		memberships += len(room)
+	}
+	return metrics.HubStats{
+		Connections:     len(h.Clients),
+		Rooms:           len(h.rooms),
+		RoomMemberships: memberships,
+	}
+}
+
+// messageSent/messageFailed cuentan el resultado de un envío persistido. Son
+// nil-safe cuando el Hub se construye sin métricas (tests).
+func (h *Hub) messageSent(kind string) {
+	if h.metrics != nil {
+		h.metrics.MessageSent(kind)
+	}
+}
+
+func (h *Hub) messageFailed(kind string) {
+	if h.metrics != nil {
+		h.metrics.MessageFailed(kind)
 	}
 }
 
@@ -69,6 +105,9 @@ func (h *Hub) RegisterClient(c *Client) {
 	h.Clients[c.Telephon] = c
 	total := len(h.Clients)
 	h.mu.Unlock()
+	if h.metrics != nil {
+		h.metrics.WSConnectionsTotal.Inc()
+	}
 	log.Printf("[HUB] Usuario registrado (tel: %s). Total clientes: %d", c.Telephon, total)
 	// Notificar a los contactos que este usuario está online (sin bloquear)
 	go h.NotifyContactsOnline(c.Telephon)
@@ -87,6 +126,9 @@ func (h *Hub) UnregisterClient(c *Client) {
 	h.closeClientLocked(c)
 	total := len(h.Clients)
 	h.mu.Unlock()
+	if h.metrics != nil {
+		h.metrics.WSDisconnectsTotal.Inc()
+	}
 
 	if current {
 		log.Printf("[HUB] Usuario desconectado (tel: %s). Total clientes: %d", c.Telephon, total)
@@ -116,6 +158,11 @@ func (h *Hub) trySendLocked(c *Client, msg []byte) bool {
 	case c.Send <- msg:
 		return true
 	default:
+		// Solo el buffer lleno cuenta como drop: una conexión cerrada ya se
+		// detecta arriba y no es un descarte.
+		if h.metrics != nil {
+			h.metrics.WSSendDroppedTotal.Inc()
+		}
 		return false
 	}
 }

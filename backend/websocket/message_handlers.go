@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"gorm/backend/metrics"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"log"
@@ -76,10 +77,12 @@ func (mh *MessageHandler) HandleChatMessage() {
 	messageSaved, err := mh.Client.ServiceChat.ServiceCreatMessageWithStatus(messageCreat, status, ctx)
 	if err != nil {
 		log.Println("[WS] Error al guardar mensaje:", err)
+		mh.Hub.messageFailed(metrics.KindDirect)
 		mh.sendError("Error al enviar mensaje: " + err.Error())
 		return
 	}
 
+	mh.Hub.messageSent(metrics.KindDirect)
 	responseBytes, _ := json.Marshal(map[string]interface{}{
 		"type":    "chat",
 		"payload": messageSaved,
@@ -315,10 +318,12 @@ func (mh *MessageHandler) HandleGroupChatMessage() {
 	savedMsg, err := mh.Client.ServiceGroup.SendGroupMessage(mh.Client.Telephon, msgSend, ctx)
 	if err != nil {
 		log.Printf("[WS-GROUP] Error al guardar mensaje de grupo: %v", err)
+		mh.Hub.messageFailed(metrics.KindGroup)
 		mh.sendError("Error al enviar mensaje al grupo: " + err.Error())
 		return
 	}
 
+	mh.Hub.messageSent(metrics.KindGroup)
 	responseBytes, _ := json.Marshal(map[string]interface{}{
 		"type":    "group_chat",
 		"payload": savedMsg,

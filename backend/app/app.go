@@ -52,7 +52,7 @@ func New() (*App, error) {
 		return nil, err
 	}
 	engine.GET("/healthz", healthHandler(db, rd))
-	deps, cancelStatusCleanup := buildDeps(db, rd, mc)
+	deps, cancelStatusCleanup := buildDeps(db, rd, mc, backendMetrics)
 	routers.Router(engine, deps)
 
 	return &App{
@@ -92,16 +92,15 @@ func healthHandler(db *gorm.DB, rd *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 		defer cancel()
+		postgresOK, redisOK := checkDependencies(ctx, db, rd)
 		status := gin.H{"postgres": "ok", "redis": "ok"}
-		healthy := true
-		if sqlDB, err := db.DB(); err != nil || sqlDB.PingContext(ctx) != nil {
+		if !postgresOK {
 			status["postgres"] = "error"
-			healthy = false
 		}
-		if err := rd.Ping(ctx).Err(); err != nil {
+		if !redisOK {
 			status["redis"] = "error"
-			healthy = false
 		}
+		healthy := postgresOK && redisOK
 		if !healthy {
 			c.JSON(http.StatusServiceUnavailable, status)
 			return
@@ -198,7 +197,7 @@ const statusCleanupInterval = 10 * time.Minute
 // buildDeps construye el grafo de dependencias: repositorios → servicios → handlers.
 // También arranca el job periódico de limpieza de estados expirados y devuelve
 // su función de cancelación, para poder detenerlo en un apagado ordenado.
-func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, context.CancelFunc) {
+func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metrics) (routers.Deps, context.CancelFunc) {
 	// Repositorios
 	repoUser := repos.GetRespositorieUser(db)
 	repoContact := repos.InitRepoContact(db, rd)
@@ -206,8 +205,9 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, c
 	cacheUser := cache.InitChacheUser(rd)
 
 	// Hub de WebSocket (presencia y mensajería en tiempo real)
-	hub := websocket.NewHub(repoContact)
+	hub := websocket.NewHub(repoContact, m)
 	go hub.Run()
+	registerRuntimeMetrics(m, hub, db, rd)
 
 	// Servicios
 	serviceUser := services.InitServices(repoUser, cacheUser)
@@ -222,6 +222,10 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, c
 
 	cleanupCtx, cancelCleanup := context.WithCancel(context.Background())
 	go statusCleanupLoop(cleanupCtx, serviceStatus, statusCleanupInterval)
+	// El checker de dependencias comparte el ciclo de vida del job de limpieza.
+	go dependencyCheckLoop(cleanupCtx, m, func(ctx context.Context) (bool, bool) {
+		return checkDependencies(ctx, db, rd)
+	}, dependencyCheckInterval, dependencyCheckTimeout)
 
 	return routers.Deps{
 		HandlerUser:      handlers.GetHandlerUser(serviceUser, hub),
@@ -229,7 +233,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, c
 		HandlerChat:      handlers.InitHandlerChat(serviceChat, hub),
 		HandlerCall:      handlers.InitHandlerCall(serviceCall),
 		HandlerMedia:     handlers.InitHandlerMedia(serviceMedia),
-		HandlerGroup:     handlers.InitHandlerGroup(serviceGroup, hub),
+		HandlerGroup:     handlers.InitHandlerGroup(serviceGroup, hub, m),
 		HandlerStatus:    handlers.InitHandlerStatus(serviceStatus, hub),
 		HandlerSearch:    handlers.InitHandlerSearch(serviceSearch),
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),
