@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useDashboard, type SelectedGroup, type SystemGroupMessage, type GroupMessageEntry } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
+import { useLoadOlderOnScroll } from '../hooks/useLoadOlderOnScroll';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
@@ -154,23 +155,37 @@ interface GroupMessageListProps {
     messages: GroupMessageEntry[] | undefined;
     myTelephon: string | undefined;
     activeWallpaper: string | null;
+    /** Grupo abierto: al cambiar se baja al fondo. */
+    groupID: number | undefined;
+    hasMore: boolean;
+    loadingOlder: boolean;
+    onLoadOlder: () => void | Promise<void>;
 }
 
 /** Locally injected "member added/left" entries carry `IsSystem`; backend messages don't. */
 const isSystemMessage = (msg: GroupMessageEntry): msg is SystemGroupMessage =>
     Boolean((msg as { IsSystem?: unknown }).IsSystem);
 
-const GroupMessageList = ({ messages, myTelephon, activeWallpaper }: GroupMessageListProps) => {
-    const bottomRef = useRef<HTMLDivElement>(null);
+export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupID, hasMore, loadingOlder, onLoadOlder }: GroupMessageListProps) => {
+    const containerRef = useRef<HTMLDivElement>(null);
     const {
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
     const { selectedGroup } = useDashboard();
 
-    useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages?.length]);
+    // Al fondo al abrir un grupo o al llegar un mensaje nuevo al final; al llegar
+    // arriba se cargan mensajes anteriores sin saltar la vista.
+    useLoadOlderOnScroll({
+        containerRef,
+        chatKey: groupID,
+        firstKey: messages?.[0]?.MessageID,
+        lastKey: messages?.[messages.length - 1]?.MessageID,
+        hasMore,
+        loadingOlder,
+        loadOlder: onLoadOlder,
+        smoothTail: true,
+    });
 
     const containerStyle = activeWallpaper
         ? { backgroundImage: `url(${activeWallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
@@ -187,7 +202,12 @@ const GroupMessageList = ({ messages, myTelephon, activeWallpaper }: GroupMessag
     }
 
     return (
-        <div className={`flex-1 overflow-y-auto py-3 px-2 sm:px-6 lg:px-10 space-y-0.5 ${surfaceClass}`} style={containerStyle}>
+        <div
+            ref={containerRef}
+            className={`flex-1 overflow-y-auto relative py-3 px-2 sm:px-6 lg:px-10 space-y-0.5 ${surfaceClass}`}
+            // overflow-anchor: none => el reajuste de scroll al anteponer es solo nuestro
+            style={{ ...containerStyle, overflowAnchor: 'none' }}
+        >
             {messages.map((msg) => {
                 if (isSystemMessage(msg)) {
                     return (
@@ -213,7 +233,14 @@ const GroupMessageList = ({ messages, myTelephon, activeWallpaper }: GroupMessag
                     />
                 );
             })}
-            <div ref={bottomRef} />
+            {/* Indicador de carga: absoluto y sin margen de space-y (no mueve el contenido) */}
+            {loadingOlder && (
+                <div className="absolute inset-x-0 top-2 mt-0! z-20 flex justify-center pointer-events-none">
+                    <span role="status" className="bg-black/50 backdrop-blur-sm text-slate-300 text-[11px] px-3 py-1 rounded-full">
+                        Cargando mensajes anteriores…
+                    </span>
+                </div>
+            )}
         </div>
     );
 };
@@ -322,6 +349,7 @@ const GroupChatWindowInner = () => {
     const {
         selectedGroup, setSelectedGroup,
         groupMessages, setGroupMessages, fetchGroupMessages, fetchGroupDetail,
+        groupPaging, loadOlderGroupMessages,
         typingUsers, profile,
         contacts,
         setSelected,
@@ -866,7 +894,15 @@ const GroupChatWindowInner = () => {
             <style>{`@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
 
             {/* ── Message list ── */}
-            <GroupMessageList messages={messages} myTelephon={myTelephon} activeWallpaper={activeWallpaper} />
+            <GroupMessageList
+                messages={messages}
+                myTelephon={myTelephon}
+                activeWallpaper={activeWallpaper}
+                groupID={selectedGroup?.ID}
+                hasMore={selectedGroup ? (groupPaging[selectedGroup.ID]?.hasMore ?? false) : false}
+                loadingOlder={selectedGroup ? (groupPaging[selectedGroup.ID]?.loadingOlder ?? false) : false}
+                onLoadOlder={() => { if (selectedGroup) return loadOlderGroupMessages(selectedGroup.ID); }}
+            />
 
             {/* ── Input ── */}
             <GroupMessageInput />
