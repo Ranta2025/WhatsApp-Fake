@@ -174,6 +174,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, c
 	serviceMedia := services.InitServiceMedia(mc)
 	serviceBugReport := services.InitServiceBugReport()
 	serviceStatus := services.InitServiceStatus(repoContact)
+	serviceSearch := services.InitServiceSearch(repoContact, repoGroup)
 
 	cleanupCtx, cancelCleanup := context.WithCancel(context.Background())
 	go statusCleanupLoop(cleanupCtx, serviceStatus, statusCleanupInterval)
@@ -186,6 +187,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client) (routers.Deps, c
 		HandlerMedia:     handlers.InitHandlerMedia(serviceMedia),
 		HandlerGroup:     handlers.InitHandlerGroup(serviceGroup, hub),
 		HandlerStatus:    handlers.InitHandlerStatus(serviceStatus, hub),
+		HandlerSearch:    handlers.InitHandlerSearch(serviceSearch),
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),
 		Hub:              hub,
 		WSTickets:        cache.NewWSTicketStore(rd),

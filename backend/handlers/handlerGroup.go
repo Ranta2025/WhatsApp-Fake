@@ -303,6 +303,30 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/group/:groupID/message/search
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleSearchGroupMessages busca mensajes de texto en el grupo. Solo miembros
+// (403 en otro caso). Query params: q (2–100 caracteres), before y limit.
+func (h *HandlerGroup) HandleSearchGroupMessages() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		if !exists || !exists2 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+		before, limit := parseSearchPaging(ctx)
+		page, err := h.service.SearchGroupMessages(telephon.(string), groupID.(uint), ctx.Query("q"), before, limit, ctx)
+		if err != nil {
+			respondSearchError(ctx, err)
+			return
+		}
+		ctx.JSON(http.StatusOK, page)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/v1/group/:groupID/message/:messageID/receipts
 // ─────────────────────────────────────────────────────────────────────────────
 

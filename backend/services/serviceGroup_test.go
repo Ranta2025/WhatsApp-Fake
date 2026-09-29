@@ -99,6 +99,11 @@ func (m *MockGroupRepo) AdvanceMemberReceipts(groupID, userID, deliveredUpTo, re
 	return args.Get(0).(models.GroupReceiptState), args.Bool(1), args.Error(2)
 }
 
+func (m *MockGroupRepo) SearchGroupMessages(groupID, userID uint, q string, before uint, limit int, ctx context.Context) ([]models.SearchRow, bool, error) {
+	args := m.Called(groupID, userID, q, before, limit, ctx)
+	return args.Get(0).([]models.SearchRow), args.Bool(1), args.Error(2)
+}
+
 // MockGroupContactRepo implementa GroupContactRepoInterface.
 type MockGroupContactRepo struct {
 	mock.Mock

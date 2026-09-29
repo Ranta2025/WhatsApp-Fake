@@ -17,6 +17,7 @@ type RouterApiMessage struct {
 	handlerMedia   *handlers.HandlerMedia
 	handlerGroup   *handlers.HandlerGroup
 	handlerStatus  *handlers.HandlerStatus
+	handlerSearch  *handlers.HandlerSearch
 	hub            *websocket.Hub
 	chatService    services.ChatServicer
 	contactService services.ContactServicer
@@ -26,7 +27,7 @@ type RouterApiMessage struct {
 
 // InitRouterApiMessage inicializa el subrouter /api/v1/ con todos los handlers
 // y aplica el middleware de validación de token JWT.
-func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, handlerStatus *handlers.HandlerStatus, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) *RouterApiMessage {
+func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact, handlerChat *handlers.HandlerChat, handlerCall *handlers.HandlerCall, handlerMedia *handlers.HandlerMedia, handlerGroup *handlers.HandlerGroup, handlerStatus *handlers.HandlerStatus, handlerSearch *handlers.HandlerSearch, hub *websocket.Hub, chatService services.ChatServicer, contactService services.ContactServicer, callService services.CallServicer, groupService services.GroupServicer) *RouterApiMessage {
 	rout := &RouterApiMessage{
 		app:            app,
 		handlerContact: handler,
@@ -35,6 +36,7 @@ func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact
 		handlerMedia:   handlerMedia,
 		handlerGroup:   handlerGroup,
 		handlerStatus:  handlerStatus,
+		handlerSearch:  handlerSearch,
 		hub:            hub,
 		chatService:    chatService,
 		contactService: contactService,
@@ -65,12 +67,18 @@ func (rt *RouterApiMessage) ApiContact() {
 func (rt *RouterApiMessage) ApiChat() {
 	rt.app.POST("chat", middleware.MiddlewareChat(), rt.handlerChat.HandlerPostChat())
 	rt.app.GET("chat/:contact", middleware.MiddlewateGetChat(), rt.handlerChat.HandlerGetChats())
+	rt.app.GET("chat/:contact/search", middleware.MiddlewateGetChat(), rt.handlerChat.HandlerSearchChat())
 	rt.app.GET("chats", rt.handlerChat.HandlerGetAllChats())
 	rt.app.PUT("chat/:contact", middleware.MiddlewareChatPutStatus(), rt.handlerChat.HandlerPutChat())
 	rt.app.PUT("chat", rt.handlerChat.HandlerPutAllChat())
 	rt.app.PUT("chat/edit", middleware.MiddlewareChatEdit(), rt.handlerChat.HandlerEditMessage())
 	rt.app.DELETE("chat/:contact", middleware.MiddlewareClearChat(), rt.handlerChat.HandlerClearChat())
 	rt.app.DELETE("message/:id/me", middleware.MiddlewareDeleteMessage(), rt.handlerChat.HandlerDeleteMessageForMe())
+}
+
+// ApiSearch registra la búsqueda global de mensajes (chats 1:1 y grupos).
+func (rt *RouterApiMessage) ApiSearch() {
+	rt.app.GET("search", rt.handlerSearch.HandlerSearchAll())
 }
 
 // ApiMedia registra la ruta de subida de archivos multimedia.
@@ -106,6 +114,7 @@ func (rt *RouterApiMessage) ApiCall() {
 //	GET    /api/v1/group/:groupID/message          → historial (paginado)
 //	PUT    /api/v1/group/:groupID/message          → editar mensaje
 //	DELETE /api/v1/group/:groupID/message          → eliminar mensaje
+//	GET    /api/v1/group/:groupID/message/search → buscar mensajes (solo miembros)
 //	GET    /api/v1/group/:groupID/message/:messageID/receipts → acuses (solo el autor)
 func (rt *RouterApiMessage) ApiGroup() {
 	g := rt.app.Group("group")
@@ -124,6 +133,7 @@ func (rt *RouterApiMessage) ApiGroup() {
 		g.POST("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessage(), rt.handlerGroup.HandleSendGroupMessage())
 		g.GET("/:groupID/message", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleGetGroupMessages())
 		g.PUT("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageEdit(), rt.handlerGroup.HandleEditGroupMessage())
+		g.GET("/:groupID/message/search", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleSearchGroupMessages())
 		g.GET("/:groupID/message/:messageID/receipts", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageID(), rt.handlerGroup.HandleGetMessageReceipts())
 		g.DELETE("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageDelete(), rt.handlerGroup.HandleDeleteGroupMessage())
 	}

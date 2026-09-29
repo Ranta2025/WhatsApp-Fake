@@ -23,6 +23,7 @@ type Deps struct {
 	HandlerMedia     *handlers.HandlerMedia
 	HandlerGroup     *handlers.HandlerGroup
 	HandlerStatus    *handlers.HandlerStatus
+	HandlerSearch    *handlers.HandlerSearch
 	HandlerBugReport *handlers.HandlerBugReport
 	Hub              *websocket.Hub
 	WSTickets        *cache.WSTicketStore
@@ -53,10 +54,11 @@ func Router(app *gin.Engine, d Deps) {
 
 	subrouter := app.Group("/api/v1/")
 	subrouter.GET("ws-ticket", middleware.MiddlewareTokenWithTelephon(), wsTicketHandler(d.WSTickets))
-	apiMessage := api.InitRouterApiMessage(subrouter, d.HandlerContact, d.HandlerChat, d.HandlerCall, d.HandlerMedia, d.HandlerGroup, d.HandlerStatus, d.Hub, d.ChatService, d.ContactService, d.CallService, d.GroupService)
+	apiMessage := api.InitRouterApiMessage(subrouter, d.HandlerContact, d.HandlerChat, d.HandlerCall, d.HandlerMedia, d.HandlerGroup, d.HandlerStatus, d.HandlerSearch, d.Hub, d.ChatService, d.ContactService, d.CallService, d.GroupService)
 	apiMessage.ApiUser()
 	apiMessage.ApiContact()
 	apiMessage.ApiChat()
+	apiMessage.ApiSearch()
 	apiMessage.ApiMedia()
 	apiMessage.ApiCall()
 	apiMessage.ApiGroup()

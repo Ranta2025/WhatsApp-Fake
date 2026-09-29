@@ -29,6 +29,7 @@ type ChatServicer interface {
 	ServiceDeleteMessage(telephonSender string, messageID uint, ctx context.Context) (schemas.Message, error)
 	ServiceClearChat(telephonUser string, telephonContact string, ctx context.Context) error
 	ServiceDeleteMessageForMe(telephonUser string, messageID uint, ctx context.Context) (schemas.Message, error)
+	ServiceSearchMessages(telephonUser, telephonContact, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error)
 }
 
 type ChatRepoInterface interface {
@@ -48,6 +49,7 @@ type ChatRepoInterface interface {
 	UpdateMessageContent(messageID uint, senderID uint, newContent string, ctx context.Context) error
 	DeleteMessageForSender(messageID uint, senderID uint, ctx context.Context) (*models.Message, error)
 	ClearChatForUser(userID uint, contactID uint, ctx context.Context) error
+	SearchMessages(userID, contactID uint, q string, before uint, limit int, ctx context.Context) ([]models.SearchRow, bool, error)
 }
 
 type ServiceChat struct {

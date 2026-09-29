@@ -193,6 +193,11 @@ func (m *MockChatService) ServiceGetMessages(telephonUser string, telephonContac
 	return args.Get(0).([]schemas.Message), args.Error(1)
 }
 
+func (m *MockChatService) ServiceSearchMessages(telephonUser, telephonContact, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error) {
+	args := m.Called(telephonUser, telephonContact, q, before, limit, ctx)
+	return args.Get(0).(*schemas.SearchPage), args.Error(1)
+}
+
 func (m *MockChatService) ServiceGetMessagesPage(telephonUser string, telephonContact string, before uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
 	args := m.Called(telephonUser, telephonContact, before, limit, ctx)
 	return args.Get(0).([]schemas.Message), args.Bool(1), args.Error(2)

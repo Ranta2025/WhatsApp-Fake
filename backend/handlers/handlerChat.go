@@ -96,6 +96,27 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 	}
 }
 
+// HandlerSearchChat busca mensajes de texto en la conversación con :contact.
+// Query params: q (2–100 caracteres), before (id, pagina hacia atrás) y limit.
+func (hd *HandlerChat) HandlerSearchChat() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		contact, exist2 := ctx.Get("contact")
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			ctx.Abort()
+			return
+		}
+		before, limit := parseSearchPaging(ctx)
+		page, err := hd.service.ServiceSearchMessages(telephon.(string), contact.(string), ctx.Query("q"), before, limit, ctx)
+		if err != nil {
+			respondSearchError(ctx, err)
+			return
+		}
+		ctx.JSON(http.StatusOK, page)
+	}
+}
+
 // HandlerPutChat marca como 'visto' los mensajes enviados por el contacto
 // al usuario autenticado para la conversación especificada.
 func (hd *HandlerChat) HandlerPutChat() gin.HandlerFunc {
