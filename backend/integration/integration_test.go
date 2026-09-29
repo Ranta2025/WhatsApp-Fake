@@ -119,6 +119,56 @@ func TestIntegration(t *testing.T) {
 		assert.Empty(t, msgs[0].Sender.Password, "no se deben cargar datos sensibles")
 	})
 
+	t.Run("group messages cursor pagination", func(t *testing.T) {
+		g := &models.Group{Name: "paginado", CreatorID: a.ID}
+		require.NoError(t, groupRepo.CreateGroupWithMembers(g, a.ID, []uint{b.ID}, ctx))
+		// 7 mensajes; los 4 últimos comparten exactamente el mismo timestamp.
+		same := time.Now()
+		var ids []uint
+		for i := 0; i < 7; i++ {
+			ts := same
+			if i < 3 {
+				ts = same.Add(-time.Hour + time.Duration(i)*time.Second)
+			}
+			m := &models.GroupMessage{GroupID: g.ID, SenderID: b.ID, Message: fmt.Sprintf("m%d", i), Time: ts}
+			require.NoError(t, groupRepo.CreateGroupMessage(m, ctx))
+			ids = append(ids, m.ID)
+		}
+
+		seen := map[uint]bool{}
+		var before uint
+		pages := 0
+		for {
+			page, hasMore, err := groupRepo.GetGroupMessagesPage(g.ID, before, 3, 0, ctx)
+			require.NoError(t, err)
+			pages++
+			for _, m := range page {
+				assert.False(t, seen[m.ID], "mensaje duplicado %d", m.ID)
+				seen[m.ID] = true
+			}
+			if !hasMore {
+				break
+			}
+			require.Len(t, page, 3)
+			before = page[len(page)-1].ID
+			require.Less(t, pages, 10, "no debe ciclar")
+		}
+		assert.Equal(t, 3, pages)
+		assert.Len(t, seen, 7, "sin huecos ni duplicados con timestamps iguales")
+		for _, id := range ids {
+			assert.True(t, seen[id])
+		}
+
+		// Frontera exacta: 7 mensajes con limit 7 => hasMore=false; limit 6 => true.
+		page, hasMore, err := groupRepo.GetGroupMessagesPage(g.ID, 0, 7, 0, ctx)
+		require.NoError(t, err)
+		assert.Len(t, page, 7)
+		assert.False(t, hasMore)
+		_, hasMore, err = groupRepo.GetGroupMessagesPage(g.ID, 0, 6, 0, ctx)
+		require.NoError(t, err)
+		assert.True(t, hasMore)
+	})
+
 	t.Run("calls only updatable by participants", func(t *testing.T) {
 		require.NoError(t, contactRepo.CreateCallLog(&models.CallLog{CallerID: a.ID, ReceiverID: b.ID, RoomID: "room1", CallType: "audio", Status: "missed", StartedAt: time.Now()}, ctx))
 		assert.Error(t, contactRepo.UpdateCallLogByRoomID("room1", c.ID, map[string]interface{}{"status": "answered"}, ctx))

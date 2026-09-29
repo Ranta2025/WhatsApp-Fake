@@ -252,6 +252,11 @@ func Conection() (*gorm.DB, error) {
 		ON group_messages (group_id, created_at)
 		WHERE deleted_at IS NULL`)
 
+	// Índice para paginación por cursor (id < before ORDER BY id DESC) del historial.
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_messages_cursor
+		ON group_messages (group_id, id)
+		WHERE deleted_at IS NULL`)
+
 	// Índice para lookup de miembros por grupo
 	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_members_group
 		ON group_members (group_id)

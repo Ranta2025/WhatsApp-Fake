@@ -211,18 +211,38 @@ func (r *RepoGroup) CreateGroupMessage(msg *models.GroupMessage, ctx context.Con
 // GetGroupMessages devuelve el historial de mensajes de un grupo con paginación,
 // ordenado del más reciente al más antiguo.
 func (r *RepoGroup) GetGroupMessages(groupID uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, error) {
+	messages, _, err := r.GetGroupMessagesPage(groupID, 0, limit, offset, ctx)
+	return messages, err
+}
+
+// GetGroupMessagesPage devuelve una página del historial (más reciente primero).
+// Si before > 0 solo incluye mensajes con id < before (cursor por id, estable
+// aunque varias filas compartan timestamp). hasMore indica si existen mensajes
+// más antiguos que el último devuelto; se calcula pidiendo limit+1 filas.
+func (r *RepoGroup) GetGroupMessagesPage(groupID, before uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	var messages []models.GroupMessage
-	err := r.data.WithContext(c).
+	q := r.data.WithContext(c).
 		Preload("Sender", selectUserBasic).
-		Where("group_id = ?", groupID).
-		Order("created_at DESC").
-		Limit(limit).
+		Where("group_id = ?", groupID)
+	if before > 0 {
+		q = q.Where("id < ?", before)
+	}
+
+	var messages []models.GroupMessage
+	err := q.Order("id DESC").
+		Limit(limit + 1).
 		Offset(offset).
 		Find(&messages).Error
-	return messages, err
+	if err != nil {
+		return nil, false, err
+	}
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+	return messages, hasMore, nil
 }
 
 // GetGroupMessageByID obtiene un mensaje de grupo por su ID.

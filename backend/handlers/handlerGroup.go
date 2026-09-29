@@ -263,7 +263,8 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // HandleGetGroupMessages devuelve el historial de mensajes del grupo con paginación.
-// Query params: limit (default 50), offset (default 0).
+// Query params: limit (default 50), offset (default 0) y before (id de mensaje;
+// devuelve solo los anteriores). La respuesta incluye hasMore.
 func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exists := ctx.Get("telephon")
@@ -282,7 +283,12 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 			offset = o
 		}
 
-		messages, err := h.service.GetGroupMessages(telephon.(string), groupID.(uint), limit, offset, ctx)
+		var before uint
+		if b, err := strconv.ParseUint(ctx.Query("before"), 10, 32); err == nil {
+			before = uint(b)
+		}
+
+		messages, hasMore, err := h.service.GetGroupMessagesPage(telephon.(string), groupID.(uint), before, limit, offset, ctx)
 		if err != nil {
 			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
@@ -291,7 +297,7 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 		if h.notifier != nil {
 			h.notifier.JoinRoomByTelephon(groupID.(uint), telephon.(string))
 		}
-		ctx.JSON(http.StatusOK, gin.H{"messages": messages})
+		ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMore": hasMore})
 	}
 }
 

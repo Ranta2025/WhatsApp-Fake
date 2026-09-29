@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"gorm.io/gorm"
 )
 
 // ==================== MOCKS ====================
@@ -62,6 +63,11 @@ func (m *MockGroupRepo) CreateGroupMessage(msg *models.GroupMessage, ctx context
 func (m *MockGroupRepo) GetGroupMessages(groupID uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, error) {
 	args := m.Called(groupID, limit, offset, ctx)
 	return args.Get(0).([]models.GroupMessage), args.Error(1)
+}
+
+func (m *MockGroupRepo) GetGroupMessagesPage(groupID, before uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, bool, error) {
+	args := m.Called(groupID, before, limit, offset, ctx)
+	return args.Get(0).([]models.GroupMessage), args.Bool(1), args.Error(2)
 }
 
 func (m *MockGroupRepo) GetGroupMessageByID(messageID uint, ctx context.Context) (*models.GroupMessage, error) {
@@ -239,4 +245,49 @@ func TestSendGroupMessage_SaveErrorIsReported(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.EqualError(t, err, "error al guardar el mensaje")
+}
+
+// ==================== TESTS: paginación por cursor ====================
+
+func TestGetGroupMessagesPage_PassesCursorAndHasMore(t *testing.T) {
+	svc, repo, contacts := newGroupServiceForSend()
+	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
+	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetGroupMessagesPage", testGroupID, uint(90), 30, 0, mock.Anything).
+		Return([]models.GroupMessage{{Model: gorm.Model{ID: 89}, Message: "a"}}, true, nil)
+
+	msgs, hasMore, err := svc.GetGroupMessagesPage(testSenderTel, testGroupID, 90, 30, 0, context.Background())
+
+	assert.NoError(t, err)
+	assert.True(t, hasMore)
+	if assert.Len(t, msgs, 1) {
+		assert.Equal(t, uint(89), msgs[0].MessageID)
+	}
+}
+
+func TestGetGroupMessagesPage_ClampsLimit(t *testing.T) {
+	svc, repo, contacts := newGroupServiceForSend()
+	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
+	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetGroupMessagesPage", testGroupID, uint(0), maxGroupMessagesPage, 0, mock.Anything).
+		Return([]models.GroupMessage{}, false, nil)
+
+	_, hasMore, err := svc.GetGroupMessagesPage(testSenderTel, testGroupID, 0, 5000, -3, context.Background())
+
+	assert.NoError(t, err)
+	assert.False(t, hasMore)
+	repo.AssertExpectations(t)
+}
+
+func TestGetGroupMessagesPage_NonMemberRejected(t *testing.T) {
+	svc, repo, contacts := newGroupServiceForSend()
+	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
+	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(false, nil)
+
+	msgs, hasMore, err := svc.GetGroupMessagesPage(testSenderTel, testGroupID, 10, 10, 0, context.Background())
+
+	assert.Nil(t, msgs)
+	assert.False(t, hasMore)
+	assert.EqualError(t, err, "no tienes acceso a este grupo")
+	repo.AssertNotCalled(t, "GetGroupMessagesPage", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }

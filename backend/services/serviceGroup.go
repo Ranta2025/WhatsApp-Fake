@@ -30,6 +30,7 @@ type GroupServicer interface {
 	GetGroupDetail(telephon string, groupID uint, ctx context.Context) (*schemas.GroupDetail, error)
 	SendGroupMessage(telephonSender string, data models.GroupMessageSend, ctx context.Context) (*schemas.GroupMessageResponse, error)
 	GetGroupMessages(telephon string, groupID uint, limit, offset int, ctx context.Context) ([]schemas.GroupMessageResponse, error)
+	GetGroupMessagesPage(telephon string, groupID, before uint, limit, offset int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, error)
 	EditGroupMessage(telephon string, groupID uint, data models.GroupMessageEdit, ctx context.Context) (*schemas.GroupMessageResponse, error)
 	DeleteGroupMessage(telephon string, groupID uint, data models.GroupMessageDelete, ctx context.Context) error
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
@@ -49,6 +50,7 @@ type GroupRepoInterface interface {
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
 	CreateGroupMessage(msg *models.GroupMessage, ctx context.Context) error
 	GetGroupMessages(groupID uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, error)
+	GetGroupMessagesPage(groupID, before uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, bool, error)
 	GetGroupMessageByID(messageID uint, ctx context.Context) (*models.GroupMessage, error)
 	EditGroupMessage(groupID, messageID, senderID uint, newContent string, ctx context.Context) error
 	DeleteGroupMessage(groupID, messageID, senderID uint, ctx context.Context) error
@@ -312,14 +314,22 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 
 // GetGroupMessages retorna el historial de mensajes de un grupo con paginación.
 func (s *ServiceGroup) GetGroupMessages(telephon string, groupID uint, limit, offset int, ctx context.Context) ([]schemas.GroupMessageResponse, error) {
+	messages, _, err := s.GetGroupMessagesPage(telephon, groupID, 0, limit, offset, ctx)
+	return messages, err
+}
+
+// GetGroupMessagesPage retorna una página del historial (más reciente primero).
+// before > 0 activa el cursor por id (solo mensajes anteriores); hasMore indica
+// si quedan mensajes más antiguos.
+func (s *ServiceGroup) GetGroupMessagesPage(telephon string, groupID, before uint, limit, offset int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, error) {
 	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
-		return nil, errors.New("usuario no encontrado")
+		return nil, false, errors.New("usuario no encontrado")
 	}
 
 	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
 	if err != nil || !isMember {
-		return nil, errors.New("no tienes acceso a este grupo")
+		return nil, false, errors.New("no tienes acceso a este grupo")
 	}
 
 	if limit <= 0 {
@@ -332,11 +342,11 @@ func (s *ServiceGroup) GetGroupMessages(telephon string, groupID uint, limit, of
 		offset = 0
 	}
 
-	messages, err := s.repo.GetGroupMessages(groupID, limit, offset, ctx)
+	messages, hasMore, err := s.repo.GetGroupMessagesPage(groupID, before, limit, offset, ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return convertGroupMessages(messages), nil
+	return convertGroupMessages(messages), hasMore, nil
 }
 
 // EditGroupMessage edita el contenido de un mensaje de grupo.
