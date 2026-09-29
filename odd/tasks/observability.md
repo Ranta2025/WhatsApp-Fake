@@ -1,0 +1,80 @@
+# Feature: observability
+
+## Objective
+Operational visibility for the backend:
+- Prometheus metrics (HTTP latency/status, WebSocket connections/rooms, message counters, DB/Redis health and pool stats) on an endpoint that is NOT reachable from the public site.
+- A request id on every request, returned to the client, present in structured logs and propagated to WebSocket logs.
+- An optional docker compose profile that starts Prometheus + Grafana with a provisioned dashboard.
+
+## Problem / Why
+Current state (verified):
+- Logger: `backend/utils/logger.go` builds a `slog` JSON handler (Info) when `ENV=production` and a text handler (Debug) otherwise, and calls `slog.SetDefault`; initialized in `main.go:14`. Compose runs the app with `ENV: ${ENV:-production}` (`compose.yaml`, app env block), so the stack logs JSON. Because of `slog.SetDefault`, stdlib `log.Printf` calls are routed through the same handler (behavior to verify with a test), but they are unstructured free text: `message_handlers.go` (24 calls), `servicesUser.go` (9), `serviceStatus.go` (8), `hub.go` (6), `HandlerUser.go` (6), etc.
+- HTTP access log: `middleware.TimeMiddleware` (`backend/middleware/middlewareTime.go:12-31`) logs `method, path, status, duracion_ms, duracion` per request. It uses the raw path and has no request id. Middleware chain in `newEngine` (`backend/app/app.go:115`): `gin.Recovery(), config.Cors(), middleware.TimeMiddleware()`. Gin's default recovery writes panics unstructured.
+- Health: `GET /healthz` (`app.go:50`, `healthHandler` `:84-104`) pings Postgres and Redis with a 3 s timeout, only when called (compose/CI healthchecks).
+- No metrics at all: `rg prometheus go.mod` = nothing. The hub holds the numbers we want (`Hub.Clients`, `Hub.rooms`, `backend/websocket/hub.go:12-24`) but exposes no counts.
+- Exposure: compose publishes the app port on all host interfaces (`"${API_PORT:-8080}:8080"`, `compose.yaml:61-62`), so anything registered on the main gin engine (e.g. `/metrics`) would be world-reachable on port 8080 in that stack. nginx only proxies `/api/`, `/healthz` and `/storage/` (`docker/nginx.conf:36-71`), so `/metrics` through port 80 would hit the SPA fallback (`location /`, `:82-85`) and return `index.html`.
+
+## Scope / Authorized
+Approved roadmap item, plan only (not yet authorized to implement). Scope: metrics package and endpoint, Gin middlewares (request id, metrics, custom recovery, access log), hub stats, message counters, dependency health gauges, logs with request id (HTTP and WS), nginx header + guard, optional compose profile, docs, tests. Out of scope: tracing/OpenTelemetry, log shipping (Loki/ELK), alert rules beyond a sample file, converting every `log.Printf` in services (only the WS/HTTP paths listed).
+
+## Dependencies / ordering
+- No functional dependency; backend-heavy and low blast radius, so it is the recommended FIRST of the remaining features (gives metrics for the risky ones, e.g. `messages_expired_total`, `push_sent_total`, reaction counters can be added later by each feature). Coordinate with `web-push` / `disappearing-messages` only by adding their counters afterwards.
+- `api-casing` unaffected (no payload changes; new response header only).
+- Branch: `feat/observability` from the latest feature branch in the chain (branches are chained and unpushed).
+
+## Decisions (recommended defaults)
+- **Library (to verify):** `github.com/prometheus/client_golang` (`prometheus`, `promauto`, `promhttp`, `collectors`, `testutil`). Check the latest release and Go 1.25 compatibility before adding. Use a **custom registry** (not the global default) built in `backend/metrics` plus `collectors.NewGoCollector()` and `NewProcessCollector`, so tests can create isolated registries.
+- **Where `/metrics` lives:** recommended a **separate listener** (`METRICS_ADDR`, unset = disabled in non-compose runs; compose sets `0.0.0.0:9090` inside the container and does NOT publish the port), served by a second `http.Server` owned by `App` (`app.go:30-36` struct, started/stopped in `Run` `:235-262` next to the main server). Prometheus scrapes `app:9090` over the compose network. This makes it unreachable from both port 80 (nginx) and host port 8080 without auth. Rejected alternative: `/metrics` on the main engine behind basic-auth/IP allowlist (works but fails open on misconfiguration). Also add `location = /metrics { return 404; }` to `docker/nginx.conf` so a misdirected scrape or probe never receives the SPA HTML.
+- **HTTP metrics middleware** (`backend/middleware/middlewareMetrics.go`): `http_requests_total{method,route,status}` and `http_request_duration_seconds{method,route}` histogram (default buckets or 5ms..10s), `http_requests_in_flight`. Label `route` = `c.FullPath()` (route template, `"unmatched"` when empty) to keep cardinality bounded; never the raw path or ids. **Exclude** the WebSocket route `/api/v1/ws` (long-lived) and `/healthz` from the duration histogram. Order in `newEngine`: `RequestID, CustomRecovery, Metrics, Cors, AccessLog`.
+- **WebSocket metrics:** `Hub.Stats()` (RLock; returns `connections=len(Clients)`, `rooms=len(rooms)`, `roomMemberships`) read by a `prometheus.GaugeFunc`/custom collector (no instrumentation inside hot paths). Counters: `ws_connections_total`, `ws_disconnects_total` (in `RegisterClient`/`UnregisterClient`, `hub.go:61-96`), `ws_messages_received_total{type}` in `readPump` dispatch (`backend/websocket/cliente.go:95-140`), where `type` is restricted to the keys of `buildRouter()` (`cliente.go:69-90`) and everything else collapses to `unknown` (cardinality safety against arbitrary client-sent types), `ws_send_dropped_total` when `trySendLocked` returns false for a full buffer (`hub.go:111-121`).
+- **Message counters:** `messages_sent_total{kind="direct"|"group"}` incremented after a successful save in `HandleChatMessage` (`message_handlers.go:76-81`), `HandleGroupChatMessage` (`:315-320`) and the REST group send (`handlerGroup.go:245-258`); `messages_failed_total{kind}` on save errors. Add the counter call through a tiny `metrics.MessageSent(kind)` function, not by importing prometheus into handlers.
+- **Dependencies:** `collectors.NewDBStatsCollector(sqlDB, "postgres")` for pool stats (`db.DB()` as used in `healthHandler`), a Redis pool collector from `rd.PoolStats()` (go-redis v9; to verify field names), and `dependency_up{dependency="postgres"|"redis"}` gauges refreshed by a background checker every 15 s with a 2 s timeout, reusing the ping logic of `healthHandler` (extract a `checkDependencies(ctx)` function used by both). MinIO health optional (to verify a cheap call in `minio-go`).
+- **Request id** (`backend/middleware/middlewareRequestID.go`): read inbound `X-Request-ID` only if it matches `^[A-Za-z0-9._-]{1,64}$`, otherwise generate one (`github.com/rs/xid`, already a dependency, `go.mod`). Store in the gin context (`c.Set("requestID", id)`) AND in `c.Request.Context()` (`context.WithValue` with an unexported key) because handlers pass `*gin.Context` as `context.Context` (`ContextWithFallback = true`, `app.go:114`) and services/repos read the request context. Set the `X-Request-ID` response header. nginx: add `proxy_set_header X-Request-ID $request_id;` in `location /api/` and `= /healthz` (`docker/nginx.conf:38-49, 51-53`) so the id is created at the edge. CORS: add `X-Request-ID` to `ExposeHeaders` (`backend/config/cors.go:107-114`) so the browser (and bug reports) can read it; frontend may include it in the bug report (optional).
+- **Structured logs:** helper `logging.FromContext(ctx) *slog.Logger` returning `slog.Default().With("request_id", id)`. Upgrade `TimeMiddleware` (rename to access log, keep its behavior/fields for compatibility) to add `request_id`, `route` (template), `client_ip` (`c.ClientIP()`), `bytes` and log level by status (5xx Error, 4xx Warn, else Info; `/healthz` at Debug to cut noise). Do not log phone numbers/usernames/message bodies by default (privacy; open question). Replace gin's recovery with `gin.CustomRecoveryWithWriter` that logs `panic`, `stack` and `request_id` via slog and returns the same 500 JSON shape.
+- **WS propagation:** the upgrade request already passes through the middlewares (`routers/central.go:52`), so `HandleWebSocket` (`backend/websocket/handler.go:29-57`) reads the request id and stores it on `Client` (`NewClient`, `cliente.go:46`) as `ConnID` (request id + `-` + short counter, or the request id itself). Change the `log.Printf/Println` calls in `handler.go`, `cliente.go`, `hub.go` (connect/replace/disconnect) and `message_handlers.go` to `slog` with `conn_id`, `type`, `err` attributes. Only the WS/HTTP paths are converted in this feature; service-layer `log.Printf` stays (already routed through slog, follow-up).
+- **Compose profile `observability`:** services `prometheus` (image pinned, e.g. `prom/prometheus:v<version>`, to verify current stable) mounting `docker/observability/prometheus.yml` (scrape `app:9090`, 15 s) and `grafana` (`grafana/grafana` pinned) with provisioning files `docker/observability/grafana/provisioning/{datasources,dashboards}/*.yml` and one dashboard JSON `docker/observability/grafana/dashboards/backend.json` (RPS, p50/p95/p99 by route, 5xx ratio, WS connections/rooms, messages/min, dependency up, DB pool). Ports bound to `127.0.0.1` like postgres/minio (`compose.yaml` postgres block), Grafana admin password from `${GRAFANA_ADMIN_PASSWORD:-admin}` (local only; documented). Volumes named like the existing ones. Not part of the default `docker compose up` (profile only, same mechanism as the `tunnel` profile, `compose.yaml` cloudflared block). The app service gets `METRICS_ADDR: ${METRICS_ADDR:-0.0.0.0:9090}`; without the profile nothing scrapes it and the port stays unpublished.
+- **CI:** add a step to the `unit` job or `e2e` job: `docker compose --profile observability config -q` (syntax check only). Do not start Prometheus/Grafana in CI.
+
+## Constraints
+- Go: no new global mutable state outside `backend/metrics`; exported constructors take a registry for tests.
+- Conventional Commits, no AI attribution, explicit pathspecs (`git reset -q` first). One commit per task with tests and docs.
+- Never `go test -tags integration` against the shared stack. Never `docker compose down -v` unless intended.
+- Do not change existing JSON API bodies. Keep `TimeMiddleware`'s log field names (`method`, `path`, `status`, `duracion_ms`, `duracion`) so any existing log parsing keeps working.
+- Never read `.env*`; add new env vars to `compose.yaml` defaults and mention them in docs only.
+
+## TDD
+Strict TDD (session config). Runners: `go test ./...` (metrics with `prometheus/testutil`, gin `httptest`, `slog` handler capturing to a buffer), `make test-integration` (Go `-tags e2e`, stack up), `cd frontend && npm run test`/`test:e2e` only if the bug-report id change is done. RED examples: request-id middleware test failing before the middleware exists; cardinality test that requests to 1000 different unmatched paths create one `route="unmatched"` series; `ws_messages_received_total` never gets a series for an arbitrary `type`.
+
+## Tasks
+- [ ] OB1 Dependency + `backend/metrics` package: registry, Go/process collectors, HTTP/WS/message/dependency metric definitions, `Handler()`; verify library version. Unit tests with isolated registries. Route: delegated.
+- [ ] OB2 Request id + structured access log + custom recovery: middlewares, `logging.FromContext`, upgrade of `TimeMiddleware`, `newEngine` ordering, CORS expose header, nginx `X-Request-ID`. Tests: generated vs inbound valid vs inbound invalid id, header on response, id in the log record, 500 recovery keeps JSON shape and logs the panic. Route: delegated.
+- [ ] OB3 HTTP metrics middleware + separate metrics listener: `middlewareMetrics.go`, second `http.Server` in `App` with graceful shutdown, `METRICS_ADDR` handling (disabled when empty), nginx `location = /metrics` guard. Tests: labels use route templates, WS/healthz excluded, listener serves `/metrics` and only there. Route: delegated.
+- [ ] OB4 Hub/WS/message/dependency metrics: `Hub.Stats()`, counters in register/unregister/dispatch/send-drop, message counters in the 3 send paths, DB/Redis collectors, background dependency checker sharing code with `healthHandler`. Tests with a real `Hub` (see `websocket/hub_test.go`) and fakes. Route: delegated.
+- [ ] OB5 WS log propagation: `ConnID` on `Client`, slog conversion of `handler.go`, `cliente.go`, `hub.go`, `message_handlers.go` logs. Tests capture slog output for connect/disconnect/bad payload. Route: delegated.
+- [ ] OB6 Compose profile + docs: Prometheus config, Grafana provisioning + dashboard, `compose.yaml` profile and env, docs section (how to enable, ports, credentials, what is exposed), CI `config -q` check, Go e2e asserting `X-Request-ID` on `/healthz` and that `/metrics` is NOT served on port 80/8080 (404 / SPA). Route: delegated.
+- [ ] OB7 Close: full checks, one manual smoke (`docker compose --profile observability up -d`, open Grafana, generate traffic), doc + mirror.
+
+## Acceptance criteria
+- Every HTTP response has `X-Request-ID`; the same id appears in the request's access log line and in the WS connection logs of an upgraded request; invalid inbound ids are replaced.
+- `/metrics` is served only on the internal metrics listener; `GET http://localhost/metrics` and `GET http://localhost:8080/metrics` do not return metrics.
+- Metrics present and bounded in cardinality: http requests/duration by route template, ws connections/rooms/messages, messages sent/failed, dependency up, DB pool.
+- Default `docker compose up -d --build` behaves as today (no extra containers); `--profile observability` adds Prometheus + Grafana with a working dashboard.
+- `go test ./...`, `make test-integration`, and existing frontend checks green; no API body changes.
+
+## Risks
+- Label cardinality explosions (route templates only, WS type allowlist, no user ids as labels).
+- Accidental public exposure of `/metrics` (separate listener + nginx guard + e2e assertion).
+- Log noise/volume and PII: keep `/healthz` at debug, no bodies or phone numbers.
+- Behavior change in middleware order (recovery/metrics before CORS) must not alter CORS preflight responses (covered by `config/cors_test.go` and a new test).
+- Pinned image versions in the compose profile need verification at implementation time.
+
+## Open questions (user decision)
+- **Open question (user decision):** log the authenticated phone number / user id in access logs. Recommended: no (request id only) for privacy; add later behind `LOG_USER=1`.
+- **Open question (user decision):** metrics listener default. Recommended: enabled in compose on an unpublished port, disabled (empty `METRICS_ADDR`) elsewhere. Alternative: same port with a bearer token.
+- **Open question (user decision):** Grafana in the default stack or only under the profile. Recommended: profile only.
+
+## Progress / Evidence
+(not started)
+
+## Next step
+Recommended to implement first (independent, low risk). First task: OB1.
