@@ -356,6 +356,44 @@ export interface BugReportRequest {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Búsqueda de mensajes (camelCase, ver backend/schemas/schemaSearch.go)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Rango [inicio, fin) en índices de rune (codepoint) sobre `snippet`. */
+export type HighlightRange = [number, number];
+
+export interface SearchResult {
+  messageID: number;
+  /** ISO 8601. */
+  time: string;
+  snippet: string;
+  highlights: HighlightRange[];
+}
+
+/** GET /api/v1/chat/:contact/search y /api/v1/group/:groupID/message/search. */
+export interface SearchPage {
+  results: SearchResult[];
+  hasMore: boolean;
+}
+
+export type SearchChatKind = 'direct' | 'group';
+
+export interface GlobalSearchChat {
+  kind: SearchChatKind;
+  /** telephon del contacto (direct) o id del grupo como texto (group). */
+  key: string;
+  name: string;
+  avatarUrl: string;
+  results: SearchResult[];
+  total: number;
+}
+
+/** GET /api/v1/search. */
+export interface GlobalSearchResponse {
+  chats: GlobalSearchChat[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Errores
 // ─────────────────────────────────────────────────────────────────────────
 

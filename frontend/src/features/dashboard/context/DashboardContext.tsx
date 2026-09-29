@@ -2,6 +2,7 @@ import {
     createContext, useContext, useState, useEffect, useRef, useCallback,
     type ReactNode, type Dispatch, type SetStateAction,
 } from 'react';
+import { isAxiosError } from 'axios';
 import api from '../../../api/axios';
 import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/groupApi';
 import { useAuth, type AuthContextValue } from '../../../context/AuthContext';
@@ -21,8 +22,15 @@ import {
     normalizeChatMessagesResponse, normalizeHasMore,
 } from '../lib/normalizeResponses';
 import {
-    mergeLatestWindow, isContiguousWindow, prependOlder, oldestRealMessageId, DEFAULT_PAGING, type PagingState,
+    mergeLatestWindow, isContiguousWindow, prependOlder, oldestRealMessageId, newestRealMessageId, DEFAULT_PAGING, type PagingState,
 } from '../lib/mergeMessages';
+import {
+    createFocusedWindow, refocus, windowHasMessage, extendOlder, extendNewer, updateFocusedMessages, removeFocusedMessage,
+    type FocusedWindow,
+} from '../lib/focusedWindow';
+import {
+    getChatWindowAround, getChatAfter, getChatBefore, getGroupWindowAround, getGroupAfter, getGroupBefore, WINDOW_LIMIT,
+} from '../api/historyApi';
 import { useNotificationClick } from '../hooks/useNotificationClick';
 import { useGroupReceiptAcks } from '../hooks/useGroupReceiptAcks';
 import {
@@ -37,7 +45,10 @@ const CHAT_LATEST_WINDOW = 200;
 /** Ventana inicial que devuelve el detalle de grupo. */
 const GROUP_DETAIL_WINDOW = 50;
 
-export type { PagingState };
+export type { PagingState, FocusedWindow };
+
+/** Chat 1:1 (`key` = telephon) o grupo (`id`) sobre el que se abre una ventana desprendida. */
+export type FocusTarget = { kind: 'chat'; key: string } | { kind: 'group'; id: number };
 
 export type SidebarView = 'chats' | 'groups' | 'contacts' | 'estados' | 'calls';
 
@@ -145,6 +156,19 @@ export interface DashboardContextValue {
     groupPaging: Record<number, PagingState>;
     /** Carga la página anterior de un grupo (cursor = id del mensaje real más antiguo). */
     loadOlderGroupMessages: (groupID: number) => Promise<void>;
+    /**
+     * Ventanas desprendidas (buscar → "ir al mensaje"): tramos del historial que NO están
+     * en messagesByChat / groupMessages para no romper su paginación anclada al último mensaje.
+     */
+    focusedChat: Record<string, FocusedWindow<Message>>;
+    focusedGroup: Record<number, FocusedWindow<GroupMessageResponse>>;
+    /** Abre (o re-apunta) la ventana desprendida en un mensaje; false si no se pudo abrir. */
+    openMessageAt: (target: FocusTarget, messageId: number) => Promise<boolean>;
+    /** Carga la página anterior / posterior de la ventana desprendida. */
+    loadOlderFocused: (target: FocusTarget) => Promise<void>;
+    loadNewerFocused: (target: FocusTarget) => Promise<void>;
+    /** Descarta la ventana desprendida y vuelve a la lista normal (los últimos mensajes). */
+    returnToLatest: (target: FocusTarget) => void;
     isConnected: boolean;
     sendMessage: ReturnType<typeof useWebSocket>['sendMessage'];
     sendTypingIndicator: ReturnType<typeof useWebSocket>['sendTypingIndicator'];
@@ -177,6 +201,10 @@ const windowPaging = (prev: PagingState | undefined, hasMore: boolean, contiguou
     prev?.olderLoaded && contiguous
         ? prev
         : { hasMore, loadingOlder: prev?.loadingOlder ?? false, olderLoaded: false }
+);
+
+const focusKey = (target: FocusTarget): string => (
+    target.kind === 'chat' ? `chat:${target.key}` : `group:${target.id}`
 );
 
 /** `X-Has-More: true|false` (backend 1:1 history); undefined when absent (e.g. not exposed). */
@@ -221,6 +249,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const [groupMessages, setGroupMessages] = useState<Record<number, GroupMessageEntry[]>>({}); // { [groupID]: GroupMessageResponse[] }
     const [groupPaging, setGroupPaging] = useState<Record<number, PagingState>>({});
     const [groupReceipts, setGroupReceipts] = useState<GroupReceiptsState>({});
+    // Ventanas desprendidas (ver DashboardContextValue.focusedChat)
+    const [focusedChat, setFocusedChat] = useState<Record<string, FocusedWindow<Message>>>({});
+    const [focusedGroup, setFocusedGroup] = useState<Record<number, FocusedWindow<GroupMessageResponse>>>({});
     const [selectedGroup, setSelectedGroupState] = useState<SelectedGroup | null>(null);
 
     /**
@@ -316,10 +347,17 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const groupMessagesRef = useRef<Record<number, GroupMessageEntry[]>>({});
     const chatPagingRef = useRef<Record<string, PagingState>>({});
     const groupPagingRef = useRef<Record<number, PagingState>>({});
+    const focusedChatRef = useRef<Record<string, FocusedWindow<Message>>>({});
+    const focusedGroupRef = useRef<Record<number, FocusedWindow<GroupMessageResponse>>>({});
+    // Época por chat/grupo: sube al abrir/reemplazar/descartar la ventana; las respuestas
+    // de una época anterior (más lentas) se ignoran.
+    const focusEpochRef = useRef<Map<string, number>>(new Map());
     useEffect(() => { messagesByChatRef.current = messagesByChat; }, [messagesByChat]);
     useEffect(() => { groupMessagesRef.current = groupMessages; }, [groupMessages]);
     useEffect(() => { chatPagingRef.current = chatPaging; }, [chatPaging]);
     useEffect(() => { groupPagingRef.current = groupPaging; }, [groupPaging]);
+    useEffect(() => { focusedChatRef.current = focusedChat; }, [focusedChat]);
+    useEffect(() => { focusedGroupRef.current = focusedGroup; }, [focusedGroup]);
     // Acuses de grupo del cliente: entrega (agrupada) y lectura (throttled) del grupo abierto.
     const { noteIncomingGroupMessage } = useGroupReceiptAcks({
         selfTelephon: user?.telephon,
@@ -517,6 +555,165 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
+    // ── Ventanas desprendidas (buscar → "ir al mensaje") ────────────────────────
+    // Escriben ref y estado con la misma función pura: el ref permite coalescer cargas
+    // en el acto y el updater funcional convive con los handlers WS que también actualizan.
+    const patchFocusedChat = useCallback((key: string, fn: (w: FocusedWindow<Message>) => FocusedWindow<Message> | null) => {
+        const apply = (rec: Record<string, FocusedWindow<Message>>) => {
+            const cur = rec[key];
+            if (!cur) return rec;
+            const next = fn(cur);
+            if (next === cur) return rec;
+            const out = { ...rec };
+            if (next) out[key] = next; else delete out[key];
+            return out;
+        };
+        focusedChatRef.current = apply(focusedChatRef.current);
+        setFocusedChat(apply);
+    }, []);
+
+    const patchFocusedGroup = useCallback((id: number, fn: (w: FocusedWindow<GroupMessageResponse>) => FocusedWindow<GroupMessageResponse> | null) => {
+        const apply = (rec: Record<number, FocusedWindow<GroupMessageResponse>>) => {
+            const cur = rec[id];
+            if (!cur) return rec;
+            const next = fn(cur);
+            if (next === cur) return rec;
+            const out = { ...rec };
+            if (next) out[id] = next; else delete out[id];
+            return out;
+        };
+        focusedGroupRef.current = apply(focusedGroupRef.current);
+        setFocusedGroup(apply);
+    }, []);
+
+    const putFocusedChat = useCallback((key: string, win: FocusedWindow<Message>) => {
+        const apply = (rec: Record<string, FocusedWindow<Message>>) => ({ ...rec, [key]: win });
+        focusedChatRef.current = apply(focusedChatRef.current);
+        setFocusedChat(apply);
+    }, []);
+
+    const putFocusedGroup = useCallback((id: number, win: FocusedWindow<GroupMessageResponse>) => {
+        const apply = (rec: Record<number, FocusedWindow<GroupMessageResponse>>) => ({ ...rec, [id]: win });
+        focusedGroupRef.current = apply(focusedGroupRef.current);
+        setFocusedGroup(apply);
+    }, []);
+
+    const bumpFocusEpoch = useCallback((fk: string): number => {
+        const next = (focusEpochRef.current.get(fk) ?? 0) + 1;
+        focusEpochRef.current.set(fk, next);
+        return next;
+    }, []);
+
+    const openMessageAt = useCallback(async (target: FocusTarget, messageId: number): Promise<boolean> => {
+        const fk = focusKey(target);
+        const existingChat = target.kind === 'chat' ? focusedChatRef.current[target.key] : undefined;
+        const existingGroup = target.kind === 'group' ? focusedGroupRef.current[target.id] : undefined;
+        if (existingChat && windowHasMessage(existingChat, messageId) && target.kind === 'chat') {
+            // Ya está en la ventana: solo se re-apunta (sin petición).
+            patchFocusedChat(target.key, w => refocus(w, messageId));
+            return true;
+        }
+        if (existingGroup && windowHasMessage(existingGroup, messageId) && target.kind === 'group') {
+            patchFocusedGroup(target.id, w => refocus(w, messageId));
+            return true;
+        }
+        const existing = existingChat ?? existingGroup;
+        const epoch = bumpFocusEpoch(fk);
+        const seq = (existing?.seq ?? 0) + 1;
+        try {
+            if (target.kind === 'chat') {
+                const win = await getChatWindowAround(target.key, messageId, WINDOW_LIMIT);
+                if (focusEpochRef.current.get(fk) !== epoch) return false;
+                if (!win.messages.some(m => m.MessageID === messageId)) throw new Error('target missing from window');
+                putFocusedChat(target.key, createFocusedWindow(win.messages, win, messageId, seq));
+            } else {
+                const win = await getGroupWindowAround(target.id, messageId, WINDOW_LIMIT);
+                if (focusEpochRef.current.get(fk) !== epoch) return false;
+                if (!win.messages.some(m => m.MessageID === messageId)) throw new Error('target missing from window');
+                putFocusedGroup(target.id, createFocusedWindow(win.messages, win, messageId, seq));
+            }
+            return true;
+        } catch (err) {
+            if (focusEpochRef.current.get(fk) !== epoch) return false;
+            console.error(`Error opening message ${messageId} in ${fk}:`, err);
+            const gone = isAxiosError(err) && err.response?.status === 404;
+            addToast({ type: 'error', message: gone ? 'El mensaje ya no está disponible' : 'No se pudo abrir el mensaje' });
+            return false;
+        }
+    }, [addToast, bumpFocusEpoch, patchFocusedChat, patchFocusedGroup, putFocusedChat, putFocusedGroup]);
+
+    const loadOlderFocused = useCallback(async (target: FocusTarget): Promise<void> => {
+        const fk = focusKey(target);
+        const win = target.kind === 'chat' ? focusedChatRef.current[target.key] : focusedGroupRef.current[target.id];
+        if (!win || !win.hasMoreOlder || win.loadingOlder) return;
+        const before = oldestRealMessageId(win.messages);
+        if (before === null) return;
+        const epoch = focusEpochRef.current.get(fk);
+        try {
+            if (target.kind === 'chat') {
+                patchFocusedChat(target.key, w => ({ ...w, loadingOlder: true }));
+                const page = await getChatBefore(target.key, before, OLDER_PAGE_SIZE);
+                if (focusEpochRef.current.get(fk) !== epoch) return;
+                patchFocusedChat(target.key, w => extendOlder(w, page.messages, page.hasMore));
+            } else {
+                patchFocusedGroup(target.id, w => ({ ...w, loadingOlder: true }));
+                const page = await getGroupBefore(target.id, before, OLDER_PAGE_SIZE);
+                if (focusEpochRef.current.get(fk) !== epoch) return;
+                patchFocusedGroup(target.id, w => extendOlder(w, page.messages, page.hasMore));
+            }
+        } catch (err) {
+            console.error(`Error loading older messages for ${fk}:`, err);
+            if (focusEpochRef.current.get(fk) !== epoch) return;
+            if (target.kind === 'chat') patchFocusedChat(target.key, w => ({ ...w, loadingOlder: false }));
+            else patchFocusedGroup(target.id, w => ({ ...w, loadingOlder: false }));
+        }
+    }, [patchFocusedChat, patchFocusedGroup]);
+
+    const loadNewerFocused = useCallback(async (target: FocusTarget): Promise<void> => {
+        const fk = focusKey(target);
+        const win = target.kind === 'chat' ? focusedChatRef.current[target.key] : focusedGroupRef.current[target.id];
+        if (!win || !win.hasMoreNewer || win.loadingNewer) return;
+        const after = newestRealMessageId(win.messages);
+        if (after === null) return;
+        const epoch = focusEpochRef.current.get(fk);
+        try {
+            if (target.kind === 'chat') {
+                patchFocusedChat(target.key, w => ({ ...w, loadingNewer: true }));
+                const page = await getChatAfter(target.key, after, OLDER_PAGE_SIZE);
+                if (focusEpochRef.current.get(fk) !== epoch) return;
+                patchFocusedChat(target.key, w => extendNewer(w, page.messages, page.hasMoreNewer));
+            } else {
+                patchFocusedGroup(target.id, w => ({ ...w, loadingNewer: true }));
+                const page = await getGroupAfter(target.id, after, OLDER_PAGE_SIZE);
+                if (focusEpochRef.current.get(fk) !== epoch) return;
+                patchFocusedGroup(target.id, w => extendNewer(w, page.messages, page.hasMoreNewer));
+            }
+        } catch (err) {
+            console.error(`Error loading newer messages for ${fk}:`, err);
+            if (focusEpochRef.current.get(fk) !== epoch) return;
+            if (target.kind === 'chat') patchFocusedChat(target.key, w => ({ ...w, loadingNewer: false }));
+            else patchFocusedGroup(target.id, w => ({ ...w, loadingNewer: false }));
+        }
+    }, [patchFocusedChat, patchFocusedGroup]);
+
+    const returnToLatest = useCallback((target: FocusTarget) => {
+        bumpFocusEpoch(focusKey(target));
+        if (target.kind === 'chat') patchFocusedChat(target.key, () => null);
+        else patchFocusedGroup(target.id, () => null);
+    }, [bumpFocusEpoch, patchFocusedChat, patchFocusedGroup]);
+
+    // Salir de un chat/grupo descarta su ventana desprendida (y cualquier apertura en curso).
+    const selectedChatKey = selected?.Number;
+    const selectedGroupKey = selectedGroup?.ID;
+    useEffect(() => {
+        for (const key of Object.keys(focusedChatRef.current)) {
+            if (key !== selectedChatKey) { bumpFocusEpoch(focusKey({ kind: 'chat', key })); patchFocusedChat(key, () => null); }
+        }
+        for (const id of Object.keys(focusedGroupRef.current).map(Number)) {
+            if (id !== selectedGroupKey) { bumpFocusEpoch(focusKey({ kind: 'group', id })); patchFocusedGroup(id, () => null); }
+        }
+    }, [selectedChatKey, selectedGroupKey, bumpFocusEpoch, patchFocusedChat, patchFocusedGroup]);
+
     // Fetch full detail (with members) for a specific group and update selectedGroup
     const fetchGroupDetail = useCallback(async (groupID: number) => {
         try {
@@ -659,6 +856,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 );
                 return { ...prev, [readerTelephon]: updated };
             });
+            patchFocusedChat(readerTelephon, w => updateFocusedMessages(w, m =>
+                m.Receptor === readerTelephon && (m.Status === 'enviado' || m.Status === 'entregado')
+                    ? { ...m, Status: 'visto' as const }
+                    : m
+            ));
         };
 
         // Handler: mensajes pendientes marcados como "entregado" (receptor se conectó)
@@ -676,6 +878,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 );
                 return { ...prev, [receiverTelephon]: updated };
             });
+            patchFocusedChat(receiverTelephon, w => updateFocusedMessages(w, m =>
+                m.Receptor === receiverTelephon && m.Status === 'enviado'
+                    ? { ...m, Status: 'entregado' as const }
+                    : m
+            ));
         };
 
         // Handler: un contacto cambió su avatar
@@ -718,6 +925,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 );
                 return { ...prev, [contactNumber]: updated };
             });
+            patchFocusedChat(contactNumber, w => updateFocusedMessages(w, m =>
+                m.MessageID === updatedMsg.MessageID ? { ...m, Message: updatedMsg.Message, Edited: true } : m
+            ));
         };
 
         // Handler: un mensaje fue eliminado para todos (por mí o por el otro participante)
@@ -735,6 +945,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 const updated = msgs.filter(m => m.MessageID !== deletedMsg.MessageID);
                 return { ...prev, [contactNumber]: updated };
             });
+            patchFocusedChat(contactNumber, w => removeFocusedMessage(w, deletedMsg.MessageID));
         };
 
         // ── Group event handlers ───────────────────────────────────────────────────
@@ -791,6 +1002,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                     ),
                 };
             });
+            patchFocusedGroup(updatedMsg.GroupID, w => updateFocusedMessages(w, m =>
+                m.MessageID === updatedMsg.MessageID ? { ...m, Message: updatedMsg.Message, Edited: true } : m
+            ));
         };
 
         /** A group message was deleted for everyone. */
@@ -804,6 +1018,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                     [deletedMsg.GroupID]: msgs.filter(m => m.MessageID !== deletedMsg.MessageID),
                 };
             });
+            patchFocusedGroup(deletedMsg.GroupID, w => removeFocusedMessage(w, deletedMsg.MessageID));
         };
 
         /**
@@ -943,7 +1158,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('group_member_left', handleGroupMemberLeft);
             off('group_receipt', handleGroupReceipt);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
@@ -997,6 +1212,12 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         fetchGroupDetail,
         groupPaging,
         loadOlderGroupMessages,
+        focusedChat,
+        focusedGroup,
+        openMessageAt,
+        loadOlderFocused,
+        loadNewerFocused,
+        returnToLatest,
         // WebSocket state & actions
         isConnected,
         sendMessage,

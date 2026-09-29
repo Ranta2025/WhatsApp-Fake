@@ -86,6 +86,12 @@ describe('MessageList infinite scroll up (1:1)', () => {
         expect(status?.parentElement?.className).toContain('mt-0!');
     });
 
+    it('cada burbuja lleva data-message-id (destino del salto desde una búsqueda)', () => {
+        renderWith(undefined, [msg(5), msg(6)]);
+        const marked = Array.from(container.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'));
+        expect(marked).toEqual(['5', '6']);
+    });
+
     it('desactiva el scroll anchoring nativo del navegador en el contenedor', () => {
         renderWith(undefined);
         expect(scroller().style.overflowAnchor).toBe('none');

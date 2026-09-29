@@ -251,3 +251,14 @@
   color: var(--color-slate-200) !important;
   border: 1px solid var(--color-slate-700) !important;
 }
+
+/* Resaltado temporal del mensaje al que se salta desde una búsqueda (ver useLoadOlderOnScroll). */
+@keyframes search-flash {
+  0%, 60% { background-color: rgba(250, 204, 21, 0.28); }
+  100% { background-color: transparent; }
+}
+
+[data-search-flash="true"] {
+  border-radius: 0.75rem;
+  animation: search-flash 1.8s ease-out;
+}

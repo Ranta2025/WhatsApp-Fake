@@ -53,6 +53,21 @@ export function oldestRealMessageId(list: readonly MergeableMessage[] | undefine
     return oldest;
 }
 
+/** Largest numeric MessageID (the "after" cursor); ignores synthetic entries. */
+export function newestRealMessageId(list: readonly MergeableMessage[] | undefined): number | null {
+    if (!list) return null;
+    let newest: number | null = null;
+    for (const m of list) {
+        if (isRealId(m.MessageID) && (newest === null || m.MessageID > newest)) newest = m.MessageID;
+    }
+    return newest;
+}
+
+/** Dedupes by id (first occurrence wins) and sorts chronologically. */
+export function sortUnique<T extends MergeableMessage>(list: readonly T[]): T[] {
+    return dedupeAndSort([...list]);
+}
+
 /** Adds an older page before the loaded messages; already-loaded copies win. */
 export function prependOlder<T extends MergeableMessage>(prev: readonly T[] | undefined, older: readonly T[]): T[] {
     return dedupeAndSort([...(prev ?? []), ...older]);

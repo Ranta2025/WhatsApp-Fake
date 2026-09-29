@@ -163,6 +163,7 @@ const MessageList = () => {
                             return (
                                 <div 
                                     key={m.MessageID} 
+                                    data-message-id={m.MessageID}
                                     className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 animate-slide-up`}
                                 >
                                     <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`}>

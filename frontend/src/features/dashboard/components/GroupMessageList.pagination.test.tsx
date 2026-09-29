@@ -91,6 +91,13 @@ describe('GroupMessageList infinite scroll up', () => {
         expect(container.querySelector('[role="status"]')?.textContent).toContain('Cargando mensajes anteriores');
     });
 
+    it('cada burbuja real lleva data-message-id; las entradas del sistema no', () => {
+        const system: GroupMessageEntry = { MessageID: 'system_1', GroupID: 5, IsSystem: true, Message: 'Ana salió del grupo', Time: '2026-01-01T09:00:00Z' };
+        renderList({ messages: [system, msg(5), msg(6)] });
+        const marked = Array.from(container.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'));
+        expect(marked).toEqual(['5', '6']);
+    });
+
     it('desactiva el scroll anchoring nativo del contenedor', () => {
         renderList();
         expect(scroller().style.overflowAnchor).toBe('none');

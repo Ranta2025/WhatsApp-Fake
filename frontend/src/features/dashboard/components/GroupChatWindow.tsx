@@ -49,7 +49,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
     const isMenuOpen = menuOpen === msg.MessageID;
 
     return (
-        <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} group px-2 py-0.5`}>
+        <div data-message-id={msg.MessageID} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group px-2 py-0.5`}>
             <div className={`relative max-w-[75%] min-w-[80px] ${isMine ? 'items-end' : 'items-start'} flex flex-col`}>
                 {/* Reply preview */}
                 {msg.ReplyToMessage && (
