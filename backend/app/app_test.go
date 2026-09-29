@@ -6,6 +6,7 @@ import (
 	"gorm/backend/metrics"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -235,5 +236,65 @@ func TestDependencyCheckLoopRunsAtStartupThenPerTickAndStopsOnCancel(t *testing.
 	case <-calls:
 		t.Fatal("siguió chequeando después de cancelar el contexto")
 	case <-time.After(250 * time.Millisecond):
+	}
+}
+
+// ==================== OB6b: review warnings ====================
+
+// Un panic en un handler debe contarse como HTTP 500 en http_requests_total y
+// dejar el gauge in-flight en 0 (Metrics envuelve a Recovery).
+func TestNewEngineCountsPanicAsHTTP500(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	m := newTestMetrics()
+	engine, err := newEngine(m)
+	require.NoError(t, err)
+	engine.GET("/boom", func(*gin.Context) { panic("boom") })
+
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, httptest.NewRequest("GET", "/boom", nil))
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.HTTPRequestsTotal.WithLabelValues("GET", "/boom", "500")))
+	assert.Equal(t, 0.0, testutil.ToFloat64(m.HTTPRequestsInFlight))
+}
+
+// Si el listener de métricas falla, Run debe pasar por el mismo apagado ordenado
+// (cancelar jobs y apagar el server principal) en vez de retornar de golpe.
+func TestRunShutsDownMainServerWhenMetricsListenerFails(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer occupied.Close()
+
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	mainAddr := free.Addr().String()
+	free.Close()
+
+	cleanupCancelled := make(chan struct{})
+	a := &App{
+		server:              &http.Server{Addr: mainAddr, Handler: http.NewServeMux()},
+		metricsServer:       &http.Server{Addr: occupied.Addr().String(), Handler: http.NewServeMux()},
+		cancelStatusCleanup: func() { close(cleanupCancelled) },
+	}
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- a.Run(context.Background()) }()
+
+	select {
+	case err := <-runErr:
+		require.Error(t, err, "el fallo del listener debe propagarse")
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run no retornó tras fallar el listener de métricas")
+	}
+
+	select {
+	case <-cleanupCancelled:
+	default:
+		t.Fatal("no cancelaron los jobs de fondo en el apagado")
+	}
+	conn, dialErr := net.DialTimeout("tcp", mainAddr, 300*time.Millisecond)
+	if dialErr == nil {
+		conn.Close()
+		t.Fatal("el server principal siguió escuchando tras el fallo del listener")
 	}
 }

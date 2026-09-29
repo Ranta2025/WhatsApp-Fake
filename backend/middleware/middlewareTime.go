@@ -41,16 +41,17 @@ func TimeMiddleware() gin.HandlerFunc {
 	}
 }
 
-// accessLogLevel elige el nivel según el estado: 5xx Error, 4xx Warn, /healthz
-// Debug (para no inundar con los healthchecks) y el resto Info.
+// accessLogLevel elige el nivel según el estado: 5xx Error y 4xx Warn (también
+// en /healthz: un healthcheck fallido nunca debe quedar oculto), /healthz
+// exitoso Debug (para no inundar con los healthchecks) y el resto Info.
 func accessLogLevel(path string, status int) slog.Level {
 	switch {
-	case path == "/healthz":
-		return slog.LevelDebug
 	case status >= 500:
 		return slog.LevelError
 	case status >= 400:
 		return slog.LevelWarn
+	case path == "/healthz":
+		return slog.LevelDebug
 	default:
 		return slog.LevelInfo
 	}

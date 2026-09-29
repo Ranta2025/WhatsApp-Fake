@@ -119,12 +119,13 @@ func newEngine(m *metrics.Metrics) (*gin.Engine, error) {
 	// con esto, la cancelación/timeout de la petición llega hasta la BD.
 	engine.ContextWithFallback = true
 	// Orden de middlewares: RequestID primero (todo log/respuesta lleva id),
-	// luego Recovery, después Métricas y CORS; el access log va al final para
+	// luego Métricas envolviendo a Recovery (un panic ya convertido en 500 por
+	// Recovery se cuenta como 500), después CORS; el access log va al final para
 	// registrar el estado real de la respuesta.
 	engine.Use(
 		middleware.RequestID(),
-		middleware.Recovery(),
 		middleware.Metrics(m),
+		middleware.Recovery(),
 		config.Cors(),
 		middleware.TimeMiddleware(),
 	)
@@ -303,11 +304,14 @@ func (a *App) Run(ctx context.Context) error {
 		}()
 	}
 
+	// Un fallo de cualquiera de los dos listeners entra al mismo apagado
+	// ordenado que la cancelación de ctx (jobs, server principal, BD y Redis).
+	var runErr error
 	select {
 	case err := <-errCh:
-		return err
+		runErr = err
 	case err := <-metricsErrCh:
-		return err
+		runErr = err
 	case <-ctx.Done():
 	}
 
@@ -324,9 +328,18 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 
-	if sqlDB, dbErr := a.db.DB(); dbErr == nil {
-		sqlDB.Close()
+	if a.db != nil {
+		if sqlDB, dbErr := a.db.DB(); dbErr == nil {
+			sqlDB.Close()
+		}
 	}
-	a.redis.Close()
+	if a.redis != nil {
+		a.redis.Close()
+	}
+	// El error que provocó el apagado (listener caído) tiene prioridad sobre
+	// los errores del propio apagado.
+	if runErr != nil {
+		return runErr
+	}
 	return err
 }

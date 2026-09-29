@@ -58,6 +58,9 @@ func TestAccessLogLevelByStatus(t *testing.T) {
 		{"5xx error", "/fail", http.StatusInternalServerError, slog.LevelError},
 		{"4xx warn", "/bad", http.StatusBadRequest, slog.LevelWarn},
 		{"healthz debug", "/healthz", http.StatusOK, slog.LevelDebug},
+		{"healthz 503 error", "/healthz", http.StatusServiceUnavailable, slog.LevelError},
+		{"healthz 500 error", "/healthz", http.StatusInternalServerError, slog.LevelError},
+		{"healthz 404 warn", "/healthz", http.StatusNotFound, slog.LevelWarn},
 	}
 
 	for _, tc := range cases {

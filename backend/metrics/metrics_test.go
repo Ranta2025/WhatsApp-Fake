@@ -135,6 +135,24 @@ func TestMetrics_HistogramObservesAndBucketsBound(t *testing.T) {
 
 	names := gatherNames(t, m.Registry())
 	require.Contains(t, names, "http_request_duration_seconds")
+
+	// Layout de buckets: 12 límites exponenciales desde 5ms (x2), hasta 10.24s.
+	families, err := m.Registry().Gather()
+	require.NoError(t, err)
+	var bounds []float64
+	for _, family := range families {
+		if family.GetName() != "http_request_duration_seconds" {
+			continue
+		}
+		for _, b := range family.GetMetric()[0].GetHistogram().GetBucket() {
+			bounds = append(bounds, b.GetUpperBound())
+		}
+	}
+	want := prometheus.ExponentialBuckets(0.005, 2, 12)
+	require.Len(t, bounds, 12)
+	assert.InDeltaSlice(t, want, bounds, 1e-9)
+	assert.InDelta(t, 0.005, bounds[0], 1e-9)
+	assert.InDelta(t, 10.24, bounds[len(bounds)-1], 1e-9)
 }
 
 func TestMetrics_IsolatedRegistries(t *testing.T) {
@@ -144,8 +162,35 @@ func TestMetrics_IsolatedRegistries(t *testing.T) {
 	first.MessagesSentTotal.WithLabelValues(KindDirect).Inc()
 	first.MessagesSentTotal.WithLabelValues(KindDirect).Inc()
 
-	assert.Equal(t, 2.0, testutil.ToFloat64(first.MessagesSentTotal.WithLabelValues(KindDirect)))
-	assert.Equal(t, 0.0, testutil.ToFloat64(second.MessagesSentTotal.WithLabelValues(KindDirect)))
+	// Solo el registry de first tiene la serie; el de second no la ve (no se
+	// crea ninguna serie en second al consultar, a diferencia de ToFloat64 sobre
+	// WithLabelValues, que la crearía en 0 y no probaría nada).
+	assert.Equal(t, 2.0, sampleValue(t, first.Registry(), "messages_sent_total", "kind", KindDirect))
+	assert.NotContains(t, gatherNames(t, second.Registry()), "messages_sent_total")
+}
+
+// sampleValue devuelve el valor de un counter/gauge con un label dado, o -1 si
+// la serie no existe en el registry.
+func sampleValue(t *testing.T, gatherer prometheus.Gatherer, name, label, value string) float64 {
+	t.Helper()
+	families, err := gatherer.Gather()
+	require.NoError(t, err)
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, l := range metric.GetLabel() {
+				if l.GetName() == label && l.GetValue() == value {
+					if c := metric.GetCounter(); c != nil {
+						return c.GetValue()
+					}
+					return metric.GetGauge().GetValue()
+				}
+			}
+		}
+	}
+	return -1
 }
 
 func TestHandler_ServesRegistryInPrometheusFormat(t *testing.T) {
