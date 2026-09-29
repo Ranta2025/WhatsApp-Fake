@@ -349,9 +349,14 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const groupPagingRef = useRef<Record<number, PagingState>>({});
     const focusedChatRef = useRef<Record<string, FocusedWindow<Message>>>({});
     const focusedGroupRef = useRef<Record<number, FocusedWindow<GroupMessageResponse>>>({});
-    // Época por chat/grupo: sube al abrir/reemplazar/descartar la ventana; las respuestas
-    // de una época anterior (más lentas) se ignoran.
+    // Época de la ventana por chat/grupo: sube solo cuando la ventana se reemplaza o se
+    // descarta (nunca al *empezar* una apertura); las cargas de página capturan la época al
+    // empezar y descartan su respuesta si cambió. Una apertura que falla no la toca, así la
+    // ventana original conserva sus cargas en curso y sus flags de loading se limpian solos.
     const focusEpochRef = useRef<Map<string, number>>(new Map());
+    // Petición de apertura vigente por chat/grupo: sube al abrir, re-enfocar, volver a lo
+    // reciente o salir del chat; una apertura cuya petición ya no es la vigente se descarta.
+    const openSeqRef = useRef<Map<string, number>>(new Map());
     useEffect(() => { messagesByChatRef.current = messagesByChat; }, [messagesByChat]);
     useEffect(() => { groupMessagesRef.current = groupMessages; }, [groupMessages]);
     useEffect(() => { chatPagingRef.current = chatPaging; }, [chatPaging]);
@@ -604,10 +609,25 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         return next;
     }, []);
 
+    const bumpOpenSeq = useCallback((fk: string): number => {
+        const next = (openSeqRef.current.get(fk) ?? 0) + 1;
+        openSeqRef.current.set(fk, next);
+        return next;
+    }, []);
+
+    // Descarta la ventana y cualquier apertura pendiente de ese chat/grupo.
+    const dropFocusState = useCallback((fk: string) => {
+        bumpOpenSeq(fk);
+        bumpFocusEpoch(fk);
+    }, [bumpFocusEpoch, bumpOpenSeq]);
+
     const openMessageAt = useCallback(async (target: FocusTarget, messageId: number): Promise<boolean> => {
         const fk = focusKey(target);
         const existingChat = target.kind === 'chat' ? focusedChatRef.current[target.key] : undefined;
         const existingGroup = target.kind === 'group' ? focusedGroupRef.current[target.id] : undefined;
+        // Toda petición nueva (también el re-enfoque sin red) sustituye a una apertura pendiente:
+        // la última elección del usuario gana.
+        const openSeq = bumpOpenSeq(fk);
         if (existingChat && windowHasMessage(existingChat, messageId) && target.kind === 'chat') {
             // Ya está en la ventana: solo se re-apunta (sin petición).
             patchFocusedChat(target.key, w => refocus(w, messageId));
@@ -617,30 +637,32 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             patchFocusedGroup(target.id, w => refocus(w, messageId));
             return true;
         }
-        const existing = existingChat ?? existingGroup;
-        const epoch = bumpFocusEpoch(fk);
-        const seq = (existing?.seq ?? 0) + 1;
         try {
             if (target.kind === 'chat') {
                 const win = await getChatWindowAround(target.key, messageId, WINDOW_LIMIT);
-                if (focusEpochRef.current.get(fk) !== epoch) return false;
+                if (openSeqRef.current.get(fk) !== openSeq) return false;
                 if (!win.messages.some(m => m.MessageID === messageId)) throw new Error('target missing from window');
+                // seq sobre la ventana vigente *ahora* (un re-enfoque intermedio ya lo subió).
+                const seq = (focusedChatRef.current[target.key]?.seq ?? 0) + 1;
+                bumpFocusEpoch(fk); // las cargas de la ventana anterior pasan a ser obsoletas
                 putFocusedChat(target.key, createFocusedWindow(win.messages, win, messageId, seq));
             } else {
                 const win = await getGroupWindowAround(target.id, messageId, WINDOW_LIMIT);
-                if (focusEpochRef.current.get(fk) !== epoch) return false;
+                if (openSeqRef.current.get(fk) !== openSeq) return false;
                 if (!win.messages.some(m => m.MessageID === messageId)) throw new Error('target missing from window');
+                const seq = (focusedGroupRef.current[target.id]?.seq ?? 0) + 1;
+                bumpFocusEpoch(fk);
                 putFocusedGroup(target.id, createFocusedWindow(win.messages, win, messageId, seq));
             }
             return true;
         } catch (err) {
-            if (focusEpochRef.current.get(fk) !== epoch) return false;
+            if (openSeqRef.current.get(fk) !== openSeq) return false;
             console.error(`Error opening message ${messageId} in ${fk}:`, err);
             const gone = isAxiosError(err) && err.response?.status === 404;
             addToast({ type: 'error', message: gone ? 'El mensaje ya no está disponible' : 'No se pudo abrir el mensaje' });
             return false;
         }
-    }, [addToast, bumpFocusEpoch, patchFocusedChat, patchFocusedGroup, putFocusedChat, putFocusedGroup]);
+    }, [addToast, bumpFocusEpoch, bumpOpenSeq, patchFocusedChat, patchFocusedGroup, putFocusedChat, putFocusedGroup]);
 
     const loadOlderFocused = useCallback(async (target: FocusTarget): Promise<void> => {
         const fk = focusKey(target);
@@ -697,22 +719,22 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     }, [patchFocusedChat, patchFocusedGroup]);
 
     const returnToLatest = useCallback((target: FocusTarget) => {
-        bumpFocusEpoch(focusKey(target));
+        dropFocusState(focusKey(target));
         if (target.kind === 'chat') patchFocusedChat(target.key, () => null);
         else patchFocusedGroup(target.id, () => null);
-    }, [bumpFocusEpoch, patchFocusedChat, patchFocusedGroup]);
+    }, [dropFocusState, patchFocusedChat, patchFocusedGroup]);
 
     // Salir de un chat/grupo descarta su ventana desprendida (y cualquier apertura en curso).
     const selectedChatKey = selected?.Number;
     const selectedGroupKey = selectedGroup?.ID;
     useEffect(() => {
         for (const key of Object.keys(focusedChatRef.current)) {
-            if (key !== selectedChatKey) { bumpFocusEpoch(focusKey({ kind: 'chat', key })); patchFocusedChat(key, () => null); }
+            if (key !== selectedChatKey) { dropFocusState(focusKey({ kind: 'chat', key })); patchFocusedChat(key, () => null); }
         }
         for (const id of Object.keys(focusedGroupRef.current).map(Number)) {
-            if (id !== selectedGroupKey) { bumpFocusEpoch(focusKey({ kind: 'group', id })); patchFocusedGroup(id, () => null); }
+            if (id !== selectedGroupKey) { dropFocusState(focusKey({ kind: 'group', id })); patchFocusedGroup(id, () => null); }
         }
-    }, [selectedChatKey, selectedGroupKey, bumpFocusEpoch, patchFocusedChat, patchFocusedGroup]);
+    }, [selectedChatKey, selectedGroupKey, dropFocusState, patchFocusedChat, patchFocusedGroup]);
 
     // Fetch full detail (with members) for a specific group and update selectedGroup
     const fetchGroupDetail = useCallback(async (groupID: number) => {

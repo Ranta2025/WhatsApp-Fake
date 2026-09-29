@@ -366,6 +366,127 @@ describe('DashboardProvider detached windows', () => {
         });
     });
 
+    describe('1:1 chat: window races (controllable promises)', () => {
+        type Held = { params: Record<string, number>; resolve: (v: unknown) => void; reject: (e: unknown) => void };
+        let holding: boolean;
+        let held: Held[];
+        const heldFor = (key: 'around' | 'before' | 'after'): Held => {
+            const h = held.find(x => x.params[key] !== undefined);
+            if (!h) throw new Error(`no held ${key} request`);
+            return h;
+        };
+
+        beforeEach(() => {
+            holding = false;
+            held = [];
+            mockGet.mockImplementation((url: string, config?: GetConfig) => {
+                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (!url.startsWith('/api/v1/chat/')) return Promise.resolve({ data: null });
+                if (!holding) return Promise.resolve(around(40, 60));
+                return new Promise((resolve, reject) => { held.push({ params: config?.params ?? {}, resolve, reject }); });
+            });
+        });
+
+        const openInitial = async () => {
+            await mount();
+            await act(async () => { await ctx!.openMessageAt({ kind: 'chat', key: 'B' }, 50); });
+            holding = true;
+        };
+        const B = { kind: 'chat', key: 'B' } as const;
+        const older = { data: range(30, 39).map(chatMsg), headers: { 'x-has-more': 'true' } };
+        const newer = { data: range(61, 70).map(chatMsg), headers: { 'x-has-more-newer': 'true' } };
+
+        it('a loadOlder started while a replacing open is in flight cannot merge into the replacement window', async () => {
+            await openInitial();
+            let open: Promise<boolean> = Promise.resolve(false);
+            let load: Promise<void> = Promise.resolve();
+            await act(async () => {
+                open = ctx!.openMessageAt(B, 5);
+                load = ctx!.loadOlderFocused(B);
+            });
+            await act(async () => { heldFor('around').resolve(around(1, 10, { older: false })); await open; });
+            await act(async () => { heldFor('before').resolve(older); await load; });
+
+            expect(ids(fc().messages)).toEqual(range(1, 10));
+            expect(ctx!.focusedChat['B']).toMatchObject({ targetId: 5, hasMoreOlder: false, loadingOlder: false });
+        });
+
+        it('a loadNewer started while a replacing open is in flight cannot merge into the replacement window', async () => {
+            await openInitial();
+            let open: Promise<boolean> = Promise.resolve(false);
+            let load: Promise<void> = Promise.resolve();
+            await act(async () => {
+                open = ctx!.openMessageAt(B, 5);
+                load = ctx!.loadNewerFocused(B);
+            });
+            await act(async () => { heldFor('around').resolve(around(1, 10)); await open; });
+            await act(async () => { heldFor('after').resolve(newer); await load; });
+
+            expect(ids(fc().messages)).toEqual(range(1, 10));
+            expect(ctx!.focusedChat['B']).toMatchObject({ hasMoreNewer: true, loadingNewer: false });
+        });
+
+        it('a failed open (404) leaves the original window usable and its in-flight loadOlder still clears loading', async () => {
+            await openInitial();
+            let open: Promise<boolean> = Promise.resolve(true);
+            let load: Promise<void> = Promise.resolve();
+            await act(async () => {
+                load = ctx!.loadOlderFocused(B);
+                open = ctx!.openMessageAt(B, 5);
+            });
+            await act(async () => { heldFor('around').reject(httpError(404)); await open; });
+            await act(async () => { heldFor('before').resolve(older); await load; });
+
+            expect(ids(fc().messages)).toEqual(range(30, 60));
+            expect(ctx!.focusedChat['B']).toMatchObject({ loadingOlder: false, targetId: 50 });
+        });
+
+        it('a failed open (500) with a failing in-flight loadNewer does not leave loadingNewer stuck', async () => {
+            await openInitial();
+            let open: Promise<boolean> = Promise.resolve(true);
+            let load: Promise<void> = Promise.resolve();
+            await act(async () => {
+                load = ctx!.loadNewerFocused(B);
+                open = ctx!.openMessageAt(B, 5);
+            });
+            await act(async () => { heldFor('around').reject(httpError(500)); await open; });
+            await act(async () => { heldFor('after').reject(new Error('boom')); await load; });
+
+            expect(ctx!.focusedChat['B']).toMatchObject({ loadingNewer: false });
+            expect(ids(fc().messages)).toEqual(range(40, 60));
+        });
+
+        it('a target missing from the server window keeps the original window and clears its loading flags', async () => {
+            await openInitial();
+            let open: Promise<boolean> = Promise.resolve(true);
+            let load: Promise<void> = Promise.resolve();
+            await act(async () => {
+                load = ctx!.loadOlderFocused(B);
+                open = ctx!.openMessageAt(B, 999);
+            });
+            await act(async () => { heldFor('around').resolve(around(1, 10)); await open; });
+            await act(async () => { heldFor('before').resolve(older); await load; });
+
+            expect(ids(fc().messages)).toEqual(range(30, 60));
+            expect(ctx!.focusedChat['B']).toMatchObject({ loadingOlder: false });
+        });
+
+        it('refocusing inside the window supersedes a pending out-of-window open', async () => {
+            await openInitial();
+            let open: Promise<boolean> = Promise.resolve(true);
+            await act(async () => { open = ctx!.openMessageAt(B, 5); });
+            await act(async () => { await ctx!.openMessageAt(B, 45); });
+            expect(ctx!.focusedChat['B']).toMatchObject({ targetId: 45 });
+
+            let landed = true;
+            await act(async () => { heldFor('around').resolve(around(1, 10)); landed = await open; });
+
+            expect(landed).toBe(false);
+            expect(ctx!.focusedChat['B']).toMatchObject({ targetId: 45 });
+            expect(ids(fc().messages)).toEqual(range(40, 60));
+        });
+    });
+
     describe('group', () => {
         const groupAround = (from: number, to: number, flags: { older?: boolean; newer?: boolean } = {}) => ({
             data: { messages: range(from, to).map(groupMsg), hasMoreOlder: flags.older ?? true, hasMoreNewer: flags.newer ?? true },
@@ -403,6 +524,52 @@ describe('DashboardProvider detached windows', () => {
 
             expect(ids(fg().messages)).toEqual(range(30, 65));
             expect(ctx!.focusedGroup[9]).toMatchObject({ hasMoreOlder: false, hasMoreNewer: false });
+        });
+
+        it('races: an old-window page cannot merge into a replacement; a failed open keeps loading flags clean; refocus supersedes a pending open', async () => {
+            type Held = { params: Record<string, number>; resolve: (v: unknown) => void; reject: (e: unknown) => void };
+            const held: Held[] = [];
+            let holding = false;
+            mockGet.mockImplementation((url: string, config?: GetConfig) => {
+                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url !== '/api/v1/group/9/message') return Promise.resolve({ data: null });
+                if (!holding) return Promise.resolve(groupAround(40, 60));
+                return new Promise((resolve, reject) => { held.push({ params: config?.params ?? {}, resolve, reject }); });
+            });
+            const heldFor = (key: string): Held => {
+                const h = held.find(x => x.params[key] !== undefined);
+                if (!h) throw new Error(`no held ${key} request`);
+                return h;
+            };
+            const G = { kind: 'group', id: 9 } as const;
+            await mount();
+            await act(async () => { await ctx!.openMessageAt(G, 50); });
+            holding = true;
+
+            // (a) replacement wins over an old-window page
+            let open: Promise<boolean> = Promise.resolve(false);
+            let load: Promise<void> = Promise.resolve();
+            await act(async () => { open = ctx!.openMessageAt(G, 5); load = ctx!.loadOlderFocused(G); });
+            await act(async () => { heldFor('around').resolve(groupAround(1, 10, { older: false })); await open; });
+            await act(async () => { heldFor('before').resolve({ data: { messages: range(30, 39).reverse().map(groupMsg), hasMore: true } }); await load; });
+            expect(ids(fg().messages)).toEqual(range(1, 10));
+            expect(ctx!.focusedGroup[9]).toMatchObject({ loadingOlder: false, hasMoreOlder: false });
+
+            // (b) a failed open keeps the window and its loading flags clean
+            held.length = 0;
+            await act(async () => { load = ctx!.loadNewerFocused(G); open = ctx!.openMessageAt(G, 999); });
+            await act(async () => { heldFor('around').reject(httpError(404)); await open; });
+            await act(async () => { heldFor('after').reject(new Error('boom')); await load; });
+            expect(ctx!.focusedGroup[9]).toMatchObject({ loadingNewer: false });
+            expect(ids(fg().messages)).toEqual(range(1, 10));
+
+            // (c) refocusing inside the window supersedes a pending open
+            held.length = 0;
+            await act(async () => { open = ctx!.openMessageAt(G, 500); });
+            await act(async () => { await ctx!.openMessageAt(G, 3); });
+            await act(async () => { heldFor('around').resolve(groupAround(490, 510)); await open; });
+            expect(ctx!.focusedGroup[9]).toMatchObject({ targetId: 3 });
+            expect(ids(fg().messages)).toEqual(range(1, 10));
         });
 
         it('403 / 404 toast and open nothing; returnToLatest clears', async () => {

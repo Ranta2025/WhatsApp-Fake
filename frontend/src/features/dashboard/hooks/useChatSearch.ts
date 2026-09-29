@@ -70,14 +70,16 @@ export function useChatSearch({
     const controller = useRef<AbortController | null>(null);
     // Generación de la búsqueda: las respuestas de una generación anterior se ignoran.
     const generation = useRef(0);
-    const loadingMoreRef = useRef(false);
+    // Página siguiente en curso: quien pide más mientras hay una carga (p. ej. el prefetch)
+    // comparte esa misma promesa en vez de recibir [].
+    const pendingMoreRef = useRef<Promise<SearchResult[]> | null>(null);
 
     const cancelPending = useCallback(() => {
         if (timer.current) { clearTimeout(timer.current); timer.current = null; }
         controller.current?.abort();
         controller.current = null;
         generation.current += 1;
-        loadingMoreRef.current = false;
+        pendingMoreRef.current = null;
     }, []);
 
     const clearResults = useCallback((nextStatus: ChatSearchStatus) => {
@@ -131,26 +133,32 @@ export function useChatSearch({
         }, latest.current.debounceMs);
     }, [cancelPending, clearResults, runSearch]);
 
-    const loadMore = useCallback(async (): Promise<SearchResult[]> => {
+    const loadMore = useCallback((): Promise<SearchResult[]> => {
+        if (pendingMoreRef.current) return pendingMoreRef.current;
         const { search: doSearch, pageSize: limit } = latest.current;
         const last = results[results.length - 1];
-        if (!hasMore || loadingMoreRef.current || !last || !activeQuery || !controller.current) return [];
+        if (!hasMore || !last || !activeQuery || !controller.current) return Promise.resolve([]);
         const gen = generation.current;
         const signal = controller.current.signal;
-        loadingMoreRef.current = true;
         setLoadingMore(true);
-        try {
-            const page = await doSearch(activeQuery, { before: last.messageID, limit, signal });
-            if (signal.aborted || gen !== generation.current) return [];
-            setResults(prev => [...prev, ...page.results]);
-            setHasMore(page.hasMore && page.results.length > 0);
-            return page.results;
-        } catch (err) {
-            if (!signal.aborted && gen === generation.current) console.error('Error loading more search results:', err);
-            return [];
-        } finally {
-            if (gen === generation.current) { loadingMoreRef.current = false; setLoadingMore(false); }
-        }
+        const run = (async (): Promise<SearchResult[]> => {
+            try {
+                const page = await doSearch(activeQuery, { before: last.messageID, limit, signal });
+                if (signal.aborted || gen !== generation.current) return [];
+                setResults(prev => [...prev, ...page.results]);
+                setHasMore(page.hasMore && page.results.length > 0);
+                return page.results;
+            } catch (err) {
+                if (!signal.aborted && gen === generation.current) console.error('Error loading more search results:', err);
+                return [];
+            } finally {
+                if (gen === generation.current) setLoadingMore(false);
+            }
+        })();
+        pendingMoreRef.current = run;
+        // Por identidad: cubre también un rechazo/retorno síncrono y no pisa una carga posterior.
+        void run.finally(() => { if (pendingMoreRef.current === run) pendingMoreRef.current = null; });
+        return run;
     }, [results, hasMore, activeQuery]);
 
     const goOlder = useCallback(() => {
@@ -163,7 +171,8 @@ export function useChatSearch({
             return;
         }
         if (hasMore) {
-            // Nada por delante cargado: pedir la página y saltar al primer resultado nuevo.
+            // Nada por delante cargado (o el prefetch sigue en curso): esperar la página
+            // —la misma promesa— y saltar al primer resultado nuevo.
             void loadMore().then(added => {
                 if (added.length === 0) return;
                 setIndex(index + 1);

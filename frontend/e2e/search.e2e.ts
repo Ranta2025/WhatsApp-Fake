@@ -60,7 +60,12 @@ test.describe('búsqueda de mensajes', () => {
       await openChat(marta.page, 'Ana');
       await sendChatText(marta.page, liveText);
       await expect(messageText(marta.page, liveText)).toBeVisible();
+      // Primero se demuestra que el mensaje SÍ llegó al lado de Ana (la vista previa de la barra lateral
+      // se actualiza por el WebSocket y, con la ventana desprendida, es el único sitio donde aparece)...
+      await expect(ana.page.getByText(liveText)).toBeVisible();
+      // ...y solo entonces, con la llegada probada, se comprueba que no se coló en la ventana desprendida.
       await expect(bubbleWithText(ana.page, liveText)).toHaveCount(0);
+      await expect(ana.page.getByRole('button', { name: RETURN_TO_LATEST })).toBeVisible();
 
       // Siguiente: vuelve al reciente.
       await ana.page.getByRole('button', { name: 'Coincidencia siguiente' }).click();

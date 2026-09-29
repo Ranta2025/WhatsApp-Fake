@@ -151,6 +151,62 @@ describe('useChatSearch', () => {
         expect(openMessageAt).toHaveBeenLastCalledWith(chatA, 9);
     });
 
+    it('pressing "anterior" at the last loaded hit while the prefetch is in flight waits for it and then jumps', async () => {
+        search.mockResolvedValueOnce(page([30, 20, 10], true));
+        mount(); openBar();
+        await type('hola');
+
+        let resolveNext: (p: SearchPage) => void = () => {};
+        search.mockImplementationOnce(() => new Promise<SearchPage>(r => { resolveNext = r; }));
+        await act(async () => { state.goOlder(); }); // index 1 -> starts the prefetch
+        await act(async () => { state.goOlder(); }); // index 2 = last loaded, prefetch still pending
+        expect(state.index).toBe(2);
+        expect(state.loadingMore).toBe(true);
+        await act(async () => { state.goOlder(); }); // must not be a no-op
+
+        expect(search).toHaveBeenCalledTimes(2); // initial + ONE shared prefetch
+        await act(async () => { resolveNext(page([9, 8], false)); });
+
+        expect(state.results.map(r => r.messageID)).toEqual([30, 20, 10, 9, 8]);
+        expect(state.index).toBe(3);
+        expect(openMessageAt).toHaveBeenLastCalledWith(chatA, 9);
+    });
+
+    it('nothing ahead loaded: fetches the next page and then jumps to its first hit', async () => {
+        search.mockResolvedValueOnce(page([30], true));
+        mount(); openBar();
+        await type('hola');
+        expect(state.index).toBe(0);
+
+        search.mockResolvedValueOnce(page([20, 10], false));
+        await act(async () => { state.goOlder(); });
+
+        expect(search).toHaveBeenLastCalledWith('hola', expect.objectContaining({ before: 30, limit: 3 }));
+        expect(state.results.map(r => r.messageID)).toEqual([30, 20, 10]);
+        expect(state.index).toBe(1);
+        expect(openMessageAt).toHaveBeenLastCalledWith(chatA, 20);
+    });
+
+    it('nothing ahead loaded and the fetch fails or comes back empty: stays put without jumping', async () => {
+        search.mockResolvedValueOnce(page([30], true));
+        mount(); openBar();
+        await type('hola');
+        openMessageAt.mockClear();
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        search.mockRejectedValueOnce(new Error('boom'));
+        await act(async () => { state.goOlder(); });
+        expect(state.index).toBe(0);
+        expect(state.loadingMore).toBe(false);
+        expect(openMessageAt).not.toHaveBeenCalled();
+
+        search.mockResolvedValueOnce(page([], false));
+        await act(async () => { state.goOlder(); });
+        expect(state.index).toBe(0);
+        expect(state.hasMore).toBe(false);
+        expect(openMessageAt).not.toHaveBeenCalled();
+    });
+
     it('a new term supersedes the previous request: its late answer is ignored and it is aborted', async () => {
         let resolveFirst: (p: SearchPage) => void = () => {};
         let firstSignal: AbortSignal | undefined;
