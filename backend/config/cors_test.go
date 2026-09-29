@@ -45,6 +45,24 @@ func TestCorsExposesHasMoreHeader(t *testing.T) {
 	}
 }
 
+// El navegador (y los reportes de bug) deben poder leer el request id de la
+// respuesta cross-origin.
+func TestCorsExposesRequestIDHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Cors())
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Expose-Headers"); !strings.Contains(strings.ToLower(got), "x-request-id") {
+		t.Errorf("Access-Control-Expose-Headers = %q, want X-Request-ID", got)
+	}
+}
+
 // El frontend lee los flags de las ventanas around/after (chat 1:1) cross-origin.
 func TestCorsExposesWindowHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)

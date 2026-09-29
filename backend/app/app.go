@@ -112,7 +112,15 @@ func newEngine() (*gin.Engine, error) {
 	// Los handlers pasan el *gin.Context como context.Context a los servicios:
 	// con esto, la cancelación/timeout de la petición llega hasta la BD.
 	engine.ContextWithFallback = true
-	engine.Use(gin.Recovery(), config.Cors(), middleware.TimeMiddleware())
+	// Orden de middlewares: RequestID primero (todo log/respuesta lleva id),
+	// luego Recovery, después Métricas (OB3, aún no existe) y CORS; el access
+	// log va al final para registrar el estado real de la respuesta.
+	engine.Use(
+		middleware.RequestID(),
+		middleware.Recovery(),
+		config.Cors(),
+		middleware.TimeMiddleware(),
+	)
 
 	// Solo se confía en X-Forwarded-For de los proxies indicados (nginx /
 	// túnel). Si se confiara en todos, cualquiera podría falsear su IP y

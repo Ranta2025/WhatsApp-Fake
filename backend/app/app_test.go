@@ -5,11 +5,15 @@ import (
 	"errors"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeStatusService implementa services.StatusServicer solo para poder
@@ -52,6 +56,30 @@ func (f *fakeStatusService) GetStatusViewers(telephon string, statusID uint, ctx
 }
 func (f *fakeStatusService) DeleteStatus(telephon string, statusID uint, ctx context.Context) ([]string, error) {
 	return nil, nil
+}
+
+// ==================== OB2-request-id-middleware-order ====================
+
+// La cadena de newEngine debe devolver X-Request-ID en toda respuesta y seguir
+// resolviendo el preflight CORS pese a que RequestID/Recovery van antes de Cors.
+func TestNewEngineSetsRequestIDAndKeepsCorsPreflight(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine, err := newEngine()
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	assert.NotEmpty(t, w.Header().Get("X-Request-ID"), "toda respuesta debe llevar X-Request-ID")
+
+	pre := httptest.NewRequest("OPTIONS", "/", nil)
+	pre.Header.Set("Origin", "http://localhost:5173")
+	pre.Header.Set("Access-Control-Request-Method", "GET")
+	pw := httptest.NewRecorder()
+	engine.ServeHTTP(pw, pre)
+
+	assert.Equal(t, http.StatusNoContent, pw.Code, "el preflight CORS no debe romperse con el nuevo orden")
+	assert.Equal(t, "http://localhost:5173", pw.Header().Get("Access-Control-Allow-Origin"))
+	assert.NotEmpty(t, pw.Header().Get("X-Request-ID"), "el preflight también lleva el id")
 }
 
 // ==================== R3-cleanup-loop-untested ====================

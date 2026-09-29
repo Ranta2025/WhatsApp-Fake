@@ -111,6 +111,7 @@ func Cors() gin.HandlerFunc {
 			"X-Has-More",
 			"X-Has-More-Older",
 			"X-Has-More-Newer",
+			"X-Request-ID",
 		},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
