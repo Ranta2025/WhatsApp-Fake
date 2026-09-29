@@ -86,3 +86,31 @@ export function messageBubbles(page: Page): Locator {
 export function groupMessageText(page: Page, text: string): Locator {
   return page.locator('div.rounded-2xl.shadow-sm').getByText(text, { exact: true });
 }
+
+// Burbuja completa de un mensaje de grupo (contiene texto, hora, ticks y botón de opciones).
+export function groupBubble(page: Page, text: string): Locator {
+  return page.locator('div.rounded-2xl.shadow-sm').filter({ has: page.getByText(text, { exact: true }) });
+}
+
+export type TickLabel = 'Enviado' | 'Entregado' | 'Visto';
+
+// Tick de estado de un mensaje propio de grupo (svg con role="img" y aria-label del estado).
+export function groupTick(page: Page, text: string, label: TickLabel): Locator {
+  return groupBubble(page, text).getByRole('img', { name: label, exact: true });
+}
+
+// Abre el diálogo "Info" (quién lo leyó / recibió) de un mensaje propio de grupo.
+export async function openGroupMessageInfo(page: Page, text: string): Promise<Locator> {
+  const bubble = groupBubble(page, text);
+  await bubble.hover();
+  await bubble.getByRole('button', { name: 'Opciones' }).click();
+  await page.getByRole('button', { name: 'Info', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Info del mensaje' });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+// Sección ("Leído por", "Entregado a", ...) del diálogo Info.
+export function infoSection(dialog: Locator, heading: string): Locator {
+  return dialog.locator('section').filter({ has: dialog.page().getByRole('heading', { name: heading, exact: true }) });
+}
