@@ -9,6 +9,7 @@ import type {
     GroupMessageSendRequest,
     GroupMessageEditRequest,
     GroupMessageDeleteRequest,
+    GroupMessageReceipts,
     MediaType,
 } from '../types/api';
 
@@ -139,3 +140,12 @@ export const updateGroupAvatar = (
     avatarUrl: string
 ): Promise<AxiosResponse<{ avatarUrl: string }>> =>
     api.patch<{ avatarUrl: string }>(`/api/v1/group/${groupID}/avatar`, { avatarUrl });
+
+/**
+ * Who read / received a group message (only its author may ask; 403 otherwise).
+ */
+export const getGroupMessageReceipts = (
+    groupID: number,
+    messageID: number
+): Promise<AxiosResponse<GroupMessageReceipts>> =>
+    api.get<GroupMessageReceipts>(`/api/v1/group/${groupID}/message/${messageID}/receipts`);

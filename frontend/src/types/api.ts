@@ -132,6 +132,22 @@ export interface GroupMessageResponse {
   ReplyToMessage?: string;
 }
 
+/** Ficha mínima de un miembro en la lista de acuses (camelCase, ver schemaGroup.go). */
+export interface GroupMemberBrief {
+  telephon: string;
+  username: string;
+  avatarUrl?: string;
+}
+
+/** GET /api/v1/group/:groupID/message/:messageID/receipts (solo el autor del mensaje). */
+export interface GroupMessageReceipts {
+  readBy: GroupMemberBrief[];
+  /** Entregado pero aún no leído. */
+  deliveredTo: GroupMemberBrief[];
+  /** Todavía sin entregar. */
+  pending: GroupMemberBrief[];
+}
+
 /** GET /api/v1/group/:groupID */
 export interface GroupDetail extends GroupResponse {
   Members: GroupMemberResponse[];

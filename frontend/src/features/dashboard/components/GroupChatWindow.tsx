@@ -12,7 +12,10 @@ import { useRefMap } from '../../../hooks/useRefMap';
 import { getResponseError } from '../../../lib/errors';
 import { groupReplySenderLabel } from '../lib/groupReply';
 import { parseGroupWallpapers, type GroupWallpapers } from '../lib/groupWallpapers';
-import type { GroupMessageResponse, MediaUploadResult } from '../../../types/api';
+import MessageTicks from './MessageTicks';
+import GroupMessageInfoModal from './GroupMessageInfoModal';
+import { deriveGroupMessageStatus } from '../lib/groupReceipts';
+import type { GroupMessageResponse, MediaUploadResult, MessageStatus } from '../../../types/api';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -34,9 +37,13 @@ interface GroupMessageBubbleProps {
     onDeleteForMe: (msg: GroupMessageResponse) => void;
     menuOpen: number | null;
     setMenuOpen: (id: number | null) => void;
+    /** Estado derivado de los acuses del grupo (solo se dibuja en mensajes propios). */
+    status?: MessageStatus;
+    /** Abre el "Info" del mensaje (entrada de menú solo en mensajes propios). */
+    onInfo?: (msg: GroupMessageResponse) => void;
 }
 
-export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen }: GroupMessageBubbleProps) => {
+export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo }: GroupMessageBubbleProps) => {
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     const isMenuOpen = menuOpen === msg.MessageID;
@@ -78,6 +85,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     <div className={`text-[10px] mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-200/70 justify-end' : 'text-slate-500'}`}>
                         {msg.Edited && <span>editado</span>}
                         <span>{formatTime(msg.Time)}</span>
+                        {isMine && status && <MessageTicks status={status} />}
                     </div>
 
                     {/* Context menu button (hover; se mantiene visible mientras el menú está abierto o con foco por teclado) */}
@@ -112,6 +120,17 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                         </svg>
                         Responder
                     </button>
+
+                    {/* Info (quién lo leyó / recibió) — only my messages */}
+                    {isMine && onInfo && (
+                        <button onClick={() => { onInfo(msg); setMenuOpen(null); }}
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Info
+                        </button>
+                    )}
 
                     {/* Edit — only my messages */}
                     {isMine && (
@@ -172,7 +191,8 @@ export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupI
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
-    const { selectedGroup } = useDashboard();
+    const { selectedGroup, groupReceipts } = useDashboard();
+    const [infoMessage, setInfoMessage] = useState<GroupMessageResponse | null>(null);
 
     // Al fondo al abrir un grupo o al llegar un mensaje nuevo al final; al llegar
     // arriba se cargan mensajes anteriores sin saltar la vista.
@@ -230,9 +250,14 @@ export const GroupMessageList = ({ messages, myTelephon, activeWallpaper, groupI
                         onDeleteForMe={handleDeleteMessageForMe}
                         menuOpen={messageMenuOpen}
                         setMenuOpen={setMessageMenuOpen}
+                        status={msg.SenderTelephon === myTelephon
+                            ? deriveGroupMessageStatus(msg.MessageID, msg.SenderTelephon, groupID === undefined ? undefined : groupReceipts[groupID])
+                            : undefined}
+                        onInfo={setInfoMessage}
                     />
                 );
             })}
+            {infoMessage && <GroupMessageInfoModal message={infoMessage} onClose={() => setInfoMessage(null)} />}
             {/* Indicador de carga: absoluto y sin margen de space-y (no mueve el contenido) */}
             {loadingOlder && (
                 <div className="absolute inset-x-0 top-2 mt-0! z-20 flex justify-center pointer-events-none">

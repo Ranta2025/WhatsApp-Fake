@@ -6,7 +6,7 @@
  * (max message id when the member joined). Message ids are global serials, so
  * they are only comparable inside one group. Marks only ever advance.
  */
-import type { GroupMemberResponse } from '../../../types/api';
+import type { GroupMemberResponse, MessageStatus } from '../../../types/api';
 
 export interface GroupReceiptMark {
     joined: number;
@@ -119,4 +119,30 @@ export function removeMemberMark(state: GroupReceiptsState, groupID: number, tel
     if (!group || !(telephon in group)) return state;
     const rest = Object.fromEntries(Object.entries(group).filter(([tel]) => tel !== telephon));
     return { ...state, [groupID]: rest };
+}
+
+/**
+ * Status of a message we sent, derived from the other members' marks
+ * (mirrors backend `GroupMessageStatus`): "visto" when every eligible member
+ * read it, "entregado" when every one received it, else "enviado" (also when
+ * nobody else is eligible). Eligible = not the sender and joined before the message.
+ */
+export function deriveGroupMessageStatus(
+    messageId: number, senderTelephon: string, marks: GroupReceiptMarks | undefined,
+): MessageStatus {
+    let eligible = 0;
+    let delivered = 0;
+    let read = 0;
+    for (const [tel, m] of Object.entries(marks ?? {})) {
+        if (tel === senderTelephon || m.joined >= messageId) continue;
+        eligible++;
+        if (m.read >= messageId) {
+            read++;
+            delivered++;
+        } else if (m.delivered >= messageId) {
+            delivered++;
+        }
+    }
+    if (eligible === 0 || delivered < eligible) return 'enviado';
+    return read === eligible ? 'visto' : 'entregado';
 }

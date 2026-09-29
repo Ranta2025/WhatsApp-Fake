@@ -1,4 +1,4 @@
-import type { GroupResponse, GroupMessageResponse, Message } from '../../../types/api';
+import type { GroupResponse, GroupMessageResponse, GroupMemberBrief, GroupMessageReceipts, Message } from '../../../types/api';
 
 /**
  * Static types describe the backend contract, they do not validate runtime
@@ -49,4 +49,30 @@ export function normalizeHasMore(data: unknown): boolean | undefined {
     if (!data || typeof data !== 'object') return undefined;
     const { hasMore } = data as { hasMore?: unknown };
     return typeof hasMore === 'boolean' ? hasMore : undefined;
+}
+
+const normalizeBriefs = (list: unknown): GroupMemberBrief[] => {
+    if (!Array.isArray(list)) return [];
+    const out: GroupMemberBrief[] = [];
+    for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const { telephon, username, avatarUrl } = item as { telephon?: unknown; username?: unknown; avatarUrl?: unknown };
+        if (typeof telephon !== 'string' || telephon === '') continue;
+        out.push({
+            telephon,
+            username: typeof username === 'string' && username !== '' ? username : telephon,
+            ...(typeof avatarUrl === 'string' && avatarUrl !== '' ? { avatarUrl } : {}),
+        });
+    }
+    return out;
+};
+
+/** `GET .../message/:id/receipts`: each list degrades to [] when absent/invalid; malformed members are dropped. */
+export function normalizeGroupReceipts(data: unknown): GroupMessageReceipts {
+    const body = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+    return {
+        readBy: normalizeBriefs(body.readBy),
+        deliveredTo: normalizeBriefs(body.deliveredTo),
+        pending: normalizeBriefs(body.pending),
+    };
 }

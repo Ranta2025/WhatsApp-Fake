@@ -57,3 +57,14 @@ describe('groupApi URL/method/body mapping', () => {
         });
     });
 });
+
+describe('getGroupMessageReceipts', () => {
+    it('GETs /api/v1/group/:groupID/message/:messageID/receipts', async () => {
+        const { getGroupMessageReceipts } = await import('./groupApi');
+        mockApi.get.mockClear();
+
+        await getGroupMessageReceipts(7, 42);
+
+        expect(mockApi.get).toHaveBeenCalledWith('/api/v1/group/7/message/42/receipts');
+    });
+});

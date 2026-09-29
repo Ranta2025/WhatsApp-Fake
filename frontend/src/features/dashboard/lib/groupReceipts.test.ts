@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { GroupMemberResponse } from '../../../types/api';
 import {
     marksFromMembers, mergeMarks, parseGroupReceipt, applyReceiptEvent,
-    latestRealMessageId, addMemberMark, removeMemberMark, type GroupReceiptMarks,
+    latestRealMessageId, addMemberMark, removeMemberMark, deriveGroupMessageStatus, type GroupReceiptMarks,
 } from './groupReceipts';
 
 const member = (Telephon: string, extra: Partial<GroupMemberResponse> = {}): GroupMemberResponse => ({
@@ -124,5 +124,35 @@ describe('addMemberMark / removeMemberMark', () => {
         expect(removeMemberMark(base, 7, 'a')[7]).toEqual({});
         expect(removeMemberMark(base, 7, 'nobody')).toBe(base);
         expect(removeMemberMark(base, 99, 'a')).toBe(base);
+    });
+});
+
+describe('deriveGroupMessageStatus', () => {
+    const marks = (entries: Record<string, [number, number, number]>): GroupReceiptMarks => Object.fromEntries(
+        Object.entries(entries).map(([tel, [joined, delivered, read]]) => [tel, { joined, delivered, read }]),
+    );
+
+    it('is "enviado" without marks or without other members', () => {
+        expect(deriveGroupMessageStatus(10, 'me', undefined)).toBe('enviado');
+        expect(deriveGroupMessageStatus(10, 'me', {})).toBe('enviado');
+        expect(deriveGroupMessageStatus(10, 'me', marks({ me: [0, 10, 10] }))).toBe('enviado');
+    });
+
+    it('is "enviado" until EVERY other member has it delivered', () => {
+        expect(deriveGroupMessageStatus(10, 'me', marks({ a: [0, 10, 0], b: [0, 9, 0] }))).toBe('enviado');
+    });
+
+    it('is "entregado" when all received it but not all read it (read implies delivered)', () => {
+        expect(deriveGroupMessageStatus(10, 'me', marks({ a: [0, 10, 0], b: [0, 0, 10] }))).toBe('entregado');
+        expect(deriveGroupMessageStatus(10, 'me', marks({ a: [0, 10, 10], b: [0, 10, 9] }))).toBe('entregado');
+    });
+
+    it('is "visto" when all others read it', () => {
+        expect(deriveGroupMessageStatus(10, 'me', marks({ a: [0, 10, 10], b: [0, 12, 11] }))).toBe('visto');
+    });
+
+    it('ignores the sender and members that joined at or after the message', () => {
+        expect(deriveGroupMessageStatus(10, 'me', marks({ me: [0, 0, 0], a: [0, 10, 10], late: [10, 0, 0] }))).toBe('visto');
+        expect(deriveGroupMessageStatus(10, 'me', marks({ a: [0, 10, 10], early: [9, 0, 0] }))).toBe('enviado');
     });
 });

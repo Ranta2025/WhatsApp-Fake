@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     normalizeGroupsResponse, normalizeGroupMessagesResponse, normalizeGroupDetailMessages,
-    normalizeChatMessagesResponse, normalizeHasMore,
+    normalizeChatMessagesResponse, normalizeHasMore, normalizeGroupReceipts,
 } from './normalizeResponses';
 
 // R3-dashboard-null-body-guards-removed: fetchUserGroups/fetchGroupMessages/
@@ -83,5 +83,33 @@ describe('normalizeHasMore', () => {
         expect(normalizeHasMore(null)).toBeUndefined();
         expect(normalizeHasMore({})).toBeUndefined();
         expect(normalizeHasMore({ hasMore: 'true' })).toBeUndefined();
+    });
+});
+
+describe('normalizeGroupReceipts', () => {
+    it('keeps well-formed member briefs in each list', () => {
+        expect(normalizeGroupReceipts({
+            readBy: [{ telephon: '1', username: 'ana', avatarUrl: '/a.png' }],
+            deliveredTo: [{ telephon: '2', username: 'luis' }],
+            pending: [],
+        })).toEqual({
+            readBy: [{ telephon: '1', username: 'ana', avatarUrl: '/a.png' }],
+            deliveredTo: [{ telephon: '2', username: 'luis' }],
+            pending: [],
+        });
+    });
+
+    it('degrades null / non-object / missing lists to empty lists', () => {
+        const empty = { readBy: [], deliveredTo: [], pending: [] };
+        expect(normalizeGroupReceipts(null)).toEqual(empty);
+        expect(normalizeGroupReceipts(undefined)).toEqual(empty);
+        expect(normalizeGroupReceipts('x')).toEqual(empty);
+        expect(normalizeGroupReceipts({ readBy: 'nope', deliveredTo: null })).toEqual(empty);
+    });
+
+    it('drops malformed entries and falls back to the telephon when the username is not a string', () => {
+        expect(normalizeGroupReceipts({
+            readBy: [null, 7, {}, { telephon: 5 }, { telephon: '3', username: 9 }, { telephon: '' }],
+        }).readBy).toEqual([{ telephon: '3', username: '3' }]);
     });
 });
