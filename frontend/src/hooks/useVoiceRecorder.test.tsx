@@ -72,6 +72,14 @@ describe('useVoiceRecorder', () => {
 
     const start = async () => { await act(async () => { await rec().startRecording(); }); };
 
+    it('al desmontar durante la grabación libera el micrófono sin subir', async () => {
+        await start();
+        act(() => root.unmount());
+        expect(trackStop).toHaveBeenCalled();
+        expect(mockPost).not.toHaveBeenCalled();
+        root = createRoot(container);
+    });
+
     it('startRecording pone isRecording y cuenta segundos', async () => {
         await start();
         expect(rec().isRecording).toBe(true);

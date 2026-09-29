@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import api from '../api/axios';
 import type { MediaUploadResult } from '../types/api';
 
@@ -31,6 +31,7 @@ export function useVoiceRecorder({ onRecorded, onUploadError }: UseVoiceRecorder
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const activeRef = useRef(false);
     const audioChunksRef = useRef<Blob[]>([]);
     const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -66,6 +67,7 @@ export function useVoiceRecorder({ onRecorded, onUploadError }: UseVoiceRecorder
             };
 
             mediaRecorder.start();
+            activeRef.current = true;
             setIsRecording(true);
             setRecordingTime(0);
             recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
@@ -77,6 +79,7 @@ export function useVoiceRecorder({ onRecorded, onUploadError }: UseVoiceRecorder
 
     const stopRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
+            activeRef.current = false;
             mediaRecorderRef.current.stop();
             setIsRecording(false);
             clearInterval(recordingTimerRef.current || undefined);
@@ -89,12 +92,24 @@ export function useVoiceRecorder({ onRecorded, onUploadError }: UseVoiceRecorder
             recorder.onstop = () => {
                 recorder.stream.getTracks().forEach(track => track.stop());
             };
+            activeRef.current = false;
             recorder.stop();
             setIsRecording(false);
             clearInterval(recordingTimerRef.current || undefined);
             setRecordingTime(0);
         }
     };
+
+    // Al desmontar con una grabación activa: cancelar sin subir y soltar el micrófono.
+    useEffect(() => () => {
+        const recorder = mediaRecorderRef.current;
+        if (recorder && activeRef.current) {
+            activeRef.current = false;
+            clearInterval(recordingTimerRef.current || undefined);
+            recorder.onstop = () => { recorder.stream.getTracks().forEach(track => track.stop()); };
+            recorder.stop();
+        }
+    }, []);
 
     return { isRecording, recordingTime, startRecording, stopRecording, cancelRecording };
 }

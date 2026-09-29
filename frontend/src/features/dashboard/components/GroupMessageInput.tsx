@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useGroupMessaging } from '../hooks/useGroupMessaging';
 import { isEscapeHandled } from '../../../hooks/useEscapeToClose';
@@ -25,8 +25,20 @@ const GroupMessageInput = () => {
         onUploadError: () => addToast({ type: 'error', message: 'No se pudo enviar la nota de voz' }),
     });
 
+    const isLeft = selectedGroup?.UserRole === 'left';
+    const isEditing = Boolean(editingMessageId);
+
+    // Si el rol pasa a 'left' mientras se graba, soltar el micrófono sin subir.
+    useEffect(() => {
+        if (isLeft && isRecording) cancelRecording();
+    }, [isLeft, isRecording, cancelRecording]);
+
+    // Entrar en modo edición desmonta el adjuntar: cerrar el menú para que no reaparezca.
+    // Ajuste de estado durante el render (patrón de React), sin efecto.
+    if (isEditing && showAttachMenu) setShowAttachMenu(false);
+
     // If the user has left the group, show a read-only banner
-    if (selectedGroup?.UserRole === 'left') {
+    if (isLeft) {
         return (
             <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

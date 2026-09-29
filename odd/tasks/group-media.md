@@ -45,3 +45,4 @@ Strategy: ask-on-risk. Forecast is ~600 authored lines, which is over budget, so
 
 ## Next step
 GM5: browser smoke (group send image + voice note), close doc + mirror.
+- GM4b: review fixes in `GroupMessageInput`. R3-recording-survives-left-role: effect cancels the recording (`cancelRecording`, no upload, mic released) when role is/becomes `left`; `useVoiceRecorder` now also stops recorder + mic tracks on unmount (no upload). R3-attach-menu-state-survives-edit: `showAttachMenu` reset when edit mode starts (render-time state adjustment; an effect tripped `react-hooks/set-state-in-effect`). 3 new tests RED (2 component, 1 hook) -> GREEN. typecheck/lint/build clean, vitest 36 files / 215 tests, no `any`.

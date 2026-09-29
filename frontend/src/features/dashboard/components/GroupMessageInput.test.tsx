@@ -171,4 +171,21 @@ describe('GroupMessageInput media', () => {
         expect(byLabel('Grabar nota de voz')).toBeNull();
         expect(container.querySelector('textarea')).toBeNull();
     });
+
+    it('si el rol pasa a left mientras graba, cancela la grabación', () => {
+        recorderState = { isRecording: true, recordingTime: 3 };
+        setup();
+        expect(cancelRecording).not.toHaveBeenCalled();
+        setup({ role: 'left' });
+        expect(cancelRecording).toHaveBeenCalledTimes(1);
+    });
+
+    it('editar cierra el menú de adjuntos y no reaparece al terminar', () => {
+        setup();
+        click(byLabel('Adjuntar archivo'));
+        expect(container.querySelector('[data-testid="upload-menu"]')).not.toBeNull();
+        setup({ editingMessageId: 9 });
+        setup({ editingMessageId: null });
+        expect(container.querySelector('[data-testid="upload-menu"]')).toBeNull();
+    });
 });
