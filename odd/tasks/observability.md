@@ -52,7 +52,7 @@ Strict TDD (session config). Runners: `go test ./...` (metrics with `prometheus/
 - [x] OB4 Hub/WS/message/dependency metrics: `Hub.Stats()`, counters in register/unregister/dispatch/send-drop, message counters in the 3 send paths, DB/Redis collectors, background dependency checker sharing code with `healthHandler`. Tests with a real `Hub` (see `websocket/hub_test.go`) and fakes. Route: delegated.
 - [x] OB5 WS log propagation: `ConnID` on `Client`, slog conversion of `handler.go`, `cliente.go`, `hub.go`, `message_handlers.go` logs. Tests capture slog output for connect/disconnect/bad payload. Route: delegated.
 - [x] OB6 Compose profile + docs: Prometheus config, Grafana provisioning + dashboard, `compose.yaml` profile and env, docs section (how to enable, ports, credentials, what is exposed), CI `config -q` check, Go e2e asserting `X-Request-ID` on `/healthz` and that `/metrics` is NOT served on port 80/8080 (404 / SPA). Route: delegated.
-- [ ] OB7 Close: full checks, one manual smoke (`docker compose --profile observability up -d`, open Grafana, generate traffic), doc + mirror.
+- [x] OB7 Close: full checks, one manual smoke (`docker compose --profile observability up -d`, open Grafana, generate traffic), doc + mirror.
 
 ## Acceptance criteria
 - Every HTTP response has `X-Request-ID`; the same id appears in the request's access log line and in the WS connection logs of an upgraded request; invalid inbound ids are replaced.
@@ -123,6 +123,20 @@ Strict TDD (session config). Runners: `go test ./...` (metrics with `prometheus/
   - Informational (dependency bumps from OB1's `go mod tidy`): `golang-jwt/jwt/v5` 5.3.0 -> 5.3.1, `x/crypto` 0.47 -> 0.54, `x/text` 0.33 -> 0.40, `x/net` 0.48 -> 0.57, `x/sys` 0.40 -> 0.47 (plus `x/mod`, `x/sync`, `x/tools`, `protobuf`), `klauspost/compress` 1.18.2 -> 1.19.1. Full suite and e2e stayed green after the bump.
   - Known residual (not fixed): with Recovery outside `TimeMiddleware`, a panicking request produces no "Request completed" access-log line (the recovery log with `request_id` is still emitted).
 - OB6c (minor review warnings): `compose.yaml` `METRICS_ADDR: ${METRICS_ADDR-0.0.0.0:9090}` (unset -> default, explicitly empty -> disabled; comment + `docs/OBSERVABILITY.md` fixed); e2e nginx subtest now asserts 200 on all requests and that nginx replaces the inbound id (non-empty, != sent; `docker/nginx.conf` sets `$request_id`); CI step `promtool check config` + `check rules` via pinned `prom/prometheus` image. Verified: `METRICS_ADDR= docker compose config` renders `""`, unset renders default; promtool config/rules ok; actionlint ok; `go vet ./... && go test ./...` ok; `make test-integration` ok (incl. live e2e).
+- Reviews (per commit, all approved + acknowledged): 57eec44, 5dd860e, d562b1a (OB1–OB3, implemented with opencode and audited), 0a14d45, 4a260d9, a23c3dd, b2bee55, 406c01c.
+- OB4 audit: opencode left OB4 as uncommitted WIP that did not compile (`NewHub` signature changed, `app.go` not updated). The WIP was reviewed, the correct parts kept and the rest completed in 0a14d45.
+- OB7 manual smoke (2026-09-30), with `docker compose --profile observability up -d prometheus grafana` after the user pulled the images manually:
+  - Prometheus target `backend` is `up`.
+  - `sum by (status)(http_requests_total)` has data.
+  - `dependency_up{postgres,redis}` = 1.
+  - Grafana provisioned the `Prometheus` datasource and the "Backend overview" dashboard.
+  - `/metrics` returns 404 on ports 80/8080 (Go e2e). FEATURE CLOSED.
+- Follow-ups (not fixed):
+  - A panicking request gets no access-log line, because Recovery sits outside TimeMiddleware; a one-line reorder fixes it.
+  - The `METRICS_ADDR` doc row wording is ambiguous.
+  - `TestRunShutsDownMainServerWhenMetricsListenerFails` has a port-reuse race.
+  - hub.go username/last_seen logs still use log.Printf.
+  - Transitive dependency bumps are recorded above.
 
 ## Next step
-Recommended to implement first (independent, low risk). First task: OB1.
+Feature closed. Next: group-admin-permissions (see ROADMAP.md).

@@ -19,7 +19,7 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | e2e-ci | `feat/e2e-ci` | done (workflow only runs on GitHub after a push) | [e2e-ci.md](e2e-ci.md) |
 | group-read-receipts | `feat/group-read-receipts` | done | [group-read-receipts.md](group-read-receipts.md) |
 | message-search | `feat/message-search` | done | [message-search.md](message-search.md) |
-| observability | `feat/observability` | pending | [observability.md](observability.md) |
+| observability | `feat/observability` | done | [observability.md](observability.md) |
 | group-admin-permissions | `feat/group-admin-permissions` | pending | [group-admin-permissions.md](group-admin-permissions.md) |
 | reactions | `feat/reactions` | pending | [reactions.md](reactions.md) |
 | disappearing-messages | `feat/disappearing-messages` | pending | [disappearing-messages.md](disappearing-messages.md) |
@@ -27,7 +27,7 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | web-push | `feat/web-push` | pending | [web-push.md](web-push.md) |
 | api-casing | `feat/api-casing` | pending | [api-casing.md](api-casing.md) |
 
-## Recommended order for the pending features (after message-search is closed)
+## Recommended order for the pending features
 1. **observability** - backend-only, independent, low blast radius, and gives metrics/request ids to debug everything after it.
 2. **group-admin-permissions** - user-requested WhatsApp-style group roles/settings; introduces the persisted system-message discriminator (`Kind`) and typed permission errors on group paths, so reactions (no reactions on system messages) and disappearing-messages (expire/clean them) are designed against it instead of retrofitted; independent of both otherwise.
 3. **reactions** - touches the message schemas and history paths while the contract is still small; the disappearing-messages job must later clean reactions, so reactions first.
@@ -37,6 +37,19 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 7. **api-casing** - LAST: it renames the contract across backend, frontend and tests, so doing it before the others would force rebases of every branch and rewrite new features twice; the negotiated compatibility window also covers cached PWA bundles.
 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
+
+## Handoff state (2026-09-30)
+- **Current tip:** `feat/observability`. The message-search follow-up fixes 227a5cc / 2c78969 also live here, at the tip of the chain. Start the next feature with `git switch -c feat/group-admin-permissions` from `feat/observability`.
+- **Done and reviewed:** everything up to and including observability. Every code commit was reviewed per commit and acknowledged.
+- **Next:** `group-admin-permissions.md`. Its open questions have recommended defaults, and creator protection is the one to confirm with the user first.
+- **Checks to run before and after each task:**
+  - `go build ./... && go vet ./... && go test ./...`
+  - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
+  - `cd frontend && npm run typecheck && npm run lint && npm run test && npm run build`
+  - `npm run test:e2e` against the running stack, after `docker compose up -d --build app web`
+- **Stack:** `docker compose up -d`. The observability profile is optional: `docker compose --profile observability up -d prometheus grafana`, then Grafana at http://localhost:3000 (admin/admin) and Prometheus at http://127.0.0.1:9090.
+- **Known leftovers:** each feature doc has a "Follow-ups (not fixed)" list.
+- **Stale review lineage:** `review-d33a5f83f9c32c1a` (message-pagination d3fadb6) is still open. Its CRITICAL finding was fixed forward in 22dcd3f/ae77379. Releasing it needs a maintainer-authorized `gentle-ai review abandon`.
 
 ## How to resume a feature
 1. Read the feature document top to bottom (Decisions, Constraints, TDD, Tasks, Open questions). Resolve or confirm each "Open question (user decision)" with the user (one question at a time); use the recommended default only if the user agrees.
