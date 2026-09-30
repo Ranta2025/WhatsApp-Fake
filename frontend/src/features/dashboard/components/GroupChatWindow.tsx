@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { useDashboard, type SelectedGroup, type SystemGroupMessage, type GroupMessageEntry, type FocusTarget } from '../context/DashboardContext';
+import { useDashboard, type SelectedGroup, type GroupMessageEntry, type FocusTarget } from '../context/DashboardContext';
 import { GroupMessagingProvider, useGroupMessaging } from '../hooks/useGroupMessaging';
 import { useLoadOlderOnScroll, type ScrollTarget } from '../hooks/useLoadOlderOnScroll';
 import HighlightedText from './HighlightedText';
@@ -20,6 +20,7 @@ import { useChatSearch } from '../hooks/useChatSearch';
 import { searchGroup, type SearchPageOptions } from '../api/searchApi';
 import { composeFocusedMessages } from '../lib/focusedWindow';
 import { deriveGroupMessageStatus } from '../lib/groupReceipts';
+import { isSystemGroupMessage, describeGroupSystemMessage } from '../lib/groupAdminEvents';
 import type { GroupMessageResponse, MediaUploadResult, MessageStatus, SearchPage } from '../../../types/api';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -196,9 +197,7 @@ interface GroupMessageListProps {
     searchQuery?: string;
 }
 
-/** Locally injected "member added/left" entries carry `IsSystem`; backend messages don't. */
-const isSystemMessage = (msg: GroupMessageEntry): msg is SystemGroupMessage =>
-    Boolean((msg as { IsSystem?: unknown }).IsSystem);
+/** Persisted system entries (`Kind: 'system'`) render as a centered notice; see lib/groupAdminEvents.ts. */
 
 export const GroupMessageList = ({
     messages, myTelephon, activeWallpaper, groupID, hasMore, loadingOlder, onLoadOlder,
@@ -209,7 +208,7 @@ export const GroupMessageList = ({
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
-    const { selectedGroup, groupReceipts } = useDashboard();
+    const { selectedGroup, groupReceipts, groupMemberNames } = useDashboard();
     // El Info se ata al grupo en que se abrió: si cambia el grupo o el mensaje
     // ya no está en la lista (borrado), se descarta durante el render.
     const [info, setInfo] = useState<{ groupID: number | undefined; message: GroupMessageResponse } | null>(null);
@@ -218,6 +217,15 @@ export const GroupMessageList = ({
     }
     const infoMessage = info?.message ?? null;
     const openInfo = (message: GroupMessageResponse) => setInfo({ groupID, message });
+
+    // Nombres para los eventos de sistema: la caché del contexto (sobrevive a que
+    // un miembro salga) con fallback a los miembros actuales del grupo abierto.
+    const resolveSystemName = useCallback((telephon: string): string | undefined => {
+        if (groupID === undefined) return undefined;
+        return groupMemberNames?.[groupID]?.[telephon]
+            ?? selectedGroup?.Members?.find(m => m.Telephon === telephon)?.Username
+            ?? undefined;
+    }, [groupID, groupMemberNames, selectedGroup]);
 
     // Al fondo al abrir un grupo o al llegar un mensaje nuevo al final; al llegar
     // arriba se cargan mensajes anteriores sin saltar la vista.
@@ -259,11 +267,11 @@ export const GroupMessageList = ({
             style={{ ...containerStyle, overflowAnchor: 'none' }}
         >
             {messages.map((msg) => {
-                if (isSystemMessage(msg)) {
+                if (isSystemGroupMessage(msg)) {
                     return (
                         <div key={msg.MessageID} className="flex justify-center py-1 px-4">
                             <span className="bg-black/40 backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
-                                {msg.Message}
+                                {describeGroupSystemMessage(msg, myTelephon, resolveSystemName)}
                             </span>
                         </div>
                     );

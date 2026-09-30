@@ -30,6 +30,19 @@ export type CallType = 'video' | 'audio';
 /** backend/models/group.go GroupMember.Role. */
 export type GroupRole = 'admin' | 'member';
 
+/** backend/models/group.go GroupMessage.Kind. Absent = normal message; "system" = persisted group event. */
+export type GroupMessageKind = 'system';
+
+/** backend/models/group.go SystemEvent* constants (structured, never rendered text). */
+export type GroupSystemEvent =
+  | 'member_added'
+  | 'member_removed'
+  | 'member_left'
+  | 'admin_granted'
+  | 'admin_revoked'
+  | 'settings_changed'
+  | 'info_changed';
+
 // ─────────────────────────────────────────────────────────────────────────
 // User / perfil — backend/schemas/schemauser.go UserGet (mixed casing:
 // Username/Telephon/Gmail sin json tag → PascalCase; avatar/wallpaper con
@@ -103,6 +116,10 @@ export interface GroupResponse {
   MemberCount: number;
   UserRole: GroupRole;
   CreatedAt: string;
+  /** Permisos del grupo (PascalCase, backend schemaGroup.go). false = abierto (default). */
+  OnlyAdminsCanSend: boolean;
+  OnlyAdminsCanEditInfo: boolean;
+  OnlyAdminsCanAddMembers: boolean;
 }
 
 export interface GroupMemberResponse {
@@ -130,6 +147,11 @@ export interface GroupMessageResponse {
   ReplyToMessageID?: number;
   ReplyToTelephon?: string;
   ReplyToMessage?: string;
+  /** Presente solo en eventos de sistema persistidos (backend omitempty). */
+  Kind?: GroupMessageKind;
+  SystemEvent?: GroupSystemEvent;
+  /** Teléfonos afectados por el evento, para redactar por espectador. */
+  SystemTargets?: string[];
 }
 
 /** Ficha mínima de un miembro en la lista de acuses (camelCase, ver schemaGroup.go). */
@@ -299,6 +321,60 @@ export interface GroupCreateRequest {
   description?: string;
   /** Teléfonos E.164 de los miembros iniciales. */
   members: string[];
+  /**
+   * CUSTOM (decisión 2026-09-30): permisos opcionales al crear, default abierto.
+   * Plumbing listo para GA7; el backend actual (GroupCreate) todavía no los parsea.
+   */
+  onlyAdminsCanSend?: boolean;
+  onlyAdminsCanEditInfo?: boolean;
+  onlyAdminsCanAddMembers?: boolean;
+}
+
+export interface GroupMemberRoleRequest {
+  role: GroupRole;
+}
+
+export interface GroupSettingsRequest {
+  onlyAdminsCanSend?: boolean;
+  onlyAdminsCanEditInfo?: boolean;
+  onlyAdminsCanAddMembers?: boolean;
+}
+
+export interface GroupInfoRequest {
+  name?: string;
+  description?: string;
+}
+
+/** Respuesta de PUT .../members/:telephon/role (camelCase, handlerGroup.go). */
+export interface GroupMemberRoleResult {
+  groupID: number;
+  telephon: string;
+  role: GroupRole;
+  systemMessage?: GroupMessageResponse;
+}
+
+/** Respuesta de DELETE .../members/:telephon. */
+export interface GroupMemberRemovedResult {
+  groupID: number;
+  telephon: string;
+  systemMessage?: GroupMessageResponse;
+}
+
+/** Respuesta de PATCH .../settings y payload del evento `group_settings`. */
+export interface GroupSettingsResult {
+  groupID: number;
+  onlyAdminsCanSend: boolean;
+  onlyAdminsCanEditInfo: boolean;
+  onlyAdminsCanAddMembers: boolean;
+  systemMessage?: GroupMessageResponse;
+}
+
+/** Respuesta de PATCH .../:groupID y payload del evento `group_info`. */
+export interface GroupInfoResult {
+  groupID: number;
+  name: string;
+  description: string;
+  systemMessage?: GroupMessageResponse;
 }
 
 export interface GroupAddMembersRequest {

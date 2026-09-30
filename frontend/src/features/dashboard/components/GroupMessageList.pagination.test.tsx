@@ -91,8 +91,11 @@ describe('GroupMessageList infinite scroll up', () => {
         expect(container.querySelector('[role="status"]')?.textContent).toContain('Cargando mensajes anteriores');
     });
 
-    it('cada burbuja real lleva data-message-id; las entradas del sistema no', () => {
-        const system: GroupMessageEntry = { MessageID: 'system_1', GroupID: 5, IsSystem: true, Message: 'Ana salió del grupo', Time: '2026-01-01T09:00:00Z' };
+    it('cada burbuja real lleva data-message-id; el aviso de sistema no', () => {
+        const system: GroupMessageResponse = {
+            MessageID: 1, GroupID: 5, SenderTelephon: '222', SenderUsername: 'Ana', Message: '',
+            Time: '2026-01-01T09:00:00Z', Edited: false, Kind: 'system', SystemEvent: 'member_left', SystemTargets: ['222'],
+        };
         renderList({ messages: [system, msg(5), msg(6)] });
         const marked = Array.from(container.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'));
         expect(marked).toEqual(['5', '6']);
@@ -103,8 +106,11 @@ describe('GroupMessageList infinite scroll up', () => {
         expect(scroller().style.overflowAnchor).toBe('none');
     });
 
-    it('la primera entrada sintética no rompe el render (el cursor real lo calcula el contexto)', () => {
-        const system: GroupMessageEntry = { MessageID: 'system_1', GroupID: 5, IsSystem: true, Message: 'Ana salió del grupo', Time: '2026-01-01T09:00:00Z' };
+    it('un aviso de sistema al inicio no rompe el render', () => {
+        const system: GroupMessageResponse = {
+            MessageID: 1, GroupID: 5, SenderTelephon: '222', SenderUsername: 'Ana', Message: '',
+            Time: '2026-01-01T09:00:00Z', Edited: false, Kind: 'system', SystemEvent: 'member_left', SystemTargets: ['222'],
+        };
         renderList({ messages: [system, msg(5)] });
         expect(container.textContent).toContain('Ana salió del grupo');
         scrollTo(0);

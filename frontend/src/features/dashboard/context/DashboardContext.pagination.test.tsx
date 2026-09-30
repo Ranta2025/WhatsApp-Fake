@@ -278,14 +278,16 @@ describe('DashboardProvider message pagination', () => {
             expect(ctx?.groupPaging[9]?.hasMore).toBe(true);
         });
 
-        it('loadOlderGroupMessages passes before=oldest real id, ignoring synthetic entries', async () => {
+        it('loadOlderGroupMessages passes before=oldest real id, ignoring entries without a numeric id', async () => {
             mockGetGroupMessages.mockResolvedValue({ data: { messages: desc(51, 100), hasMore: true } });
             await mount();
             await act(async () => { await ctx!.fetchGroupMessages(9); });
+            // Malformed/legacy entry (non-numeric id): never a pagination cursor.
+            const malformed = { MessageID: 'system_1', GroupID: 9, Message: 'x', Time: iso(1) } as unknown as GroupMessageResponse;
             await act(async () => {
                 ctx!.setGroupMessages(prev => ({
                     ...prev,
-                    [9]: [{ MessageID: 'system_1', GroupID: 9, IsSystem: true, Message: 'x', Time: iso(1) }, ...(prev[9] ?? [])],
+                    [9]: [malformed, ...(prev[9] ?? [])],
                 }));
             });
 

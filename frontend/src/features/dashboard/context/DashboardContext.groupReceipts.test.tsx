@@ -58,6 +58,7 @@ const groupMsg = (id: number, sender = '222'): GroupMessageResponse => ({
 });
 const detail = (overrides: Partial<GroupDetail> = {}): GroupDetail => ({
     ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
+    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
     Members: [
         { Telephon: '111', Username: 'ana', Role: 'admin' },
         { Telephon: '222', Username: 'luis', Role: 'member', JoinedMessageID: 0, LastDeliveredMessageID: 10, LastReadMessageID: 4 },
@@ -68,6 +69,7 @@ const detail = (overrides: Partial<GroupDetail> = {}): GroupDetail => ({
 });
 const selected = (): SelectedGroup => ({
     ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
+    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
 });
 
 describe('DashboardProvider group receipts', () => {

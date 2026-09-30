@@ -17,6 +17,9 @@ import type {
   Message,
   GroupMessageResponse,
   GroupResponse,
+  GroupRole,
+  GroupSettingsResult,
+  GroupInfoResult,
   StatusOwnerBrief,
   StatusItem,
   StatusViewer,
@@ -151,6 +154,8 @@ export interface WsGroupMemberAdded {
     addedByUsername: string;
     addedMembers: Array<{ telephon: string; username: string }>;
     newMemberCount: number;
+    /** Evento de sistema persistido para aplicar estado y mensaje de forma atómica. */
+    systemMessage?: GroupMessageResponse;
   };
 }
 
@@ -161,7 +166,37 @@ export interface WsGroupAvatarUpdate {
 
 export interface WsGroupMemberLeft {
   type: 'group_member_left';
-  payload: { groupID: number; telephon: string; username: string };
+  payload: { groupID: number; telephon: string; username: string; systemMessage?: GroupMessageResponse };
+}
+
+/** Un miembro fue designado/descartado admin (camelCase, handlerGroup.go). */
+export interface WsGroupMemberRole {
+  type: 'group_member_role';
+  payload: { groupID: number; telephon: string; role: GroupRole; systemMessage?: GroupMessageResponse };
+}
+
+/** Un miembro fue eliminado por un admin; el removido también lo recibe (pasa a estado left). */
+export interface WsGroupMemberRemoved {
+  type: 'group_member_removed';
+  payload: {
+    groupID: number;
+    telephon: string;
+    username: string;
+    newMemberCount: number;
+    systemMessage?: GroupMessageResponse;
+  };
+}
+
+/** La configuración de permisos del grupo cambió. */
+export interface WsGroupSettings {
+  type: 'group_settings';
+  payload: GroupSettingsResult;
+}
+
+/** El nombre/descripción del grupo cambió. */
+export interface WsGroupInfo {
+  type: 'group_info';
+  payload: GroupInfoResult;
 }
 
 /**
@@ -231,6 +266,10 @@ export type WsEvent =
   | WsGroupMemberAdded
   | WsGroupAvatarUpdate
   | WsGroupMemberLeft
+  | WsGroupMemberRole
+  | WsGroupMemberRemoved
+  | WsGroupSettings
+  | WsGroupInfo
   | WsGroupReceipt
   | WsStatusNew
   | WsStatusViewed

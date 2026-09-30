@@ -10,6 +10,14 @@ import type {
     GroupMessageEditRequest,
     GroupMessageDeleteRequest,
     GroupMessageReceipts,
+    GroupRole,
+    GroupMemberRoleRequest,
+    GroupMemberRoleResult,
+    GroupMemberRemovedResult,
+    GroupSettingsRequest,
+    GroupSettingsResult,
+    GroupInfoRequest,
+    GroupInfoResult,
     MediaType,
 } from '../types/api';
 
@@ -20,13 +28,15 @@ import type {
  * @param name - Group name (required)
  * @param description - Optional description
  * @param members - Array of telephon numbers of initial members
+ * @param settings - CUSTOM: optional create-time permissions (plumbing for GA7)
  */
 export const createGroup = (
     name: string,
     description: string | undefined,
-    members: string[]
+    members: string[],
+    settings?: GroupSettingsRequest
 ): Promise<AxiosResponse<{ group: GroupDetail }>> => {
-    const body: GroupCreateRequest = { name, description, members };
+    const body: GroupCreateRequest = { name, description, members, ...settings };
     return api.post<{ group: GroupDetail }>('/api/v1/group', body);
 };
 
@@ -56,6 +66,54 @@ export const addGroupMembers = (
     const body: GroupAddMembersRequest = { members };
     return api.post<{ message: string }>(`/api/v1/group/${groupID}/members`, body);
 };
+
+/**
+ * Design (role="admin") or dismiss (role="member") a member. Admin only.
+ * PUT /api/v1/group/:groupID/members/:telephon/role
+ */
+export const changeGroupMemberRole = (
+    groupID: number,
+    telephon: string,
+    role: GroupRole
+): Promise<AxiosResponse<GroupMemberRoleResult>> => {
+    const body: GroupMemberRoleRequest = { role };
+    return api.put<GroupMemberRoleResult>(
+        `/api/v1/group/${groupID}/members/${encodeURIComponent(telephon)}/role`,
+        body
+    );
+};
+
+/**
+ * Remove a member from the group. Admin only.
+ * DELETE /api/v1/group/:groupID/members/:telephon
+ */
+export const removeGroupMember = (
+    groupID: number,
+    telephon: string
+): Promise<AxiosResponse<GroupMemberRemovedResult>> =>
+    api.delete<GroupMemberRemovedResult>(
+        `/api/v1/group/${groupID}/members/${encodeURIComponent(telephon)}`
+    );
+
+/**
+ * Change the group permission settings (at least one field). Admin only.
+ * PATCH /api/v1/group/:groupID/settings
+ */
+export const updateGroupSettings = (
+    groupID: number,
+    settings: GroupSettingsRequest
+): Promise<AxiosResponse<GroupSettingsResult>> =>
+    api.patch<GroupSettingsResult>(`/api/v1/group/${groupID}/settings`, settings);
+
+/**
+ * Change the group name/description (at least one field, same validation as create).
+ * PATCH /api/v1/group/:groupID
+ */
+export const updateGroupInfo = (
+    groupID: number,
+    info: GroupInfoRequest
+): Promise<AxiosResponse<GroupInfoResult>> =>
+    api.patch<GroupInfoResult>(`/api/v1/group/${groupID}`, info);
 
 // ── Group Messages ────────────────────────────────────────────────────────────
 

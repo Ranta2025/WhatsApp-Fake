@@ -2,8 +2,8 @@
  * Merge helpers for paginated message history (1:1 and group).
  *
  * Entries are identified by `MessageID`. Real backend messages carry a numeric
- * id (used as the pagination cursor); synthetic client-only entries (group
- * "member added/left" notices) carry a string id and are never a cursor.
+ * id (used as the pagination cursor); any malformed/legacy entry with a
+ * non-numeric id is never a cursor.
  */
 
 export interface MergeableMessage {
@@ -43,7 +43,7 @@ const dedupeAndSort = <T extends MergeableMessage>(list: T[]): T[] => {
     return unique.sort(compareChronological);
 };
 
-/** Smallest numeric MessageID (the "before" cursor); ignores synthetic entries. */
+/** Smallest numeric MessageID (the "before" cursor); ignores non-numeric ids. */
 export function oldestRealMessageId(list: readonly MergeableMessage[] | undefined): number | null {
     if (!list) return null;
     let oldest: number | null = null;
@@ -53,7 +53,7 @@ export function oldestRealMessageId(list: readonly MergeableMessage[] | undefine
     return oldest;
 }
 
-/** Largest numeric MessageID (the "after" cursor); ignores synthetic entries. */
+/** Largest numeric MessageID (the "after" cursor); ignores non-numeric ids. */
 export function newestRealMessageId(list: readonly MergeableMessage[] | undefined): number | null {
     if (!list) return null;
     let newest: number | null = null;

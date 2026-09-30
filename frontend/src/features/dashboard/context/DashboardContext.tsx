@@ -37,6 +37,9 @@ import {
     marksFromMembers, mergeMarks, parseGroupReceipt, applyReceiptEvent, latestRealMessageId,
     addMemberMark, removeMemberMark, type GroupReceiptsState,
 } from '../lib/groupReceipts';
+import {
+    parseSystemMessage, parseGroupMemberRole, parseGroupMemberRemoved, parseGroupSettings, parseGroupInfo,
+} from '../lib/groupAdminEvents';
 
 /** Mensajes por página al cargar historial antiguo (scroll hacia arriba). */
 const OLDER_PAGE_SIZE = 50;
@@ -80,16 +83,8 @@ export type LocalGroupRole = GroupRole | 'left';
 export type LocalGroup = Omit<GroupResponse, 'UserRole'> & { UserRole: LocalGroupRole };
 export type SelectedGroup = LocalGroup & Partial<Pick<GroupDetail, 'Members' | 'Messages'>>;
 
-/** System message injected locally for "member added"/"member left" (not sent by the backend). */
-export interface SystemGroupMessage {
-    MessageID: string;
-    GroupID: number;
-    IsSystem: true;
-    Message: string;
-    Time: string;
-}
-
-export type GroupMessageEntry = GroupMessageResponse | SystemGroupMessage;
+/** System messages are now server-persisted `GroupMessageResponse` rows (`Kind: 'system'`). */
+export type GroupMessageEntry = GroupMessageResponse;
 
 export interface DashboardContextValue {
     profile: UserGet | null;
@@ -179,6 +174,11 @@ export interface DashboardContextValue {
     sendGroupJoin: ReturnType<typeof useWebSocket>['sendGroupJoin'];
     /** groupID -> telephon -> receipt watermarks (fed by group detail and `group_receipt`). */
     groupReceipts: GroupReceiptsState;
+    /**
+     * groupID -> telephon -> username, cached from member lists and admin events so
+     * system messages can name a target that already left (it is gone from Members).
+     */
+    groupMemberNames: Record<number, Record<string, string>>;
     user: AuthContextValue['user'];
     logout: AuthContextValue['logout'];
 }
@@ -249,6 +249,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const [groupMessages, setGroupMessages] = useState<Record<number, GroupMessageEntry[]>>({}); // { [groupID]: GroupMessageResponse[] }
     const [groupPaging, setGroupPaging] = useState<Record<number, PagingState>>({});
     const [groupReceipts, setGroupReceipts] = useState<GroupReceiptsState>({});
+    const [groupMemberNames, setGroupMemberNames] = useState<Record<number, Record<string, string>>>({});
     // Ventanas desprendidas (ver DashboardContextValue.focusedChat)
     const [focusedChat, setFocusedChat] = useState<Record<string, FocusedWindow<Message>>>({});
     const [focusedGroup, setFocusedGroup] = useState<Record<number, FocusedWindow<GroupMessageResponse>>>({});
@@ -533,8 +534,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    // Cargar la página anterior de un grupo (scroll hacia arriba). Las entradas
-    // sintéticas (IsSystem) nunca son cursor: oldestRealMessageId las ignora.
+    // Cargar la página anterior de un grupo (scroll hacia arriba). Los eventos de
+    // sistema persistidos son mensajes reales (id numérico) y también son cursor;
+    // oldestRealMessageId ignora cualquier entrada sin id numérico.
     const loadOlderGroupMessages = useCallback(async (groupID: number) => {
         const guardKey = `group:${groupID}`;
         const paging = groupPagingRef.current[groupID];
@@ -753,6 +755,18 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                     ...prev,
                     [groupID]: mergeMarks(prev[groupID], marksFromMembers(detailMembers)),
                 }));
+                setGroupMemberNames(prev => {
+                    const known = prev[groupID] ?? {};
+                    let changed = false;
+                    const next = { ...known };
+                    for (const m of detailMembers) {
+                        if (typeof m?.Telephon === 'string' && m.Telephon !== '' && typeof m.Username === 'string' && m.Username !== '' && next[m.Telephon] !== m.Username) {
+                            next[m.Telephon] = m.Username;
+                            changed = true;
+                        }
+                    }
+                    return changed ? { ...prev, [groupID]: next } : prev;
+                });
             }
             // Pre-populate message cache if backend returned messages
             const detailMessages = normalizeGroupDetailMessages(data);
@@ -1071,22 +1085,36 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             );
         };
 
-        /** Members were added to a group — inject system messages and update member list. */
+        /** Appends a server-persisted system message, deduping by its server id. */
+        const appendSystemMessage = (groupID: number, msg: GroupMessageResponse | undefined) => {
+            if (!msg) return;
+            setGroupMessages(prev => {
+                const list = prev[groupID] ?? [];
+                if (list.some(m => m.MessageID === msg.MessageID)) return prev;
+                return { ...prev, [groupID]: [...list, msg] };
+            });
+        };
+
+        /** Caches telephon -> username so a member who left can still be named later. */
+        const rememberNames = (groupID: number, entries: ReadonlyArray<{ telephon: string; username: string }>) => {
+            setGroupMemberNames(prev => {
+                const known = prev[groupID] ?? {};
+                let changed = false;
+                const next = { ...known };
+                for (const e of entries) {
+                    if (e.telephon && e.username && next[e.telephon] !== e.username) {
+                        next[e.telephon] = e.username;
+                        changed = true;
+                    }
+                }
+                return changed ? { ...prev, [groupID]: next } : prev;
+            });
+        };
+
+        /** Members were added to a group — track receipts/names and append the persisted notice. */
         const handleGroupMemberAdded = (payload: WsHandlerMap['group_member_added']) => {
             if (!payload?.groupID || !payload?.addedMembers?.length) return;
-            const adder = payload.addedByUsername || 'Alguien';
-            const now = Date.now();
-            const systemMsgs: SystemGroupMessage[] = payload.addedMembers.map((m, i) => ({
-                MessageID: `system_add_${now}_${i}_${m.telephon}`,
-                GroupID: payload.groupID,
-                IsSystem: true,
-                Message: `${adder} añadió a ${m.username || m.telephon}`,
-                Time: new Date().toISOString(),
-            }));
-            setGroupMessages(prev => {
-                const msgs = prev[payload.groupID] || [];
-                return { ...prev, [payload.groupID]: [...msgs, ...systemMsgs] };
-            });
+            rememberNames(payload.groupID, payload.addedMembers);
             const latestKnownId = latestRealMessageId(groupMessagesRef.current[payload.groupID]);
             setGroupReceipts(prev => payload.addedMembers.reduce(
                 (acc, m) => addMemberMark(acc, payload.groupID, m.telephon, latestKnownId),
@@ -1112,23 +1140,13 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                     Members: [...(prev.Members || []), ...toAdd],
                 };
             });
+            appendSystemMessage(payload.groupID, parseSystemMessage(payload.systemMessage));
         };
 
-        /** A group member left — inject a system message and update member count/list. */
+        /** A group member left — update member list/names and append the persisted notice. */
         const handleGroupMemberLeft = (payload: WsHandlerMap['group_member_left']) => {
             if (!payload?.groupID) return;
-            const displayName = payload.username || payload.telephon;
-            const systemMsg: SystemGroupMessage = {
-                MessageID: `system_${Date.now()}_${Math.random()}`,
-                GroupID: payload.groupID,
-                IsSystem: true,
-                Message: `${displayName} salió del grupo`,
-                Time: new Date().toISOString(),
-            };
-            setGroupMessages(prev => {
-                const msgs = prev[payload.groupID] || [];
-                return { ...prev, [payload.groupID]: [...msgs, systemMsg] };
-            });
+            rememberNames(payload.groupID, [{ telephon: payload.telephon, username: payload.username }]);
             setGroupReceipts(prev => removeMemberMark(prev, payload.groupID, payload.telephon));
             // Update member count and remove from members list
             setGroups(prev => prev.map(g =>
@@ -1146,6 +1164,82 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                         : prev.Members,
                 };
             });
+            appendSystemMessage(payload.groupID, parseSystemMessage(payload.systemMessage));
+        };
+
+        /** A member was promoted/dismissed — update roles (self included) and append the notice. */
+        const handleGroupMemberRole = (payload: WsHandlerMap['group_member_role']) => {
+            const event = parseGroupMemberRole(payload);
+            if (!event) return;
+            const myTelephon = profileRef.current?.Telephon;
+            const iAmTarget = event.telephon === myTelephon;
+            setGroups(prev => prev.map(g =>
+                g.ID === event.groupID && iAmTarget ? { ...g, UserRole: event.role } : g
+            ));
+            setSelectedGroupState(prev => {
+                if (!prev || prev.ID !== event.groupID) return prev;
+                return {
+                    ...prev,
+                    ...(iAmTarget ? { UserRole: event.role } : {}),
+                    Members: prev.Members?.map(m =>
+                        m.Telephon === event.telephon ? { ...m, Role: event.role } : m
+                    ),
+                };
+            });
+            appendSystemMessage(event.groupID, event.systemMessage);
+        };
+
+        /** A member was removed by an admin — the removed user also receives this and moves to `left`. */
+        const handleGroupMemberRemoved = (payload: WsHandlerMap['group_member_removed']) => {
+            const event = parseGroupMemberRemoved(payload);
+            if (!event) return;
+            const myTelephon = profileRef.current?.Telephon;
+            if (event.username) rememberNames(event.groupID, [{ telephon: event.telephon, username: event.username }]);
+            setGroupReceipts(prev => removeMemberMark(prev, event.groupID, event.telephon));
+            const iAmRemoved = event.telephon === myTelephon;
+            setGroups(prev => prev.map(g => {
+                if (g.ID !== event.groupID) return g;
+                const MemberCount = event.newMemberCount ?? Math.max((g.MemberCount || 1) - 1, 0);
+                return iAmRemoved ? { ...g, MemberCount, UserRole: 'left' } : { ...g, MemberCount };
+            }));
+            setSelectedGroupState(prev => {
+                if (!prev || prev.ID !== event.groupID) return prev;
+                const MemberCount = event.newMemberCount ?? Math.max((prev.MemberCount || 1) - 1, 0);
+                const Members = prev.Members
+                    ? prev.Members.filter(m => m.Telephon !== event.telephon)
+                    : prev.Members;
+                return iAmRemoved
+                    ? { ...prev, MemberCount, Members, UserRole: 'left' }
+                    : { ...prev, MemberCount, Members };
+            });
+            appendSystemMessage(event.groupID, event.systemMessage);
+        };
+
+        /** Group permission settings changed. */
+        const handleGroupSettings = (payload: WsHandlerMap['group_settings']) => {
+            const event = parseGroupSettings(payload);
+            if (!event) return;
+            const patch = {
+                OnlyAdminsCanSend: event.onlyAdminsCanSend,
+                OnlyAdminsCanEditInfo: event.onlyAdminsCanEditInfo,
+                OnlyAdminsCanAddMembers: event.onlyAdminsCanAddMembers,
+            };
+            setGroups(prev => prev.map(g => g.ID === event.groupID ? { ...g, ...patch } : g));
+            setSelectedGroupState(prev => prev?.ID === event.groupID ? { ...prev, ...patch } : prev);
+            appendSystemMessage(event.groupID, event.systemMessage);
+        };
+
+        /** Group name/description changed. */
+        const handleGroupInfo = (payload: WsHandlerMap['group_info']) => {
+            const event = parseGroupInfo(payload);
+            if (!event) return;
+            setGroups(prev => prev.map(g =>
+                g.ID === event.groupID ? { ...g, Name: event.name, Description: event.description } : g
+            ));
+            setSelectedGroupState(prev => prev?.ID === event.groupID
+                ? { ...prev, Name: event.name, Description: event.description }
+                : prev);
+            appendSystemMessage(event.groupID, event.systemMessage);
         };
 
         on('message', handleIncomingMessage);
@@ -1164,6 +1258,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         on('group_avatar_update', handleGroupAvatarUpdate);
         on('group_member_added', handleGroupMemberAdded);
         on('group_member_left', handleGroupMemberLeft);
+        on('group_member_role', handleGroupMemberRole);
+        on('group_member_removed', handleGroupMemberRemoved);
+        on('group_settings', handleGroupSettings);
+        on('group_info', handleGroupInfo);
         on('group_receipt', handleGroupReceipt);
 
         return () => {
@@ -1182,6 +1280,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('group_avatar_update', handleGroupAvatarUpdate);
             off('group_member_added', handleGroupMemberAdded);
             off('group_member_left', handleGroupMemberLeft);
+            off('group_member_role', handleGroupMemberRole);
+            off('group_member_removed', handleGroupMemberRemoved);
+            off('group_settings', handleGroupSettings);
+            off('group_info', handleGroupInfo);
             off('group_receipt', handleGroupReceipt);
         };
     }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest]);
@@ -1254,6 +1356,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         sendGroupDeleteMessage,
         sendGroupJoin,
         groupReceipts,
+        groupMemberNames,
         // Auth passthrough
         user,
         logout
