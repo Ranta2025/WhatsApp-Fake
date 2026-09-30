@@ -32,6 +32,30 @@ func (m *MockGroupRepo) AddMembers(groupID uint, members []models.GroupMember, s
 	return args.Get(0).([]models.GroupMember), args.Error(1)
 }
 
+func (m *MockGroupRepo) ChangeMemberRole(groupID, actorID, targetID uint, newRole string, system *models.GroupMessage, ctx context.Context) error {
+	return m.Called(groupID, actorID, targetID, newRole, system, ctx).Error(0)
+}
+
+func (m *MockGroupRepo) RemoveMember(groupID, actorID, targetID uint, system *models.GroupMessage, ctx context.Context) error {
+	return m.Called(groupID, actorID, targetID, system, ctx).Error(0)
+}
+
+func (m *MockGroupRepo) UpdateGroupSettings(groupID, actorID uint, patch models.GroupSettingsUpdate, system *models.GroupMessage, ctx context.Context) (*models.Group, error) {
+	args := m.Called(groupID, actorID, patch, system, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Group), args.Error(1)
+}
+
+func (m *MockGroupRepo) UpdateGroupInfo(groupID, actorID uint, name, description *string, system *models.GroupMessage, ctx context.Context) (*models.Group, error) {
+	args := m.Called(groupID, actorID, name, description, system, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Group), args.Error(1)
+}
+
 func (m *MockGroupRepo) GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error) {
 	args := m.Called(groupID, ctx)
 	if args.Get(0) == nil {

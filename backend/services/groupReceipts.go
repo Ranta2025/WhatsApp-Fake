@@ -16,10 +16,8 @@ const (
 )
 
 // Errores tipados que los handlers traducen a códigos HTTP.
-var (
-	ErrGroupMessageNotFound = models.ErrGroupMessageNotFound
-	ErrNotGroupMember       = errors.New("no eres miembro de este grupo")
-)
+// ErrNotGroupMember se declara junto a los permisos de grupo (groupPermissions.go).
+var ErrGroupMessageNotFound = models.ErrGroupMessageNotFound
 
 // ErrNotMessageSender indica que quien consulta los acuses no es el autor del mensaje.
 var ErrNotMessageSender = errors.New("solo el autor del mensaje puede ver sus acuses")

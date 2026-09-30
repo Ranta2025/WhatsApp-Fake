@@ -25,7 +25,12 @@ const (
 // GroupServicer define todas las operaciones de negocio del dominio de grupos.
 type GroupServicer interface {
 	CreateGroup(telephonCreator string, data models.GroupCreate, ctx context.Context) (*schemas.GroupDetail, error)
-	AddMembers(telephonRequester string, groupID uint, data models.GroupAddMembers, ctx context.Context) ([]schemas.GroupMemberBrief, error)
+	AddMembers(telephonRequester string, groupID uint, data models.GroupAddMembers, ctx context.Context) ([]schemas.GroupMemberBrief, *schemas.GroupMessageResponse, error)
+	Promote(telephonActor string, groupID uint, targetTelephon string, ctx context.Context) (*schemas.GroupMessageResponse, error)
+	Dismiss(telephonActor string, groupID uint, targetTelephon string, ctx context.Context) (*schemas.GroupMessageResponse, error)
+	Remove(telephonActor string, groupID uint, targetTelephon string, ctx context.Context) (*schemas.GroupMessageResponse, error)
+	UpdateSettings(telephonActor string, groupID uint, data models.GroupSettingsUpdate, ctx context.Context) (*schemas.GroupSettingsResult, error)
+	UpdateInfo(telephonActor string, groupID uint, data models.GroupInfoUpdate, ctx context.Context) (*schemas.GroupInfoResult, error)
 	GetUserGroups(telephon string, ctx context.Context) ([]schemas.GroupResponse, error)
 	GetGroupDetail(telephon string, groupID uint, ctx context.Context) (*schemas.GroupDetail, error)
 	SendGroupMessage(telephonSender string, data models.GroupMessageSend, ctx context.Context) (*schemas.GroupMessageResponse, error)
@@ -34,7 +39,7 @@ type GroupServicer interface {
 	EditGroupMessage(telephon string, groupID uint, data models.GroupMessageEdit, ctx context.Context) (*schemas.GroupMessageResponse, error)
 	DeleteGroupMessage(telephon string, groupID uint, data models.GroupMessageDelete, ctx context.Context) error
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
-	LeaveGroup(telephon string, groupID uint, ctx context.Context) error
+	LeaveGroup(telephon string, groupID uint, ctx context.Context) (*schemas.GroupMessageResponse, error)
 	UpdateGroupAvatar(telephon string, groupID uint, avatarUrl string, ctx context.Context) error
 	GetUsernameByTelephon(telephon string, ctx context.Context) (string, error)
 	AdvanceGroupDelivered(telephon string, groupID, upToMessageID uint, ctx context.Context) (*schemas.GroupReceiptUpdate, error)
@@ -49,6 +54,10 @@ type GroupServicer interface {
 type GroupRepoInterface interface {
 	CreateGroupWithMembers(group *models.Group, creatorID uint, memberIDs []uint, ctx context.Context) error
 	AddMembers(groupID uint, members []models.GroupMember, system *models.GroupMessage, ctx context.Context) ([]models.GroupMember, error)
+	ChangeMemberRole(groupID, actorID, targetID uint, newRole string, system *models.GroupMessage, ctx context.Context) error
+	RemoveMember(groupID, actorID, targetID uint, system *models.GroupMessage, ctx context.Context) error
+	UpdateGroupSettings(groupID, actorID uint, patch models.GroupSettingsUpdate, system *models.GroupMessage, ctx context.Context) (*models.Group, error)
+	UpdateGroupInfo(groupID, actorID uint, name, description *string, system *models.GroupMessage, ctx context.Context) (*models.Group, error)
 	GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error)
 	GetGroupMembers(groupID uint, ctx context.Context) ([]models.GroupMember, error)
 	GetUserGroups(userID uint, ctx context.Context) ([]models.UserGroupRow, error)
@@ -139,26 +148,26 @@ func (s *ServiceGroup) CreateGroup(telephonCreator string, data models.GroupCrea
 // AddMembers añade nuevos miembros a un grupo y devuelve los realmente
 // añadidos (un contacto que ya era miembro activo no cuenta). Persiste el
 // evento member_added en la misma transacción del alta.
-func (s *ServiceGroup) AddMembers(telephonRequester string, groupID uint, data models.GroupAddMembers, ctx context.Context) ([]schemas.GroupMemberBrief, error) {
+func (s *ServiceGroup) AddMembers(telephonRequester string, groupID uint, data models.GroupAddMembers, ctx context.Context) ([]schemas.GroupMemberBrief, *schemas.GroupMessageResponse, error) {
 	requesterID, err := s.contactRepo.GetIdByTelephon(telephonRequester, ctx)
 	if err != nil {
-		return nil, errors.New("usuario no encontrado")
+		return nil, nil, errors.New("usuario no encontrado")
 	}
 
 	// Verificar que el requester es miembro del grupo
 	isMember, err := s.repo.IsMember(groupID, uint(requesterID), ctx)
 	if err != nil || !isMember {
-		return nil, errors.New("no eres miembro de este grupo")
+		return nil, nil, errors.New("no eres miembro de este grupo")
 	}
 
 	// Resolver teléfonos, validando que sean contactos del requester
 	memberIDs, err := s.resolveMemberTelephons(uint(requesterID), data.Members, ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(memberIDs) == 0 {
-		return nil, errors.New("no se encontraron contactos válidos para añadir")
+		return nil, nil, errors.New("no se encontraron contactos válidos para añadir")
 	}
 
 	members := make([]models.GroupMember, 0, len(memberIDs))
@@ -170,11 +179,12 @@ func (s *ServiceGroup) AddMembers(telephonRequester string, groupID uint, data m
 			AddedByID: uint(requesterID),
 		})
 	}
-	// El repo completa los targets con los teléfonos realmente insertados.
+	// El repo completa los targets con los teléfonos realmente insertados y muta
+	// el puntero con el id asignado (GORM) al persistir dentro de su transacción.
 	system := models.NewSystemMessage(groupID, uint(requesterID), models.SystemEventMemberAdded, nil)
 	added, err := s.repo.AddMembers(groupID, members, system, ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make([]schemas.GroupMemberBrief, 0, len(added))
 	for _, m := range added {
@@ -184,7 +194,7 @@ func (s *ServiceGroup) AddMembers(telephonRequester string, groupID uint, data m
 			AvatarUrl: m.User.AvatarUrl,
 		})
 	}
-	return out, nil
+	return out, s.systemMessageResponse(system, telephonRequester, ctx), nil
 }
 
 // GetUserGroups retorna los grupos en los que participa el usuario.
@@ -532,20 +542,36 @@ func groupMessageToSchema(m *models.GroupMessage, senderTelephon, senderUsername
 
 // LeaveGroup elimina al usuario de la membresía del grupo y persiste el evento
 // member_left (el que sale es el actor y el target) en la misma transacción.
-func (s *ServiceGroup) LeaveGroup(telephon string, groupID uint, ctx context.Context) error {
+// Devuelve el mensaje de sistema persistido para incluirlo en el evento WS.
+func (s *ServiceGroup) LeaveGroup(telephon string, groupID uint, ctx context.Context) (*schemas.GroupMessageResponse, error) {
 	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
-		return errors.New("usuario no encontrado")
+		return nil, errors.New("usuario no encontrado")
 	}
 	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !isMember {
-		return errors.New("no eres miembro de este grupo")
+		return nil, errors.New("no eres miembro de este grupo")
 	}
 	system := models.NewSystemMessage(groupID, uint(userID), models.SystemEventMemberLeft, []string{telephon})
-	return s.repo.LeaveGroup(groupID, uint(userID), system, ctx)
+	if err := s.repo.LeaveGroup(groupID, uint(userID), system, ctx); err != nil {
+		return nil, err
+	}
+	return s.systemMessageResponse(system, telephon, ctx), nil
+}
+
+// systemMessageResponse mapea el mensaje de sistema que el repo persistió y mutó
+// in-place dentro de su transacción (id/time/targets) al schema del evento.
+// Devuelve nil si no se persistió (id 0), p. ej. cuando no hubo altas.
+func (s *ServiceGroup) systemMessageResponse(msg *models.GroupMessage, actorTelephon string, ctx context.Context) *schemas.GroupMessageResponse {
+	if msg == nil || msg.ID == 0 {
+		return nil
+	}
+	username, _ := s.contactRepo.GetUsernameByTelephon(actorTelephon, ctx)
+	resp := groupMessageToSchema(msg, actorTelephon, username)
+	return &resp
 }
 
 // UpdateGroupAvatar actualiza el avatar del grupo verificando que el usuario sea miembro.

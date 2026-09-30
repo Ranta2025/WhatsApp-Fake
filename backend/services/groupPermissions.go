@@ -10,12 +10,19 @@ import (
 // Errores tipados de permisos de grupo. Los handlers los traducen a códigos
 // HTTP (403 de permiso, 400 de objetivo inválido, 404 de objetivo inexistente)
 // y los caminos WebSocket responden con `error` sin difundir nada.
+//
+// Los errores compartidos con el repo (not-admin, objetivo no-miembro, cambio
+// inválido, no-miembro) viven en `models` y se re-exportan aquí para que los
+// handlers sigan usando `services.Err*`.
 var (
-	ErrNotGroupAdmin       = errors.New("solo los administradores pueden realizar esta acción")
+	ErrNotGroupMember       = models.ErrNotGroupMember
+	ErrNotGroupAdmin        = models.ErrNotGroupAdmin
+	ErrGroupTargetNotMember = models.ErrGroupTargetNotMember
+	ErrInvalidRoleChange    = models.ErrInvalidRoleChange
+
 	ErrGroupSendRestricted = errors.New("solo los admins pueden enviar mensajes")
 	ErrGroupEditRestricted = errors.New("solo los admins pueden editar la información del grupo")
 	ErrGroupAddRestricted  = errors.New("solo los admins pueden agregar participantes")
-	ErrInvalidRoleChange   = errors.New("cambio de rol no válido")
 )
 
 // isAdmin indica si un rol de miembro es de administrador.
@@ -48,20 +55,26 @@ type groupPermissionState struct {
 	onlyAdminsCanAddMembers bool
 }
 
-// actorRole resuelve el usuario y devuelve su rol en el grupo.
+// actorIdentity resuelve el usuario y devuelve su ID y su rol en el grupo.
 // Devuelve ErrNotGroupMember si no es miembro activo.
-func (s *ServiceGroup) actorRole(telephon string, groupID uint, ctx context.Context) (string, error) {
+func (s *ServiceGroup) actorIdentity(telephon string, groupID uint, ctx context.Context) (uint, string, error) {
 	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
-		return "", errors.New("usuario no encontrado")
+		return 0, "", errors.New("usuario no encontrado")
 	}
 	role, err := s.repo.GetMemberRole(groupID, uint(userID), ctx)
 	if err != nil {
 		// Coherente con el resto de mutaciones de grupo: cualquier fallo de la
 		// comprobación de membresía se trata como "no eres miembro".
-		return "", ErrNotGroupMember
+		return 0, "", ErrNotGroupMember
 	}
-	return role, nil
+	return uint(userID), role, nil
+}
+
+// actorRole resuelve el usuario y devuelve su rol en el grupo.
+func (s *ServiceGroup) actorRole(telephon string, groupID uint, ctx context.Context) (string, error) {
+	_, role, err := s.actorIdentity(telephon, groupID, ctx)
+	return role, err
 }
 
 // groupPermissionContext carga el rol del actor y la configuración del grupo

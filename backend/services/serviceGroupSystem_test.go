@@ -46,7 +46,7 @@ func TestAddMembers_ReturnsActuallyAddedAndPassesSystemEvent(t *testing.T) {
 			m.SenderID == uint(testSenderID)
 	}), mock.Anything).Return(addedMembers, nil)
 
-	added, err := svc.AddMembers(testSenderTel, testGroupID,
+	added, _, err := svc.AddMembers(testSenderTel, testGroupID,
 		models.GroupAddMembers{Members: []string{"+34600000011", "+34600000012"}}, context.Background())
 
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func TestAddMembers_RepoErrorPropagates(t *testing.T) {
 	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
 	repo.On("AddMembers", testGroupID, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("db"))
 
-	added, err := svc.AddMembers(testSenderTel, testGroupID,
+	added, _, err := svc.AddMembers(testSenderTel, testGroupID,
 		models.GroupAddMembers{Members: []string{"+34600000011"}}, context.Background())
 
 	assert.Nil(t, added)
@@ -88,7 +88,8 @@ func TestLeaveGroup_PersistsMemberLeftSystemMessage(t *testing.T) {
 			len(m.SystemTargets) == 1 && m.SystemTargets[0] == testSenderTel
 	}), mock.Anything).Return(nil)
 
-	require.NoError(t, svc.LeaveGroup(testSenderTel, testGroupID, context.Background()))
+	_, err := svc.LeaveGroup(testSenderTel, testGroupID, context.Background())
+	require.NoError(t, err)
 	repo.AssertExpectations(t)
 }
 

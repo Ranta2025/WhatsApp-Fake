@@ -546,3 +546,153 @@ func (r *RepoGroup) UpdateGroupAvatar(groupID uint, avatarUrl string, ctx contex
 	return r.data.WithContext(c).Model(&models.Group{}).Where("id = ?", groupID).
 		Update("avatar_url", avatarUrl).Error
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Administración de miembros
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ChangeMemberRole cambia el rol de un miembro en una única transacción con lock
+// de grupo: re-verifica el actor (admin activo) y el objetivo (miembro activo,
+// distinto del actor, con un rol nuevo distinto del actual) y persiste el
+// mensaje de sistema `admin_granted`/`admin_revoked` de forma atómica.
+func (r *RepoGroup) ChangeMemberRole(groupID, actorID, targetID uint, newRole string, system *models.GroupMessage, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		if err := lockGroupRow(tx, groupID); err != nil {
+			return err
+		}
+		actorRole, actorActive, err := memberRoleTx(tx, groupID, actorID)
+		if err != nil {
+			return err
+		}
+		targetRole, targetActive, err := memberRoleTx(tx, groupID, targetID)
+		if err != nil {
+			return err
+		}
+		if err := membershipDecision(actorID, targetID, actorRole, actorActive, targetRole, targetActive, newRole, true); err != nil {
+			return err
+		}
+		if err := tx.Model(&models.GroupMember{}).
+			Where("group_id = ? AND user_id = ?", groupID, targetID).
+			Update("role", newRole).Error; err != nil {
+			return err
+		}
+		return insertSystemMessage(tx, system)
+	})
+}
+
+// RemoveMember elimina (soft-delete) la membresía de un miembro en una única
+// transacción con lock de grupo: re-verifica el actor y el objetivo y persiste
+// el mensaje de sistema `member_removed`.
+func (r *RepoGroup) RemoveMember(groupID, actorID, targetID uint, system *models.GroupMessage, ctx context.Context) error {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		if err := lockGroupRow(tx, groupID); err != nil {
+			return err
+		}
+		actorRole, actorActive, err := memberRoleTx(tx, groupID, actorID)
+		if err != nil {
+			return err
+		}
+		targetRole, targetActive, err := memberRoleTx(tx, groupID, targetID)
+		if err != nil {
+			return err
+		}
+		if err := membershipDecision(actorID, targetID, actorRole, actorActive, targetRole, targetActive, "", false); err != nil {
+			return err
+		}
+		result := tx.Where("group_id = ? AND user_id = ?", groupID, targetID).
+			Delete(&models.GroupMember{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return models.ErrGroupTargetNotMember
+		}
+		return insertSystemMessage(tx, system)
+	})
+}
+
+// UpdateGroupSettings aplica solo los campos presentes del PATCH y devuelve el
+// grupo resultante. Re-verifica el actor (admin activo) bajo lock y persiste el
+// mensaje de sistema `settings_changed`.
+func (r *RepoGroup) UpdateGroupSettings(groupID, actorID uint, patch models.GroupSettingsUpdate, system *models.GroupMessage, ctx context.Context) (*models.Group, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var updated models.Group
+	err := r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		if err := lockGroupRow(tx, groupID); err != nil {
+			return err
+		}
+		if err := requireAdminTx(tx, groupID, actorID); err != nil {
+			return err
+		}
+		updates := map[string]interface{}{}
+		if patch.OnlyAdminsCanSend != nil {
+			updates["only_admins_can_send"] = *patch.OnlyAdminsCanSend
+		}
+		if patch.OnlyAdminsCanEditInfo != nil {
+			updates["only_admins_can_edit_info"] = *patch.OnlyAdminsCanEditInfo
+		}
+		if patch.OnlyAdminsCanAddMembers != nil {
+			updates["only_admins_can_add_members"] = *patch.OnlyAdminsCanAddMembers
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(&models.Group{}).Where("id = ?", groupID).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.First(&updated, groupID).Error; err != nil {
+			return err
+		}
+		return insertSystemMessage(tx, system)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
+
+// UpdateGroupInfo aplica solo los campos presentes del PATCH y devuelve el grupo
+// resultante. Re-verifica que el actor siga siendo miembro activo bajo lock (el
+// permiso fino de edición lo aplica el servicio según la matriz) y persiste el
+// mensaje de sistema `info_changed`.
+func (r *RepoGroup) UpdateGroupInfo(groupID, actorID uint, name, description *string, system *models.GroupMessage, ctx context.Context) (*models.Group, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var updated models.Group
+	err := r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		if err := lockGroupRow(tx, groupID); err != nil {
+			return err
+		}
+		if err := requireActiveMemberTx(tx, groupID, actorID); err != nil {
+			return err
+		}
+		updates := map[string]interface{}{}
+		if name != nil {
+			updates["name"] = *name
+		}
+		if description != nil {
+			updates["description"] = *description
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(&models.Group{}).Where("id = ?", groupID).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.First(&updated, groupID).Error; err != nil {
+			return err
+		}
+		return insertSystemMessage(tx, system)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}

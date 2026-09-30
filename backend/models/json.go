@@ -91,6 +91,36 @@ type GroupAddMembers struct {
 	Members []string `json:"members" binding:"required,min=1"`
 }
 
+// GroupMemberRoleUpdate es el body de PUT .../members/:telephon/role.
+type GroupMemberRoleUpdate struct {
+	Role string `json:"role" binding:"required"` // "admin" | "member"
+}
+
+// GroupSettingsUpdate cambia la configuración de permisos del grupo (PATCH).
+// Punteros: solo se aplican los campos presentes; al menos uno es obligatorio.
+type GroupSettingsUpdate struct {
+	OnlyAdminsCanSend       *bool `json:"onlyAdminsCanSend"`
+	OnlyAdminsCanEditInfo   *bool `json:"onlyAdminsCanEditInfo"`
+	OnlyAdminsCanAddMembers *bool `json:"onlyAdminsCanAddMembers"`
+}
+
+// AnySet indica si al menos una configuración viene presente en el PATCH.
+func (g GroupSettingsUpdate) AnySet() bool {
+	return g.OnlyAdminsCanSend != nil || g.OnlyAdminsCanEditInfo != nil || g.OnlyAdminsCanAddMembers != nil
+}
+
+// GroupInfoUpdate cambia el nombre/descripción del grupo (PATCH /:groupID).
+// Punteros: solo se aplican los campos presentes; al menos uno es obligatorio.
+type GroupInfoUpdate struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+// AnySet indica si al menos un campo de info viene presente en el PATCH.
+func (g GroupInfoUpdate) AnySet() bool {
+	return g.Name != nil || g.Description != nil
+}
+
 // GroupMessageSend es el payload de un nuevo mensaje de grupo (HTTP y WebSocket).
 // En la ruta REST el groupID se toma de la URL; en WebSocket va en el payload.
 type GroupMessageSend struct {

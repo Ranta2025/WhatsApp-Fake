@@ -110,6 +110,11 @@ func (rt *RouterApiMessage) ApiCall() {
 //	GET    /api/v1/group                           → mis grupos
 //	GET    /api/v1/group/:groupID                  → detalle del grupo
 //	POST   /api/v1/group/:groupID/members          → añadir miembros
+//	PUT    /api/v1/group/:groupID/members/:telephon/role → designar/descartar admin
+//	DELETE /api/v1/group/:groupID/members/:telephon → eliminar miembro
+//	DELETE /api/v1/group/:groupID/member           → salir del grupo (self)
+//	PATCH  /api/v1/group/:groupID/settings         → configuración de permisos
+//	PATCH  /api/v1/group/:groupID                  → nombre/descripción
 //	POST   /api/v1/group/:groupID/message          → enviar mensaje
 //	GET    /api/v1/group/:groupID/message          → historial (paginado)
 //	PUT    /api/v1/group/:groupID/message          → editar mensaje
@@ -126,8 +131,12 @@ func (rt *RouterApiMessage) ApiGroup() {
 
 		// Miembros
 		g.POST("/:groupID/members", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupAddMembers(), rt.handlerGroup.HandleAddMembers())
+		g.PUT("/:groupID/members/:telephon/role", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupTelephon(), middleware.MiddlewareGroupMemberRole(), rt.handlerGroup.HandleChangeMemberRole())
+		g.DELETE("/:groupID/members/:telephon", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupTelephon(), rt.handlerGroup.HandleRemoveMember())
 		g.DELETE("/:groupID/member", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleLeaveGroup())
 		g.PATCH("/:groupID/avatar", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleUpdateGroupAvatar())
+		g.PATCH("/:groupID/settings", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupSettings(), rt.handlerGroup.HandleUpdateGroupSettings())
+		g.PATCH("/:groupID", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupInfo(), rt.handlerGroup.HandleUpdateGroupInfo())
 
 		// Mensajes de grupo
 		g.POST("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessage(), rt.handlerGroup.HandleSendGroupMessage())

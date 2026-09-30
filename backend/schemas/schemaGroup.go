@@ -93,3 +93,23 @@ type GroupMessageReceipts struct {
 	DeliveredTo []GroupMemberBrief `json:"deliveredTo"`
 	Pending     []GroupMemberBrief `json:"pending"`
 }
+
+// GroupSettingsResult es el payload del evento `group_settings` (y la respuesta
+// del PATCH /settings): la configuración resultante y el mensaje de sistema
+// persistido para que el cliente aplique estado y mensaje de forma atómica.
+type GroupSettingsResult struct {
+	GroupID                 uint                  `json:"groupID"`
+	OnlyAdminsCanSend       bool                  `json:"onlyAdminsCanSend"`
+	OnlyAdminsCanEditInfo   bool                  `json:"onlyAdminsCanEditInfo"`
+	OnlyAdminsCanAddMembers bool                  `json:"onlyAdminsCanAddMembers"`
+	SystemMessage           *GroupMessageResponse `json:"systemMessage,omitempty"`
+}
+
+// GroupInfoResult es el payload del evento `group_info` (y la respuesta del
+// PATCH /:groupID): nombre/descripción resultantes y el mensaje de sistema.
+type GroupInfoResult struct {
+	GroupID       uint                  `json:"groupID"`
+	Name          string                `json:"name"`
+	Description   string                `json:"description"`
+	SystemMessage *GroupMessageResponse `json:"systemMessage,omitempty"`
+}
