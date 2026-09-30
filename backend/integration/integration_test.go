@@ -146,7 +146,8 @@ func TestIntegration(t *testing.T) {
 		require.NoError(t, groupRepo.CreateGroupWithMembers(g, a.ID, []uint{b.ID}, ctx))
 
 		// Añadir un miembro ya existente no debe fallar (ON CONFLICT DO NOTHING)
-		require.NoError(t, groupRepo.AddMembers(g.ID, []models.GroupMember{{UserID: b.ID, Role: "member", AddedByID: a.ID}, {UserID: c.ID, Role: "member", AddedByID: a.ID}}, ctx))
+		_, addErr := groupRepo.AddMembers(g.ID, []models.GroupMember{{UserID: b.ID, Role: "member", AddedByID: a.ID}, {UserID: c.ID, Role: "member", AddedByID: a.ID}}, nil, ctx)
+		require.NoError(t, addErr)
 
 		rows, err := groupRepo.GetUserGroups(b.ID, ctx)
 		require.NoError(t, err)
@@ -157,7 +158,7 @@ func TestIntegration(t *testing.T) {
 		assert.Equal(t, "grupo", rows[0].Name)
 
 		// El admin sale: el miembro más antiguo pasa a ser admin
-		require.NoError(t, groupRepo.LeaveGroup(g.ID, a.ID, ctx))
+		require.NoError(t, groupRepo.LeaveGroup(g.ID, a.ID, nil, ctx))
 		rows, err = groupRepo.GetUserGroups(b.ID, ctx)
 		require.NoError(t, err)
 		assert.Equal(t, "admin", rows[0].UserRole)

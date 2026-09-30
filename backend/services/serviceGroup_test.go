@@ -24,8 +24,12 @@ func (m *MockGroupRepo) CreateGroupWithMembers(group *models.Group, creatorID ui
 	return m.Called(group, creatorID, memberIDs, ctx).Error(0)
 }
 
-func (m *MockGroupRepo) AddMembers(groupID uint, members []models.GroupMember, ctx context.Context) error {
-	return m.Called(groupID, members, ctx).Error(0)
+func (m *MockGroupRepo) AddMembers(groupID uint, members []models.GroupMember, system *models.GroupMessage, ctx context.Context) ([]models.GroupMember, error) {
+	args := m.Called(groupID, members, system, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.GroupMember), args.Error(1)
 }
 
 func (m *MockGroupRepo) GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error) {
@@ -91,8 +95,8 @@ func (m *MockGroupRepo) DeleteGroupMessage(groupID, messageID, senderID uint, ct
 	return m.Called(groupID, messageID, senderID, ctx).Error(0)
 }
 
-func (m *MockGroupRepo) LeaveGroup(groupID, userID uint, ctx context.Context) error {
-	return m.Called(groupID, userID, ctx).Error(0)
+func (m *MockGroupRepo) LeaveGroup(groupID, userID uint, system *models.GroupMessage, ctx context.Context) error {
+	return m.Called(groupID, userID, system, ctx).Error(0)
 }
 
 func (m *MockGroupRepo) UpdateGroupAvatar(groupID uint, avatarUrl string, ctx context.Context) error {

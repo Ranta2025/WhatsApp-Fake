@@ -179,49 +179,41 @@ func (h *HandlerGroup) HandleAddMembers() gin.HandlerFunc {
 			return
 		}
 
-		err := h.service.AddMembers(telephon.(string), groupID.(uint), data.(models.GroupAddMembers), ctx)
+		added, err := h.service.AddMembers(telephon.(string), groupID.(uint), data.(models.GroupAddMembers), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		detail, detailErr := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx)
-		if detailErr == nil {
-			// Miembros realmente añadidos: los que están en el grupo y venían en la petición
-			requested := make(map[string]struct{}, len(data.(models.GroupAddMembers).Members))
-			for _, tel := range data.(models.GroupAddMembers).Members {
-				requested[tel] = struct{}{}
-			}
-			type addedEntry struct {
-				Telephon string `json:"telephon"`
-				Username string `json:"username"`
-			}
-			added := make([]addedEntry, 0, len(requested))
-			addedTelephons := make([]string, 0, len(requested))
-			allTelephons := make([]string, 0, len(detail.Members))
-			adderUsername := ""
-			for _, m := range detail.Members {
-				allTelephons = append(allTelephons, m.Telephon)
-				if m.Telephon == telephon.(string) {
-					adderUsername = m.Username
-					continue
-				}
-				if _, ok := requested[m.Telephon]; ok {
-					added = append(added, addedEntry{Telephon: m.Telephon, Username: m.Username})
+		if len(added) > 0 {
+			detail, detailErr := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx)
+			if detailErr == nil {
+				// La lista realmente añadida la decide el servicio (no se infiere
+				// de la petición ∩ miembros actuales).
+				addedTelephons := make([]string, 0, len(added))
+				for _, m := range added {
 					addedTelephons = append(addedTelephons, m.Telephon)
 				}
+				allTelephons := make([]string, 0, len(detail.Members))
+				adderUsername := ""
+				for _, m := range detail.Members {
+					allTelephons = append(allTelephons, m.Telephon)
+					if m.Telephon == telephon.(string) {
+						adderUsername = m.Username
+					}
+				}
+
+				// 1. Notificar a los nuevos miembros con el detalle del grupo (sidebar)
+				h.notifyGroupMembers(groupID.(uint), addedTelephons, telephon.(string), detail.GroupResponse)
+
+				// 2. Broadcast "group_member_added" a TODOS los miembros actuales
+				h.notifyAllGroupMembers(allTelephons, "group_member_added", map[string]interface{}{
+					"groupID":         groupID.(uint),
+					"addedByUsername": adderUsername,
+					"addedMembers":    added,
+					"newMemberCount":  len(allTelephons),
+				})
 			}
-
-			// 1. Notificar a los nuevos miembros con el detalle del grupo (sidebar)
-			h.notifyGroupMembers(groupID.(uint), addedTelephons, telephon.(string), detail.GroupResponse)
-
-			// 2. Broadcast "group_member_added" a TODOS los miembros actuales
-			h.notifyAllGroupMembers(allTelephons, "group_member_added", map[string]interface{}{
-				"groupID":         groupID.(uint),
-				"addedByUsername": adderUsername,
-				"addedMembers":    added,
-				"newMemberCount":  len(allTelephons),
-			})
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{"message": "miembros añadidos correctamente"})

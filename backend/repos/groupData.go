@@ -58,18 +58,48 @@ func (r *RepoGroup) CreateGroupWithMembers(group *models.Group, creatorID uint, 
 	})
 }
 
-// AddMembers inserta una lista de nuevos miembros en un grupo.
-// En caso de conflicto (miembro ya existente activo), ignora el duplicado.
-func (r *RepoGroup) AddMembers(groupID uint, members []models.GroupMember, ctx context.Context) error {
-	if len(members) == 0 {
+// systemMessageFilter es el predicado que excluye los mensajes de sistema de
+// las lecturas/operaciones que no deben verlos (búsqueda, edición, borrado y
+// respuestas).
+const systemMessageFilter = "COALESCE(kind,'') = ''"
+
+// insertSystemMessage persiste un mensaje de sistema DENTRO de la transacción
+// del caller (nunca abre su propia transacción): así el evento y el cambio de
+// estado son atómicos. Es nil-safe.
+func insertSystemMessage(tx *gorm.DB, msg *models.GroupMessage) error {
+	if msg == nil {
 		return nil
+	}
+	return tx.Create(msg).Error
+}
+
+// systemTargetsFromMembers extrae los teléfonos de los miembros insertados (con
+// su usuario precargado), en el orden en que quedaron persistidos.
+func systemTargetsFromMembers(members []models.GroupMember) []string {
+	out := make([]string, 0, len(members))
+	for _, m := range members {
+		if m.User.Telephon != "" {
+			out = append(out, m.User.Telephon)
+		}
+	}
+	return out
+}
+
+// AddMembers inserta los miembros que aún no son activos y devuelve los
+// realmente añadidos (con su usuario precargado). Un miembro ya activo no
+// cuenta como añadido. Cuando `system` no es nil y hubo altas, persiste el
+// mensaje de sistema en la MISMA transacción del alta.
+func (r *RepoGroup) AddMembers(groupID uint, members []models.GroupMember, system *models.GroupMessage, ctx context.Context) ([]models.GroupMember, error) {
+	if len(members) == 0 {
+		return nil, nil
 	}
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	// El snapshot del máximo id y el alta van en la misma transacción para que
 	// el miembro nuevo no cuente en los acuses de mensajes anteriores a su alta.
-	return r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+	var added []models.GroupMember
+	err := r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
 		// Bloqueo del grupo: espera a los inserts de mensajes en vuelo (ver CreateGroupMessage).
 		if err := lockGroupRow(tx, groupID); err != nil {
 			return err
@@ -78,14 +108,67 @@ func (r *RepoGroup) AddMembers(groupID uint, members []models.GroupMember, ctx c
 		if err != nil {
 			return err
 		}
-		for i := range members {
-			members[i].GroupID = groupID
-			members[i].JoinedMessageID = joinedAt
+
+		requested := make([]uint, 0, len(members))
+		for _, m := range members {
+			requested = append(requested, m.UserID)
 		}
-		// ON CONFLICT DO NOTHING: si el miembro ya existe activo (índice único
-		// parcial idx_group_member_active), no falla toda la inserción.
-		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&members).Error
+		// Miembros ya activos: no se reinsertan ni cuentan como "añadidos".
+		var existing []uint
+		if err := tx.Model(&models.GroupMember{}).
+			Where("group_id = ? AND user_id IN ?", groupID, requested).
+			Pluck("user_id", &existing).Error; err != nil {
+			return err
+		}
+		active := make(map[uint]struct{}, len(existing))
+		for _, id := range existing {
+			active[id] = struct{}{}
+		}
+
+		toAdd := make([]models.GroupMember, 0, len(members))
+		for _, m := range members {
+			if _, ok := active[m.UserID]; ok {
+				continue
+			}
+			m.GroupID = groupID
+			m.JoinedMessageID = joinedAt
+			toAdd = append(toAdd, m)
+		}
+		if len(toAdd) == 0 {
+			return nil
+		}
+		// ON CONFLICT DO NOTHING: protege ante una carrera con otro alta (el
+		// lock de grupo ya serializa, pero el índice parcial es la garantía).
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&toAdd).Error; err != nil {
+			return err
+		}
+
+		ids := make([]uint, 0, len(toAdd))
+		for _, m := range toAdd {
+			ids = append(ids, m.UserID)
+		}
+		if err := tx.Preload("User", selectUserBasic).
+			Where("group_id = ? AND user_id IN ?", groupID, ids).
+			Find(&added).Error; err != nil {
+			return err
+		}
+		if len(added) == 0 {
+			return nil
+		}
+		if system != nil {
+			system.GroupID = groupID
+			system.Time = time.Now()
+			system.SystemTargets = systemTargetsFromMembers(added)
+			if err := insertSystemMessage(tx, system); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return added, nil
 }
 
 // GetGroupByID obtiene los datos de un grupo por su ID.
@@ -363,7 +446,7 @@ func (r *RepoGroup) EditGroupMessage(groupID, messageID, senderID uint, newConte
 
 	result := r.data.WithContext(c).
 		Model(&models.GroupMessage{}).
-		Where("id = ? AND group_id = ? AND sender_id = ?", messageID, groupID, senderID).
+		Where("id = ? AND group_id = ? AND sender_id = ? AND "+systemMessageFilter, messageID, groupID, senderID).
 		Updates(map[string]interface{}{
 			"message": newContent,
 			"edited":  true,
@@ -384,7 +467,7 @@ func (r *RepoGroup) DeleteGroupMessage(groupID, messageID, senderID uint, ctx co
 	defer cancel()
 
 	result := r.data.WithContext(c).
-		Where("id = ? AND group_id = ? AND sender_id = ?", messageID, groupID, senderID).
+		Where("id = ? AND group_id = ? AND sender_id = ? AND "+systemMessageFilter, messageID, groupID, senderID).
 		Delete(&models.GroupMessage{})
 	if result.Error != nil {
 		return result.Error
@@ -397,8 +480,9 @@ func (r *RepoGroup) DeleteGroupMessage(groupID, messageID, senderID uint, ctx co
 
 // LeaveGroup elimina (soft-delete) la membresía del usuario en el grupo. Si era
 // el último administrador y quedan miembros, promueve a administrador al miembro
-// más antiguo para que el grupo no quede sin admin. Todo en una transacción.
-func (r *RepoGroup) LeaveGroup(groupID, userID uint, ctx context.Context) error {
+// más antiguo para que el grupo no quede sin admin. Cuando `system` no es nil,
+// persiste el mensaje de sistema member_left en la misma transacción.
+func (r *RepoGroup) LeaveGroup(groupID, userID uint, system *models.GroupMessage, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -418,19 +502,20 @@ func (r *RepoGroup) LeaveGroup(groupID, userID uint, ctx context.Context) error 
 			Count(&admins).Error; err != nil {
 			return err
 		}
-		if admins > 0 {
-			return nil
+		if admins == 0 {
+			var remaining []models.GroupMember
+			if err := tx.Where("group_id = ?", groupID).Find(&remaining).Error; err != nil {
+				return err
+			}
+			oldest := promotionCandidate(remaining)
+			if oldest != nil {
+				// El grupo no debe quedar sin admin (el que sale ya no cuenta).
+				if err := tx.Model(oldest).Update("role", models.GroupRoleAdmin).Error; err != nil {
+					return err
+				}
+			}
 		}
-
-		var remaining []models.GroupMember
-		if err := tx.Where("group_id = ?", groupID).Find(&remaining).Error; err != nil {
-			return err
-		}
-		oldest := promotionCandidate(remaining)
-		if oldest == nil {
-			return nil // el grupo quedó vacío
-		}
-		return tx.Model(oldest).Update("role", models.GroupRoleAdmin).Error
+		return insertSystemMessage(tx, system)
 	})
 }
 

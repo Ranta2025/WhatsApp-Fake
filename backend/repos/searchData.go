@@ -24,6 +24,15 @@ import (
 // planner los use.
 const searchVisibleText = "deleted_at IS NULL AND COALESCE(media_type,'') = ''"
 
+// groupSearchVisibleText añade la exclusión de mensajes de sistema a la
+// visibilidad de búsqueda de grupo (los índices parciales no incluyen kind, así
+// que el planner sigue pudiendo usar el índice y filtra después).
+const groupSearchVisibleText = searchVisibleText + " AND " + systemMessageFilter
+
+// groupSearchMembership replica el predicado de pertenencia de la búsqueda
+// global de grupos y excluye los mensajes de sistema.
+const groupSearchMembership = groupMembership + " AND " + systemMessageFilter
+
 // directVisibility replica el predicado de visibilidad de GetMessagesPage para
 // todos los chats del usuario (los borrados para mí quedan excluidos).
 const directVisibility = "((id_user = ? AND deleted_by_sender = false) OR (id_receptor = ? AND deleted_by_receiver = false))"
@@ -133,7 +142,7 @@ func (r *RepoGroup) SearchGroupMessages(groupID, userID uint, q string, before u
 	}
 	db := r.data.WithContext(c).Table("group_messages").
 		Select(`id, "time", message`).
-		Where(searchVisibleText).
+		Where(groupSearchVisibleText).
 		Where("group_id = ?", groupID).
 		Where("EXISTS (SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND deleted_at IS NULL)", groupID, userID).
 		Where(SearchMatchSQL(useSearchNorm(c, r.data)), utils.EscapeLike(q))
@@ -196,7 +205,7 @@ func (app *ApiContact) SearchMessagesGlobal(userID uint, q string, perChat, maxC
 func (r *RepoGroup) SearchGroupMessagesGlobal(userID uint, q string, perChat, maxChats int, ctx context.Context) ([]models.GlobalSearchRow, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	sql := buildGlobalSearchSQL("group_messages", "group_id", groupMembership, useSearchNorm(c, r.data))
+	sql := buildGlobalSearchSQL("group_messages", "group_id", groupSearchMembership, useSearchNorm(c, r.data))
 	var rows []models.GlobalSearchRow
 	err := r.data.WithContext(c).Raw(sql, userID, utils.EscapeLike(q), maxChats, perChat).Scan(&rows).Error
 	return rows, err

@@ -163,6 +163,10 @@ func (s *ServiceGroup) GetGroupMessageReceipts(telephon string, groupID, message
 	if msg.GroupID != groupID {
 		return nil, ErrGroupMessageNotFound
 	}
+	if msg.Kind == models.GroupMessageKindSystem {
+		// Los eventos de sistema no tienen acuses (ni Info ni ticks).
+		return nil, ErrGroupMessageNotFound
+	}
 	if msg.SenderID != userID {
 		return nil, ErrNotMessageSender
 	}

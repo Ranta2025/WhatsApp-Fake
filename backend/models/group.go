@@ -13,6 +13,21 @@ const (
 	GroupRoleMember = "member"
 )
 
+// Kind de GroupMessage. "" es un mensaje normal del usuario; "system" es un
+// evento de grupo persistido (persistido estructurado, no texto renderizado).
+const GroupMessageKindSystem = "system"
+
+// Eventos de sistema persistidos en el historial del grupo.
+const (
+	SystemEventMemberAdded     = "member_added"
+	SystemEventMemberRemoved   = "member_removed"
+	SystemEventMemberLeft      = "member_left"
+	SystemEventAdminGranted    = "admin_granted"
+	SystemEventAdminRevoked    = "admin_revoked"
+	SystemEventSettingsChanged = "settings_changed"
+	SystemEventInfoChanged     = "info_changed"
+)
+
 // Group representa un grupo de chat.
 // El creador es automáticamente el primer administrador.
 type Group struct {
@@ -76,8 +91,30 @@ type GroupMessage struct {
 	ReplyToTelephon  *string `gorm:"column:reply_to_telephon;size:50"`
 	ReplyToMessage   *string `gorm:"size:400"`
 
+	// Mensajes de sistema: eventos de grupo persistidos y renderizados por el
+	// cliente desde datos estructurados (no guardan texto por espectador).
+	// Kind "" = mensaje normal; "system" = evento. SystemTargets son los
+	// teléfonos afectados (p. ej. los añadidos en un member_added).
+	Kind          string   `gorm:"size:20;not null;default:''"`
+	SystemEvent   string   `gorm:"size:30;not null;default:''"`
+	SystemTargets []string `gorm:"type:jsonb;serializer:json"`
+
 	Group  Group        `gorm:"foreignKey:GroupID;references:ID"`
 	Sender UserDataBase `gorm:"foreignKey:SenderID;references:ID"`
+}
+
+// NewSystemMessage construye un mensaje de sistema listo para insertar en la
+// transacción del caller. SenderID es el actor del evento; targets son los
+// teléfonos afectados (puede ser nil si el repo los completa).
+func NewSystemMessage(groupID, senderID uint, event string, targets []string) *GroupMessage {
+	return &GroupMessage{
+		GroupID:       groupID,
+		SenderID:      senderID,
+		Kind:          GroupMessageKindSystem,
+		SystemEvent:   event,
+		SystemTargets: targets,
+		Time:          time.Now(),
+	}
 }
 
 // UserGroupRow es un grupo del usuario con los datos agregados para el listado

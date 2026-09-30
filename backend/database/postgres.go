@@ -290,6 +290,15 @@ func Conection() (*gorm.DB, error) {
 				CHECK (media_type IS NULL OR media_type = ''
 					OR media_type IN ('image', 'audio', 'video', 'sticker', 'document'));
 		END IF;
+
+		-- group_messages.kind ("" normal | "system" evento persistido)
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'group_messages' AND constraint_name = 'chk_group_messages_kind'
+		) THEN
+			ALTER TABLE group_messages ADD CONSTRAINT chk_group_messages_kind
+				CHECK (kind IN ('', 'system'));
+		END IF;
 	END $$;`)
 
 	// ─────────────────────────────────────────────────────────────────────────

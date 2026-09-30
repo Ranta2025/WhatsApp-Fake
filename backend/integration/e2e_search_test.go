@@ -169,7 +169,7 @@ func TestE2EMessageSearch(t *testing.T) {
 	})
 
 	t.Run("group: leaving removes access", func(t *testing.T) {
-		require.NoError(t, groupRepo.LeaveGroup(group.ID, bob.ID, ctx))
+		require.NoError(t, groupRepo.LeaveGroup(group.ID, bob.ID, nil, ctx))
 		rows, _, err := groupRepo.SearchGroupMessages(group.ID, bob.ID, "reunion", 0, 20, ctx)
 		require.NoError(t, err)
 		assert.Empty(t, rows)

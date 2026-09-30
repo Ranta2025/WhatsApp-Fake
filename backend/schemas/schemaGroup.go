@@ -52,6 +52,13 @@ type GroupMessageResponse struct {
 	ReplyToMessageID *uint   `json:"ReplyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"ReplyToTelephon,omitempty"`
 	ReplyToMessage   *string `json:"ReplyToMessage,omitempty"`
+
+	// Mensajes de sistema persistidos. Kind "" en los mensajes normales; en los
+	// de sistema Kind="system" y SystemEvent describe el evento. SystemTargets
+	// son los teléfonos afectados para que el cliente redacte por espectador.
+	Kind          string   `json:"Kind,omitempty"`
+	SystemEvent   string   `json:"SystemEvent,omitempty"`
+	SystemTargets []string `json:"SystemTargets,omitempty"`
 }
 
 // GroupDetail combina la info completa del grupo: metadatos, miembros y mensajes.
