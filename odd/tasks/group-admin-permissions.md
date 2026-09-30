@@ -136,7 +136,14 @@ Route notation: delegated = one bounded Sonnet writer (per repo memory: Opus orc
 6. Removed members: **keep the existing `left` UX (cached messages visible, composer replaced by a banner, server denies fresh fetches)** vs. remove the group from their list.
 
 ## Progress / Evidence
-None yet. Document written 2026-09-29 (planning only; no code changed).
+- 2026-09-30: ODD tracking iniciado. Branch `feat/group-admin-permissions` creada desde `feat/observability`. Mirror Engram `odd/group-admin-permissions/tasks`. Las 6 open questions resueltas con el usuario:
+  1. Creator protection: sin protección (WhatsApp puro, cualquier admin puede remover/degradar incluso al creador).
+  2. System messages: persistir todo server-side estructurado + migrar add/leave.
+  3. Restringidos: sí pueden borrar propios, no editar.
+  4. CUSTOM: grupos nuevos configurables al crear a conveniencia estilo WhatsApp (extiende CreateGroup API + CreateGroupModal); default todo abierto. Añadir a GA4/GA6-GA7.
+  5. Aprobar nuevos: fase 2.
+  6. Removidos: mantener UX `left`.
+- Route: delegated (writer trigger: GA1 toca 2+ archivos no-triviales). TDD strict per doc. GA1-GA9 pendientes.
 
 ## Next step
-Resolve the open questions with the user (one at a time), create `feat/group-admin-permissions` from the latest feature branch, create the Engram mirror `odd/group-admin-permissions/tasks`, then start GA1 (RED first).
+GA1 Permission foundation (delegated writer, RED first), luego GA2-GA9 en orden.
