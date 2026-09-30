@@ -21,7 +21,9 @@ import { searchGroup, type SearchPageOptions } from '../api/searchApi';
 import { composeFocusedMessages } from '../lib/focusedWindow';
 import { deriveGroupMessageStatus } from '../lib/groupReceipts';
 import { isSystemGroupMessage, describeGroupSystemMessage } from '../lib/groupAdminEvents';
-import type { GroupMessageResponse, MediaUploadResult, MessageStatus, SearchPage } from '../../../types/api';
+import { canAddMembers, canEditInfo, canManageMembers } from '../lib/groupPermissions';
+import GroupSettingsSection from './GroupSettingsSection';
+import type { GroupMessageResponse, MediaUploadResult, MessageStatus, SearchPage, GroupRole, GroupInfoRequest } from '../../../types/api';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -437,6 +439,12 @@ const GroupChatWindowInner = () => {
     const [memberMenuOpen, setMemberMenuOpen]     = useState<string | null>(null);
     const [addContactOpen, setAddContactOpen]     = useState(false);
     const [addContactTarget, setAddContactTarget] = useState({ number: '', username: '' });
+    const [confirmRemoveMember, setConfirmRemoveMember] = useState<{ telephon: string; username: string } | null>(null);
+    const [memberActionLoading, setMemberActionLoading] = useState(false);
+    const [editingInfo, setEditingInfo]           = useState(false);
+    const [infoName, setInfoName]                 = useState('');
+    const [infoDescription, setInfoDescription]   = useState('');
+    const [savingInfo, setSavingInfo]             = useState(false);
     const optionsRef                               = useRef<HTMLDivElement>(null);
     const avatarInputRef                           = useRef<HTMLInputElement>(null);
     const avatarTriggerRef                         = useRef<HTMLButtonElement>(null); // disparador del menú de avatar (Popover)
@@ -630,8 +638,85 @@ const GroupChatWindowInner = () => {
     useEscapeToClose(() => setConfirmDelete(false), confirmDelete);
     useEscapeToClose(() => setConfirmClear(false), confirmClear);
     useEscapeToClose(() => setViewAvatarOpen(false), viewAvatarOpen);
+    useEscapeToClose(() => setConfirmRemoveMember(null), confirmRemoveMember !== null);
+    useEscapeToClose(() => setEditingInfo(false), editingInfo);
 
     if (!selectedGroup) return null;
+
+    // Permisos del grupo para este espectador (matriz de lib/groupPermissions).
+    // Hiding controls is convenience only: el backend valida cada camino.
+    const canManageMembersNow = canManageMembers(selectedGroup.UserRole);
+    const canAddMembersNow = canAddMembers(selectedGroup.UserRole, selectedGroup);
+    const canEditInfoNow = canEditInfo(selectedGroup.UserRole, selectedGroup);
+
+    const openEditInfo = () => {
+        setInfoName(selectedGroup.Name);
+        setInfoDescription(selectedGroup.Description ?? '');
+        setEditingInfo(true);
+    };
+
+    const saveGroupInfo = async () => {
+        const gid = selectedGroup.ID;
+        const patch: GroupInfoRequest = {};
+        const nextName = infoName.trim();
+        const nextDescription = infoDescription.trim();
+        if (nextName && nextName !== selectedGroup.Name) patch.name = nextName;
+        if (nextDescription !== (selectedGroup.Description ?? '')) patch.description = nextDescription;
+        if (Object.keys(patch).length === 0) { setEditingInfo(false); return; }
+        setSavingInfo(true);
+        try {
+            const { updateGroupInfo } = await import('../../../api/groupApi');
+            const { data } = await updateGroupInfo(gid, patch);
+            setSelectedGroup(prev => (prev && prev.ID === gid ? { ...prev, Name: data.name, Description: data.description } : prev));
+            setGroups(prev => prev.map(g => (g.ID === gid ? { ...g, Name: data.name, Description: data.description } : g)));
+            addToast({ type: 'success', message: 'Información del grupo actualizada' });
+            setEditingInfo(false);
+        } catch (err) {
+            addToast({ type: 'error', message: getResponseError(err) || 'No se pudo actualizar la información' });
+        } finally {
+            setSavingInfo(false);
+        }
+    };
+
+    const handleMemberRole = async (telephon: string, role: GroupRole, displayName: string) => {
+        const gid = selectedGroup.ID;
+        setMemberMenuOpen(null);
+        try {
+            const { changeGroupMemberRole } = await import('../../../api/groupApi');
+            await changeGroupMemberRole(gid, telephon, role);
+            setSelectedGroup(prev => (prev && prev.ID === gid
+                ? { ...prev, Members: prev.Members?.map(m => (m.Telephon === telephon ? { ...m, Role: role } : m)) }
+                : prev));
+            addToast({ type: 'success', message: role === 'admin' ? `${displayName} es admin` : `${displayName} ya no es admin` });
+        } catch (err) {
+            addToast({ type: 'error', message: getResponseError(err) || 'No se pudo cambiar el rol' });
+        }
+    };
+
+    const handleRemoveMember = async () => {
+        if (!confirmRemoveMember) return;
+        const gid = selectedGroup.ID;
+        const { telephon } = confirmRemoveMember;
+        setMemberActionLoading(true);
+        try {
+            const { removeGroupMember } = await import('../../../api/groupApi');
+            await removeGroupMember(gid, telephon);
+            setSelectedGroup(prev => (prev && prev.ID === gid
+                ? {
+                    ...prev,
+                    MemberCount: Math.max((prev.MemberCount || 1) - 1, 0),
+                    Members: prev.Members?.filter(m => m.Telephon !== telephon),
+                }
+                : prev));
+            setGroups(prev => prev.map(g => (g.ID === gid ? { ...g, MemberCount: Math.max((g.MemberCount || 1) - 1, 0) } : g)));
+            addToast({ type: 'success', message: 'Miembro eliminado' });
+            setConfirmRemoveMember(null);
+        } catch (err) {
+            addToast({ type: 'error', message: getResponseError(err) || 'No se pudo eliminar al miembro' });
+        } finally {
+            setMemberActionLoading(false);
+        }
+    };
 
     return (
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden bg-slate-950 relative">
@@ -751,7 +836,8 @@ const GroupChatWindowInner = () => {
                                         ref={avatarTriggerRef}
                                         onClick={() => setShowAvatarMenu(v => !v)}
                                         className="relative w-24 h-24 rounded-full overflow-hidden shadow-xl focus:outline-none"
-                                        disabled={uploadingAvatar}>
+                                        aria-label="Foto del grupo"
+                                        disabled={uploadingAvatar || (!selectedGroup.AvatarUrl && !canEditInfoNow)}>
                                         <div className="w-full h-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-4xl font-bold text-white">
                                             {selectedGroup.AvatarUrl
                                                 ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
@@ -761,10 +847,15 @@ const GroupChatWindowInner = () => {
                                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
                                             {uploadingAvatar
                                                 ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                : <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                  </svg>
+                                                : canEditInfoNow
+                                                    ? <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                      </svg>
+                                                    : <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                      </svg>
                                             }
                                         </div>
                                     </button>
@@ -788,7 +879,7 @@ const GroupChatWindowInner = () => {
                                                 Ver foto
                                             </button>
                                         )}
-                                        {selectedGroup?.UserRole !== 'left' && (
+                                        {canEditInfoNow && (
                                             <label className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors cursor-pointer">
                                                 <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -809,9 +900,54 @@ const GroupChatWindowInner = () => {
                                         onChange={handleGroupAvatarChange}
                                     />
                                 </div>
-                                <h2 className="text-xl font-bold text-white text-center">{selectedGroup.Name}</h2>
-                                {selectedGroup.Description && (
-                                    <p className="text-sm text-slate-400 text-center mt-1 max-w-xs">{selectedGroup.Description}</p>
+                                {editingInfo ? (
+                                    <div className="w-full max-w-xs flex flex-col gap-2 mt-1" data-testid="group-info-edit">
+                                        <input
+                                            type="text"
+                                            value={infoName}
+                                            onChange={e => setInfoName(e.target.value)}
+                                            maxLength={60}
+                                            aria-label="Nombre del grupo"
+                                            placeholder="Nombre del grupo"
+                                            className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
+                                        />
+                                        <textarea
+                                            value={infoDescription}
+                                            onChange={e => setInfoDescription(e.target.value)}
+                                            maxLength={200}
+                                            rows={2}
+                                            aria-label="Descripción del grupo"
+                                            placeholder="Descripción del grupo"
+                                            className="w-full resize-none bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditingInfo(false)} disabled={savingInfo}
+                                                    className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors disabled:opacity-50">
+                                                Cancelar
+                                            </button>
+                                            <button onClick={saveGroupInfo} disabled={savingInfo || !infoName.trim()}
+                                                    className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                                                {savingInfo ? 'Guardando...' : 'Guardar'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-center gap-2 mt-0">
+                                            <h2 className="text-xl font-bold text-white text-center">{selectedGroup.Name}</h2>
+                                            {canEditInfoNow && (
+                                                <button onClick={openEditInfo} aria-label="Editar info del grupo"
+                                                        className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                        {selectedGroup.Description && (
+                                            <p className="text-sm text-slate-400 text-center mt-1 max-w-xs">{selectedGroup.Description}</p>
+                                        )}
+                                    </>
                                 )}
                                 <p className="text-xs text-slate-500 mt-2">
                                     Grupo · {selectedGroup.MemberCount ?? (selectedGroup.Members?.length ?? '?')} participantes
@@ -873,13 +1009,15 @@ const GroupChatWindowInner = () => {
                                     <span className="text-sm font-semibold text-slate-300">
                                         {selectedGroup.Members?.length ?? selectedGroup.MemberCount ?? '?'} participantes
                                     </span>
-                                    <button onClick={() => { setShowMembers(false); setShowAddMembers(true); }}
-                                            className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                                        </svg>
-                                        Añadir
-                                    </button>
+                                    {canAddMembersNow && (
+                                        <button onClick={() => { setShowMembers(false); setShowAddMembers(true); }}
+                                                className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                            </svg>
+                                            Añadir
+                                        </button>
+                                    )}
                                 </div>
 
                                 {selectedGroup.Members ? (
@@ -947,6 +1085,35 @@ const GroupChatWindowInner = () => {
                                                             Agregar a contactos
                                                         </button>
                                                     )}
+                                                    {canManageMembersNow && (
+                                                        <>
+                                                            <div className="border-t border-white/5" />
+                                                            {m.Role === 'admin' ? (
+                                                                <button onClick={() => { void handleMemberRole(m.Telephon, 'member', m.ContactName || m.Username); }}
+                                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                    </svg>
+                                                                    Descartar como admin
+                                                                </button>
+                                                            ) : (
+                                                                <button onClick={() => { void handleMemberRole(m.Telephon, 'admin', m.ContactName || m.Username); }}
+                                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z" />
+                                                                    </svg>
+                                                                    Designar como admin
+                                                                </button>
+                                                            )}
+                                                            <button onClick={() => { setConfirmRemoveMember({ telephon: m.Telephon, username: m.ContactName || m.Username }); setMemberMenuOpen(null); }}
+                                                                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
+                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                                                                </svg>
+                                                                Eliminar
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </Popover>
                                             </div>
                                         );
@@ -955,6 +1122,9 @@ const GroupChatWindowInner = () => {
                                     <div className="px-4 py-6 text-center text-slate-500 text-sm">Cargando participantes...</div>
                                 )}
                             </div>
+
+                            {/* Configuración del grupo (permisos) */}
+                            <GroupSettingsSection />
 
                             <div className="h-2 bg-slate-950/60" />
 
@@ -1072,6 +1242,37 @@ const GroupChatWindowInner = () => {
                             <button onClick={handleLeaveGroup} disabled={loadingLeave}
                                     className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
                                 {loadingLeave ? 'Saliendo...' : 'Salir'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Confirm remove member dialog ── */}
+            {confirmRemoveMember && (
+                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                     onClick={() => setConfirmRemoveMember(null)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
+                         onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="font-semibold text-white">¿Eliminar a {confirmRemoveMember.username || confirmRemoveMember.telephon}?</p>
+                                <p className="text-xs text-slate-400 mt-0.5">Dejará de ser miembro del grupo. Podrás volver a añadirlo después.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmRemoveMember(null)} disabled={memberActionLoading}
+                                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors disabled:opacity-50">
+                                Cancelar
+                            </button>
+                            <button onClick={handleRemoveMember} disabled={memberActionLoading}
+                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                                {memberActionLoading ? 'Eliminando...' : 'Eliminar'}
                             </button>
                         </div>
                     </div>

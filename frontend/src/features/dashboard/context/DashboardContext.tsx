@@ -81,7 +81,14 @@ export interface CallState {
  */
 export type LocalGroupRole = GroupRole | 'left';
 export type LocalGroup = Omit<GroupResponse, 'UserRole'> & { UserRole: LocalGroupRole };
-export type SelectedGroup = LocalGroup & Partial<Pick<GroupDetail, 'Members' | 'Messages'>>;
+export type SelectedGroup = LocalGroup & Partial<Pick<GroupDetail, 'Members' | 'Messages'>> & {
+    /**
+     * Client-only: the viewer was removed by an admin (vs. leaving voluntarily).
+     * The composer uses it to show the removal wording instead of the generic
+     * "no longer a member" copy; it is never sent to the backend.
+     */
+    RemovedByAdmin?: boolean;
+};
 
 /** System messages are now server-persisted `GroupMessageResponse` rows (`Kind: 'system'`). */
 export type GroupMessageEntry = GroupMessageResponse;
@@ -1209,7 +1216,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                     ? prev.Members.filter(m => m.Telephon !== event.telephon)
                     : prev.Members;
                 return iAmRemoved
-                    ? { ...prev, MemberCount, Members, UserRole: 'left' }
+                    ? { ...prev, MemberCount, Members, UserRole: 'left', RemovedByAdmin: true }
                     : { ...prev, MemberCount, Members };
             });
             appendSystemMessage(event.groupID, event.systemMessage);

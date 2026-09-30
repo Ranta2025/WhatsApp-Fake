@@ -178,6 +178,7 @@ describe('DashboardProvider group admin events', () => {
 
         expect(ctx?.groups[0]?.UserRole).toBe('left');
         expect(ctx?.selectedGroup?.UserRole).toBe('left');
+        expect(ctx?.selectedGroup?.RemovedByAdmin).toBe(true);
     });
 
     it('group_settings updates the settings on groups and selectedGroup and appends the notice', async () => {

@@ -3,6 +3,8 @@ import { useDashboard } from '../context/DashboardContext';
 import { createGroup } from '../../../api/groupApi';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { getErrorMessage } from '../../../lib/errors';
+import { GroupPermissionToggle } from './GroupSettingsSection';
+import type { GroupSettingsRequest } from '../../../types/api';
 
 interface CreateGroupModalProps {
     isOpen: boolean;
@@ -20,6 +22,12 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
     const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
     const [memberSearch, setMemberSearch]       = useState('');
     const [loading, setLoading] = useState(false);
+    // CUSTOM (Q4): grupos nuevos configurables al crear, default todo abierto.
+    const [settings, setSettings] = useState<GroupSettingsRequest>({
+        onlyAdminsCanSend: false,
+        onlyAdminsCanEditInfo: false,
+        onlyAdminsCanAddMembers: false,
+    });
 
     const acceptedContacts = useMemo(
         () => contacts.filter(c => c.Status === 'accepted'),
@@ -49,6 +57,7 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
         setDescription('');
         setSelectedMembers(new Set<string>());
         setMemberSearch('');
+        setSettings({ onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false });
         onClose();
     };
 
@@ -65,7 +74,7 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
 
         setLoading(true);
         try {
-            await createGroup(name.trim(), description.trim(), Array.from(selectedMembers));
+            await createGroup(name.trim(), description.trim(), Array.from(selectedMembers), settings);
             addToast({ type: 'success', message: `Grupo "${name.trim()}" creado` });
             await fetchUserGroups();
             handleClose();
@@ -135,6 +144,31 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
                                 placeholder="Descripción breve del grupo"
                                 className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm"
                             />
+                        </div>
+
+                        {/* Permisos del grupo (CUSTOM Q4) */}
+                        <div>
+                            <div className="text-xs text-indigo-300/70 uppercase tracking-wider font-semibold mb-1">Permisos del grupo</div>
+                            <div className="divide-y divide-white/5">
+                                <GroupPermissionToggle
+                                    label="Enviar mensajes"
+                                    testId="create-setting-send"
+                                    value={settings.onlyAdminsCanSend ?? false}
+                                    onChange={v => setSettings(s => ({ ...s, onlyAdminsCanSend: v }))}
+                                />
+                                <GroupPermissionToggle
+                                    label="Editar info del grupo"
+                                    testId="create-setting-edit"
+                                    value={settings.onlyAdminsCanEditInfo ?? false}
+                                    onChange={v => setSettings(s => ({ ...s, onlyAdminsCanEditInfo: v }))}
+                                />
+                                <GroupPermissionToggle
+                                    label="Agregar otros participantes"
+                                    testId="create-setting-add"
+                                    value={settings.onlyAdminsCanAddMembers ?? false}
+                                    onChange={v => setSettings(s => ({ ...s, onlyAdminsCanAddMembers: v }))}
+                                />
+                            </div>
                         </div>
                     </div>
 

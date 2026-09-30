@@ -3,6 +3,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { useGroupMessaging } from '../hooks/useGroupMessaging';
 import { isEscapeHandled } from '../../../hooks/useEscapeToClose';
 import { useVoiceRecorder, formatRecordingTime } from '../../../hooks/useVoiceRecorder';
+import { canSend } from '../lib/groupPermissions';
 import MediaUploadMenu from '../../../components/MediaUploadMenu';
 
 const GroupMessageInput = () => {
@@ -27,24 +28,53 @@ const GroupMessageInput = () => {
 
     const isLeft = selectedGroup?.UserRole === 'left';
     const isEditing = Boolean(editingMessageId);
+    // Matriz de permisos (lib/groupPermissions.ts): un miembro sólo queda
+    // restringido si el envío es solo-admins; admin nunca. `left` se maneja aparte.
+    const restrictedSend = Boolean(selectedGroup) && !isLeft && !canSend(selectedGroup!.UserRole, selectedGroup!);
 
     // Si el rol pasa a 'left' mientras se graba, soltar el micrófono sin subir.
     useEffect(() => {
         if (isLeft && isRecording) cancelRecording();
     }, [isLeft, isRecording, cancelRecording]);
 
+    // Al quedar restringido en vivo (cambio de rol/settings) se cancelan la
+    // edición y la respuesta pendientes, y se suelta el micrófono. El banner
+    // reemplaza al composer, así que no puede quedar ningún modo a medias.
+    useEffect(() => {
+        if (!restrictedSend) return;
+        if (isRecording) cancelRecording();
+        if (editingMessageId) handleEditMessageCancel();
+        if (replyingTo) cancelReply();
+    }, [restrictedSend, isRecording, cancelRecording, editingMessageId, handleEditMessageCancel, replyingTo, cancelReply]);
+
     // Entrar en modo edición desmonta el adjuntar: cerrar el menú para que no reaparezca.
     // Ajuste de estado durante el render (patrón de React), sin efecto.
     if (isEditing && showAttachMenu) setShowAttachMenu(false);
 
-    // If the user has left the group, show a read-only banner
+    // If the user has left the group, show a read-only banner. Wording differs
+    // when the cause is an admin removal vs. a voluntary leave (`RemovedByAdmin`).
     if (isLeft) {
         return (
-            <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
+            <div data-testid="group-composer-left" className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
-                Ya no eres miembro de este grupo
+                {selectedGroup?.RemovedByAdmin
+                    ? 'Un admin te eliminó de este grupo'
+                    : 'Ya no eres miembro de este grupo'}
+            </div>
+        );
+    }
+
+    // Restricted members cannot send: same disabled-composer pattern as `left`
+    // (attach / voice / emoji hidden; reply and edit already cancelled above).
+    if (restrictedSend) {
+        return (
+            <div data-testid="group-composer-restricted" className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Solo los admins pueden enviar mensajes
             </div>
         );
     }
