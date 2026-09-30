@@ -137,6 +137,13 @@ func (s *ServiceGroup) CreateGroup(telephonCreator string, data models.GroupCrea
 		Name:        name,
 		Description: data.Description,
 		CreatorID:   uint(creatorID),
+
+		// CUSTOM (decisión 2026-09-30): grupos configurables al crear. El grupo
+		// nace con estos valores; no se persiste system message porque no hay
+		// un cambio de estado que notificar.
+		OnlyAdminsCanSend:       data.OnlyAdminsCanSend,
+		OnlyAdminsCanEditInfo:   data.OnlyAdminsCanEditInfo,
+		OnlyAdminsCanAddMembers: data.OnlyAdminsCanAddMembers,
 	}
 
 	if err := s.repo.CreateGroupWithMembers(group, uint(creatorID), memberIDs, ctx); err != nil {

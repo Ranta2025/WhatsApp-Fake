@@ -80,10 +80,17 @@ type GetContactPut struct {
 
 // GroupCreate es el body para crear un nuevo grupo.
 // Members es la lista de teléfonos (E.164) de los contactos a añadir como miembros iniciales.
+// Los tres settings de permisos son opcionales: su ausencia equivale a false
+// (grupo abierto, comportamiento por defecto). El grupo nace con esos valores,
+// así que la creación NO persiste un mensaje de sistema (no hay cambio que notificar).
 type GroupCreate struct {
 	Name        string   `json:"name" binding:"required"`
 	Description string   `json:"description,omitempty"`
 	Members     []string `json:"members" binding:"required,min=1"`
+
+	OnlyAdminsCanSend       bool `json:"onlyAdminsCanSend"`
+	OnlyAdminsCanEditInfo   bool `json:"onlyAdminsCanEditInfo"`
+	OnlyAdminsCanAddMembers bool `json:"onlyAdminsCanAddMembers"`
 }
 
 // GroupAddMembers añade nuevos miembros a un grupo existente.
