@@ -384,7 +384,8 @@ func TestAddMembers_ReturnsSystemMessage(t *testing.T) {
 	contacts.On("GetIdByTelephon", "+34600000011", mock.Anything).Return(11, nil)
 	contacts.On("IsAcceptedContact", uint(testSenderID), uint(11), mock.Anything).Return(true, nil)
 	contacts.On("GetUsernameByTelephon", testSenderTel, mock.Anything).Return("ana", nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleAdmin, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
 	repo.On("AddMembers", testGroupID, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			args.Get(2).(*models.GroupMessage).Model = gorm.Model{ID: 90}

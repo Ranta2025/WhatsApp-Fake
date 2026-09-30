@@ -113,3 +113,51 @@ func TestConcurrentMutualDismissalKeepsOneAdmin(t *testing.T) {
 	}
 	assert.GreaterOrEqual(t, admins, 1, "el grupo nunca queda sin admins")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Idempotencia del PATCH de configuración
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestSettingsUpdates fija la idempotencia: solo se persisten los campos
+// presentes que REALMENTE cambian. Un PATCH que repite los valores vigentes
+// devuelve un mapa vacío, de modo que no se escribe ni se emite system message.
+func TestSettingsUpdates(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+
+	current := models.Group{
+		OnlyAdminsCanSend:       true,
+		OnlyAdminsCanEditInfo:   false,
+		OnlyAdminsCanAddMembers: true,
+	}
+
+	cases := []struct {
+		name      string
+		patch     models.GroupSettingsUpdate
+		wantKeys  []string
+		wantEmpty bool
+	}{
+		{"campo ausente no cambia nada", models.GroupSettingsUpdate{}, nil, true},
+		{"mismo valor no cambia nada", models.GroupSettingsUpdate{OnlyAdminsCanSend: boolPtr(true)}, nil, true},
+		{"los tres iguales no cambian nada", models.GroupSettingsUpdate{
+			OnlyAdminsCanSend: boolPtr(true), OnlyAdminsCanEditInfo: boolPtr(false), OnlyAdminsCanAddMembers: boolPtr(true),
+		}, nil, true},
+		{"un cambio real se persiste", models.GroupSettingsUpdate{OnlyAdminsCanSend: boolPtr(false)}, []string{"only_admins_can_send"}, false},
+		{"cambios parciales solo incluyen los distintos", models.GroupSettingsUpdate{
+			OnlyAdminsCanSend: boolPtr(true), OnlyAdminsCanEditInfo: boolPtr(true), OnlyAdminsCanAddMembers: boolPtr(true),
+		}, []string{"only_admins_can_edit_info"}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updates := settingsUpdates(current, tc.patch)
+			if tc.wantEmpty {
+				assert.Empty(t, updates)
+				return
+			}
+			assert.Len(t, updates, len(tc.wantKeys))
+			for _, k := range tc.wantKeys {
+				assert.Contains(t, updates, k)
+			}
+		})
+	}
+}

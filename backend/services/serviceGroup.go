@@ -38,6 +38,7 @@ type GroupServicer interface {
 	GetGroupMessagesPage(telephon string, groupID, before uint, limit, offset int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, error)
 	EditGroupMessage(telephon string, groupID uint, data models.GroupMessageEdit, ctx context.Context) (*schemas.GroupMessageResponse, error)
 	DeleteGroupMessage(telephon string, groupID uint, data models.GroupMessageDelete, ctx context.Context) error
+	RequireCanSend(telephon string, groupID uint, ctx context.Context) error
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
 	LeaveGroup(telephon string, groupID uint, ctx context.Context) (*schemas.GroupMessageResponse, error)
 	UpdateGroupAvatar(telephon string, groupID uint, avatarUrl string, ctx context.Context) error
@@ -154,10 +155,10 @@ func (s *ServiceGroup) AddMembers(telephonRequester string, groupID uint, data m
 		return nil, nil, errors.New("usuario no encontrado")
 	}
 
-	// Verificar que el requester es miembro del grupo
-	isMember, err := s.repo.IsMember(groupID, uint(requesterID), ctx)
-	if err != nil || !isMember {
-		return nil, nil, errors.New("no eres miembro de este grupo")
+	// Enforcement de la matriz: admin siempre; miembro sólo si el grupo permite
+	// que cualquiera agregue (only_admins_can_add_members apagado).
+	if err := s.requireCanAddMembers(telephonRequester, groupID, ctx); err != nil {
+		return nil, nil, err
 	}
 
 	// Resolver teléfonos, validando que sean contactos del requester
@@ -316,10 +317,10 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		return nil, errors.New("remitente no encontrado")
 	}
 
-	// Verificar membresía
-	isMember, err := s.repo.IsMember(data.GroupID, uint(senderID), ctx)
-	if err != nil || !isMember {
-		return nil, errors.New("no eres miembro de este grupo")
+	// Enforcement de la matriz: admin siempre; miembro sólo si el grupo permite
+	// enviar (only_admins_can_send apagado). Cubre REST y WS `group_chat`.
+	if err := s.requireCanSend(telephonSender, data.GroupID, ctx); err != nil {
+		return nil, err
 	}
 
 	// Un mensaje de sistema no es un objetivo válido de respuesta. Si el id no
@@ -413,9 +414,10 @@ func (s *ServiceGroup) EditGroupMessage(telephon string, groupID uint, data mode
 		return nil, errors.New("usuario no encontrado")
 	}
 
-	isMember, err := s.repo.IsMember(groupID, uint(senderID), ctx)
-	if err != nil || !isMember {
-		return nil, errors.New("no eres miembro de este grupo")
+	// Editar el mensaje propio comparte la matriz de envío: admin siempre;
+	// miembro sólo si el grupo permite enviar.
+	if err := s.requireCanSend(telephon, groupID, ctx); err != nil {
+		return nil, err
 	}
 
 	if err := s.repo.EditGroupMessage(groupID, data.MessageID, uint(senderID), data.Message, ctx); err != nil {
@@ -574,23 +576,30 @@ func (s *ServiceGroup) systemMessageResponse(msg *models.GroupMessage, actorTele
 	return &resp
 }
 
-// UpdateGroupAvatar actualiza el avatar del grupo verificando que el usuario sea miembro.
+// UpdateGroupAvatar actualiza el avatar del grupo. El avatar es "info del
+// grupo": lo puede cambiar un admin, o un miembro si only_admins_can_edit_info
+// está apagado.
 func (s *ServiceGroup) UpdateGroupAvatar(telephon string, groupID uint, avatarUrl string, ctx context.Context) error {
 	if avatarUrl != "" && !utils.IsSafeMediaURL(avatarUrl) {
 		return errors.New("URL de avatar no válida")
 	}
-	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
-	if err != nil {
-		return errors.New("usuario no encontrado")
-	}
-	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
-	if err != nil {
+	if err := s.requireCanEditInfo(telephon, groupID, ctx); err != nil {
 		return err
 	}
-	if !isMember {
-		return errors.New("no eres miembro de este grupo")
-	}
 	return s.repo.UpdateGroupAvatar(groupID, avatarUrl, ctx)
+}
+
+// RequireCanSend expone la comprobación de la matriz de envío para los caminos
+// que no pasan por SendGroupMessage (el indicador "escribiendo" por WebSocket).
+//
+// Tradeoff de rendimiento: cada evento de typing hace un GetMemberRole (índice
+// parcial único group_id+user_id) + GetGroupByID (PK). Es el mismo coste que un
+// envío real y el cliente ya limita la frecuencia del typing, así que se opta
+// por la lectura directa SIN cache: una cache per-client exigiría invalidar en
+// `group_settings`/`group_member_role` y añadiría ventanas de permiso obsoleto.
+// Solo se añadirá cache si el perfilado lo justifica.
+func (s *ServiceGroup) RequireCanSend(telephon string, groupID uint, ctx context.Context) error {
+	return s.requireCanSend(telephon, groupID, ctx)
 }
 
 // GetUsernameByTelephon retorna el username de un usuario por su número de teléfono.

@@ -32,7 +32,8 @@ func TestAddMembers_ReturnsActuallyAddedAndPassesSystemEvent(t *testing.T) {
 	contacts.On("GetIdByTelephon", "+34600000012", mock.Anything).Return(12, nil)
 	contacts.On("IsAcceptedContact", uint(testSenderID), uint(11), mock.Anything).Return(true, nil)
 	contacts.On("IsAcceptedContact", uint(testSenderID), uint(12), mock.Anything).Return(true, nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleAdmin, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
 
 	addedMembers := []models.GroupMember{
 		userMember(11, "+34600000011", "marta"),
@@ -63,7 +64,8 @@ func TestAddMembers_RepoErrorPropagates(t *testing.T) {
 	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
 	contacts.On("GetIdByTelephon", "+34600000011", mock.Anything).Return(11, nil)
 	contacts.On("IsAcceptedContact", uint(testSenderID), uint(11), mock.Anything).Return(true, nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleAdmin, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
 	repo.On("AddMembers", testGroupID, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("db"))
 
 	added, _, err := svc.AddMembers(testSenderTel, testGroupID,
@@ -97,7 +99,8 @@ func TestLeaveGroup_PersistsMemberLeftSystemMessage(t *testing.T) {
 func TestSendGroupMessage_ReplyToSystemMessageRejected(t *testing.T) {
 	svc, repo, contacts := newGroupServiceForSend()
 	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleMember, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
 	replyTo := uint(55)
 	repo.On("GetGroupMessageByID", replyTo, mock.Anything).Return(&models.GroupMessage{
 		Model: gorm.Model{ID: replyTo}, GroupID: testGroupID, Kind: models.GroupMessageKindSystem,
@@ -117,7 +120,8 @@ func TestSendGroupMessage_ReplyToNormalMessageAllowed(t *testing.T) {
 	svc, repo, contacts := newGroupServiceForSend()
 	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
 	contacts.On("GetUsernameByTelephon", testSenderTel, mock.Anything).Return("ana", nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleMember, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
 	replyTo := uint(54)
 	repo.On("GetGroupMessageByID", replyTo, mock.Anything).Return(&models.GroupMessage{
 		Model: gorm.Model{ID: replyTo}, GroupID: testGroupID, Message: "original",

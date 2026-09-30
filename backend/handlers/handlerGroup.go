@@ -76,10 +76,15 @@ func (h *HandlerGroup) notifyAllGroupMembers(telephons []string, wsType string, 
 
 // respondGroupMutationError traduce los errores tipados de una mutación de
 // membresía/permisos a su código HTTP: 403 permiso, 404 objetivo inexistente,
-// 400 cambio inválido.
+// 400 cambio inválido. Incluye las restricciones de la matriz de GA4 (enviar,
+// editar info, agregar).
 func (h *HandlerGroup) respondGroupMutationError(ctx *gin.Context, err error) {
 	switch {
-	case errors.Is(err, services.ErrNotGroupAdmin), errors.Is(err, services.ErrNotGroupMember):
+	case errors.Is(err, services.ErrNotGroupAdmin),
+		errors.Is(err, services.ErrNotGroupMember),
+		errors.Is(err, services.ErrGroupSendRestricted),
+		errors.Is(err, services.ErrGroupEditRestricted),
+		errors.Is(err, services.ErrGroupAddRestricted):
 		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrGroupTargetNotMember):
 		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -198,7 +203,7 @@ func (h *HandlerGroup) HandleAddMembers() gin.HandlerFunc {
 
 		added, systemMsg, err := h.service.AddMembers(telephon.(string), groupID.(uint), data.(models.GroupAddMembers), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondGroupMutationError(ctx, err)
 			return
 		}
 
@@ -263,7 +268,7 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 			if h.metrics != nil {
 				h.metrics.MessageFailed(metrics.KindGroup)
 			}
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondGroupMutationError(ctx, err)
 			return
 		}
 		if h.metrics != nil {
@@ -423,7 +428,7 @@ func (h *HandlerGroup) HandleEditGroupMessage() gin.HandlerFunc {
 
 		msg, err := h.service.EditGroupMessage(telephon.(string), groupID.(uint), data.(models.GroupMessageEdit), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondGroupMutationError(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": msg})
@@ -482,7 +487,7 @@ func (h *HandlerGroup) HandleUpdateGroupAvatar() gin.HandlerFunc {
 		}
 
 		if err := h.service.UpdateGroupAvatar(telephon.(string), groupID.(uint), body.AvatarUrl, ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondGroupMutationError(ctx, err)
 			return
 		}
 

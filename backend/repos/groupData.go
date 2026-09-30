@@ -632,16 +632,14 @@ func (r *RepoGroup) UpdateGroupSettings(groupID, actorID uint, patch models.Grou
 		if err := requireAdminTx(tx, groupID, actorID); err != nil {
 			return err
 		}
-		updates := map[string]interface{}{}
-		if patch.OnlyAdminsCanSend != nil {
-			updates["only_admins_can_send"] = *patch.OnlyAdminsCanSend
+		// Idempotencia: solo se aplican los campos que REALMENTE cambian. Si el
+		// PATCH repite los valores vigentes no se escribe ni se emite system
+		// message (settingsUpdates devuelve un mapa vacío).
+		var current models.Group
+		if err := tx.First(&current, groupID).Error; err != nil {
+			return err
 		}
-		if patch.OnlyAdminsCanEditInfo != nil {
-			updates["only_admins_can_edit_info"] = *patch.OnlyAdminsCanEditInfo
-		}
-		if patch.OnlyAdminsCanAddMembers != nil {
-			updates["only_admins_can_add_members"] = *patch.OnlyAdminsCanAddMembers
-		}
+		updates := settingsUpdates(current, patch)
 		if len(updates) > 0 {
 			if err := tx.Model(&models.Group{}).Where("id = ?", groupID).Updates(updates).Error; err != nil {
 				return err
@@ -649,6 +647,9 @@ func (r *RepoGroup) UpdateGroupSettings(groupID, actorID uint, patch models.Grou
 		}
 		if err := tx.First(&updated, groupID).Error; err != nil {
 			return err
+		}
+		if len(updates) == 0 {
+			return nil
 		}
 		return insertSystemMessage(tx, system)
 	})

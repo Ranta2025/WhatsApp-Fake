@@ -347,6 +347,16 @@ func (mh *MessageHandler) HandleGroupTyping() {
 		return
 	}
 
+	// El typing sigue la matriz de envío: un miembro restringido (solo admins
+	// pueden enviar) no puede mostrarse "escribiendo". Se suprime en silencio,
+	// sin `error` ni difusión. La comprobación (rol + settings) es una lectura
+	// indexada por evento; el cliente ya limita la frecuencia del typing.
+	ctx, cancel := mh.context()
+	defer cancel()
+	if err := mh.Client.ServiceGroup.RequireCanSend(mh.Client.Telephon, typing.GroupID, ctx); err != nil {
+		return
+	}
+
 	notification, _ := json.Marshal(map[string]interface{}{
 		"type": "group_typing",
 		"payload": map[string]interface{}{

@@ -189,7 +189,9 @@ func newGroupServiceForSend() (GroupServicer, *MockGroupRepo, *MockGroupContactR
 func expectMemberSend(repo *MockGroupRepo, contacts *MockGroupContactRepo) {
 	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
 	contacts.On("GetUsernameByTelephon", testSenderTel, mock.Anything).Return("alice", nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	// El envío pasa por la matriz de permisos: rol del actor + settings del grupo.
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleMember, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
 	repo.On("CreateGroupMessage", mock.Anything, mock.Anything).Return(nil)
 }
 
@@ -275,7 +277,7 @@ func TestSendGroupMessage_EmptyWithoutMediaRejected(t *testing.T) {
 func TestSendGroupMessage_MediaFromNonMemberRejected(t *testing.T) {
 	svc, repo, contacts := newGroupServiceForSend()
 	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(false, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return("", errors.New("no miembro"))
 
 	resp, err := svc.SendGroupMessage(testSenderTel, models.GroupMessageSend{
 		GroupID: testGroupID, MediaUrl: "/storage/pic.png", MediaType: "image",
@@ -289,7 +291,8 @@ func TestSendGroupMessage_MediaFromNonMemberRejected(t *testing.T) {
 func TestSendGroupMessage_SaveErrorIsReported(t *testing.T) {
 	svc, repo, contacts := newGroupServiceForSend()
 	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
-	repo.On("IsMember", testGroupID, uint(testSenderID), mock.Anything).Return(true, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleMember, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
 	repo.On("CreateGroupMessage", mock.Anything, mock.Anything).Return(errors.New("db"))
 
 	resp, err := svc.SendGroupMessage(testSenderTel, models.GroupMessageSend{

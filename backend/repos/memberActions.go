@@ -82,3 +82,22 @@ func requireAdminTx(tx *gorm.DB, groupID, actorID uint) error {
 	}
 	return nil
 }
+
+// settingsUpdates calcula los cambios REALES de un PATCH de configuración: solo
+// los campos presentes cuyo valor difiere del actual. Un PATCH que repite los
+// valores vigentes devuelve un mapa vacío, de modo que no se escribe nada ni se
+// persiste un mensaje de sistema (idempotencia: "settings sin cambios" no
+// genera evento).
+func settingsUpdates(current models.Group, patch models.GroupSettingsUpdate) map[string]interface{} {
+	updates := map[string]interface{}{}
+	if patch.OnlyAdminsCanSend != nil && *patch.OnlyAdminsCanSend != current.OnlyAdminsCanSend {
+		updates["only_admins_can_send"] = *patch.OnlyAdminsCanSend
+	}
+	if patch.OnlyAdminsCanEditInfo != nil && *patch.OnlyAdminsCanEditInfo != current.OnlyAdminsCanEditInfo {
+		updates["only_admins_can_edit_info"] = *patch.OnlyAdminsCanEditInfo
+	}
+	if patch.OnlyAdminsCanAddMembers != nil && *patch.OnlyAdminsCanAddMembers != current.OnlyAdminsCanAddMembers {
+		updates["only_admins_can_add_members"] = *patch.OnlyAdminsCanAddMembers
+	}
+	return updates
+}
