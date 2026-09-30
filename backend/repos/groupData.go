@@ -414,7 +414,7 @@ func (r *RepoGroup) LeaveGroup(groupID, userID uint, ctx context.Context) error 
 
 		var admins int64
 		if err := tx.Model(&models.GroupMember{}).
-			Where("group_id = ? AND role = ?", groupID, "admin").
+			Where("group_id = ? AND role = ?", groupID, models.GroupRoleAdmin).
 			Count(&admins).Error; err != nil {
 			return err
 		}
@@ -422,16 +422,35 @@ func (r *RepoGroup) LeaveGroup(groupID, userID uint, ctx context.Context) error 
 			return nil
 		}
 
-		var oldest models.GroupMember
-		err := tx.Where("group_id = ?", groupID).Order("created_at ASC").First(&oldest).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil // el grupo quedó vacío
-		}
-		if err != nil {
+		var remaining []models.GroupMember
+		if err := tx.Where("group_id = ?", groupID).Find(&remaining).Error; err != nil {
 			return err
 		}
-		return tx.Model(&oldest).Update("role", "admin").Error
+		oldest := promotionCandidate(remaining)
+		if oldest == nil {
+			return nil // el grupo quedó vacío
+		}
+		return tx.Model(oldest).Update("role", models.GroupRoleAdmin).Error
 	})
+}
+
+// promotionCandidate devuelve el miembro que debe ser promovido a admin cuando
+// el grupo se queda sin ninguno: el más antiguo por created_at y, en empate de
+// timestamp, el de menor id (determinista aunque dos altas compartan instante).
+// Devuelve nil si no quedan miembros.
+func promotionCandidate(members []models.GroupMember) *models.GroupMember {
+	if len(members) == 0 {
+		return nil
+	}
+	best := &members[0]
+	for i := 1; i < len(members); i++ {
+		candidate := &members[i]
+		if candidate.CreatedAt.Before(best.CreatedAt) ||
+			(candidate.CreatedAt.Equal(best.CreatedAt) && candidate.ID < best.ID) {
+			best = candidate
+		}
+	}
+	return best
 }
 
 // UpdateGroupAvatar actualiza la URL del avatar del grupo.

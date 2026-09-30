@@ -7,6 +7,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Roles de miembro dentro de un grupo.
+const (
+	GroupRoleAdmin  = "admin"
+	GroupRoleMember = "member"
+)
+
 // Group representa un grupo de chat.
 // El creador es automáticamente el primer administrador.
 type Group struct {
@@ -15,6 +21,13 @@ type Group struct {
 	Description string `gorm:"size:300"`
 	AvatarUrl   string `gorm:"size:500"`
 	CreatorID   uint   `gorm:"not null;index"`
+
+	// Configuración de permisos del grupo. Todas parten en false (el
+	// comportamiento abierto de siempre): un admin las activa para restringir
+	// la acción a admins. Los grupos existentes quedan igual al migrar.
+	OnlyAdminsCanSend       bool `gorm:"not null;default:false"`
+	OnlyAdminsCanEditInfo   bool `gorm:"not null;default:false"`
+	OnlyAdminsCanAddMembers bool `gorm:"not null;default:false"`
 
 	Creator UserDataBase  `gorm:"foreignKey:CreatorID;references:ID"`
 	Members []GroupMember `gorm:"foreignKey:GroupID"`

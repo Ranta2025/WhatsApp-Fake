@@ -53,6 +53,7 @@ type GroupRepoInterface interface {
 	GetGroupMembers(groupID uint, ctx context.Context) ([]models.GroupMember, error)
 	GetUserGroups(userID uint, ctx context.Context) ([]models.UserGroupRow, error)
 	IsMember(groupID, userID uint, ctx context.Context) (bool, error)
+	GetMemberRole(groupID, userID uint, ctx context.Context) (string, error)
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
 	CreateGroupMessage(msg *models.GroupMessage, ctx context.Context) error
 	GetGroupMessages(groupID uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, error)
@@ -194,6 +195,10 @@ func (s *ServiceGroup) GetUserGroups(telephon string, ctx context.Context) ([]sc
 			MemberCount:     g.MemberCount,
 			UserRole:        g.UserRole,
 			CreatedAt:       g.CreatedAt,
+
+			OnlyAdminsCanSend:       g.OnlyAdminsCanSend,
+			OnlyAdminsCanEditInfo:   g.OnlyAdminsCanEditInfo,
+			OnlyAdminsCanAddMembers: g.OnlyAdminsCanAddMembers,
 		})
 	}
 	return responses, nil
@@ -249,6 +254,10 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 			MemberCount:     len(members),
 			UserRole:        userRole,
 			CreatedAt:       group.CreatedAt,
+
+			OnlyAdminsCanSend:       group.OnlyAdminsCanSend,
+			OnlyAdminsCanEditInfo:   group.OnlyAdminsCanEditInfo,
+			OnlyAdminsCanAddMembers: group.OnlyAdminsCanAddMembers,
 		},
 		Members:  convertGroupMembers(members),
 		Messages: convertGroupMessages(messages),

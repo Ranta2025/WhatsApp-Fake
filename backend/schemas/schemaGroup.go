@@ -12,6 +12,12 @@ type GroupResponse struct {
 	MemberCount     int       `json:"MemberCount"`
 	UserRole        string    `json:"UserRole"` // rol del usuario que hace la petición: "admin" | "member"
 	CreatedAt       time.Time `json:"CreatedAt"`
+
+	// Configuración de permisos del grupo (PascalCase por regla cross-feature:
+	// campos añadidos dentro de un schema PascalCase existente).
+	OnlyAdminsCanSend       bool `json:"OnlyAdminsCanSend"`
+	OnlyAdminsCanEditInfo   bool `json:"OnlyAdminsCanEditInfo"`
+	OnlyAdminsCanAddMembers bool `json:"OnlyAdminsCanAddMembers"`
 }
 
 // GroupMemberResponse son los datos de un miembro dentro de un grupo,

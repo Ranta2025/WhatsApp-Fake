@@ -51,6 +51,11 @@ func (m *MockGroupRepo) IsMember(groupID, userID uint, ctx context.Context) (boo
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockGroupRepo) GetMemberRole(groupID, userID uint, ctx context.Context) (string, error) {
+	args := m.Called(groupID, userID, ctx)
+	return args.String(0), args.Error(1)
+}
+
 func (m *MockGroupRepo) GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error) {
 	args := m.Called(groupID, ctx)
 	return args.Get(0).([]string), args.Error(1)
