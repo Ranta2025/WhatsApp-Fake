@@ -1,4 +1,4 @@
-import { newestRealMessageId, sortUnique, type MergeableMessage } from './mergeMessages';
+import { adoptServerReactions, newestRealMessageId, sortUnique, type MergeableMessage } from './mergeMessages';
 
 /**
  * A "detached" slice of a chat's history, opened to jump to a message that is
@@ -46,25 +46,25 @@ export function refocus<T extends MergeableMessage>(win: FocusedWindow<T>, targe
     return { ...win, targetId, seq: win.seq + 1 };
 }
 
-/** Adds an older page (already-loaded copies win); an empty page ends that direction. */
+/** Adds an older page (already-loaded copies win, except Reactions: the server value replaces them); an empty page ends that direction. */
 export function extendOlder<T extends MergeableMessage>(
     win: FocusedWindow<T>, older: readonly T[], hasMoreOlder: boolean,
 ): FocusedWindow<T> {
     return {
         ...win,
-        messages: sortUnique([...win.messages, ...older]),
+        messages: sortUnique([...adoptServerReactions(win.messages, older), ...older]),
         hasMoreOlder: older.length > 0 && hasMoreOlder,
         loadingOlder: false,
     };
 }
 
-/** Adds a newer page (already-loaded copies win); an empty page ends that direction. */
+/** Adds a newer page (already-loaded copies win, except Reactions: the server value replaces them); an empty page ends that direction. */
 export function extendNewer<T extends MergeableMessage>(
     win: FocusedWindow<T>, newer: readonly T[], hasMoreNewer: boolean,
 ): FocusedWindow<T> {
     return {
         ...win,
-        messages: sortUnique([...win.messages, ...newer]),
+        messages: sortUnique([...adoptServerReactions(win.messages, newer), ...newer]),
         hasMoreNewer: newer.length > 0 && hasMoreNewer,
         loadingNewer: false,
     };

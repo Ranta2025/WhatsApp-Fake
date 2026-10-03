@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import type { ReactionSummary } from '../../../types/api';
 import {
     createFocusedWindow, refocus, windowHasMessage, extendOlder, extendNewer, composeFocusedMessages,
     updateFocusedMessages, removeFocusedMessage,
 } from './focusedWindow';
 
-interface Msg { MessageID: number | string; Time: string; Message?: string }
+interface Msg { MessageID: number | string; Time: string; Message?: string; Reactions?: ReactionSummary[] }
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const msg = (id: number, extra: Partial<Msg> = {}): Msg => ({ MessageID: id, Time: iso(id), Message: `m${id}`, ...extra });
 const ids = (list: readonly Msg[]) => list.map(m => m.MessageID);
@@ -110,5 +111,28 @@ describe('updateFocusedMessages / removeFocusedMessage', () => {
         const w = win(1, 3);
         expect(ids(removeFocusedMessage(w, 2).messages)).toEqual([1, 3]);
         expect(removeFocusedMessage(w, 99)).toBe(w);
+    });
+});
+
+describe('reactions preservation', () => {
+    const chip = (Emoji: string, Count = 1, Mine = false): ReactionSummary => ({ Emoji, Count, Mine });
+
+    it('extendOlder: an overlapping server copy replaces the stale Reactions of the loaded one', () => {
+        const w = createFocusedWindow<Msg>([msg(10, { Reactions: [chip('👍', 1, true)] }), msg(11)], { hasMoreOlder: true, hasMoreNewer: false }, 10, 1);
+        const next = extendOlder(w, [msg(9), msg(10, { Reactions: [chip('❤️', 2)] })], true);
+        expect(next.messages.find(m => m.MessageID === 10)?.Reactions).toEqual([chip('❤️', 2)]);
+    });
+
+    it('extendNewer: an overlapping server copy without Reactions clears the loaded chips', () => {
+        const w = createFocusedWindow<Msg>([msg(10, { Reactions: [chip('👍')] })], { hasMoreOlder: false, hasMoreNewer: true }, 10, 1);
+        const next = extendNewer(w, [msg(10), msg(11)], true);
+        expect(next.messages.find(m => m.MessageID === 10)?.Reactions).toBeUndefined();
+        expect(ids(next.messages)).toEqual([10, 11]);
+    });
+
+    it('extendNewer: chips of new messages in the page are kept', () => {
+        const w = createFocusedWindow<Msg>([msg(10)], { hasMoreOlder: false, hasMoreNewer: true }, 10, 1);
+        const next = extendNewer(w, [msg(11, { Reactions: [chip('😂', 3, true)] })], false);
+        expect(next.messages[1]?.Reactions).toEqual([chip('😂', 3, true)]);
     });
 });

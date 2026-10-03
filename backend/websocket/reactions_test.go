@@ -170,11 +170,12 @@ func TestHandleReaction_Group_FansOutToActorAndMembers(t *testing.T) {
 func TestHandleReaction_Removal_SendsEmptyEmoji(t *testing.T) {
 	rh, _ := newReactionHarness(t)
 	rh.svc.change = directChange(true, "")
+	rh.svc.change.PreviousEmoji = "👍"
 
 	rh.send(`{"kind":"direct","messageID":10,"emoji":""}`)
 
 	got := reactionsIn(t, drain(rh.other))
-	if len(got) != 1 || got[0].Payload.Emoji != "" {
+	if len(got) != 1 || got[0].Payload.Emoji != "" || got[0].Payload.PreviousEmoji != "👍" {
 		t.Fatalf("quitar debía difundir emoji vacío: %+v", got)
 	}
 	var raw map[string]map[string]interface{}

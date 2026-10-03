@@ -204,6 +204,36 @@ describe('group receipt frames', () => {
         wsManager.disconnect();
     });
 
+    it('sendReaction emits the react frame (groupID only for group messages)', async () => {
+        const { wsManager, socket } = await connectAndOpen();
+
+        expect(wsManager.sendReaction('direct', 5, '👍')).toBe(true);
+        expect(wsManager.sendReaction('group', 7, '', 9)).toBe(true);
+
+        expect(socket.sent.map((raw) => JSON.parse(raw) as unknown)).toEqual([
+            { type: 'react', payload: { kind: 'direct', messageID: 5, emoji: '👍' } },
+            { type: 'react', payload: { kind: 'group', messageID: 7, groupID: 9, emoji: '' } },
+        ]);
+        wsManager.disconnect();
+    });
+
+    it('routes reaction pushes and the raw error envelope (with context) to their listeners', async () => {
+        const { wsManager, socket } = await connectAndOpen();
+        const onReaction = vi.fn();
+        const onError = vi.fn();
+        wsManager.on('reaction', onReaction);
+        wsManager.on('error', onError);
+        const payload = { kind: 'direct', messageID: 5, telephon: '+1', username: 'ana', emoji: '👍', previousEmoji: '', authorTelephon: '+2', preview: 'hi' };
+        const error = { type: 'error', error: 'nope', context: { action: 'react', kind: 'direct', messageID: 5, status: 403 } };
+
+        socket.onmessage?.({ data: JSON.stringify({ type: 'reaction', payload }) } as MessageEvent);
+        socket.onmessage?.({ data: JSON.stringify(error) } as MessageEvent);
+
+        expect(onReaction).toHaveBeenCalledWith(payload);
+        expect(onError).toHaveBeenCalledWith(error);
+        wsManager.disconnect();
+    });
+
     it('does not send (and reports false) while disconnected', async () => {
         const { default: wsManager } = await import('./websocket');
         expect(wsManager.sendGroupDelivered(7, 12)).toBe(false);

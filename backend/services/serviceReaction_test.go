@@ -69,20 +69,20 @@ func (f *fakeReactionRepo) IsGroupMember(groupID, userID uint, _ context.Context
 	return f.members[[2]uint{groupID, userID}], nil
 }
 
-func (f *fakeReactionRepo) UpsertReaction(kind string, messageID, userID uint, emoji string, _ context.Context) (bool, error) {
+func (f *fakeReactionRepo) UpsertReaction(kind string, messageID, userID uint, emoji string, _ context.Context) (string, bool, error) {
 	f.upserts++
 	k := reactionKey{kind, messageID, userID}
 	prev, existed := f.rows[k]
 	f.rows[k] = emoji
-	return !existed || prev != emoji, nil
+	return prev, !existed || prev != emoji, nil
 }
 
-func (f *fakeReactionRepo) DeleteReaction(kind string, messageID, userID uint, _ context.Context) (bool, error) {
+func (f *fakeReactionRepo) DeleteReaction(kind string, messageID, userID uint, _ context.Context) (string, bool, error) {
 	f.deletes++
 	k := reactionKey{kind, messageID, userID}
-	_, existed := f.rows[k]
+	prev, existed := f.rows[k]
 	delete(f.rows, k)
-	return existed, nil
+	return prev, existed, nil
 }
 
 var fakeActors = map[string]models.ReactionActor{
@@ -144,9 +144,12 @@ func TestSetReaction_Direct_ReplaceOnChange(t *testing.T) {
 	assert.Equal(t, userA, ch.AuthorID)
 	assert.Equal(t, userA, ch.OtherUserID, "para B, el otro participante es A")
 	assert.Equal(t, userB, ch.UserID)
+	assert.Equal(t, "", ch.PreviousEmoji, "primera reacción: sin emoji anterior")
 
-	_, err = svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "❤️", ctx)
+	ch, err = svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "❤️", ctx)
 	require.NoError(t, err)
+	assert.Equal(t, "👍", ch.PreviousEmoji, "reemplazo: informa el emoji anterior")
+	assert.Equal(t, "👍", ch.Event().PreviousEmoji)
 	assert.Equal(t, "❤️", repo.rows[reactionKey{models.ReactionKindDirect, 10, userB}])
 	assert.Len(t, repo.rows, 1, "una sola reacción por usuario y mensaje")
 }
@@ -168,6 +171,7 @@ func TestSetReaction_EmptyEmojiRemoves(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ch.Removed)
 	assert.Equal(t, "", ch.Emoji)
+	assert.Equal(t, "👍", ch.PreviousEmoji, "quitar: informa el emoji que tenía")
 	assert.Empty(t, repo.rows)
 	assert.Equal(t, 1, repo.deletes)
 }
@@ -287,8 +291,8 @@ type failingUpsertRepo struct {
 	err error
 }
 
-func (f *failingUpsertRepo) UpsertReaction(string, uint, uint, string, context.Context) (bool, error) {
-	return false, f.err
+func (f *failingUpsertRepo) UpsertReaction(string, uint, uint, string, context.Context) (string, bool, error) {
+	return "", false, f.err
 }
 
 func TestSetReaction_NoOpSemantics(t *testing.T) {

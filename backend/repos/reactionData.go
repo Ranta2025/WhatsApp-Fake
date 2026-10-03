@@ -126,31 +126,65 @@ func (r *RepoReaction) IsGroupMember(groupID, userID uint, ctx context.Context) 
 }
 
 // UpsertReaction crea o reemplaza la reacción del usuario al mensaje. Devuelve
-// true si se insertó o cambió de emoji; con el mismo emoji no toca la fila
-// (la cláusula WHERE del DO UPDATE lo impide) y devuelve false.
-func (r *RepoReaction) UpsertReaction(kind string, messageID, userID uint, emoji string, ctx context.Context) (bool, error) {
+// el emoji anterior ("" si no tenía reacción) y si la fila cambió. Con el mismo
+// emoji no toca la fila y devuelve changed=false. Todo ocurre en una transacción:
+// primero un INSERT ... DO NOTHING (gana la carrera por la clave única) y, si la
+// fila ya existía, se lee con FOR UPDATE para que el emoji anterior sea exacto
+// aunque otra petición del mismo usuario compita.
+func (r *RepoReaction) UpsertReaction(kind string, messageID, userID uint, emoji string, ctx context.Context) (string, bool, error) {
 	c, cancel := context.WithTimeout(ctx, reactionTimeout)
 	defer cancel()
 
-	row := models.MessageReaction{MessageKind: kind, MessageID: messageID, UserID: userID, Emoji: emoji}
-	res := r.data.WithContext(c).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "message_kind"}, {Name: "message_id"}, {Name: "user_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"emoji", "updated_at"}),
-		Where:     clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "message_reactions.emoji <> excluded.emoji"}}},
-	}).Create(&row)
-	return res.RowsAffected > 0, res.Error
+	var previous string
+	var changed bool
+	err := r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
+		row := models.MessageReaction{MessageKind: kind, MessageID: messageID, UserID: userID, Emoji: emoji}
+		res := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "message_kind"}, {Name: "message_id"}, {Name: "user_id"}},
+			DoNothing: true,
+		}).Create(&row)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 { // inserción nueva
+			changed = true
+			return nil
+		}
+		var cur models.MessageReaction
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id", "emoji").
+			Where("message_kind = ? AND message_id = ? AND user_id = ?", kind, messageID, userID).
+			First(&cur).Error; err != nil {
+			return err
+		}
+		previous = cur.Emoji
+		if cur.Emoji == emoji {
+			return nil
+		}
+		changed = true
+		return tx.Model(&models.MessageReaction{}).Where("id = ?", cur.ID).Update("emoji", emoji).Error
+	})
+	if err != nil {
+		return "", false, err
+	}
+	return previous, changed, nil
 }
 
-// DeleteReaction elimina la reacción del usuario. Devuelve true si había una
-// fila que borrar (borrar lo inexistente es un no-op idempotente).
-func (r *RepoReaction) DeleteReaction(kind string, messageID, userID uint, ctx context.Context) (bool, error) {
+// DeleteReaction elimina la reacción del usuario. Devuelve el emoji que tenía
+// y true si había una fila que borrar (borrar lo inexistente es un no-op
+// idempotente). DELETE ... RETURNING es atómico: no hace falta bloquear aparte.
+func (r *RepoReaction) DeleteReaction(kind string, messageID, userID uint, ctx context.Context) (string, bool, error) {
 	c, cancel := context.WithTimeout(ctx, reactionTimeout)
 	defer cancel()
 
-	res := r.data.WithContext(c).
-		Where("message_kind = ? AND message_id = ? AND user_id = ?", kind, messageID, userID).
-		Delete(&models.MessageReaction{})
-	return res.RowsAffected > 0, res.Error
+	var emojis []string
+	err := r.data.WithContext(c).Raw(
+		"DELETE FROM message_reactions WHERE message_kind = ? AND message_id = ? AND user_id = ? RETURNING emoji",
+		kind, messageID, userID).Scan(&emojis).Error
+	if err != nil || len(emojis) == 0 {
+		return "", false, err
+	}
+	return emojis[0], true, nil
 }
 
 // reactionRow es la proyección mínima que se agrega en Go.

@@ -13,12 +13,15 @@ type ReactionSummary struct {
 // Emoji vacío significa "reacción quitada". AuthorTelephon y Preview permiten al
 // autor del mensaje mostrar la notificación aunque ese mensaje no esté cargado.
 type ReactionEvent struct {
-	Kind           string `json:"kind"`
-	MessageID      uint   `json:"messageID"`
-	GroupID        uint   `json:"groupID,omitempty"`
-	Telephon       string `json:"telephon"`
-	Username       string `json:"username"`
-	Emoji          string `json:"emoji"`
+	Kind      string `json:"kind"`
+	MessageID uint   `json:"messageID"`
+	GroupID   uint   `json:"groupID,omitempty"`
+	Telephon  string `json:"telephon"`
+	Username  string `json:"username"`
+	Emoji     string `json:"emoji"`
+	// PreviousEmoji es la reacción que el actor tenía antes ("" si no tenía):
+	// permite a los clientes aplicar replace/remove como delta exacto.
+	PreviousEmoji  string `json:"previousEmoji"`
 	AuthorTelephon string `json:"authorTelephon"`
 	Preview        string `json:"preview"`
 }

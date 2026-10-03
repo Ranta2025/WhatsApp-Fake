@@ -229,10 +229,45 @@ export interface WsStatusDeleted {
   payload: { ownerTelephon: string; statusId: number };
 }
 
+/**
+ * Reacción fijada/cambiada/quitada por `telephon` (camelCase,
+ * backend/schemas/schemaReaction.go). `emoji: ""` = reacción quitada;
+ * `previousEmoji` es lo que tenía antes ("" si nada) y permite aplicar el
+ * cambio como delta exacto. `authorTelephon`/`preview` alimentan la
+ * notificación al autor del mensaje.
+ */
+export interface ReactionEventPayload {
+  kind: 'direct' | 'group';
+  messageID: number;
+  groupID?: number;
+  telephon: string;
+  username: string;
+  emoji: string;
+  previousEmoji: string;
+  authorTelephon: string;
+  preview: string;
+}
+
+export interface WsReaction {
+  type: 'reaction';
+  payload: ReactionEventPayload;
+}
+
+/** Contexto que acompaña a un error de una acción `react` (para el rollback optimista). */
+export interface WsErrorContext {
+  action: string;
+  kind?: string;
+  messageID?: number;
+  groupID?: number;
+  status?: number;
+}
+
 /** Envelope plano: NO tiene `payload`, el mensaje va en `error`. */
 export interface WsError {
   type: 'error';
   error: string;
+  /** Presente solo en errores de acciones con contexto (hoy: `react`). */
+  context?: WsErrorContext;
 }
 
 /** Respuesta al ping del cliente; no lleva ningún otro campo. */
@@ -271,6 +306,7 @@ export type WsEvent =
   | WsGroupSettings
   | WsGroupInfo
   | WsGroupReceipt
+  | WsReaction
   | WsStatusNew
   | WsStatusViewed
   | WsStatusDeleted
@@ -390,6 +426,12 @@ export interface WsSendGroupRead {
   payload: { groupID: number; upToMessageID: number };
 }
 
+/** Fija (emoji no vacío) o quita (emoji vacío) mi reacción a un mensaje. */
+export interface WsSendReact {
+  type: 'react';
+  payload: { kind: 'direct' | 'group'; messageID: number; groupID?: number; emoji: string };
+}
+
 /** Todo mensaje que el frontend puede enviar por WebSocket. */
 export type WsClientMessage =
   | WsPing
@@ -408,6 +450,7 @@ export type WsClientMessage =
   | WsSendGroupDeleteMessage
   | WsSendGroupJoin
   | WsSendGroupDelivered
-  | WsSendGroupRead;
+  | WsSendGroupRead
+  | WsSendReact;
 
 export type WsClientMessageType = WsClientMessage['type'];

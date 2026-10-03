@@ -183,6 +183,7 @@ func TestE2EReactions(t *testing.T) {
 		react(wsA, map[string]interface{}{"kind": "direct", "messageID": directID, "emoji": "❤️"})
 		ev := wsB.wait(t, "reaction")["payload"].(map[string]interface{})
 		assert.Equal(t, "❤️", ev["emoji"])
+		assert.Equal(t, "👍", ev["previousEmoji"], "el reemplazo informa el emoji anterior")
 
 		fromA := reactionSummaries(history(ca))
 		require.Len(t, fromA, 1)
@@ -205,6 +206,7 @@ func TestE2EReactions(t *testing.T) {
 		react(wsA, map[string]interface{}{"kind": "direct", "messageID": directID, "emoji": ""})
 		ev := wsB.wait(t, "reaction")["payload"].(map[string]interface{})
 		assert.Equal(t, "", ev["emoji"])
+		assert.Equal(t, "❤️", ev["previousEmoji"], "quitar informa el emoji que tenía")
 		assert.Empty(t, reactionSummaries(history(ca)))
 		assert.Empty(t, reactionSummaries(history(cb)))
 

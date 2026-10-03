@@ -10,9 +10,9 @@ import { useWebSocket } from '../../../hooks/useWebSocket';
 import {
     showNativeNotification, type NotificationPermissionState,
 } from '../../../utils/notifications';
-import type { WsHandlerMap } from '../../../api/websocket';
+import wsManager, { type WsHandlerMap } from '../../../api/websocket';
 import type {
-    UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupRole, GroupDetail, GroupMessageResponse, CallType,
+    UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupRole, GroupDetail, GroupMessageResponse, CallType, ReactionSummary,
 } from '../../../types/api';
 import {
     resolveChatTarget, type DashboardChatGroupEntry, type SelectedChatTarget,
@@ -21,6 +21,10 @@ import {
     normalizeGroupsResponse, normalizeGroupMessagesResponse, normalizeGroupDetailMessages,
     normalizeChatMessagesResponse, normalizeHasMore,
 } from '../lib/normalizeResponses';
+import {
+    applyReaction, applyOptimisticReaction, restoreReactions, reactionsOf, toggledEmoji, parseReactionEvent,
+    parseReactionErrorContext, reactionPendingKey, type ReactionBearing, type ReactionKind,
+} from '../lib/reactions';
 import {
     mergeLatestWindow, isContiguousWindow, prependOlder, oldestRealMessageId, newestRealMessageId, DEFAULT_PAGING, type PagingState,
 } from '../lib/mergeMessages';
@@ -60,6 +64,13 @@ export interface Toast {
     type: 'error' | 'success' | 'info';
     message: string;
     createdAt: number;
+}
+
+/** Message a reaction refers to (`groupID` is required for group messages). */
+export interface ReactionTarget {
+    kind: ReactionKind;
+    messageID: number;
+    groupID?: number;
 }
 
 export interface CallState {
@@ -179,6 +190,11 @@ export interface DashboardContextValue {
     sendGroupEditMessage: ReturnType<typeof useWebSocket>['sendGroupEditMessage'];
     sendGroupDeleteMessage: ReturnType<typeof useWebSocket>['sendGroupDeleteMessage'];
     sendGroupJoin: ReturnType<typeof useWebSocket>['sendGroupJoin'];
+    /**
+     * Reacts to a message with `emoji`; tapping my current emoji removes it. Optimistic: the
+     * chips update at once and roll back if the server answers a WS `error` for that react.
+     */
+    reactToMessage: (target: ReactionTarget, emoji: string) => void;
     /** groupID -> telephon -> receipt watermarks (fed by group detail and `group_receipt`). */
     groupReceipts: GroupReceiptsState;
     /**
@@ -221,6 +237,14 @@ const readHasMoreHeader = (headers: unknown): boolean | undefined => {
     if (raw === 'true') return true;
     if (raw === 'false') return false;
     return undefined;
+};
+
+type ListMapper = <T extends ReactionBearing>(list: T[]) => T[];
+
+/** Applies a list reducer to a detached window; same object when nothing changed. */
+const mapWindow = <T extends ReactionBearing>(w: FocusedWindow<T>, fn: ListMapper): FocusedWindow<T> => {
+    const messages = fn(w.messages);
+    return messages === w.messages ? w : { ...w, messages };
 };
 
 export const DashboardProvider = ({ children }: { children: ReactNode }) => {
@@ -350,6 +374,12 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => { allChatGroupsRef.current = allChatGroups; }, [allChatGroups]);
     const avatarMapRef = useRef<Record<string, string>>({});
     useEffect(() => { avatarMapRef.current = avatarMap; }, [avatarMap]);
+    const selectedGroupRef = useRef<SelectedGroup | null>(null);
+    useEffect(() => { selectedGroupRef.current = selectedGroup; }, [selectedGroup]);
+    const groupMemberNamesRef = useRef<Record<number, Record<string, string>>>({});
+    useEffect(() => { groupMemberNamesRef.current = groupMemberNames; }, [groupMemberNames]);
+    const selfTelephonRef = useRef<string | undefined>(user?.telephon);
+    useEffect(() => { selfTelephonRef.current = user?.telephon; }, [user?.telephon]);
     // Cursor/estado de paginación leídos por loadOlder* sin recrear los callbacks.
     const messagesByChatRef = useRef<Record<string, Message[]>>({});
     const groupMessagesRef = useRef<Record<number, GroupMessageEntry[]>>({});
@@ -611,6 +641,72 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         focusedGroupRef.current = apply(focusedGroupRef.current);
         setFocusedGroup(apply);
     }, []);
+
+    // ── Reacciones ──────────────────────────────────────────────────────────────
+    // Las reacciones viajan dentro de cada mensaje; el mismo reducer puro se aplica a la lista
+    // normal y a la ventana desprendida del chat. Un mensaje 1:1 se busca por id en todos los
+    // chats (el evento no trae el contacto cuando el actor soy yo).
+    const mapReactionContainers = useCallback((kind: ReactionKind, groupID: number | undefined, fn: ListMapper) => {
+        if (kind === 'group') {
+            if (groupID === undefined) return;
+            setGroupMessages(prev => {
+                const list = prev[groupID];
+                if (!list) return prev;
+                const next = fn(list);
+                return next === list ? prev : { ...prev, [groupID]: next };
+            });
+            patchFocusedGroup(groupID, w => mapWindow(w, fn));
+            return;
+        }
+        setMessagesByChat(prev => {
+            let out = prev;
+            for (const [key, list] of Object.entries(prev)) {
+                const next = fn(list);
+                if (next === list) continue;
+                if (out === prev) out = { ...prev };
+                out[key] = next;
+            }
+            return out;
+        });
+        for (const key of Object.keys(focusedChatRef.current)) patchFocusedChat(key, w => mapWindow(w, fn));
+    }, [patchFocusedChat, patchFocusedGroup]);
+
+    /** Reactions snapshot taken before the first unconfirmed optimistic change, per message. */
+    const pendingReactionsRef = useRef<Map<string, ReactionSummary[] | undefined>>(new Map());
+
+    /** Puts back the pre-send reactions of a message; false when nothing was pending. */
+    const rollbackReaction = useCallback((kind: ReactionKind, messageID: number, groupID?: number): boolean => {
+        const key = reactionPendingKey(kind, messageID);
+        if (!pendingReactionsRef.current.has(key)) return false;
+        const snapshot = pendingReactionsRef.current.get(key);
+        pendingReactionsRef.current.delete(key);
+        mapReactionContainers(kind, groupID, list => restoreReactions(list, messageID, snapshot));
+        return true;
+    }, [mapReactionContainers]);
+
+    const reactToMessage = useCallback((target: ReactionTarget, tapped: string) => {
+        const { kind, messageID, groupID } = target;
+        if (kind === 'group' && groupID === undefined) return;
+        const lists: ReactionBearing[][] = [];
+        if (kind === 'group' && groupID !== undefined) {
+            const normal = groupMessagesRef.current[groupID];
+            const focused = focusedGroupRef.current[groupID];
+            if (normal) lists.push(normal);
+            if (focused) lists.push(focused.messages);
+        } else {
+            lists.push(...Object.values(messagesByChatRef.current));
+            lists.push(...Object.values(focusedChatRef.current).map(w => w.messages));
+        }
+        const current = reactionsOf(lists, messageID);
+        const emoji = toggledEmoji(current, tapped);
+        const key = reactionPendingKey(kind, messageID);
+        if (!pendingReactionsRef.current.has(key)) pendingReactionsRef.current.set(key, current);
+        mapReactionContainers(kind, groupID, list => applyOptimisticReaction(list, messageID, emoji));
+        if (!wsManager.sendReaction(kind, messageID, emoji, groupID)) {
+            rollbackReaction(kind, messageID, groupID);
+            addToast({ type: 'error', message: 'No se pudo enviar la reacción' });
+        }
+    }, [mapReactionContainers, rollbackReaction, addToast]);
 
     const bumpFocusEpoch = useCallback((fk: string): number => {
         const next = (focusEpochRef.current.get(fk) ?? 0) + 1;
@@ -1015,6 +1111,43 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             setGroupReceipts(prev => applyReceiptEvent(prev, event));
         };
 
+        /** Someone (or I, from another session / the echo) set, changed or removed a reaction. */
+        const handleReaction = (payload: WsHandlerMap['reaction']) => {
+            const event = parseReactionEvent(payload);
+            if (!event) return;
+            const me = profileRef.current?.Telephon ?? selfTelephonRef.current;
+            if (event.telephon === me) pendingReactionsRef.current.delete(reactionPendingKey(event.kind, event.messageID));
+            mapReactionContainers(event.kind, event.groupID, list => applyReaction(list, event, me));
+
+            // Author notification: only for a new/changed emoji from somebody else, in a chat that is not open.
+            if (event.emoji === '' || !me || event.authorTelephon !== me || event.telephon === me) return;
+            let name: string | undefined;
+            if (event.kind === 'group') {
+                if (selectedGroupRef.current?.ID === event.groupID) return;
+                name = event.groupID === undefined ? undefined : groupMemberNamesRef.current[event.groupID]?.[event.telephon];
+            } else {
+                if (selectedRef.current?.Number === event.telephon) return;
+                const known = contactsRef.current.find(c => c.Number === event.telephon);
+                name = known?.ContactName || known?.Username || undefined;
+            }
+            const who = name || event.username || event.telephon;
+            addToast({
+                type: 'info',
+                message: event.preview
+                    ? `${who} reaccionó ${event.emoji} a: ${event.preview}`
+                    : `${who} reaccionó ${event.emoji} a tu mensaje`,
+            });
+        };
+
+        /** A failed `react` (WS error with context): undo the optimistic change of that message. */
+        const handleWsError = (envelope: WsHandlerMap['error']) => {
+            const target = parseReactionErrorContext(envelope);
+            if (!target) return;
+            if (rollbackReaction(target.kind, target.messageID, target.groupID)) {
+                addToast({ type: 'error', message: 'No se pudo enviar la reacción' });
+            }
+        };
+
         /** Someone in a group is typing. */
         const handleGroupTyping = (payload: WsHandlerMap['group_typing']) => {
             if (!payload?.groupID || !payload?.from) return;
@@ -1270,6 +1403,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         on('group_settings', handleGroupSettings);
         on('group_info', handleGroupInfo);
         on('group_receipt', handleGroupReceipt);
+        on('reaction', handleReaction);
+        on('error', handleWsError);
 
         return () => {
             off('message', handleIncomingMessage);
@@ -1292,8 +1427,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('group_settings', handleGroupSettings);
             off('group_info', handleGroupInfo);
             off('group_receipt', handleGroupReceipt);
+            off('reaction', handleReaction);
+            off('error', handleWsError);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, rollbackReaction, addToast]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
@@ -1362,6 +1499,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         sendGroupEditMessage,
         sendGroupDeleteMessage,
         sendGroupJoin,
+        reactToMessage,
         groupReceipts,
         groupMemberNames,
         // Auth passthrough

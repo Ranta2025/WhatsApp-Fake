@@ -6,6 +6,8 @@
  * non-numeric id is never a cursor.
  */
 
+import type { ReactionSummary } from '../../../types/api';
+
 export interface MergeableMessage {
     MessageID: number | string;
     Time: string;
@@ -68,9 +70,37 @@ export function sortUnique<T extends MergeableMessage>(list: readonly T[]): T[] 
     return dedupeAndSort([...list]);
 }
 
-/** Adds an older page before the loaded messages; already-loaded copies win. */
+const sameReactions = (a: readonly ReactionSummary[] | undefined, b: readonly ReactionSummary[] | undefined): boolean => {
+    if (a === b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    return a.every((r, i) => r.Emoji === b[i]?.Emoji && r.Count === b[i]?.Count && r.Mine === b[i]?.Mine);
+};
+
+/**
+ * Pages fetched from the server may overlap messages that are already loaded.
+ * The loaded copy keeps winning for every field (a live edit must not be rolled
+ * back by a slightly older page), EXCEPT `Reactions`: the incoming server value
+ * replaces it (including "no reactions"), so a stale optimistic chip never survives
+ * a refetch. Same objects/array when nothing differs.
+ */
+export function adoptServerReactions<T extends MergeableMessage>(loaded: readonly T[], incoming: readonly T[]): T[] {
+    const fresh = new Map<number | string, T>();
+    for (const m of incoming) fresh.set(m.MessageID, m);
+    return loaded.map(m => {
+        const server = fresh.get(m.MessageID);
+        if (!server) return m;
+        const current = (m as T & { Reactions?: ReactionSummary[] }).Reactions;
+        const next = (server as T & { Reactions?: ReactionSummary[] }).Reactions;
+        if (sameReactions(current, next)) return m;
+        const copy = { ...m } as T & { Reactions?: ReactionSummary[] };
+        if (next) copy.Reactions = next; else delete copy.Reactions;
+        return copy;
+    });
+}
+
+/** Adds an older page before the loaded messages; already-loaded copies win (except Reactions, see adoptServerReactions). */
 export function prependOlder<T extends MergeableMessage>(prev: readonly T[] | undefined, older: readonly T[]): T[] {
-    return dedupeAndSort([...(prev ?? []), ...older]);
+    return dedupeAndSort([...adoptServerReactions(prev ?? [], older), ...older]);
 }
 
 /**

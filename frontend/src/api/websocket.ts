@@ -457,6 +457,16 @@ class WebSocketManager {
         return this._send('group_read', { groupID, upToMessageID });
     }
 
+    /** Fija (emoji no vacío) o quita (emoji vacío) mi reacción a un mensaje 1:1 o de grupo. */
+    sendReaction(kind: 'direct' | 'group', messageID: number, emoji: string, groupID?: number): boolean {
+        return this._send('react', {
+            kind,
+            messageID,
+            emoji,
+            ...(kind === 'group' && groupID !== undefined ? { groupID } : {}),
+        });
+    }
+
     isConnected(): boolean {
         return Boolean(this.ws && this.ws.readyState === WebSocket.OPEN);
     }

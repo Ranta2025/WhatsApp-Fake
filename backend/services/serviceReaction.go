@@ -33,8 +33,9 @@ type ReactionRepoInterface interface {
 	IsGroupMember(groupID, userID uint, ctx context.Context) (bool, error)
 	// UpsertReaction/DeleteReaction informan si la fila cambió (insertada,
 	// reemplazada o borrada); un no-op (mismo emoji, nada que borrar) devuelve false.
-	UpsertReaction(kind string, messageID, userID uint, emoji string, ctx context.Context) (bool, error)
-	DeleteReaction(kind string, messageID, userID uint, ctx context.Context) (bool, error)
+	// También devuelven el emoji anterior del usuario ("" si no tenía).
+	UpsertReaction(kind string, messageID, userID uint, emoji string, ctx context.Context) (previous string, changed bool, err error)
+	DeleteReaction(kind string, messageID, userID uint, ctx context.Context) (previous string, changed bool, err error)
 	ActorByTelephon(telephon string, ctx context.Context) (*models.ReactionActor, error)
 	ListReactionUsers(kind string, messageID uint, ctx context.Context) ([]models.ReactionUsers, error)
 }
@@ -49,14 +50,16 @@ type ReactionServicer interface {
 // ReactionChange es el resultado de SetReaction: lo que el transporte necesita
 // para el fan-out del evento `reaction`.
 type ReactionChange struct {
-	Kind        string
-	MessageID   uint
-	GroupID     uint // solo grupo
-	UserID      uint // quien reaccionó
-	Emoji       string
-	Removed     bool
-	AuthorID    uint // autor del mensaje
-	OtherUserID uint // solo 1:1: el otro participante respecto a UserID
+	Kind      string
+	MessageID uint
+	GroupID   uint // solo grupo
+	UserID    uint // quien reaccionó
+	Emoji     string
+	// PreviousEmoji es el emoji que el usuario tenía antes ("" si ninguno).
+	PreviousEmoji string
+	Removed       bool
+	AuthorID      uint // autor del mensaje
+	OtherUserID   uint // solo 1:1: el otro participante respecto a UserID
 	// Changed es false cuando la operación no modificó nada (mismo emoji, quitar
 	// una reacción inexistente): el transporte no debe difundirla.
 	Changed bool
@@ -73,7 +76,7 @@ type ReactionChange struct {
 func (c *ReactionChange) Event() schemas.ReactionEvent {
 	return schemas.ReactionEvent{
 		Kind: c.Kind, MessageID: c.MessageID, GroupID: c.GroupID,
-		Telephon: c.ActorTelephon, Username: c.ActorUsername, Emoji: c.Emoji,
+		Telephon: c.ActorTelephon, Username: c.ActorUsername, Emoji: c.Emoji, PreviousEmoji: c.PreviousEmoji,
 		AuthorTelephon: c.AuthorTelephon, Preview: c.Preview,
 	}
 }
@@ -173,10 +176,11 @@ func (s *ReactionService) SetReaction(userID uint, kind string, messageID, group
 	}
 
 	var changed bool
+	var previous string
 	if removed {
-		changed, err = s.repo.DeleteReaction(kind, messageID, userID, ctx)
+		previous, changed, err = s.repo.DeleteReaction(kind, messageID, userID, ctx)
 	} else {
-		changed, err = s.repo.UpsertReaction(kind, messageID, userID, emoji, ctx)
+		previous, changed, err = s.repo.UpsertReaction(kind, messageID, userID, emoji, ctx)
 	}
 	if err != nil {
 		return nil, err
@@ -184,7 +188,7 @@ func (s *ReactionService) SetReaction(userID uint, kind string, messageID, group
 
 	change := &ReactionChange{
 		Kind: kind, MessageID: messageID, UserID: userID,
-		Emoji: emoji, Removed: removed, Changed: changed,
+		Emoji: emoji, PreviousEmoji: previous, Removed: removed, Changed: changed,
 		AuthorID: target.AuthorID, OtherUserID: target.OtherUserID,
 		AuthorTelephon: target.AuthorTelephon, OtherTelephon: target.OtherTelephon,
 		Preview: reactionPreview(target.Text, target.MediaType),

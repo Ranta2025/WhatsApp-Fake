@@ -77,6 +77,34 @@ export interface ContactChat {
 // Mensajes 1:1 — backend/schemas/schemaMessage.go
 // ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * Agregado de reacciones de un mensaje tal como lo ve el espectador
+ * (backend/schemas/schemaReaction.go, PascalCase dentro de Message /
+ * GroupMessageResponse). `Mine` indica si el espectador es uno de los `Count`.
+ */
+export interface ReactionSummary {
+  Emoji: string;
+  Count: number;
+  Mine: boolean;
+}
+
+/** Usuario que reaccionó (GET .../reactions, camelCase). */
+export interface ReactionUser {
+  telephon: string;
+  username: string;
+  avatarUrl: string;
+}
+
+export interface ReactionUsersEntry {
+  emoji: string;
+  users: ReactionUser[];
+}
+
+/** GET /api/v1/chat/message/:id/reactions y /api/v1/group/:groupID/message/:messageID/reactions. */
+export interface MessageReactionsResponse {
+  reactions: ReactionUsersEntry[];
+}
+
 export interface Message {
   MessageID: number;
   SenderTelephon: string;
@@ -91,6 +119,8 @@ export interface Message {
   ReplyToMessageID?: number;
   ReplyToTelephon?: string;
   ReplyToMessage?: string;
+  /** Omitido por el backend cuando no hay reacciones (omitempty). */
+  Reactions?: ReactionSummary[];
 }
 
 /** GET del historial de chat 1:1 con un contacto. */
@@ -152,6 +182,8 @@ export interface GroupMessageResponse {
   SystemEvent?: GroupSystemEvent;
   /** Teléfonos afectados por el evento, para redactar por espectador. */
   SystemTargets?: string[];
+  /** Omitido por el backend cuando no hay reacciones (omitempty). */
+  Reactions?: ReactionSummary[];
 }
 
 /** Ficha mínima de un miembro en la lista de acuses (camelCase, ver schemaGroup.go). */

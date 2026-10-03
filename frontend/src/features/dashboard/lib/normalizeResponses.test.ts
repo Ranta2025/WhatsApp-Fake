@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     normalizeGroupsResponse, normalizeGroupMessagesResponse, normalizeGroupDetailMessages,
     normalizeChatMessagesResponse, normalizeHasMore, normalizeGroupReceipts,
+    normalizeReactions, normalizeReactionUsers,
 } from './normalizeResponses';
 
 // R3-dashboard-null-body-guards-removed: fetchUserGroups/fetchGroupMessages/
@@ -111,5 +112,79 @@ describe('normalizeGroupReceipts', () => {
         expect(normalizeGroupReceipts({
             readBy: [null, 7, {}, { telephon: 5 }, { telephon: '3', username: 9 }, { telephon: '' }],
         }).readBy).toEqual([{ telephon: '3', username: '3' }]);
+    });
+});
+
+describe('normalizeReactions', () => {
+    it('returns undefined for absent / non-array / empty values', () => {
+        expect(normalizeReactions(undefined)).toBeUndefined();
+        expect(normalizeReactions(null)).toBeUndefined();
+        expect(normalizeReactions('x')).toBeUndefined();
+        expect(normalizeReactions([])).toBeUndefined();
+    });
+
+    it('keeps valid entries and drops malformed ones without throwing', () => {
+        const out = normalizeReactions([
+            { Emoji: '👍', Count: 2, Mine: true },
+            { Emoji: '', Count: 1, Mine: false },
+            { Emoji: '❤️', Count: 0, Mine: false },
+            { Emoji: '😂', Count: 1.5, Mine: false },
+            { Emoji: '😮', Count: -1, Mine: false },
+            { Emoji: '😢', Count: '3', Mine: false },
+            { Emoji: '🙏', Count: 1, Mine: 'yes' },
+            { Emoji: 7, Count: 1, Mine: false },
+            null, 'x', 4,
+            { Emoji: '🙏', Count: 3, Mine: false },
+        ]);
+        expect(out).toEqual([{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '🙏', Count: 3, Mine: false }]);
+    });
+
+    it('drops duplicated emojis keeping the first occurrence', () => {
+        expect(normalizeReactions([{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '👍', Count: 1, Mine: false }]))
+            .toEqual([{ Emoji: '👍', Count: 2, Mine: true }]);
+    });
+});
+
+describe('Reactions inside message normalizers', () => {
+    const msg = (extra: Record<string, unknown> = {}) => ({ MessageID: 1, Time: '2024-01-01T00:00:00Z', ...extra });
+
+    it('normalizeChatMessagesResponse sanitizes Reactions and removes an all-invalid field', () => {
+        const [a, b] = normalizeChatMessagesResponse([
+            msg({ Reactions: [{ Emoji: '👍', Count: 1, Mine: false }, { nope: true }] }),
+            msg({ MessageID: 2, Reactions: [{ nope: true }] }),
+        ]);
+        expect(a?.Reactions).toEqual([{ Emoji: '👍', Count: 1, Mine: false }]);
+        expect('Reactions' in (b ?? {})).toBe(false);
+    });
+
+    it('group history / detail normalizers sanitize Reactions too', () => {
+        const [g] = normalizeGroupMessagesResponse({ messages: [msg({ Reactions: [{ Emoji: '🙏', Count: 2, Mine: true }, null] })] });
+        expect(g?.Reactions).toEqual([{ Emoji: '🙏', Count: 2, Mine: true }]);
+        const [d] = normalizeGroupDetailMessages({ Messages: [msg({ Reactions: 'garbage' })] });
+        expect('Reactions' in (d ?? {})).toBe(false);
+    });
+});
+
+describe('normalizeReactionUsers', () => {
+    it('returns an empty list for a malformed body', () => {
+        expect(normalizeReactionUsers(null)).toEqual({ reactions: [] });
+        expect(normalizeReactionUsers({ reactions: 'x' })).toEqual({ reactions: [] });
+    });
+
+    it('keeps valid groups, drops malformed groups and users, defaults username/avatar', () => {
+        expect(normalizeReactionUsers({
+            reactions: [
+                { emoji: '👍', users: [{ telephon: '1', username: 'ana', avatarUrl: 'a.png' }, { username: 'x' }, { telephon: '2' }] },
+                { emoji: '', users: [{ telephon: '3', username: 'z', avatarUrl: '' }] },
+                { emoji: '❤️', users: 'x' },
+                { emoji: '😂', users: [] },
+                null,
+            ],
+        })).toEqual({
+            reactions: [{ emoji: '👍', users: [
+                { telephon: '1', username: 'ana', avatarUrl: 'a.png' },
+                { telephon: '2', username: '2', avatarUrl: '' },
+            ] }],
+        });
     });
 });
