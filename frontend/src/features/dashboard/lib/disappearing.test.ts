@@ -4,7 +4,7 @@ import {
     isDisappearSeconds, normalizeDisappearSeconds, formatDisappearDuration, describeDisappearingChange,
     describeDirectSystemMessage, parseExpiresAt, removeMessagesByIds, removeExpiredMessages, earliestExpiry,
     expiryDelay, isSystemDirectMessage, countUnreadFrom, hasUnreadFrom, latestPreviewable, MAX_EXPIRY_DELAY_MS,
-    removeExpiredFromWindow, removeIdsFromWindow,
+    removeExpiredFromWindow, removeIdsFromWindow, formatDisappearShort, disappearOptionLabel,
 } from './disappearing';
 import { describeGroupSystemMessage } from './groupAdminEvents';
 import { createFocusedWindow } from './focusedWindow';
@@ -117,6 +117,13 @@ describe('removal reducers', () => {
         expect(removeExpiredMessages(same, now)).toBe(same);
     });
 
+    it('never removes system messages, even with a past ExpiresAt', () => {
+        const now = Date.parse('2026-01-01T12:00:00Z');
+        const list = [sys(1, '86400', { ExpiresAt: '2026-01-01T11:00:00Z' }), msg(2, { ExpiresAt: '2026-01-01T11:00:00Z' })];
+        const out = removeExpiredMessages(list, now);
+        expect(out.map(m => m.MessageID)).toEqual([1]);
+    });
+
     it('windows: same object when nothing changes, filtered messages otherwise', () => {
         const win = createFocusedWindow([msg(1, { ExpiresAt: '2026-01-01T11:00:00Z' }), msg(2)], { hasMoreOlder: true, hasMoreNewer: false }, 2, 1);
         const now = Date.parse('2026-01-01T12:00:00Z');
@@ -136,6 +143,19 @@ describe('earliestExpiry / expiryDelay', () => {
         expect(earliestExpiry([a, b])).toBe(Date.parse('2026-01-01T12:00:05Z'));
         expect(earliestExpiry([[msg(1)], []])).toBeNull();
         expect(earliestExpiry([])).toBeNull();
+    });
+
+    it('ignores entries the sweep cannot remove (non-numeric id, system) so they cannot stall the timer', () => {
+        const unremovable = [
+            msg(1, { MessageID: 'tmp-1' as unknown as number, ExpiresAt: '2026-01-01T11:00:00Z' }),
+            sys(2, '86400', { ExpiresAt: '2026-01-01T11:00:00Z' }),
+            msg(3, { ExpiresAt: '2026-01-01T12:00:09Z' }),
+        ];
+        expect(earliestExpiry([unremovable])).toBe(Date.parse('2026-01-01T12:00:09Z'));
+        expect(earliestExpiry([[unremovable[0]!, unremovable[1]!]])).toBeNull();
+        // a later removable one still gets swept
+        const now = Date.parse('2026-01-01T12:00:10Z');
+        expect(removeExpiredMessages(unremovable, now).map(m => m.MessageID)).toEqual(['tmp-1', 2]);
     });
 
     it('delay is never negative and capped', () => {
@@ -165,5 +185,15 @@ describe('system message exclusions', () => {
         expect(latestPreviewable([msg(1), msg(2), sys(3, '86400')])?.MessageID).toBe(2);
         expect(latestPreviewable([sys(3, '0')])).toBeNull();
         expect(latestPreviewable(undefined)).toBeNull();
+    });
+});
+
+describe('selector/chip labels', () => {
+    it('short and option labels', () => {
+        expect(formatDisappearShort(86400)).toBe('24 h');
+        expect(formatDisappearShort(604800)).toBe('7 d');
+        expect(formatDisappearShort(7776000)).toBe('90 d');
+        expect(disappearOptionLabel(0)).toBe('Desactivados');
+        expect(disappearOptionLabel(604800)).toBe('7 días');
     });
 });

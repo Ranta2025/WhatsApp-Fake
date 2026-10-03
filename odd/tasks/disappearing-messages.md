@@ -58,7 +58,7 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - [x] DE3 Read-path filtering: `notExpired` scope on every message query (list them in the task, one test per site). Route: delegated.
 - [x] DE4 Expiry job: `messageExpiryLoop` (clock-injected), batch delete with reply scrubbing and reaction cleanup, media GC (`MediaServicer.Remove`, reference check), `messages_expired` fan-out, wiring + graceful stop in `app.go`. Tests for each rule, plus job start/stop like `app_test.go` covers the status loop (`backend/app/app_test.go`, to verify). Route: delegated.
 - [x] DE5 Frontend plumbing: types/guards, `messages_expired` + `disappearing_changed` handlers, removal from `messagesByChat`/`groupMessages`/`focusedWindow`, local expiry timer, system-message rendering, unread/preview exclusion. Vitest. Route: delegated.
-- [ ] DE6 UI: selector in chat info and group panel, header chip, bubble clock icon, permission gating. Component tests. Route: delegated.
+- [x] DE6 UI: selector in chat info and group panel, header chip, bubble clock icon, permission gating. Component tests. Route: delegated.
 - [ ] DE7 Playwright: Ana sets a timer with Luis, system pill appears for both; a new message shows the clock icon; expiry removes it live for both and after reload (using the test-only short duration or seeded expiry); group variant: member can change while "Editar info" is open; with "Editar info: solo admins" the member cannot change. Two green runs. Route: delegated.
 - [ ] DE8 Close: full checks, doc + mirror.
 
@@ -177,5 +177,16 @@ The Decisions above predate group-admin-permissions/reactions. These points OVER
   - RED/GREEN: lib tests failed on missing modules first (then 211 lib tests green); `useExpiryTimer` and the context suite (19 of 20 failing before the provider changes) written before the implementation; the component tests (`MessageList.system`, `Sidebar.system`) were checked non-vacuous by stashing the component changes (6/6 fail) and restoring them. `disappearingApi.test.ts` was written together with the module (no separate RED observed).
   - Assumptions: when local expiry or `messages_expired` empties a list that still has `hasMore`, paging is not reset (older pages remain reachable only if some real id remains as cursor; a reconnect refetch heals it); an unchanged-event REST result with `systemMessage: null` only syncs the timer.
 
+- DE5 committed `a650f65` (route: delegated writer). Review slice `abfc1d8..a650f65` (DE4 advisory fix `6bb891e` + DE5): medium / `slice_budget_reached`, consent granted, lens review-reliability, APPROVED and acknowledged, lineage `review-3d16fb320f76a080`. Last reviewed boundary = `a650f65`.
+  - Advisories carried into DE6: `earliestExpiry` must only consider messages the sweep can remove (numeric `MessageID`), otherwise an unremovable past expiry stalls the local timer (`lib/disappearing.ts:146-155`); the local sweep must never expire `Kind === 'system'` messages regardless of the path they arrived through, with a non-vacuous test (system message WITH a past `ExpiresAt`) (`lib/disappearing.ts:120-132`).
+
+- DE6 built (uncommitted, parent commits; route: delegated writer): disappearing-messages UI.
+  - `components/DisappearingControls.tsx`: `ChatDisappearingSection` (1:1 contact panel, between Acciones and Fondo), `GroupDisappearingSection` (group info panel, after `GroupSettingsSection`; editable via `canEditInfo(UserRole, selectedGroup)`, otherwise read-only text plus "Solo los administradores pueden cambiar esta opción", hint omitted for `left`), `DisappearingChip` (header, only when seconds > 0), `ExpiryClock` (bubble, only for a valid `ExpiresAt`). Selector is a native `<select>`; while the setter is pending it is disabled and shows "Guardando…"; the failure toast comes from the DashboardContext setters (DE5) and the select reverts to the stored value.
+  - Wiring: `ContactDetails`, `GroupChatWindow` (panel, header chip, group bubble clock), `ChatWindow` (header chip), `MessageList` (1:1 bubble clock). Lib: `formatDisappearShort`, `disappearOptionLabel`.
+  - DE5 advisories fixed in `lib/disappearing.ts`: `earliestExpiry` and the sweep share `removableExpiry` (numeric id and `Kind !== 'system'`), so an unremovable past expiry cannot stall the timer and system messages are never removed locally. `ExpirableMessage` gained `Kind`. The context test 'never expires system messages' now seeds a past `ExpiresAt` (plus a normal message).
+  - Accessible names / test ids (for DE7): select `aria-label="Mensajes temporales"` (options "Desactivados", "24 horas", "7 días", "90 días"; values 0/86400/604800/7776000); `data-testid` `disappearing-section`, `disappearing-pending`, `disappearing-readonly`, `disappearing-chip` (aria-label "Mensajes temporales activados: 24 horas", text "Mensajes temporales: 24 h"), `expiry-clock` (role img, aria-label/title "Mensaje temporal").
+  - RED/GREEN: lib/context tests failed first (3 failures: unremovable earliest, system with past ExpiresAt in lib and context), green after the fix; component and window tests failed on missing wiring (7 failures) before wiring, green after.
+  - Verification: `npm run typecheck`, `npm run lint`, `npm run test` (93 files, 768 tests), `npm run build` ok.
+
 ## Next step
-DE6.
+DE7.

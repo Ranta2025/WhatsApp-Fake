@@ -31,6 +31,20 @@ export function formatDisappearDuration(seconds: number): string {
     }
 }
 
+/** Compact label for the header chip: "24 h" / "7 d" / "90 d". */
+export function formatDisappearShort(seconds: number): string {
+    switch (seconds) {
+        case 86400: return '24 h';
+        case 604800: return '7 d';
+        case 7776000: return '90 d';
+        default: return `${seconds} s`;
+    }
+}
+
+/** Option label of the selector ("Desactivados" for 0). */
+export const disappearOptionLabel = (seconds: number): string =>
+    seconds === 0 ? 'Desactivados' : formatDisappearDuration(seconds);
+
 /** Notice text: "Ana activó los mensajes temporales: 24 horas" / "Activaste ..." for the viewer. */
 export function describeDisappearingChange(seconds: number, actorIsViewer: boolean, actorName: string): string {
     if (seconds === 0) {
@@ -80,6 +94,7 @@ export function parseExpiresAt(raw: unknown): number | undefined {
 /** Shape shared by 1:1 and group messages for expiry and reply scrubbing. */
 export interface ExpirableMessage extends MergeableMessage {
     ExpiresAt?: string;
+    Kind?: 'system';
     ReplyToMessageID?: number;
     ReplyToTelephon?: string;
     ReplyToMessage?: string;
@@ -116,8 +131,12 @@ export function removeMessagesByIds<T extends ExpirableMessage>(list: readonly T
     return changed ? out : list;
 }
 
+/** Expiry instant of a message the local sweep may remove (numeric id, never a system notice). */
+const removableExpiry = (m: ExpirableMessage): number | undefined =>
+    typeof m.MessageID === 'number' && m.Kind !== 'system' ? parseExpiresAt(m.ExpiresAt) : undefined;
+
 const isExpired = (m: ExpirableMessage, now: number): boolean => {
-    const at = parseExpiresAt(m.ExpiresAt);
+    const at = removableExpiry(m);
     return at !== undefined && now >= at;
 };
 
@@ -141,12 +160,12 @@ export function removeExpiredFromWindow<T extends ExpirableMessage>(win: Focused
     return messages === win.messages ? win : { ...win, messages };
 }
 
-/** Earliest valid `ExpiresAt` (epoch ms) among all the given lists, or null. */
+/** Earliest `ExpiresAt` (epoch ms) among messages the sweep can actually remove, or null. */
 export function earliestExpiry(lists: Iterable<readonly ExpirableMessage[]>): number | null {
     let best: number | null = null;
     for (const list of lists) {
         for (const m of list) {
-            const at = parseExpiresAt(m.ExpiresAt);
+            const at = removableExpiry(m);
             if (at !== undefined && (best === null || at < best)) best = at;
         }
     }

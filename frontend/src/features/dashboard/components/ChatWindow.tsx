@@ -13,6 +13,7 @@ import Avatar from '../../../components/ui/Avatar';
 import { ChatIcon, PhoneIcon as PhoneEmojiIcon, GroupIcon } from '../../../components/ui/icons';
 import { formatLastSeen } from '../../../utils/format';
 import { hasUnreadFrom } from '../lib/disappearing';
+import { DisappearingChip } from './DisappearingControls';
 import type { CallType, SearchPage } from '../../../types/api';
 import type { SearchPageOptions } from '../api/searchApi';
 import type { FocusTarget } from '../context/DashboardContext';
@@ -93,7 +94,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
         selected, setSelected, isConnected, avatarMap, onlineUsers, typingUsers,
         lastSeenMap, setMessagesByChat, contacts, addToast,
         messagesByChat, fetchChatMessages, profile, allChatGroups, markAsRead,
-        focusedChat, openMessageAt, returnToLatest,
+        focusedChat, openMessageAt, returnToLatest, selectedDisappearSeconds,
     } = useDashboard();
     const [showAddContactModal, setShowAddContactModal] = useState(false);
 
@@ -191,6 +192,8 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                         </div>
                     </div>
                 </button>
+
+                <DisappearingChip seconds={selectedDisappearSeconds} />
 
                 <div className="flex items-center gap-0.5 flex-shrink-0">
                     <button onClick={() => handleCallClick('audio')} disabled={!isConnected} className="icon-btn" title="Llamada de voz" aria-label="Llamada de voz">

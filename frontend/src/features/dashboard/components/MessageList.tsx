@@ -11,6 +11,7 @@ import { isMediaUrl } from '../../../lib/mediaMessage';
 import Popover from '../../../components/ui/Popover';
 import { useRefMap } from '../../../hooks/useRefMap';
 import MessageTicks from './MessageTicks';
+import { ExpiryClock } from './DisappearingControls';
 import ReactionPicker from './reactions/ReactionPicker';
 import ReactionChips from './reactions/ReactionChips';
 import ReactionTrigger from './reactions/ReactionTrigger';
@@ -337,6 +338,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
 
                                             {/* Info de pie de burbuja */}
                                             <div className="mt-0.5 -mb-0.5 flex items-center justify-end gap-1">
+                                                <span className={isMine ? 'text-white/60' : 'text-slate-400'}><ExpiryClock expiresAt={m.ExpiresAt} /></span>
                                                 <span className={`text-[11px] ${isMine ? 'text-white/60' : 'text-slate-400'}`}>
                                                     {m.Edited && 'editado · '}{time}
                                                 </span>

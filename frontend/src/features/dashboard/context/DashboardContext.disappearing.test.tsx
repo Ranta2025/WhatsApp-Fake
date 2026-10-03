@@ -376,9 +376,9 @@ describe('DashboardProvider disappearing messages', () => {
 
         it('never expires system messages', async () => {
             await mountFake();
-            await act(async () => { ctx!.setMessagesByChat({ B: [directSys(8, 86400)] }); });
+            await act(async () => { ctx!.setMessagesByChat({ B: [{ ...directSys(8, 86400), ExpiresAt: at(-60_000) }, chatMsg(9)] }); });
             act(() => { vi.advanceTimersByTime(24 * 60 * 60 * 1000); });
-            expect(ids(ctx!.messagesByChat['B'])).toEqual([8]);
+            expect(ids(ctx!.messagesByChat['B'])).toEqual([8, 9]);
         });
     });
 

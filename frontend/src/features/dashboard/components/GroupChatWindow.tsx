@@ -23,6 +23,7 @@ import { deriveGroupMessageStatus } from '../lib/groupReceipts';
 import { isSystemGroupMessage, describeGroupSystemMessage } from '../lib/groupAdminEvents';
 import { canAddMembers, canEditInfo, canManageMembers } from '../lib/groupPermissions';
 import GroupSettingsSection from './GroupSettingsSection';
+import { GroupDisappearingSection, DisappearingChip, ExpiryClock } from './DisappearingControls';
 import ReactionPicker from './reactions/ReactionPicker';
 import ReactionChips from './reactions/ReactionChips';
 import ReactionTrigger from './reactions/ReactionTrigger';
@@ -108,6 +109,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     {/* Footer: time + edited */}
                     <div className={`text-[10px] mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-200/70 justify-end' : 'text-slate-500'}`}>
                         {msg.Edited && <span>editado</span>}
+                        <ExpiryClock expiresAt={msg.ExpiresAt} />
                         <span>{formatTime(msg.Time)}</span>
                         {isMine && status && <MessageTicks status={status} />}
                     </div>
@@ -493,7 +495,7 @@ const GroupChatWindowInner = () => {
         setSelected,
         avatarMap, myAvatar,
         setGroups, addToast,
-        globalWallpaper,
+        globalWallpaper, selectedDisappearSeconds,
     } = useDashboard();
 
     const [showAddMembers, setShowAddMembers]     = useState(false);
@@ -821,6 +823,8 @@ const GroupChatWindowInner = () => {
                         )}
                     </div>
                 </div>
+
+                <DisappearingChip seconds={selectedDisappearSeconds} />
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -1196,6 +1200,9 @@ const GroupChatWindowInner = () => {
 
                             {/* Configuración del grupo (permisos) */}
                             <GroupSettingsSection />
+
+                            {/* Mensajes temporales */}
+                            <GroupDisappearingSection />
 
                             <div className="h-2 bg-slate-950/60" />
 

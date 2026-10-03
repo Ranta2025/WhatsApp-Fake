@@ -2,6 +2,7 @@ import { useState, useEffect, type ChangeEvent, type Dispatch, type SetStateActi
 import api from '../../../api/axios';
 import { useDashboard } from '../context/DashboardContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { ChatDisappearingSection } from './DisappearingControls';
 import type { CallType, MediaUploadResult } from '../../../types/api';
 
 interface ContactDetailsProps {
@@ -171,6 +172,8 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                             </button>
                         </div>
                     </div>
+
+                    <ChatDisappearingSection />
 
                     <div className="bg-white/5 rounded-xl p-4 border border-white/5">
                         <div className="text-xs text-indigo-300/70 mb-3 uppercase tracking-wider font-semibold">Fondo de este chat</div>
