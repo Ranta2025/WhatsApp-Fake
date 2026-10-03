@@ -552,9 +552,31 @@ func TestE2EDisappearingMessages(t *testing.T) {
 	})
 }
 
-// deRemover borra (de mentira) solo los objetos sembrados por el test; el resto
-// de la cola es de otros datos del stack y se deja para el job real (devolver
-// error solo los reprograma con backoff).
+// deOwnedQueueRepo es el repo real con la cola media_gc acotada a las keys del
+// test: la pasada en proceso nunca ve (ni, por tanto, reintenta, reprograma o
+// borra) filas de la cola que pertenecen a otros datos del stack.
+type deOwnedQueueRepo struct {
+	*repos.RepoExpiry
+	owned map[string]bool
+}
+
+func (r *deOwnedQueueRepo) DueMediaGC(ctx context.Context, limit int) ([]models.MediaGC, error) {
+	all, err := r.RepoExpiry.DueMediaGC(ctx, 100000)
+	if err != nil {
+		return nil, err
+	}
+	var out []models.MediaGC
+	for _, row := range all {
+		if r.owned[row.ObjectKey] && len(out) < limit {
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+
+// deRemover borra (de mentira) solo los objetos sembrados por el test. Como el
+// repo envuelto solo le entrega filas propias, un objeto ajeno sería un fallo
+// del test: devuelve error para que se note.
 type deRemover struct {
 	store *services.ServiceMedia
 	owned map[string]bool
@@ -682,10 +704,50 @@ func deExpiryJob(t *testing.T, db *gorm.DB, ana, luis models.UserDataBase, group
 		return nil
 	}))
 
+	// Fila de cola AJENA al test, vencida para el reintento: la pasada en proceso
+	// no debe tocarla (attempts, next_attempt_at y last_error quedan igual).
+	foreignKey := "images/e2e-de4/" + tag + "foreign.jpg"
+	require.NoError(t, db.Exec(`INSERT INTO media_gc (object_key, attempts, next_attempt_at, last_error, created_at, updated_at)
+		VALUES (?, 3, now() - interval '1 minute', 'ajena', now(), now())`, foreignKey).Error)
+	t.Cleanup(func() { db.Exec("DELETE FROM media_gc WHERE object_key = ?", foreignKey) })
+	type gcSnap struct {
+		Attempts      int
+		NextAttemptAt time.Time
+		LastError     string
+	}
+	foreignSnap := func() (gcSnap, bool) {
+		var rows []gcSnap
+		require.NoError(t, db.Raw("SELECT attempts, next_attempt_at, last_error FROM media_gc WHERE object_key = ?", foreignKey).Scan(&rows).Error)
+		if len(rows) == 0 {
+			return gcSnap{}, false
+		}
+		return rows[0], true
+	}
+	foreignBefore, _ := foreignSnap()
+
+	// Respuesta huérfana: su objetivo ya no existe como fila (carrera con la
+	// expiración). El barrido de cada pasada debe limpiarle la cita. La segunda
+	// respuesta apunta a un objetivo soft-deleted, que sigue existiendo: no es
+	// huérfana y conserva la cita.
+	hardGone := models.Message{IdUser: ana.ID, IdReceptor: luis.ID, Message: "de4 objetivo huérfano " + tag, Status: "enviado", Time: now}
+	softGone := models.Message{IdUser: ana.ID, IdReceptor: luis.ID, Message: "de4 objetivo soft " + tag, Status: "enviado", Time: now}
+	require.NoError(t, db.Create(&hardGone).Error)
+	require.NoError(t, db.Create(&softGone).Error)
+	oq, sq := hardGone.Message, softGone.Message
+	orphan := models.Message{IdUser: luis.ID, IdReceptor: ana.ID, Message: "de4 respuesta huérfana " + tag, Status: "enviado", Time: now,
+		ReplyToMessageID: &hardGone.ID, ReplyToMessage: &oq, ReplyToTelephon: &ana.Telephon}
+	softReply := models.Message{IdUser: luis.ID, IdReceptor: ana.ID, Message: "de4 respuesta a soft " + tag, Status: "enviado", Time: now,
+		ReplyToMessageID: &softGone.ID, ReplyToMessage: &sq, ReplyToTelephon: &ana.Telephon}
+	require.NoError(t, db.Create(&orphan).Error)
+	require.NoError(t, db.Create(&softReply).Error)
+	require.NoError(t, db.Unscoped().Delete(&models.Message{}, hardGone.ID).Error)
+	require.NoError(t, db.Delete(&models.Message{}, softGone.ID).Error)
+
+	owned := map[string]bool{goneKey: true, sharedKey: true, groupKey: true}
 	repo := repos.InitRepoExpiry(db)
-	remover := &deRemover{store: store, owned: map[string]bool{goneKey: true, sharedKey: true, groupKey: true}}
+	remover := &deRemover{store: store, owned: owned}
 	notifier := &deNotifier{}
-	svc := services.NewMessageExpiryService(repo, remover, notifier, deNoMetrics{}, false)
+	svc := services.NewMessageExpiryService(&deOwnedQueueRepo{RepoExpiry: repo, owned: owned}, remover, notifier, deNoMetrics{}, false)
 	ctx := context.Background()
 
 	countUnscoped := func(model interface{}, ids ...uint) int64 {
@@ -726,6 +788,27 @@ func deExpiryJob(t *testing.T, db *gorm.DB, ana, luis models.UserDataBase, group
 	assert.Nil(t, gotGReply.ReplyToMessage)
 	assert.Nil(t, gotGReply.ReplyToMessageID)
 	assert.Nil(t, gotGReply.ReplyToTelephon)
+
+	// Barrido de huérfanas: la respuesta cuyo objetivo se borró físicamente
+	// pierde la cita; la que apunta a un soft-deleted la conserva.
+	var gotOrphan, gotSoft models.Message
+	require.NoError(t, db.First(&gotOrphan, orphan.ID).Error)
+	assert.Nil(t, gotOrphan.ReplyToMessageID)
+	assert.Nil(t, gotOrphan.ReplyToMessage)
+	assert.Nil(t, gotOrphan.ReplyToTelephon)
+	require.NoError(t, db.First(&gotSoft, softReply.ID).Error)
+	require.NotNil(t, gotSoft.ReplyToMessageID, "un objetivo soft-deleted no es huérfano")
+	assert.Equal(t, softGone.ID, *gotSoft.ReplyToMessageID)
+	require.NotNil(t, gotSoft.ReplyToMessage)
+
+	// La fila de cola ajena no se tocó (si desapareció, la procesó el job real
+	// de la app, que sí ve toda la cola; esta pasada nunca la entrega).
+	assert.NotContains(t, remover.removed(), foreignKey)
+	if after, ok := foreignSnap(); ok {
+		assert.Equal(t, foreignBefore.Attempts, after.Attempts, "attempts de la fila ajena")
+		assert.True(t, foreignBefore.NextAttemptAt.Equal(after.NextAttemptAt), "next_attempt_at de la fila ajena")
+		assert.Equal(t, foreignBefore.LastError, after.LastError)
+	}
 
 	// Reacciones borradas.
 	var reactions int64

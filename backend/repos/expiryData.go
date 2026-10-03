@@ -100,6 +100,43 @@ func scrubReplies(tx *gorm.DB, kind string, ids []uint) error {
 		}).Error
 }
 
+// orphanReplyWindow acota el barrido de respuestas huérfanas a las filas
+// creadas hace poco: una respuesta que perdió la carrera con la expiración se
+// acaba de crear. Es una constante interna, nunca entrada de usuario.
+const orphanReplyWindow = "15 minutes"
+
+// sweepOrphanReplies limpia la cita (id, texto y autor) de las respuestas
+// recientes cuyo objetivo ya no existe como fila. Cubre la carrera en que una
+// respuesta leyó el objetivo antes de la transacción de expiración y confirmó
+// después: scrubReplies no la vio. Los objetivos soft-deleted siguen existiendo
+// (la subconsulta no filtra deleted_at) y por eso no cuentan como huérfanos;
+// solo los borrados físicamente lo son.
+func sweepOrphanReplies(tx *gorm.DB, kind string) error {
+	model, _, err := expiryTarget(kind)
+	if err != nil {
+		return err
+	}
+	table := "messages"
+	if kind == models.ReactionKindGroup {
+		table = "group_messages"
+	}
+	return tx.Unscoped().Model(model).
+		Where("reply_to_message_id IS NOT NULL AND created_at > now() - interval '"+orphanReplyWindow+"' AND "+
+			"NOT EXISTS (SELECT 1 FROM "+table+" t WHERE t.id = "+table+".reply_to_message_id)").
+		UpdateColumns(map[string]interface{}{
+			"reply_to_message_id": nil,
+			"reply_to_message":    nil,
+			"reply_to_telephon":   nil,
+		}).Error
+}
+
+// SweepOrphanReplies ejecuta sweepOrphanReplies para el kind.
+func (r *RepoExpiry) SweepOrphanReplies(ctx context.Context, kind string) error {
+	c, cancel := context.WithTimeout(ctx, expiryTimeout)
+	defer cancel()
+	return sweepOrphanReplies(r.data.WithContext(c), kind)
+}
+
 // deleteExpiredReactions borra las reacciones de los mensajes que expiran
 // (message_reactions no tiene FK; la clave es (message_kind, message_id)).
 func deleteExpiredReactions(tx *gorm.DB, kind string, ids []uint) error {
@@ -305,14 +342,16 @@ func (r *RepoExpiry) DeleteMediaGC(ctx context.Context, id uint) error {
 	return r.data.WithContext(c).Where("id = ?", id).Delete(&models.MediaGC{}).Error
 }
 
-// RescheduleMediaGC registra un intento fallido y programa el siguiente.
-func (r *RepoExpiry) RescheduleMediaGC(ctx context.Context, id uint, attempts int, next time.Time, lastErr string) error {
+// RescheduleMediaGC registra un intento fallido y programa el siguiente a
+// backoff desde ahora. El instante se calcula en SQL (now() de la BD) porque
+// DueMediaGC compara con el mismo reloj: nunca se mezcla con la hora de Go.
+func (r *RepoExpiry) RescheduleMediaGC(ctx context.Context, id uint, attempts int, backoff time.Duration, lastErr string) error {
 	c, cancel := context.WithTimeout(ctx, expiryTimeout)
 	defer cancel()
 	return r.data.WithContext(c).Model(&models.MediaGC{}).Where("id = ?", id).
 		UpdateColumns(map[string]interface{}{
 			"attempts":        attempts,
-			"next_attempt_at": next,
+			"next_attempt_at": gorm.Expr("now() + make_interval(secs => ?)", backoff.Seconds()),
 			"last_error":      truncateRunes(lastErr, mediaGCLastErrorMax),
 			"updated_at":      gorm.Expr("now()"),
 		}).Error

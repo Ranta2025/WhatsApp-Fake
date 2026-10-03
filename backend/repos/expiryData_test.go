@@ -212,8 +212,7 @@ func TestMediaKeyReferencedChecksEveryLiveMediaColumn(t *testing.T) {
 func TestMediaGCRowWrites(t *testing.T) {
 	db, rec := dryRunDB(t)
 	r := &RepoExpiry{data: db}
-	next := time.Date(2026, 10, 3, 12, 2, 0, 0, time.UTC)
-	require.NoError(t, r.RescheduleMediaGC(context.Background(), 7, 2, next, strings.Repeat("x", 900)))
+	require.NoError(t, r.RescheduleMediaGC(context.Background(), 7, 2, 2*time.Minute, strings.Repeat("x", 900)))
 	require.NoError(t, r.DeleteMediaGC(context.Background(), 7))
 
 	stmts := stmtsOn(rec, "media_gc")
@@ -221,7 +220,36 @@ func TestMediaGCRowWrites(t *testing.T) {
 	assert.True(t, strings.HasPrefix(stmts[0], `UPDATE "media_gc"`), stmts[0])
 	assert.Contains(t, stmts[0], `"attempts"=2`)
 	assert.Contains(t, stmts[0], "id = 7")
+	assert.Contains(t, stmts[0], `"next_attempt_at"=now() +`, "el siguiente intento se calcula con el reloj de la BD")
+	assert.Contains(t, stmts[0], "make_interval(secs =>")
 	assert.NotContains(t, stmts[0], strings.Repeat("x", 501), "last_error truncado al tamaño de la columna")
 	assert.True(t, strings.HasPrefix(stmts[1], `DELETE FROM "media_gc"`), stmts[1])
 	assert.Contains(t, stmts[1], "7")
+}
+
+func TestSweepOrphanRepliesNullsQuoteWhenTargetIsHardDeleted(t *testing.T) {
+	for _, k := range expiryKinds {
+		t.Run(k.kind, func(t *testing.T) {
+			db, rec := dryRunDB(t)
+			require.NoError(t, sweepOrphanReplies(db, k.kind))
+
+			stmts := stmtsOn(rec, k.table)
+			require.Len(t, stmts, 1, rec.all())
+			s := stmts[0]
+			assert.True(t, strings.HasPrefix(s, "UPDATE "+k.table), s)
+			assert.Contains(t, s, `"reply_to_message"=NULL`)
+			assert.Contains(t, s, `"reply_to_message_id"=NULL`)
+			assert.Contains(t, s, `"reply_to_telephon"=NULL`)
+			assert.Contains(t, s, "reply_to_message_id IS NOT NULL")
+			assert.Contains(t, s, "created_at > now() - interval '15 minutes'", "acotado a la ventana reciente")
+			assert.Contains(t, s, "NOT EXISTS (SELECT 1 FROM "+strings.Trim(k.table, `"`)+" t WHERE t.id = "+strings.Trim(k.table, `"`)+".reply_to_message_id)")
+			assert.NotContains(t, s, "deleted_at", "soft-deleted siguen existiendo: no son huérfanos")
+		})
+	}
+}
+
+func TestSweepOrphanRepliesRejectsUnknownKind(t *testing.T) {
+	db, rec := dryRunDB(t)
+	assert.Error(t, sweepOrphanReplies(db, "otro"))
+	assert.Empty(t, rec.all())
 }

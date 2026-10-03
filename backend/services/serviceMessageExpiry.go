@@ -19,7 +19,12 @@ type MessageExpiryRepo interface {
 	DueMediaGC(ctx context.Context, limit int) ([]models.MediaGC, error)
 	MediaKeyReferenced(ctx context.Context, key string) (bool, error)
 	DeleteMediaGC(ctx context.Context, id uint) error
-	RescheduleMediaGC(ctx context.Context, id uint, attempts int, next time.Time, lastErr string) error
+	// RescheduleMediaGC programa el siguiente intento a backoff desde ahora,
+	// medido con el reloj de la BD (el mismo que usa DueMediaGC).
+	RescheduleMediaGC(ctx context.Context, id uint, attempts int, backoff time.Duration, lastErr string) error
+	// SweepOrphanReplies limpia las citas de respuestas recientes cuyo objetivo
+	// fue borrado físicamente (carrera respuesta/expiración).
+	SweepOrphanReplies(ctx context.Context, kind string) error
 	CountMediaGC(ctx context.Context) (int64, error)
 }
 
@@ -95,7 +100,7 @@ func NewMessageExpiryService(repo MessageExpiryRepo, media MediaRemover, notifie
 }
 
 // RunOnce ejecuta una pasada completa: expira 1:1, expira grupos (notificando
-// tras cada lote confirmado) y procesa la cola media_gc. Un fallo de una etapa
+// tras cada lote confirmado), barre respuestas huérfanas y procesa la cola media_gc. Un fallo de una etapa
 // no impide las demás; los errores se devuelven juntos.
 func (s *MessageExpiryService) RunOnce(ctx context.Context) error {
 	if s.dryRun {
@@ -105,6 +110,11 @@ func (s *MessageExpiryService) RunOnce(ctx context.Context) error {
 	for _, kind := range expiryKinds {
 		if err := s.expireKind(ctx, kind); err != nil {
 			errs = append(errs, fmt.Errorf("expirando mensajes %s: %w", kind, err))
+		}
+	}
+	for _, kind := range expiryKinds {
+		if err := s.repo.SweepOrphanReplies(ctx, kind); err != nil {
+			errs = append(errs, fmt.Errorf("barriendo respuestas huérfanas %s: %w", kind, err))
 		}
 	}
 	if err := s.processMediaGC(ctx); err != nil {
@@ -288,5 +298,5 @@ func (s *MessageExpiryService) collectMedia(ctx context.Context, row models.Medi
 	slog.Warn("media-gc: fallo al borrar el objeto, se reintentará",
 		"object_key", row.ObjectKey, "attempts", attempts, "err", removeErr)
 	s.metrics.MediaGCResult(mediaGCResultFailed)
-	return s.repo.RescheduleMediaGC(ctx, row.ID, attempts, s.now().Add(mediaGCBackoff(attempts)), removeErr.Error())
+	return s.repo.RescheduleMediaGC(ctx, row.ID, attempts, mediaGCBackoff(attempts), removeErr.Error())
 }

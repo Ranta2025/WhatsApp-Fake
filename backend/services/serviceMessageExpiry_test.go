@@ -36,17 +36,28 @@ type fakeExpiryRepo struct {
 	deleted    []uint
 	resched    []reschedCall
 	pending    int64
+
+	order      []string // llamadas en orden: "expire:<kind>", "sweep:<kind>", "gc"
+	sweepKinds []string
+	sweepErr   error
+}
+
+func (f *fakeExpiryRepo) SweepOrphanReplies(_ context.Context, kind string) error {
+	f.order = append(f.order, "sweep:"+kind)
+	f.sweepKinds = append(f.sweepKinds, kind)
+	return f.sweepErr
 }
 
 type reschedCall struct {
 	id       uint
 	attempts int
-	next     time.Time
+	backoff  time.Duration
 	lastErr  string
 }
 
 func (f *fakeExpiryRepo) ExpireBatch(_ context.Context, kind string, limit int, keyOf func(string) (string, bool)) ([]models.ExpiredMessage, error) {
 	f.calls = append(f.calls, expiryBatchCall{kind, limit})
+	f.order = append(f.order, "expire:"+kind)
 	f.keyOfSeen = keyOf != nil
 	if f.batchErr != nil {
 		return nil, f.batchErr
@@ -66,6 +77,7 @@ func (f *fakeExpiryRepo) CountExpired(_ context.Context, kind string) (int64, er
 }
 
 func (f *fakeExpiryRepo) DueMediaGC(_ context.Context, limit int) ([]models.MediaGC, error) {
+	f.order = append(f.order, "gc")
 	return f.due, nil
 }
 
@@ -78,8 +90,8 @@ func (f *fakeExpiryRepo) DeleteMediaGC(_ context.Context, id uint) error {
 	return nil
 }
 
-func (f *fakeExpiryRepo) RescheduleMediaGC(_ context.Context, id uint, attempts int, next time.Time, lastErr string) error {
-	f.resched = append(f.resched, reschedCall{id, attempts, next, lastErr})
+func (f *fakeExpiryRepo) RescheduleMediaGC(_ context.Context, id uint, attempts int, backoff time.Duration, lastErr string) error {
+	f.resched = append(f.resched, reschedCall{id, attempts, backoff, lastErr})
 	return nil
 }
 
@@ -329,9 +341,9 @@ func TestMediaGC_FailureIncrementsAttemptsWithBackoff(t *testing.T) {
 
 	assert.Empty(t, repo.deleted)
 	require.Len(t, repo.resched, 3)
-	assert.Equal(t, reschedCall{1, 1, expiryNow.Add(2 * time.Minute), "minio caído"}, repo.resched[0])
-	assert.Equal(t, reschedCall{2, 3, expiryNow.Add(8 * time.Minute), "minio caído"}, repo.resched[1])
-	assert.Equal(t, reschedCall{3, 7, expiryNow.Add(128 * time.Minute), "minio caído"}, repo.resched[2])
+	assert.Equal(t, reschedCall{1, 1, 2*time.Minute, "minio caído"}, repo.resched[0])
+	assert.Equal(t, reschedCall{2, 3, 8*time.Minute, "minio caído"}, repo.resched[1])
+	assert.Equal(t, reschedCall{3, 7, 128*time.Minute, "minio caído"}, repo.resched[2])
 	assert.Equal(t, 3, m.gc["failed"])
 	assert.EqualValues(t, 3, m.pending)
 }
@@ -390,4 +402,26 @@ func TestMediaGCBackoff(t *testing.T) {
 			assert.Equal(t, tc.want, mediaGCBackoff(tc.attempts))
 		})
 	}
+}
+
+// El barrido de respuestas huérfanas corre en cada pasada, tras los lotes de
+// expiración de ambos tipos y antes de la cola media_gc; el dry-run no barre.
+func TestMessageExpiry_OrphanReplySweepRunsAfterExpiryBatches(t *testing.T) {
+	svc, repo, _, _, _ := newExpiryFixture(false)
+	require.NoError(t, svc.RunOnce(context.Background()))
+	assert.Equal(t, []string{"expire:direct", "expire:group", "sweep:direct", "sweep:group", "gc"}, repo.order)
+}
+
+func TestMessageExpiry_OrphanReplySweepSkippedInDryRun(t *testing.T) {
+	svc, repo, _, _, _ := newExpiryFixture(true)
+	require.NoError(t, svc.RunOnce(context.Background()))
+	assert.Empty(t, repo.sweepKinds)
+}
+
+func TestMessageExpiry_OrphanReplySweepErrorIsReturnedAndGCStillRuns(t *testing.T) {
+	svc, repo, _, _, _ := newExpiryFixture(false)
+	repo.sweepErr = errors.New("boom")
+	err := svc.RunOnce(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, repo.order, "gc")
 }
