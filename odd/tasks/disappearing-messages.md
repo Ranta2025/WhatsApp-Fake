@@ -60,7 +60,7 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - [x] DE5 Frontend plumbing: types/guards, `messages_expired` + `disappearing_changed` handlers, removal from `messagesByChat`/`groupMessages`/`focusedWindow`, local expiry timer, system-message rendering, unread/preview exclusion. Vitest. Route: delegated.
 - [x] DE6 UI: selector in chat info and group panel, header chip, bubble clock icon, permission gating. Component tests. Route: delegated.
 - [x] DE7 Playwright: Ana sets a timer with Luis, system pill appears for both; a new message shows the clock icon; expiry removes it live for both and after reload (using the test-only short duration or seeded expiry); group variant: member can change while "Editar info" is open; with "Editar info: solo admins" the member cannot change. Two green runs. Route: delegated.
-- [ ] DE8 Close: full checks, doc + mirror.
+- [x] DE8 Close: full checks, doc + mirror.
 
 ## Acceptance criteria
 - Setting a timer creates a system message visible to all participants; only permitted users can change it; invalid values are rejected.
@@ -201,5 +201,10 @@ The Decisions above predate group-admin-permissions/reactions. These points OVER
   - Advisories fixed by the parent in the next commit: `psql` helper has a 30 s timeout (fails fast instead of blocking the worker); near-expiry seed raised from 15 s to 45 s with 60 s removal timeouts (two reloads on a slow runner); `TIMER_VALUES` map with a throw on unknown labels; `ensureTimerOff` helper; cleanup errors are logged instead of masking the test failure. Spec re-run: 2 passed (1.1 m).
   - Accepted: the near-expiry scenario cannot tell whether the local timer or the job removed the message (documented in the spec; the local timer is proven by `useExpiryTimer` unit tests). Locators coupled to an unnamed close button / `text-xs` class (follow-up). Refuted: the key-scoping unit test re-renders into the same React root (`mount` calls `root.render` on one root), so it is not vacuous.
 
+- DE8 close (parent inline; no code change, docs + checks only). Full matrix green: `go build ./... && go vet ./... && go vet -tags e2e ./...` ok and `go test -count=1 ./...` ok (fresh, ~7s, all packages); frontend runners verified real (`npx tsc` 5.9.3, `npx vitest` 5.0.2, no 0-byte stubs), `npm run typecheck`, `lint`, `test` (93 files, 770 tests, 23s) and `build` ok; `POSTGRES_PUBLIC_PORT=55432 make test-integration` ok (77.2s, stack healthy, no 429); after `POSTGRES_PUBLIC_PORT=55432 docker compose up -d --build app web` (web rebuilt 17s, app healthy): `npm run test:e2e` twice with >=70s spacing, 19 passed (2.7m) both runs, no flakes, no 429.
+  - Mirror note: no Engram mirror dir exists for this feature (`odd/disappearing-messages/` was never created in this repo and no mem tools were callable in the sessions); this document is the only record, so "doc + mirror" resolves to this document. Recorded so a future session does not hunt for a missing mirror.
+  - Session note (environment, outside the repo): the `gentle-ai-verify`/lens subagent profiles in `~/.gentle-shell/agent/subagents.json` pointed at `anthropic/claude-opus-5-5` and failed instantly twice ("assistant reported an error", 0 tool calls); swapped to the native opencode mapping (`gentle-ai-verify` + review lenses -> `opencode-go/glm-5.3`, `gentle-ai-explore` -> `opencode-go/glm-5.3-flash`). `~/.pi/gentle-ai/models.json` (the native RDD relay config, which served every acknowledged review of this feature) was left untouched. After the fix, verify delegations ran the integration and double-e2e matrices.
+- DE8 committed `e8a9edd` (docs + roadmap handoff, no code). Review slice `aaec4d8..e8a9edd` (DE7 advisory fix `475e196` + DE8 docs): see the review record below.
+
 ## Next step
-DE8.
+None — feature complete (DE1-DE8). Next roadmap feature: **pwa** (`feat/pwa` from `feat/disappearing-messages`).

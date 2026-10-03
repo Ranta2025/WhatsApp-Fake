@@ -22,7 +22,7 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | observability | `feat/observability` | done | [observability.md](observability.md) |
 | group-admin-permissions | `feat/group-admin-permissions` | done | [group-admin-permissions.md](group-admin-permissions.md) |
 | reactions | `feat/reactions` | done | [reactions.md](reactions.md) |
-| disappearing-messages | `feat/disappearing-messages` | pending | [disappearing-messages.md](disappearing-messages.md) |
+| disappearing-messages | `feat/disappearing-messages` | done | [disappearing-messages.md](disappearing-messages.md) |
 | pwa | `feat/pwa` | pending | [pwa.md](pwa.md) |
 | web-push | `feat/web-push` | pending | [web-push.md](web-push.md) |
 | api-casing | `feat/api-casing` | pending | [api-casing.md](api-casing.md) |
@@ -39,9 +39,9 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 
 ## Handoff state (2026-10-03)
-- **Current tip:** `feat/reactions` (RE1-RE7 done; full matrix green, see its Progress). Start the next feature with `git switch -c feat/disappearing-messages` from `feat/reactions`.
-- **Done and reviewed:** everything up to and including observability was reviewed per commit and acknowledged. group-admin-permissions commits are recorded in its document and Engram mirror.
-- **Next:** `disappearing-messages.md`. Its open questions are already resolved with the user (see the document). Its hard-delete paths must also delete `message_reactions` rows for the expired messages (kind `direct`/`group`, no FK).
+- **Current tip:** `feat/disappearing-messages` (DE1-DE8 done; full matrix green, see its Progress). Start the next feature with `git switch -c feat/pwa` from `feat/disappearing-messages`.
+- **Done and reviewed:** everything up to and including observability was reviewed per commit and acknowledged. group-admin-permissions and reactions commits are recorded in their documents. disappearing-messages slices are acknowledged through `aaec4d8`; the final slice (`aaec4d8..HEAD`, DE7 advisory fix `475e196` + DE8 docs) is recorded in its document.
+- **Next:** `pwa.md`. Environment note carried from the disappearing-messages sessions: if subagent profiles in `~/.gentle-shell/agent/subagents.json` point at `anthropic/*` and fail instantly with 0 tool calls, swap them to the native opencode mapping (see disappearing-messages.md DE8 session note); leave `~/.pi/gentle-ai/models.json` (native RDD relay) untouched.
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
