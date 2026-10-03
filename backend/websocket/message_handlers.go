@@ -526,9 +526,12 @@ func (mh *MessageHandler) HandleGroupRead() {
 	}
 }
 
+// marshalReactionJSON is a seam so tests can force a serialization failure.
+var marshalReactionJSON = json.Marshal
+
 // reactionEventBytes serializa el evento `reaction` ({type, payload}).
 func reactionEventBytes(ch *services.ReactionChange) ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return marshalReactionJSON(map[string]interface{}{
 		"type":    "reaction",
 		"payload": ch.Event(),
 	})
@@ -602,9 +605,14 @@ func (mh *MessageHandler) HandleReaction() {
 		// state may be stale, so echo the current state to this connection only.
 		echo := *change
 		echo.PreviousEmoji = echo.Emoji
-		if msg, err := reactionEventBytes(&echo); err == nil {
-			mh.reply(msg)
+		msg, err := reactionEventBytes(&echo)
+		if err != nil {
+			// Reply with an error so the client's pending-send queue drains.
+			mh.Client.log().Error("ws error serializando eco de reaction", "type", "react", "err", err)
+			mh.sendReactionError("Error al reaccionar", http.StatusInternalServerError, payload.Kind, payload.MessageID, payload.GroupID)
+			return
 		}
+		mh.reply(msg)
 		return
 	}
 	mh.Hub.PublishReaction(change, mh.Client)

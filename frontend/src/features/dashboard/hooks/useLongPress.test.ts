@@ -74,4 +74,54 @@ describe('useLongPress', () => {
         act(() => { vi.advanceTimersByTime(1000); });
         expect(onLongPress).not.toHaveBeenCalled();
     });
+    describe('after the long press fired', () => {
+        const contextMenu = () => {
+            const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+            act(() => { target().dispatchEvent(ev); });
+            return ev;
+        };
+        const click = () => {
+            const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+            const seen = vi.fn();
+            container.addEventListener('click', seen);
+            act(() => { target().dispatchEvent(ev); });
+            container.removeEventListener('click', seen);
+            return { ev, reached: seen.mock.calls.length > 0 };
+        };
+
+        it('prevents the native context menu while pressing and once fired', () => {
+            touch('touchstart', 10, 10);
+            expect(contextMenu().defaultPrevented).toBe(true);
+            act(() => { vi.advanceTimersByTime(400); });
+            expect(contextMenu().defaultPrevented).toBe(true);
+        });
+
+        it('does not touch the context menu without a touch press (mouse right-click)', () => {
+            expect(contextMenu().defaultPrevented).toBe(false);
+        });
+
+        it('swallows the one click that follows the touchend of a fired press', () => {
+            touch('touchstart', 10, 10);
+            act(() => { vi.advanceTimersByTime(400); });
+            touch('touchend', 10, 10);
+            expect(click().reached).toBe(false);
+            expect(click().reached).toBe(true);
+        });
+
+        it('does not swallow clicks after a press that never fired', () => {
+            touch('touchstart', 10, 10);
+            act(() => { vi.advanceTimersByTime(100); });
+            touch('touchend', 10, 10);
+            expect(click().reached).toBe(true);
+        });
+
+        it('drops the pending swallow if no click follows, so later clicks pass', () => {
+            touch('touchstart', 10, 10);
+            act(() => { vi.advanceTimersByTime(400); });
+            touch('touchend', 10, 10);
+            act(() => { vi.advanceTimersByTime(1000); });
+            expect(click().reached).toBe(true);
+            expect(contextMenu().defaultPrevented).toBe(false);
+        });
+    });
 });

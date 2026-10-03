@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"gorm/backend/services"
@@ -218,6 +219,36 @@ func TestHandleReaction_NoOpEchoesToActorOnly(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHandleReaction_NoOpEchoSerializationFailureLogsAndRepliesError(t *testing.T) {
+	buf := captureSlog(t)
+	prev := marshalReactionJSON
+	marshalReactionJSON = func(any) ([]byte, error) { return nil, errors.New("boom") }
+	t.Cleanup(func() { marshalReactionJSON = prev })
+
+	rh, _ := newReactionHarness(t)
+	rh.svc.change = directChange(false, "👍")
+
+	rh.send(`{"kind":"direct","messageID":10,"emoji":"👍"}`)
+
+	errs := errorsIn(t, drain(rh.actor))
+	if len(errs) != 1 {
+		t.Fatalf("el actor debía recibir 1 error para drenar su cola, got %d", len(errs))
+	}
+	e := errs[0]
+	if e.Context["action"] != "react" || e.Context["kind"] != "direct" ||
+		e.Context["messageID"] != float64(10) || e.Context["status"] != float64(500) {
+		t.Fatalf("error sin contexto de reacción: %+v", e)
+	}
+	if findRecord(buf.records(t), "ws error serializando eco de reaction") == nil {
+		t.Fatalf("falta el log del fallo de serialización: %v", buf.records(t))
+	}
+	for n, c := range map[string]*Client{"other": rh.other, "bystander": rh.bystand} {
+		if msgs := drain(c); len(msgs) != 0 {
+			t.Fatalf("el fallo no debe difundirse a %s: %s", n, msgs)
+		}
 	}
 }
 
