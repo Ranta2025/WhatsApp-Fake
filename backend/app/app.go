@@ -219,13 +219,18 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	serviceChat := services.InitServiceMessage(repoContact, repoReaction)
 	serviceCall := services.InitServiceCall(repoContact)
 	serviceGroup := services.InitServiceGroup(repoGroup, repoContact, repoReaction)
-	serviceMedia := services.InitServiceMedia(mc)
+	mediaStore := services.NewServiceMedia(mc)
+	var serviceMedia services.MediaServicer = mediaStore
 	serviceBugReport := services.InitServiceBugReport()
 	serviceStatus := services.InitServiceStatus(repoContact)
 	serviceSearch := services.InitServiceSearch(repoContact, repoGroup)
 
 	cleanupCtx, cancelCleanup := context.WithCancel(context.Background())
 	go statusCleanupLoop(cleanupCtx, serviceStatus, statusCleanupInterval)
+	// Expiración de mensajes temporales: necesita el hub para avisar a los
+	// clientes y comparte el ciclo de vida (cancelación) del job de estados.
+	messageExpiry := services.NewMessageExpiryService(repos.InitRepoExpiry(db), mediaStore, hub, m, messageExpiryDryRun())
+	go messageExpiryLoop(cleanupCtx, messageExpiry, messageExpiryInterval)
 	// El checker de dependencias comparte el ciclo de vida del job de limpieza.
 	go dependencyCheckLoop(cleanupCtx, m, func(ctx context.Context) (bool, bool) {
 		return checkDependencies(ctx, db, rd)
@@ -278,6 +283,46 @@ func runStatusCleanup(ctx context.Context, service services.StatusServicer) {
 		log.Printf("[STATUS-CLEANUP] Error limpiando estados expirados: %v", err)
 	} else if deleted > 0 {
 		log.Printf("[STATUS-CLEANUP] %d estados expirados eliminados", deleted)
+	}
+}
+
+// messageExpiryInterval es cada cuánto corre el job de expiración de mensajes
+// temporales. Es corto porque, aunque las lecturas ya ocultan los vencidos, los
+// clientes abiertos solo se enteran por el evento `messages_expired`.
+const messageExpiryInterval = time.Minute
+
+// messageExpiryRunner ejecuta una pasada del job de expiración.
+type messageExpiryRunner interface {
+	RunOnce(ctx context.Context) error
+}
+
+// messageExpiryDryRun lee MESSAGE_EXPIRY_DRY_RUN: "true" solo cuenta los
+// vencidos (para un primer despliegue), sin borrar nada.
+func messageExpiryDryRun() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("MESSAGE_EXPIRY_DRY_RUN")), "true")
+}
+
+// messageExpiryLoop corre una pasada inmediata al arrancar y luego una por
+// tick. Un error no detiene las siguientes; se detiene al cancelar ctx.
+func messageExpiryLoop(ctx context.Context, runner messageExpiryRunner, interval time.Duration) {
+	runMessageExpiry(ctx, runner)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runMessageExpiry(ctx, runner)
+		}
+	}
+}
+
+// runMessageExpiry ejecuta una pasada y loggea el error (si lo hay).
+func runMessageExpiry(ctx context.Context, runner messageExpiryRunner) {
+	if err := runner.RunOnce(ctx); err != nil && ctx.Err() == nil {
+		log.Printf("[MESSAGE-EXPIRY] Error en la pasada de expiración: %v", err)
 	}
 }
 

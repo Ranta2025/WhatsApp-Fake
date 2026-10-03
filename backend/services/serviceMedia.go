@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -68,6 +69,13 @@ type ServiceMedia struct {
 
 // InitServiceMedia crea el servicio de medios con el cliente MinIO, devolviendo la interfaz MediaServicer.
 func InitServiceMedia(client *minio.Client) MediaServicer {
+	return NewServiceMedia(client)
+}
+
+// NewServiceMedia crea el servicio de medios concreto: además de subir
+// (MediaServicer) sabe derivar object keys y borrar objetos (MediaRemover,
+// usado por el job de expiración).
+func NewServiceMedia(client *minio.Client) *ServiceMedia {
 	bucket := os.Getenv("MINIO_BUCKET")
 	if bucket == "" {
 		bucket = "media"
@@ -160,6 +168,52 @@ func (s *ServiceMedia) UploadMedia(file multipart.File, header *multipart.FileHe
 		Size:      header.Size,
 		Filename:  objectName,
 	}, nil
+}
+
+// ErrMediaObjectMissing indica que el objeto ya no existe en el almacenamiento
+// (NoSuchKey): para el borrado cuenta como éxito.
+var ErrMediaObjectMissing = errors.New("el objeto no existe en el almacenamiento")
+
+// mediaRemoveTimeout acota cada borrado de objeto.
+const mediaRemoveTimeout = 30 * time.Second
+
+// ObjectKeyFromURL deriva el object key de una URL guardada, deshaciendo el
+// paso 6 de UploadMedia: quita "/storage/<bucket>/" o "<MEDIA_PUBLIC_BASE_URL>/".
+// Una URL externa o con forma inesperada (vacía, query, "..") no es borrable.
+func (s *ServiceMedia) ObjectKeyFromURL(url string) (string, bool) {
+	var key string
+	switch {
+	case strings.HasPrefix(url, "/storage/"+s.bucket+"/"):
+		key = strings.TrimPrefix(url, "/storage/"+s.bucket+"/")
+	case s.baseURL != "" && strings.HasPrefix(url, s.baseURL+"/"):
+		key = strings.TrimPrefix(url, s.baseURL+"/")
+	default:
+		return "", false
+	}
+	if key == "" || strings.ContainsAny(key, "?#\\") || strings.Contains(key, "..") || strings.HasPrefix(key, "/") {
+		return "", false
+	}
+	return key, true
+}
+
+// RemoveObject borra el objeto del bucket. Un objeto inexistente devuelve
+// ErrMediaObjectMissing (el llamador lo trata como éxito).
+func (s *ServiceMedia) RemoveObject(ctx context.Context, key string) error {
+	c, cancel := context.WithTimeout(ctx, mediaRemoveTimeout)
+	defer cancel()
+	return mapRemoveError(s.client.RemoveObject(c, s.bucket, key, minio.RemoveObjectOptions{}))
+}
+
+// mapRemoveError traduce NoSuchKey a ErrMediaObjectMissing y conserva el resto.
+func mapRemoveError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var resp minio.ErrorResponse
+	if errors.As(err, &resp) && resp.Code == "NoSuchKey" {
+		return fmt.Errorf("%w: %v", ErrMediaObjectMissing, err)
+	}
+	return err
 }
 
 // verifyContent inspecciona los primeros bytes del archivo y deja el cursor al inicio.

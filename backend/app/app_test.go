@@ -181,6 +181,63 @@ func TestStatusCleanupLoopRunsAtStartupThenPerTickSurvivesErrorsAndStopsOnCancel
 	}
 }
 
+// fakeExpiryRunner observa las pasadas de messageExpiryLoop.
+type fakeExpiryRunner struct {
+	mu    sync.Mutex
+	seq   []error
+	next  int
+	calls chan error
+}
+
+func (f *fakeExpiryRunner) RunOnce(ctx context.Context) error {
+	f.mu.Lock()
+	var err error
+	if f.next < len(f.seq) {
+		err = f.seq[f.next]
+	}
+	f.next++
+	f.mu.Unlock()
+	f.calls <- err
+	return err
+}
+
+func TestMessageExpiryLoopRunsAtStartupThenPerTickSurvivesErrorsAndStopsOnCancel(t *testing.T) {
+	const interval = 300 * time.Millisecond
+	fake := &fakeExpiryRunner{
+		seq:   []error{errors.New("db caída temporalmente")},
+		calls: make(chan error, 10),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go messageExpiryLoop(ctx, fake, interval)
+
+	select {
+	case err := <-fake.calls:
+		assert.Error(t, err)
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("no ejecutó la expiración inicial al arrancar")
+	}
+
+	select {
+	case err := <-fake.calls:
+		assert.NoError(t, err)
+	case <-time.After(interval + 200*time.Millisecond):
+		t.Fatal("no ejecutó la expiración en el siguiente tick")
+	}
+
+	cancel()
+	select {
+	case <-fake.calls:
+		t.Fatal("siguió llamando después de cancelar el contexto")
+	case <-time.After(interval + 200*time.Millisecond):
+	}
+}
+
+func TestMessageExpiryIntervalIsOneMinute(t *testing.T) {
+	assert.Equal(t, time.Minute, messageExpiryInterval)
+}
+
 // ==================== OB4-dependency-health ====================
 
 // runDependencyCheck refleja el resultado del chequeo en dependency_up y lo

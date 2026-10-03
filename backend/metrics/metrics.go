@@ -19,6 +19,14 @@ const (
 	KindGroup  = "group"
 )
 
+// Resultados de media_gc_deletions_total (cola de borrado de objetos de MinIO).
+const (
+	MediaGCOK                = "ok"
+	MediaGCFailed            = "failed"
+	MediaGCGaveUp            = "gave_up"
+	MediaGCSkippedReferenced = "skipped_referenced"
+)
+
 // HubStats es una foto consistente de las colecciones del Hub WebSocket.
 // La devuelve Hub.Stats() y la leen los gauges ws_connections / ws_rooms /
 // ws_room_memberships en cada scrape, sin instrumentar los hot paths.
@@ -61,6 +69,11 @@ type Metrics struct {
 	MessagesFailedTotal *prometheus.CounterVec
 
 	DependencyUp *prometheus.GaugeVec
+
+	// Job de expiración de mensajes temporales y cola media_gc.
+	MessagesExpiredTotal  *prometheus.CounterVec
+	MediaGCDeletionsTotal *prometheus.CounterVec
+	MediaGCPending        prometheus.Gauge
 }
 
 // NewRegistry construye un registry aislado con los colectores de Go y de
@@ -131,6 +144,21 @@ func New(registry *prometheus.Registry) *Metrics {
 		Help: "Disponibilidad de una dependencia externa (1 disponible, 0 caída).",
 	}, []string{"dependency"})
 
+	m.MessagesExpiredTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "messages_expired_total",
+		Help: "Total de mensajes temporales borrados por expiración, por tipo (direct|group).",
+	}, []string{"kind"})
+
+	m.MediaGCDeletionsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "media_gc_deletions_total",
+		Help: "Intentos de borrado de objetos de la cola media_gc, por resultado (ok|failed|gave_up|skipped_referenced).",
+	}, []string{"result"})
+
+	m.MediaGCPending = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "media_gc_pending",
+		Help: "Objetos pendientes en la cola media_gc al final de la última pasada.",
+	})
+
 	registry.MustRegister(
 		m.HTTPRequestsTotal,
 		m.HTTPRequestDuration,
@@ -142,6 +170,9 @@ func New(registry *prometheus.Registry) *Metrics {
 		m.MessagesSentTotal,
 		m.MessagesFailedTotal,
 		m.DependencyUp,
+		m.MessagesExpiredTotal,
+		m.MediaGCDeletionsTotal,
+		m.MediaGCPending,
 	)
 
 	return m
@@ -170,6 +201,24 @@ func (m *Metrics) MessageFailed(kind string) {
 // pasar una etiqueta ya acotada (un tipo conocido o "unknown").
 func (m *Metrics) WSMessageReceived(msgType string) {
 	m.WSMessagesReceivedTotal.WithLabelValues(msgType).Inc()
+}
+
+// MessagesExpired suma n mensajes borrados por expiración del tipo indicado.
+func (m *Metrics) MessagesExpired(kind string, n int) {
+	if n > 0 {
+		m.MessagesExpiredTotal.WithLabelValues(kind).Add(float64(n))
+	}
+}
+
+// MediaGCResult cuenta un intento de borrado de la cola media_gc. El llamador
+// pasa una de las constantes MediaGC*.
+func (m *Metrics) MediaGCResult(result string) {
+	m.MediaGCDeletionsTotal.WithLabelValues(result).Inc()
+}
+
+// SetMediaGCPending refleja cuántos objetos quedan en la cola media_gc.
+func (m *Metrics) SetMediaGCPending(n int64) {
+	m.MediaGCPending.Set(float64(n))
 }
 
 // SetDependencyUp refleja la disponibilidad de una dependencia externa.

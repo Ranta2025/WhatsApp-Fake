@@ -8,12 +8,17 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"gorm/backend/database"
 	"gorm/backend/models"
+	"gorm/backend/repos"
+	"gorm/backend/services"
 	"gorm/backend/utils"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -413,19 +418,25 @@ func TestE2EDisappearingMessages(t *testing.T) {
 
 		// Operaciones sobre el vencido.
 		code, out = ca.do("PUT", "/api/v1/chat/edit", map[string]interface{}{"messageID": goneID, "receptor": peer, "message": "editado"})
-		assert.NotEqual(t, 200, code, "editar un vencido: %v", out)
+		// Códigos observados (DE4): las rutas 1:1 mapean "no encontrado" a 500
+		// (follow-up: deberían ser 404); se fijan exactos para detectar cambios.
+		assert.Equal(t, 500, code, "editar un vencido: %v", out)
 		code, out = ca.do("DELETE", fmt.Sprintf("/api/v1/message/%d/me", int(goneID)), nil)
-		assert.NotEqual(t, 200, code, "borrar para mí un vencido: %v", out)
+		assert.Equal(t, 500, code, "borrar para mí un vencido: %v", out)
 		code, out = cl.do("PUT", fmt.Sprintf("/api/v1/chat/message/%d/reaction", int(goneID)), map[string]string{"emoji": "👍"})
 		assert.Equal(t, 404, code, "reaccionar a un vencido: %v", out)
 		code, out = ca.do("POST", "/api/v1/chat", map[string]interface{}{"receptor": peer, "message": "respuesta", "replyToMessageID": goneID})
-		assert.GreaterOrEqual(t, code, 400, "responder a un vencido: %v", out)
+		assert.Equal(t, 500, code, "responder a un vencido: %v", out)
 
+		// El job de expiración (DE4) puede haberlo borrado ya: también vale.
 		var row models.Message
-		require.NoError(t, db.First(&row, uint(goneID)).Error)
-		assert.Equal(t, "caducado"+tag, row.Message, "el texto no cambió")
-		assert.False(t, row.Edited)
-		assert.False(t, row.DeletedBySender || row.DeletedByReceiver)
+		if err := db.Unscoped().First(&row, uint(goneID)).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+			require.NoError(t, err)
+			assert.Equal(t, "caducado"+tag, row.Message, "el texto no cambió")
+			assert.False(t, row.Edited)
+			assert.False(t, row.DeletedBySender || row.DeletedByReceiver)
+			assert.False(t, row.DeletedAt.Valid)
+		}
 		var replies int64
 		require.NoError(t, db.Model(&models.Message{}).Where("reply_to_message_id = ?", uint(goneID)).Count(&replies).Error)
 		assert.Zero(t, replies, "no se creó ninguna respuesta")
@@ -508,20 +519,23 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		assert.Len(t, deResults(t, out), 1, "control positivo: el vigente sí se busca")
 
 		code, out = ca.do("PUT", gBase+"/message", map[string]interface{}{"messageID": goneID, "message": "editado"})
-		assert.NotEqual(t, 200, code, "editar un vencido: %v", out)
+		assert.Equal(t, 400, code, "editar un vencido: %v", out)
 		code, out = ca.do("DELETE", gBase+"/message", map[string]interface{}{"messageID": goneID})
-		assert.NotEqual(t, 200, code, "borrar un vencido: %v", out)
+		assert.Equal(t, 400, code, "borrar un vencido: %v", out)
 		code, out = cl.do("PUT", fmt.Sprintf("%s/message/%d/reaction", gBase, int(goneID)), map[string]string{"emoji": "👍"})
 		assert.Equal(t, 404, code, "reaccionar a un vencido: %v", out)
 		code, out = ca.do("GET", fmt.Sprintf("%s/message/%d/receipts", gBase, int(goneID)), nil)
 		assert.Equal(t, 404, code, "acuses de un vencido: %v", out)
 		code, out = post(cl, "respuesta", map[string]interface{}{"replyToMessageID": goneID})
-		assert.GreaterOrEqual(t, code, 400, "responder a un vencido: %v", out)
+		assert.Equal(t, 400, code, "responder a un vencido: %v", out)
 
 		var row models.GroupMessage
-		require.NoError(t, db.First(&row, uint(goneID)).Error)
-		assert.Equal(t, "gcaducado"+tag, row.Message, "el texto no cambió")
-		assert.False(t, row.Edited)
+		if err := db.Unscoped().First(&row, uint(goneID)).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+			require.NoError(t, err)
+			assert.Equal(t, "gcaducado"+tag, row.Message, "el texto no cambió")
+			assert.False(t, row.Edited)
+			assert.False(t, row.DeletedAt.Valid)
+		}
 		var replies int64
 		require.NoError(t, db.Model(&models.GroupMessage{}).Where("reply_to_message_id = ?", uint(goneID)).Count(&replies).Error)
 		assert.Zero(t, replies, "no se creó ninguna respuesta")
@@ -532,4 +546,227 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		code, out = ca.do("GET", fmt.Sprintf("%s/message/%d/receipts", gBase, int(liveID)), nil)
 		assert.Equal(t, 200, code, "control positivo de acuses: %v", out)
 	})
+
+	// ── (d) DE4: el job de expiración borra físicamente ────────────────────
+	t.Run("DE4 job de expiración: borrado físico, citas, reacciones y media_gc", func(t *testing.T) {
+		deExpiryJob(t, db, ana, luis, uint(groupID), tag)
+	})
+}
+
+// deRemover borra (de mentira) solo los objetos sembrados por el test; el resto
+// de la cola es de otros datos del stack y se deja para el job real (devolver
+// error solo los reprograma con backoff).
+type deRemover struct {
+	store *services.ServiceMedia
+	owned map[string]bool
+	mu    sync.Mutex
+	seen  []string
+}
+
+func (r *deRemover) ObjectKeyFromURL(url string) (string, bool) { return r.store.ObjectKeyFromURL(url) }
+
+func (r *deRemover) RemoveObject(_ context.Context, key string) error {
+	if !r.owned[key] {
+		return errors.New("objeto ajeno al test e2e")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.seen = append(r.seen, key)
+	return nil
+}
+
+func (r *deRemover) removed() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.seen...)
+}
+
+type deEvent struct {
+	to      string
+	groupID uint
+	payload struct {
+		Kind       string          `json:"kind"`
+		Key        json.RawMessage `json:"key"`
+		MessageIDs []uint          `json:"messageIDs"`
+	}
+}
+
+type deNotifier struct {
+	mu     sync.Mutex
+	events []deEvent
+}
+
+func (n *deNotifier) record(to string, groupID uint, msg []byte) {
+	var env struct {
+		Type    string `json:"type"`
+		Payload json.RawMessage
+	}
+	ev := deEvent{to: to, groupID: groupID}
+	if json.Unmarshal(msg, &env) == nil && env.Type == "messages_expired" {
+		_ = json.Unmarshal(env.Payload, &ev.payload)
+	}
+	n.mu.Lock()
+	n.events = append(n.events, ev)
+	n.mu.Unlock()
+}
+
+func (n *deNotifier) SendTo(telephon string, msg []byte) { n.record(telephon, 0, msg) }
+func (n *deNotifier) SendToGroup(groupID uint, sender string, msg []byte) {
+	n.record(sender, groupID, msg)
+}
+
+type deNoMetrics struct{}
+
+func (deNoMetrics) MessagesExpired(string, int) {}
+func (deNoMetrics) MediaGCResult(string)        {}
+func (deNoMetrics) SetMediaGCPending(int64)     {}
+
+// deExpiryJob siembra mensajes vencidos (con adjunto, respuesta que copia su
+// texto y reacción) y ejecuta el job EN PROCESO contra la BD del stack. El job
+// real de la app también corre cada minuto: SKIP LOCKED evita que dos pasadas
+// tomen la misma fila y aquí se comprueba el estado final, no quién borró.
+func deExpiryJob(t *testing.T, db *gorm.DB, ana, luis models.UserDataBase, groupID uint, tag string) {
+	bucket := os.Getenv("MINIO_BUCKET")
+	if bucket == "" {
+		bucket = "media"
+	}
+	store := services.NewServiceMedia(nil)
+	goneKey := "images/e2e-de4/" + tag + "gone.jpg"
+	sharedKey := "images/e2e-de4/" + tag + "shared.jpg"
+	groupKey := "images/e2e-de4/" + tag + "group.jpg"
+	urlOf := func(key string) string { return "/storage/" + bucket + "/" + key }
+	past := time.Now().Add(-time.Hour)
+	now := time.Now()
+
+	gone := models.Message{IdUser: ana.ID, IdReceptor: luis.ID, Message: "de4 se va " + tag, Status: "enviado", Time: now,
+		MediaUrl: urlOf(goneKey), MediaType: "image", ExpiresAt: &past}
+	sharedGone := models.Message{IdUser: ana.ID, IdReceptor: luis.ID, Message: "de4 compartido vencido " + tag, Status: "enviado", Time: now,
+		MediaUrl: urlOf(sharedKey), MediaType: "image", ExpiresAt: &past}
+	// Reenvío vivo del mismo adjunto: el objeto no se puede borrar.
+	sharedLive := models.Message{IdUser: luis.ID, IdReceptor: ana.ID, Message: "de4 compartido vivo " + tag, Status: "enviado", Time: now,
+		MediaUrl: urlOf(sharedKey), MediaType: "image"}
+	ggone := models.GroupMessage{GroupID: groupID, SenderID: ana.ID, Message: "de4 grupo se va " + tag, Time: now,
+		MediaUrl: urlOf(groupKey), MediaType: "image", ExpiresAt: &past}
+	var reply models.Message
+	var greply models.GroupMessage
+
+	// Todo en una transacción: el job real ve todas las filas o ninguna (si
+	// borrara el original antes de insertar la respuesta, la cita sobreviviría).
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		for _, m := range []*models.Message{&gone, &sharedGone, &sharedLive} {
+			if err := tx.Create(m).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Create(&ggone).Error; err != nil {
+			return err
+		}
+		quote, gquote := gone.Message, ggone.Message
+		reply = models.Message{IdUser: luis.ID, IdReceptor: ana.ID, Message: "de4 respuesta " + tag, Status: "enviado", Time: now,
+			ReplyToMessageID: &gone.ID, ReplyToMessage: &quote, ReplyToTelephon: &ana.Telephon}
+		if err := tx.Create(&reply).Error; err != nil {
+			return err
+		}
+		greply = models.GroupMessage{GroupID: groupID, SenderID: luis.ID, Message: "de4 respuesta grupo " + tag, Time: now,
+			ReplyToMessageID: &ggone.ID, ReplyToMessage: &gquote, ReplyToTelephon: &ana.Telephon}
+		if err := tx.Create(&greply).Error; err != nil {
+			return err
+		}
+		for _, r := range []models.MessageReaction{
+			{MessageKind: models.ReactionKindDirect, MessageID: gone.ID, UserID: luis.ID, Emoji: "👍"},
+			{MessageKind: models.ReactionKindGroup, MessageID: ggone.ID, UserID: luis.ID, Emoji: "🔥"},
+		} {
+			if err := tx.Create(&r).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+
+	repo := repos.InitRepoExpiry(db)
+	remover := &deRemover{store: store, owned: map[string]bool{goneKey: true, sharedKey: true, groupKey: true}}
+	notifier := &deNotifier{}
+	svc := services.NewMessageExpiryService(repo, remover, notifier, deNoMetrics{}, false)
+	ctx := context.Background()
+
+	countUnscoped := func(model interface{}, ids ...uint) int64 {
+		var n int64
+		require.NoError(t, db.Unscoped().Model(model).Where("id IN ?", ids).Count(&n).Error)
+		return n
+	}
+	queued := func(keys ...string) int64 {
+		var n int64
+		require.NoError(t, db.Model(&models.MediaGC{}).Where("object_key IN ?", keys).Count(&n).Error)
+		return n
+	}
+	// Unas pocas pasadas como mucho: si el job real tiene bloqueado el lote en
+	// ese instante, SKIP LOCKED lo salta y la siguiente pasada ve su resultado.
+	for i := 0; i < 10; i++ {
+		require.NoError(t, svc.RunOnce(ctx))
+		if countUnscoped(&models.Message{}, gone.ID, sharedGone.ID)+countUnscoped(&models.GroupMessage{}, ggone.ID) == 0 &&
+			queued(goneKey, sharedKey, groupKey) == 0 {
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	// Borrado físico (Unscoped: ni siquiera quedan soft-deleted).
+	assert.Zero(t, countUnscoped(&models.Message{}, gone.ID, sharedGone.ID), "mensajes 1:1 vencidos borrados físicamente")
+	assert.Zero(t, countUnscoped(&models.GroupMessage{}, ggone.ID), "mensaje de grupo vencido borrado físicamente")
+	assert.EqualValues(t, 1, countUnscoped(&models.Message{}, sharedLive.ID), "el mensaje vivo no se toca")
+
+	// Las respuestas pierden la cita copiada pero siguen existiendo.
+	var gotReply models.Message
+	require.NoError(t, db.First(&gotReply, reply.ID).Error)
+	assert.Nil(t, gotReply.ReplyToMessage, "el texto citado no sobrevive")
+	assert.Nil(t, gotReply.ReplyToMessageID)
+	assert.Nil(t, gotReply.ReplyToTelephon)
+	assert.Equal(t, "de4 respuesta "+tag, gotReply.Message, "la respuesta conserva su propio texto")
+	var gotGReply models.GroupMessage
+	require.NoError(t, db.First(&gotGReply, greply.ID).Error)
+	assert.Nil(t, gotGReply.ReplyToMessage)
+	assert.Nil(t, gotGReply.ReplyToMessageID)
+	assert.Nil(t, gotGReply.ReplyToTelephon)
+
+	// Reacciones borradas.
+	var reactions int64
+	require.NoError(t, db.Model(&models.MessageReaction{}).
+		Where("(message_kind = ? AND message_id = ?) OR (message_kind = ? AND message_id = ?)",
+			models.ReactionKindDirect, gone.ID, models.ReactionKindGroup, ggone.ID).
+		Count(&reactions).Error)
+	assert.Zero(t, reactions)
+
+	// media_gc procesada: ninguna key sigue en la cola; el objeto compartido
+	// sigue referenciado y nunca se pidió borrarlo; los otros ya no.
+	assert.Zero(t, queued(goneKey, sharedKey, groupKey), "cola media_gc procesada")
+	assert.NotContains(t, remover.removed(), sharedKey, "un objeto aún referenciado no se borra")
+	ref, err := repo.MediaKeyReferenced(ctx, sharedKey)
+	require.NoError(t, err)
+	assert.True(t, ref, "el mensaje vivo sigue referenciando el objeto compartido")
+	for _, k := range []string{goneKey, groupKey} {
+		ref, err := repo.MediaKeyReferenced(ctx, k)
+		require.NoError(t, err)
+		assert.False(t, ref, "%s ya no está referenciado", k)
+	}
+	t.Logf("borrados pedidos por esta pasada: %v (el resto los hizo el job de la app)", remover.removed())
+
+	// Si fue esta pasada la que expiró los mensajes, los avisos llevan la key
+	// correcta: 1:1 a cada participante con el OTRO como key; grupo a la room.
+	notifier.mu.Lock()
+	defer notifier.mu.Unlock()
+	for _, ev := range notifier.events {
+		for _, id := range ev.payload.MessageIDs {
+			switch {
+			case ev.payload.Kind == "direct" && id == gone.ID:
+				var key string
+				require.NoError(t, json.Unmarshal(ev.payload.Key, &key))
+				want := map[string]string{ana.Telephon: luis.Telephon, luis.Telephon: ana.Telephon}[ev.to]
+				assert.Equal(t, want, key, "key = el otro participante (destino %s)", ev.to)
+			case ev.payload.Kind == "group" && id == ggone.ID:
+				assert.Equal(t, groupID, ev.groupID)
+				assert.Empty(t, ev.to, "sin sender excluido")
+				assert.JSONEq(t, fmt.Sprint(groupID), string(ev.payload.Key))
+			}
+		}
+	}
 }

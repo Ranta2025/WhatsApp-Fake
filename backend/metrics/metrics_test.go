@@ -278,3 +278,28 @@ func TestSetDependencyUp(t *testing.T) {
 	assert.Equal(t, 0.0, testutil.ToFloat64(m.DependencyUp.WithLabelValues("postgres")))
 	assert.Equal(t, 1.0, testutil.ToFloat64(m.DependencyUp.WithLabelValues("redis")))
 }
+
+func TestMessageExpiryMetrics(t *testing.T) {
+	m := New(prometheus.NewRegistry())
+
+	m.MessagesExpired(KindDirect, 3)
+	m.MessagesExpired(KindGroup, 2)
+	m.MessagesExpired(KindGroup, 0)
+	for _, r := range []string{MediaGCOK, MediaGCOK, MediaGCFailed, MediaGCGaveUp, MediaGCSkippedReferenced} {
+		m.MediaGCResult(r)
+	}
+	m.SetMediaGCPending(4)
+
+	assert.Equal(t, 3.0, testutil.ToFloat64(m.MessagesExpiredTotal.WithLabelValues(KindDirect)))
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.MessagesExpiredTotal.WithLabelValues(KindGroup)))
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.MediaGCDeletionsTotal.WithLabelValues("ok")))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.MediaGCDeletionsTotal.WithLabelValues("failed")))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.MediaGCDeletionsTotal.WithLabelValues("gave_up")))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.MediaGCDeletionsTotal.WithLabelValues("skipped_referenced")))
+	assert.Equal(t, 4.0, testutil.ToFloat64(m.MediaGCPending))
+
+	names := gatherNames(t, m.Registry())
+	for _, n := range []string{"messages_expired_total", "media_gc_deletions_total", "media_gc_pending"} {
+		assert.Contains(t, names, n)
+	}
+}
