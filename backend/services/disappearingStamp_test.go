@@ -47,7 +47,7 @@ func (r *stubStampChatRepo) GetMessageByID(id uint, ctx context.Context) (*model
 	if m, ok := r.byID[id]; ok {
 		return m, nil
 	}
-	return nil, gorm.ErrRecordNotFound
+	return nil, models.ErrMessageNotFound // el repo oculta expirados/borrados con este error
 }
 
 func sendDirect(t *testing.T, seconds int) (*stubStampChatRepo, *ServiceChat, error) {
@@ -92,6 +92,22 @@ func TestCreateDirectMessage_ReplyToSystemMessageRejected(t *testing.T) {
 	}, context.Background())
 
 	assert.EqualError(t, err, "no puedes responder a un mensaje de sistema")
+	assert.Nil(t, repo.created)
+}
+
+// Un objetivo expirado (oculto por el repo, que devuelve ErrMessageNotFound) no
+// puede responderse y no se crea el mensaje.
+func TestCreateDirectMessage_ReplyToExpiredMessageRejected(t *testing.T) {
+	repo := &stubStampChatRepo{ids: map[string]int{"+ana": 1, "+luis": 2}}
+	svc := &ServiceChat{repo: repo, now: stampClock}
+	id := uint(77)
+
+	_, err := svc.ServiceCreatMessage(models.MessageCreat{
+		Telephon:   "+ana",
+		MessageGet: models.MessageGet{Receptor: "+luis", Message: "hola", ReplyToMessageID: &id},
+	}, context.Background())
+
+	assert.ErrorIs(t, err, models.ErrMessageNotFound)
 	assert.Nil(t, repo.created)
 }
 

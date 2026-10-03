@@ -27,15 +27,15 @@ const searchVisibleText = "deleted_at IS NULL AND COALESCE(media_type,'') = ''"
 // groupSearchVisibleText añade la exclusión de mensajes de sistema a la
 // visibilidad de búsqueda de grupo (los índices parciales no incluyen kind, así
 // que el planner sigue pudiendo usar el índice y filtra después).
-const groupSearchVisibleText = searchVisibleText + " AND " + systemMessageFilter
+const groupSearchVisibleText = searchVisibleText + " AND " + systemMessageFilter + " AND " + notExpiredFilter
 
 // directSearchVisibleText es el equivalente 1:1 de groupSearchVisibleText: los
 // mensajes de sistema (disappearing_changed) nunca son resultado de búsqueda.
-const directSearchVisibleText = searchVisibleText + " AND " + systemMessageFilter
+const directSearchVisibleText = searchVisibleText + " AND " + systemMessageFilter + " AND " + notExpiredFilter
 
 // groupSearchMembership replica el predicado de pertenencia de la búsqueda
 // global de grupos y excluye los mensajes de sistema.
-const groupSearchMembership = groupMembership + " AND " + systemMessageFilter
+const groupSearchMembership = groupMembership + " AND " + systemMessageFilter + " AND " + notExpiredFilter
 
 // directVisibility replica el predicado de visibilidad de GetMessagesPage para
 // todos los chats del usuario (los borrados para mí quedan excluidos).
@@ -196,7 +196,7 @@ func buildGlobalSearchSQL(from, chat, visible string, useNorm bool) string {
 // visibilidad del usuario más la exclusión de mensajes de sistema.
 func directGlobalSearchSQL(useNorm bool) string {
 	return buildGlobalSearchSQL("messages", "CASE WHEN id_user = ? THEN id_receptor ELSE id_user END",
-		directVisibility+" AND "+systemMessageFilter, useNorm)
+		directVisibility+" AND "+systemMessageFilter+" AND "+notExpiredFilter, useNorm)
 }
 
 // SearchMessagesGlobal busca en todos los chats 1:1 visibles para el usuario.

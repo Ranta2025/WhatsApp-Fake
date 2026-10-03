@@ -252,7 +252,8 @@ func (app *ApiContact) GetMessagesPage(id_user uint, id_contact uint, before uin
 	defer cancel()
 	var messages []models.Message
 	q := app.data.Model(&models.Message{}).WithContext(c).
-		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false)
+		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false).
+		Where(notExpiredFilter)
 	if before > 0 {
 		q = q.Where("id < ?", before)
 	}
@@ -278,7 +279,8 @@ const conversationVisibility = "((id_user = ? AND id_receptor = ? AND deleted_by
 
 func (app *ApiContact) visibleConversation(c context.Context, userID, contactID uint) *gorm.DB {
 	return app.data.Model(&models.Message{}).WithContext(c).
-		Where(conversationVisibility, userID, contactID, false, contactID, userID, false)
+		Where(conversationVisibility, userID, contactID, false, contactID, userID, false).
+		Where(notExpiredFilter)
 }
 
 // GetMessagesAround devuelve una ventana cronológica centrada en el mensaje
@@ -369,7 +371,7 @@ func (app *ApiContact) GetSenderTelephonsWithPendingMessages(id_receiver uint, c
 		Table("messages").
 		Select("DISTINCT user_data_bases.telephon").
 		Joins("INNER JOIN user_data_bases ON messages.id_user = user_data_bases.id").
-		Where("messages.id_receptor = ? AND messages.status = ? AND messages.deleted_at IS NULL", id_receiver, "enviado").
+		Where("messages.id_receptor = ? AND messages.status = ? AND messages.deleted_at IS NULL AND "+notExpiredOn("messages"), id_receiver, "enviado").
 		Scan(&telephons)
 	if result.Error != nil {
 		return nil, result.Error
@@ -404,6 +406,7 @@ func (app *ApiContact) GetRecentMessagesForUser(id_user uint, perChat int, ctx c
 			) AS rn
 			FROM messages m
 			WHERE m.deleted_at IS NULL
+			  AND `+notExpiredOn("m")+`
 			  AND ((m.id_user = @user AND m.deleted_by_sender = false)
 			    OR (m.id_receptor = @user AND m.deleted_by_receiver = false))
 		) recent
@@ -671,7 +674,7 @@ func (app *ApiContact) UpdateMessageContent(messageID uint, idSender uint, newCo
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	result := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND id_user = ? AND "+systemMessageFilter, messageID, idSender).
+		Where("id = ? AND id_user = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, idSender).
 		Updates(map[string]interface{}{
 			"message": newContent,
 			"edited":  true,
@@ -690,8 +693,12 @@ func (app *ApiContact) GetMessageByID(messageID uint, ctx context.Context) (*mod
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var msg models.Message
-	result := app.data.Model(&models.Message{}).WithContext(c).Where("id = ?", messageID).First(&msg)
+	result := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id = ? AND "+notExpiredFilter, messageID).First(&msg)
 	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, models.ErrMessageNotFound
+		}
 		return nil, result.Error
 	}
 	return &msg, nil
@@ -702,7 +709,7 @@ func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx
 	defer cancel()
 	var msg models.Message
 	find := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND id_user = ? AND "+systemMessageFilter, messageID, idSender).
+		Where("id = ? AND id_user = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, idSender).
 		First(&msg)
 	if find.Error != nil {
 		return nil, find.Error
@@ -723,7 +730,7 @@ func (app *ApiContact) DeleteMessageForMe(messageID uint, userID uint, ctx conte
 	defer cancel()
 	var msg models.Message
 	find := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND (id_user = ? OR id_receptor = ?) AND "+systemMessageFilter, messageID, userID, userID).
+		Where("id = ? AND (id_user = ? OR id_receptor = ?) AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, userID, userID).
 		First(&msg)
 	if find.Error != nil {
 		return nil, find.Error

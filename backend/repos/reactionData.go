@@ -33,7 +33,7 @@ func (r *RepoReaction) DirectMessageTarget(messageID, userID uint, ctx context.C
 	var msg models.Message // gorm excluye los soft-deleted
 	err := r.data.WithContext(c).
 		Select("id", "id_user", "id_receptor", "message", "media_type").
-		Where("id = ? AND "+directVisibility+" AND "+systemMessageFilter, messageID, userID, userID).
+		Where("id = ? AND "+directVisibility+" AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, userID, userID).
 		First(&msg).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, models.ErrMessageNotFound
@@ -65,7 +65,7 @@ func (r *RepoReaction) GroupMessageTarget(groupID, messageID uint, ctx context.C
 	var msg models.GroupMessage
 	err := r.data.WithContext(c).
 		Select("id", "group_id", "sender_id", "message", "media_type").
-		Where("id = ? AND group_id = ? AND "+systemMessageFilter, messageID, groupID).
+		Where("id = ? AND group_id = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, groupID).
 		First(&msg).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, models.ErrGroupMessageNotFound

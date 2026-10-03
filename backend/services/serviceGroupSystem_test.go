@@ -115,6 +115,25 @@ func TestSendGroupMessage_ReplyToSystemMessageRejected(t *testing.T) {
 	repo.AssertNotCalled(t, "CreateGroupMessage", mock.Anything, mock.Anything)
 }
 
+// Un objetivo expirado/borrado (el repo devuelve ErrGroupMessageNotFound) no
+// puede responderse.
+func TestSendGroupMessage_ReplyToExpiredMessageRejected(t *testing.T) {
+	svc, repo, contacts := newGroupServiceForSend()
+	contacts.On("GetIdByTelephon", testSenderTel, mock.Anything).Return(testSenderID, nil)
+	repo.On("GetMemberRole", testGroupID, uint(testSenderID), mock.Anything).Return(models.GroupRoleMember, nil)
+	repo.On("GetGroupByID", testGroupID, mock.Anything).Return(&models.Group{}, nil)
+	replyTo := uint(56)
+	repo.On("GetGroupMessageByID", replyTo, mock.Anything).Return(nil, models.ErrGroupMessageNotFound)
+
+	resp, err := svc.SendGroupMessage(testSenderTel, models.GroupMessageSend{
+		GroupID: testGroupID, Message: "hola", ReplyToMessageID: &replyTo,
+	}, context.Background())
+
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, models.ErrGroupMessageNotFound)
+	repo.AssertNotCalled(t, "CreateGroupMessage", mock.Anything, mock.Anything)
+}
+
 // Responder a un mensaje normal sigue permitido.
 func TestSendGroupMessage_ReplyToNormalMessageAllowed(t *testing.T) {
 	svc, repo, contacts := newGroupServiceForSend()

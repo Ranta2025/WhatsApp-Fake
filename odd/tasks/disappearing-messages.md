@@ -55,7 +55,7 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 ## Tasks
 - [x] DE1 Data model + settings: columns (`expires_at`, `kind`, `groups.disappear_seconds`), `chat_settings` table, migrations/indexes, repo + service (`Set/Get`), allowed durations, permissions (participant / admin), unit tests. Route: delegated.
 - [x] DE2 Stamping + system messages + endpoints + WS `disappearing_changed`: stamp `expires_at` at creation, insert system message in the same tx, PUT endpoints, `GET settings`, `DisappearSeconds` in `GroupResponse`/`ChatGroup`, search excludes `kind='system'`. Handler/service tests + Go e2e (set 24h, message carries `ExpiresAt`, group permission follows `requireCanEditInfo` (member allowed when open, 403 when restricted), invalid value 400). Route: delegated.
-- [ ] DE3 Read-path filtering: `notExpired` scope on every message query (list them in the task, one test per site). Route: delegated.
+- [x] DE3 Read-path filtering: `notExpired` scope on every message query (list them in the task, one test per site). Route: delegated.
 - [ ] DE4 Expiry job: `messageExpiryLoop` (clock-injected), batch delete with reply scrubbing and reaction cleanup, media GC (`MediaServicer.Remove`, reference check), `messages_expired` fan-out, wiring + graceful stop in `app.go`. Tests for each rule, plus job start/stop like `app_test.go` covers the status loop (`backend/app/app_test.go`, to verify). Route: delegated.
 - [ ] DE5 Frontend plumbing: types/guards, `messages_expired` + `disappearing_changed` handlers, removal from `messagesByChat`/`groupMessages`/`focusedWindow`, local expiry timer, system-message rendering, unread/preview exclusion. Vitest. Route: delegated.
 - [ ] DE6 UI: selector in chat info and group panel, header chip, bubble clock icon, permission gating. Component tests. Route: delegated.
@@ -96,7 +96,7 @@ The Decisions above predate group-admin-permissions/reactions. These points OVER
 - 2026-10-03: the user pre-authorized RDD review consent for every slice of this feature and will be away; product doubts take the documented default and are recorded here under "Assumptions".
 
 ## Assumptions (taken without the user, review on return)
-(none yet)
+- A1 (DE2 review advisory): `PUT /chat/:contact/disappearing` accepts any existing user as contact (no contact relationship required), consistent with 1:1 messaging, which also allows chats without a contact row. Setting a timer on a chat with yourself is allowed like messaging yourself.
 
 ## Progress / Evidence
 - Branch `feat/disappearing-messages` created from `feat/reactions` @ 0a23909. RDD on (global). First review slice base-ref = 730e531 (includes the unreviewed fix 0a23909).
@@ -117,5 +117,27 @@ The Decisions above predate group-admin-permissions/reactions. These points OVER
   - RED/GREEN: service tests (`disappearingStamp_test.go`) failed to compile (undefined `now`, `ExpiresAt`, `Kind`), then green; repo test `TestDirectSearchSQLExcludesSystemMessages` RED (undefined `directGlobalSearchSQL`), then green; handler tests (`handlers/disappearing_test.go`) RED (unknown field `notifier`), then green.
   - Verification: `go build ./... && go vet ./... && go vet -tags e2e ./... && go test ./...` ok. `make test-integration` (stack on port 55432) ok incl. new `TestE2EDisappearingMessages` (1:1 set/no-op/GET/ExpiresAt/chats list/search+edit+delete exclusion; group open 200, restricted 403, admin set, no-op, detail/list DisappearSeconds, group ExpiresAt, search). Note: the suite is at the 20 logins/min limit (fixed window per IP); the new test uses 2 logins and sleeps to the end of that window in a Cleanup so later tests keep their quota (suite takes ~78s).
 
+- DE2 committed `1e3e1a3` (route: delegated writer). Review slice `33ac57b..1e3e1a3`: medium / `slice_budget_reached`, consent granted, lens review-reliability, APPROVED and acknowledged, lineage `review-e947eaf49fd3d3d0`. Last reviewed boundary = `1e3e1a3`.
+  - Advisory carried into DE3: e2e search assertions are weak (`assert.Empty(out["results"])` on a possibly wrong key; unchecked `out["chats"]` type assertion), `e2e_disappearing_test.go:158-162,254-257`.
+  - Advisory accepted: timer read before insert outside the setting tx (a change racing a send can stamp one message with the old timer).
+  - Follow-up (not fixed): e2e cleanup sleeps out the login rate-limit window assuming test order (`e2e_disappearing_test.go:43-52`).
+  - Assumption A1 recorded above (any user as 1:1 contact).
+
+- DE3 built (uncommitted, parent commits; route: delegated writer): read-path filtering.
+  - Predicate: `notExpiredFilter = "(expires_at IS NULL OR expires_at > now())"` plus `notExpiredOn(alias)` (qualified, for joins/aliases) next to `systemMessageFilter` in `repos/groupData.go`. DB clock, strictly `>` (a row with `expires_at == now()` is expired).
+  - Site list and decision:
+    - `repos/contactData.go` FILTERED: `GetMessagesPage` (and `GetMessages`), `visibleConversation` (base of `GetMessagesAround` target/older/newer and `GetMessagesAfter`; an expired around-target gives `ErrMessageNotFound` -> 404), `GetSenderTelephonsWithPendingMessages` (qualified `messages.`), `GetRecentMessagesForUser` (raw SQL chats list, qualified `m.`), `UpdateMessageContent`, `GetMessageByID` (now maps not-found to `models.ErrMessageNotFound`), `DeleteMessageForSender`, `DeleteMessageForMe`.
+    - `repos/contactData.go` UNFILTERED on purpose: `CreateMessage` (insert), `PutStatusMessageDelivered`/`PutStatusMessageSeenByContact` (status-only bulk updates, return nothing), `ClearChatForUser` (flags only), and the by-pk write after the filtered lookup in `DeleteMessageForSender`/`DeleteMessageForMe` (the filtered `First` is the gate).
+    - `repos/groupData.go` FILTERED: `GetGroupMessages`/`GetGroupMessagesPage` (also feeds group detail), `GetGroupMessagesAround` (target + older + newer; expired target -> `ErrGroupMessageNotFound` -> 404), `GetGroupMessagesAfter`, `GetGroupMessageByID` (reply, edit re-read, receipts lookup), `EditGroupMessage`, `DeleteGroupMessage`.
+    - `repos/groupReceipts.go` UNFILTERED on purpose: `maxGroupMessageID` is a watermark cap by id (ids are serials, includes soft-deleted); the receipts endpoint is gated by `GetGroupMessageByID` (404 for expired).
+    - `repos/searchData.go` FILTERED: `directSearchVisibleText` (`SearchMessages`), `groupSearchVisibleText` (`SearchGroupMessages`), `directGlobalSearchSQL` visibility, `groupSearchMembership` (`SearchGroupMessagesGlobal`).
+    - `repos/reactionData.go` FILTERED: `DirectMessageTarget`, `GroupMessageTarget`. `ReactionsForMessages`/`ListReactionUsers` read `message_reactions` only (ids come from already filtered messages) and do not join message tables: unchanged.
+    - `services/serviceChat.go` / `services/serviceGroup.go`: a reply target that is not found (expired, deleted or nonexistent; the repos return `ErrMessageNotFound`/`ErrGroupMessageNotFound`) is now rejected with that error instead of being silently accepted. Behavior change: replying to a nonexistent id used to be accepted and now fails (documented decision, keeps the reply-preview copy from outliving an expired message).
+    - No other message query exists: group list/sidebar previews are computed client-side from the filtered history; no unread-count SQL exists.
+  - RED/GREEN: `repos/expiry_filter_test.go` uses a gorm DryRun db (postgres dialector, no connection, recording logger) so every site's real SQL is asserted: 24 cases + predicate shape + global search builders. RED: all 24 site cases failed once the consts existed but no site used them (plus compile failure before). GREEN after wiring. Mutation: flipping `>` to `>=` in `notExpiredFilter` fails 24 tests. Service tests `TestCreateDirectMessage_ReplyToExpiredMessageRejected`, `TestSendGroupMessage_ReplyToExpiredMessageRejected` RED against the old service code (verified by stashing it), GREEN after.
+  - Go e2e (`e2e_disappearing_test.go`): extended `TestE2EDisappearingMessages` (no extra logins) seeding expired rows via `expires_at = now() - 1 minute` in the DB, with positive controls before expiry and a live message that keeps working. 1:1: history, cursor page, around (404, live around ok), after, chats list (last message is the live one), per-chat and global search, edit, delete-for-me, reaction (404), reply-to (>=400, no row created). Group: page, cursor page, around (404), after, detail, group and global search, edit, delete, reaction (404), receipts (404), reply-to (>=400). Not covered over HTTP: 1:1 delete-for-everyone (WS-only `delete` event; covered by the repo SQL unit test).
+  - DE2 advisory fixed: search assertions now use checked helpers (`deResults`, `deGlobalChat`, `deHasID`) on the real keys (`results[].messageID`, `chats[].kind/key/total`) with positive controls (a normal message with the same `86400` text IS found, the system message is not).
+  - Verification: `go build ./... && go vet ./... && go vet -tags e2e ./... && go test ./...` ok; `make test-integration` (stack on 55432) ok (77.7s). First run failed on a bad `after` cursor in my own new test (fixed); a rerun inside the login window hit a 429 (waited, then green).
+
 ## Next step
-DE3 (after parent commits DE2).
+DE3.

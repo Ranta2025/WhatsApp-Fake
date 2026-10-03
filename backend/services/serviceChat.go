@@ -118,7 +118,12 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	}
 	// Un mensaje de sistema no es un objetivo válido de respuesta.
 	if id := message.MessageGet.ReplyToMessageID; id != nil && *id != 0 {
-		if target, err := rp.repo.GetMessageByID(*id, ctx); err == nil && target.Kind == models.MessageKindSystem {
+		target, err := rp.repo.GetMessageByID(*id, ctx)
+		switch {
+		case errors.Is(err, models.ErrMessageNotFound):
+			// Inexistente, borrado o ya expirado: no se puede responder a él.
+			return schemas.Message{}, models.ErrMessageNotFound
+		case err == nil && target.Kind == models.MessageKindSystem:
 			return schemas.Message{}, errors.New("no puedes responder a un mensaje de sistema")
 		}
 	}

@@ -356,8 +356,12 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 	// Un mensaje de sistema no es un objetivo válido de respuesta. Si el id no
 	// existe se conserva el comportamiento previo (el cliente ya validó).
 	if data.ReplyToMessageID != nil && *data.ReplyToMessageID != 0 {
-		if target, err := s.repo.GetGroupMessageByID(*data.ReplyToMessageID, ctx); err == nil &&
-			target.Kind == models.GroupMessageKindSystem {
+		target, err := s.repo.GetGroupMessageByID(*data.ReplyToMessageID, ctx)
+		switch {
+		case errors.Is(err, models.ErrGroupMessageNotFound):
+			// Inexistente, borrado o ya expirado: no se puede responder a él.
+			return nil, models.ErrGroupMessageNotFound
+		case err == nil && target.Kind == models.GroupMessageKindSystem:
 			return nil, errors.New("no puedes responder a un mensaje de sistema")
 		}
 	}

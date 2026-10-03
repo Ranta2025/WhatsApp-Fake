@@ -63,6 +63,18 @@ func (r *RepoGroup) CreateGroupWithMembers(group *models.Group, creatorID uint, 
 // respuestas).
 const systemMessageFilter = "COALESCE(kind,'') = ''"
 
+// notExpiredFilter oculta los mensajes temporales ya vencidos aunque el job de
+// expiración todavía no los haya borrado. Compara con el reloj de la BD (no el
+// de Go) y de forma estricta: un mensaje con expires_at == now() ya expiró.
+// Debe aplicarse a toda consulta que devuelva o actúe sobre mensajes.
+const notExpiredFilter = "(expires_at IS NULL OR expires_at > now())"
+
+// notExpiredOn es notExpiredFilter con la columna calificada, para consultas
+// con joins o alias (p. ej. `messages m`).
+func notExpiredOn(alias string) string {
+	return "(" + alias + ".expires_at IS NULL OR " + alias + ".expires_at > now())"
+}
+
 // insertSystemMessage persiste un mensaje de sistema DENTRO de la transacción
 // del caller (nunca abre su propia transacción): así el evento y el cambio de
 // estado son atómicos. Es nil-safe.
@@ -337,7 +349,7 @@ func (r *RepoGroup) GetGroupMessagesPage(groupID, before uint, limit, offset int
 
 	q := r.data.WithContext(c).
 		Preload("Sender", selectUserBasic).
-		Where("group_id = ?", groupID)
+		Where("group_id = ? AND "+notExpiredFilter, groupID)
 	if before > 0 {
 		q = q.Where("id < ?", before)
 	}
@@ -369,7 +381,7 @@ func (r *RepoGroup) GetGroupMessagesAround(groupID, around uint, limit int, ctx 
 		half = 1
 	}
 	base := func() *gorm.DB {
-		return r.data.WithContext(c).Preload("Sender", selectUserBasic).Where("group_id = ?", groupID)
+		return r.data.WithContext(c).Preload("Sender", selectUserBasic).Where("group_id = ? AND "+notExpiredFilter, groupID)
 	}
 
 	var target models.GroupMessage
@@ -410,7 +422,7 @@ func (r *RepoGroup) GetGroupMessagesAfter(groupID, after uint, limit int, ctx co
 	defer cancel()
 	var msgs []models.GroupMessage
 	err := r.data.WithContext(c).Preload("Sender", selectUserBasic).
-		Where("group_id = ? AND id > ?", groupID, after).
+		Where("group_id = ? AND id > ? AND "+notExpiredFilter, groupID, after).
 		Order("id ASC").Limit(limit + 1).Find(&msgs).Error
 	if err != nil {
 		return nil, false, err
@@ -428,7 +440,8 @@ func (r *RepoGroup) GetGroupMessageByID(messageID uint, ctx context.Context) (*m
 	defer cancel()
 
 	var msg models.GroupMessage
-	result := r.data.WithContext(c).Preload("Sender", selectUserBasic).First(&msg, messageID)
+	result := r.data.WithContext(c).Preload("Sender", selectUserBasic).
+		Where("id = ? AND "+notExpiredFilter, messageID).First(&msg)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, models.ErrGroupMessageNotFound
@@ -446,7 +459,7 @@ func (r *RepoGroup) EditGroupMessage(groupID, messageID, senderID uint, newConte
 
 	result := r.data.WithContext(c).
 		Model(&models.GroupMessage{}).
-		Where("id = ? AND group_id = ? AND sender_id = ? AND "+systemMessageFilter, messageID, groupID, senderID).
+		Where("id = ? AND group_id = ? AND sender_id = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, groupID, senderID).
 		Updates(map[string]interface{}{
 			"message": newContent,
 			"edited":  true,
@@ -467,7 +480,7 @@ func (r *RepoGroup) DeleteGroupMessage(groupID, messageID, senderID uint, ctx co
 	defer cancel()
 
 	result := r.data.WithContext(c).
-		Where("id = ? AND group_id = ? AND sender_id = ? AND "+systemMessageFilter, messageID, groupID, senderID).
+		Where("id = ? AND group_id = ? AND sender_id = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, groupID, senderID).
 		Delete(&models.GroupMessage{})
 	if result.Error != nil {
 		return result.Error
