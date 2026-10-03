@@ -205,3 +205,28 @@ func TestReaction_MissingContextIsBadRequest(t *testing.T) {
 	rig.h.HandlerListReactions(models.ReactionKindDirect)(c)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestReaction_InvalidContextValuesAreBadRequest(t *testing.T) {
+	cases := map[string]struct {
+		telephon  any
+		messageID any
+	}{
+		"wrong telephon type": {telephon: 42, messageID: uint(7)},
+		"empty telephon":      {telephon: "", messageID: uint(7)},
+		"wrong message type":  {telephon: "+1", messageID: "7"},
+		"zero message id":     {telephon: "+1", messageID: uint(0)},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			rig := newReactionRig()
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", "/x", nil)
+			c.Set("telephon", tc.telephon)
+			c.Set("messageID", tc.messageID)
+			rig.h.HandlerListReactions(models.ReactionKindDirect)(c)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+	}
+}

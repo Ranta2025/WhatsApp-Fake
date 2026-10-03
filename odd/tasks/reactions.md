@@ -91,6 +91,7 @@ Resolved with the user on 2026-10-03 ("like WhatsApp"):
   - Wiring: the reaction service travels on the Hub (`hub.SetReactionService`, `rt.hub.Reactions()` in `api.go`) because `routers/central.go`/`Deps` were outside the surface (follow-up: move to `Deps` if preferred).
   - Review follow-ups fixed: rate-limiter idle sweep, emoji tail validation (VS16, skin tones, ZWJ+pictograph, tag sequences, keycap), typed-nil guard in `ReactionsForMessages`.
   - Evidence: RED `undefined: models.ReactionActor` / `HandlerReaction`; mutations caught (drop `SendTo(other)`, drop `SendToGroup`, no-op fan-out). `go test ./...` green; `make test-integration` green with `TestE2EReactions` (WS+REST, replace, remove, no-op, Mine per viewer, 403, 404 incl. system message, error context).
+- RE3 review: RDD medium, granted, lens reliability approved, acknowledged (lineage `review-a881284a385522c3`). WARNING fixed inline right after (`fix(reactions)` commit): `reactionRequest` returned ok=false without writing a response on wrong-typed/empty context values (gin answered 200 empty); now 400, test `TestReaction_InvalidContextValuesAreBadRequest` (RED: empty body). Advisory not fixed: a WS-originated reaction reaches only the actor's originating connection, not the actor's other sessions (REST reaches all via `SendTo`).
 
 ## Next step
 RE4.

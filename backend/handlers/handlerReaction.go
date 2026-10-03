@@ -41,8 +41,18 @@ func reactionRequest(ctx *gin.Context, kind string) (telephon string, messageID,
 			return "", 0, 0, false
 		}
 		groupID, _ = g.(uint)
+		if groupID == 0 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return "", 0, 0, false
+		}
 	}
-	return telephon, messageID, groupID, telephon != "" && messageID != 0
+	// Valores presentes pero con tipo inesperado o vacíos: responder 400 en
+	// lugar de devolver ok=false sin escribir nada (gin respondería 200 vacío).
+	if telephon == "" || messageID == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+		return "", 0, 0, false
+	}
+	return telephon, messageID, groupID, true
 }
 
 func (h *HandlerReaction) respondError(ctx *gin.Context, err error) {
