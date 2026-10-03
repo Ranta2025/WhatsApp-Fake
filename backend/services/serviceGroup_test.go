@@ -56,6 +56,20 @@ func (m *MockGroupRepo) UpdateGroupInfo(groupID, actorID uint, name, description
 	return args.Get(0).(*models.Group), args.Error(1)
 }
 
+func (m *MockGroupRepo) SetGroupDisappearing(actorID, groupID uint, seconds int, sysMsg *models.GroupMessage, ctx context.Context) (bool, *models.GroupMessage, error) {
+	args := m.Called(actorID, groupID, seconds, sysMsg, ctx)
+	// Como el repo real: cuando hubo cambio devuelve el mismo mensaje mutado.
+	if !args.Bool(0) {
+		return false, nil, args.Error(2)
+	}
+	return true, sysMsg, args.Error(2)
+}
+
+func (m *MockGroupRepo) GetGroupDisappearing(groupID uint, ctx context.Context) (int, error) {
+	args := m.Called(groupID, ctx)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockGroupRepo) GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error) {
 	args := m.Called(groupID, ctx)
 	if args.Get(0) == nil {

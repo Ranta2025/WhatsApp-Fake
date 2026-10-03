@@ -38,6 +38,14 @@ type Message struct {
 	ReplyToTelephon  *string `gorm:"column:reply_to_telephon;size:50"` // Número de teléfono del autor del mensaje original
 	ReplyToMessage   *string `gorm:"size:400"`                         // Texto del mensaje original (copia para mostrar)
 
+	// Mensajes de sistema 1:1 (p. ej. cambio de mensajes temporales): Kind ""
+	// = mensaje normal, "system" = evento. Message guarda el valor nuevo.
+	Kind        string `gorm:"size:20;not null;default:''"`
+	SystemEvent string `gorm:"size:40;not null;default:''"`
+
+	// ExpiresAt es el instante de expiración (nil = no expira). Se fija al crear.
+	ExpiresAt *time.Time
+
 	User        UserDataBase `gorm:"foreignKey:IdUser;references:ID"`
 	UserContact UserDataBase `gorm:"foreignKey:IdReceptor;references:ID"`
 }

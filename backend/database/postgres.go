@@ -120,6 +120,9 @@ func Conection() (*gorm.DB, error) {
 		&models.StatusView{},
 		// ── Reacciones ─────────────────────────────────────────────────────
 		&models.MessageReaction{},
+		// ── Mensajes temporales ────────────────────────────────────────────
+		&models.ChatSetting{},
+		&models.MediaGC{},
 	); err != nil {
 		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}
@@ -299,6 +302,37 @@ func Conection() (*gorm.DB, error) {
 			WHERE table_name = 'group_messages' AND constraint_name = 'chk_group_messages_kind'
 		) THEN
 			ALTER TABLE group_messages ADD CONSTRAINT chk_group_messages_kind
+				CHECK (kind IN ('', 'system'));
+		END IF;
+	END $$;`)
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// MENSAJES TEMPORALES: índices y constraints (idempotentes)
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// Un único registro de ajustes por par ordenado de usuarios.
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_settings_pair
+		ON chat_settings (user_low_id, user_high_id)`)
+
+	// Un único objeto pendiente de borrar por key en la cola de GC de media.
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_media_gc_object_key
+		ON media_gc (object_key)`)
+
+	// Índices parciales para el barrido de expiración (solo filas con timer).
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_expires_at
+		ON messages (expires_at)
+		WHERE expires_at IS NOT NULL`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_messages_expires_at
+		ON group_messages (expires_at)
+		WHERE expires_at IS NOT NULL`)
+
+	execMigration(data, `DO $$ BEGIN
+		-- messages.kind ("" normal | "system" evento persistido)
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'messages' AND constraint_name = 'chk_messages_kind'
+		) THEN
+			ALTER TABLE messages ADD CONSTRAINT chk_messages_kind
 				CHECK (kind IN ('', 'system'));
 		END IF;
 	END $$;`)

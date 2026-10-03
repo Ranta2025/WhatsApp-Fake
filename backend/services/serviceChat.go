@@ -54,6 +54,8 @@ type ChatRepoInterface interface {
 	SearchMessages(userID, contactID uint, q string, before uint, limit int, ctx context.Context) ([]models.SearchRow, bool, error)
 	GetMessagesAround(userID, contactID, around uint, limit int, ctx context.Context) ([]models.Message, bool, bool, error)
 	GetMessagesAfter(userID, contactID, after uint, limit int, ctx context.Context) ([]models.Message, bool, error)
+	SetChatDisappearing(actorID, otherID uint, seconds int, sysMsg *models.Message, ctx context.Context) (bool, *models.Message, error)
+	GetChatDisappearing(userA, userB uint, ctx context.Context) (int, error)
 }
 
 type ServiceChat struct {

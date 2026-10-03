@@ -53,7 +53,7 @@ Approved roadmap item, plan only (not yet authorized to implement). Scope: setti
 Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run test`, `make test-integration`, `cd frontend && npm run test:e2e`. Expiry timing tests must be deterministic: inject a `clock` (`func() time.Time`) into the service/job (no sleeps); e2e sets the smallest allowed value by test-only override (env `DISAPPEAR_TEST_SECONDS`, forbidden in production builds; to decide) or seeds a message with a past `expires_at` through a test-only path. Mutation checks: predicate `<=` vs `<`, reply-scrub removed, reference check removed, admin check dropped, search `kind` filter dropped.
 
 ## Tasks
-- [ ] DE1 Data model + settings: columns (`expires_at`, `kind`, `groups.disappear_seconds`), `chat_settings` table, migrations/indexes, repo + service (`Set/Get`), allowed durations, permissions (participant / admin), unit tests. Route: delegated.
+- [x] DE1 Data model + settings: columns (`expires_at`, `kind`, `groups.disappear_seconds`), `chat_settings` table, migrations/indexes, repo + service (`Set/Get`), allowed durations, permissions (participant / admin), unit tests. Route: delegated.
 - [ ] DE2 Stamping + system messages + endpoints + WS `disappearing_changed`: stamp `expires_at` at creation, insert system message in the same tx, PUT endpoints, `GET settings`, `DisappearSeconds` in `GroupResponse`/`ChatGroup`, search excludes `kind='system'`. Handler/service tests + Go e2e (set 24h, message carries `ExpiresAt`, group permission follows `requireCanEditInfo` (member allowed when open, 403 when restricted), invalid value 400). Route: delegated.
 - [ ] DE3 Read-path filtering: `notExpired` scope on every message query (list them in the task, one test per site). Route: delegated.
 - [ ] DE4 Expiry job: `messageExpiryLoop` (clock-injected), batch delete with reply scrubbing and reaction cleanup, media GC (`MediaServicer.Remove`, reference check), `messages_expired` fan-out, wiring + graceful stop in `app.go`. Tests for each rule, plus job start/stop like `app_test.go` covers the status loop (`backend/app/app_test.go`, to verify). Route: delegated.
@@ -81,8 +81,27 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - **RESOLVED 2026-10-03 (user, "the most complete"):** failed media deletions go to a persistent `media_gc` queue table (object key, attempts, next_attempt_at, last_error; unique on object key) retried by the expiry job with exponential backoff and a max-attempts cap; plus log + metric (`media_gc_pending`, deletions ok/failed). Enqueue happens in the same tx as the message delete; the reference check runs again before each delete attempt. Add to DE1 (model/migration) and DE4 (job + tests: success, retry after failure, give-up after cap, skip when re-referenced).
 - **RESOLVED 2026-10-03:** expiry precision = 1-minute job + read-time filtering (`expires_at > now()` on every read path), so users never see an expired message even before the job runs.
 
+## Reconciliation with current code (2026-10-03, explorer handoff)
+The Decisions above predate group-admin-permissions/reactions. These points OVERRIDE them where they differ:
+- `group_messages.kind` already exists (`models/group.go:98`, CHECK `chk_group_messages_kind IN ('','system')`, `database/postgres.go:296-302`) with `SystemEvent`/`SystemTargets` and `models.NewSystemMessage` (`models/group.go:106-118`). Group timer change = new SystemEvent `disappearing_changed`, inserted with `insertSystemMessage(tx, msg)` in the same repo transaction (pattern: `UpdateGroupSettings`, `repos/groupData.go:623-660`, no-op when unchanged).
+- 1:1 messages get the same shape: `messages.kind` (`''|'system'`, CHECK) + `messages.system_event` (varchar). For both kinds the system message's `Message` text is the new value in seconds (e.g. `"86400"`, `"0"` = off); the sender is the actor. This replaces the `"disappearing:86400"` body idea.
+- Search, edit, delete, reactions and reply targets already exclude group system messages through `systemMessageFilter` (`repos/groupData.go:64`); the 1:1 paths must get the equivalent filter.
+- WS: mirror `group_settings`/`group_info` (`handlers/handlerGroup.go:623-677`): the system message travels embedded as `systemMessage` inside `disappearing_changed` `{kind, key, seconds, byTelephon, systemMessage}`, sent per member with `notifyAllGroupMembers` (groups) or `SendTo` to both users (1:1), and returned as the REST body. Frontend appends it with the existing dedupe (`appendSystemMessage`, `DashboardContext.tsx:1222`).
+- Group permission = `requireCanEditInfo` (`services/groupPermissions.go:127`), as decided by the user.
+- `SendGroupMessage` is at `services/serviceGroup.go:313`; `ServiceCreatMessageWithStatus` at `services/serviceChat.go:80`.
+- The expiry loop reuses `cleanupCtx` from `buildDeps` (`app/app.go:227`); no new App field.
+- Test conventions: service tests with testify mocks; repo unit tests without DB (reflection/pure helpers); DB behavior proven in `backend/integration/e2e_*_test.go` (`-tags e2e`).
+
+## Session notes
+- 2026-10-03: the user pre-authorized RDD review consent for every slice of this feature and will be away; product doubts take the documented default and are recorded here under "Assumptions".
+
+## Assumptions (taken without the user, review on return)
+(none yet)
+
 ## Progress / Evidence
-(not started)
+- Branch `feat/disappearing-messages` created from `feat/reactions` @ 0a23909. RDD on (global). First review slice base-ref = 730e531 (includes the unreviewed fix 0a23909).
+- DE1 built (uncommitted, parent commits): models (`Message.Kind/SystemEvent/ExpiresAt`, `GroupMessage.ExpiresAt`, `Group.DisappearSeconds`, `ChatSetting`, `MediaGC` table `media_gc`, `models/disappearing.go` with `ValidDisappearSeconds`, `OrderedPair`, `ErrInvalidDisappearDuration`, `MessageKindSystem`, `SystemEventDisappearingChanged`); migrations in `database/postgres.go` (AutoMigrate + unique pair index, unique `media_gc.object_key`, partial `expires_at` indexes, `chk_messages_kind`); repo `repos/disappearingData.go` (`Get/SetChatDisappearing` on `ApiContact`, `Get/SetGroupDisappearing` on `RepoGroup`; 1:1 system message persisted with status `visto` so it is never pending/unread); services `serviceDisappearing.go` (`ServiceChat.Set/GetChatDisappearing`, `ServiceGroup.Set/GetGroupDisappearing` with `requireCanEditInfo` before repo). Methods added to `ChatRepoInterface`/`GroupRepoInterface` only (not to `ChatServicer`/`GroupServicer`; DE2 wires those).
+  - Evidence: RED observed (models and repos tests failed to compile on undefined symbols; services vet failed on undefined `SetGroupDisappearing`), then GREEN: `go build ./... && go vet ./... && go test ./...` all ok. Migration smoke on compose stack (port 55432): app healthy, `chat_settings` has `idx_chat_settings_pair` UNIQUE, `media_gc` has `idx_media_gc_object_key` UNIQUE, partial `idx_messages_expires_at`/`idx_group_messages_expires_at`, `chk_messages_kind`, `groups.disappear_seconds` default 0.
 
 ## Next step
-Implement after `reactions`; first task DE1.
+DE1.

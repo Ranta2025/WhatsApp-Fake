@@ -59,6 +59,8 @@ type GroupRepoInterface interface {
 	RemoveMember(groupID, actorID, targetID uint, system *models.GroupMessage, ctx context.Context) error
 	UpdateGroupSettings(groupID, actorID uint, patch models.GroupSettingsUpdate, system *models.GroupMessage, ctx context.Context) (*models.Group, error)
 	UpdateGroupInfo(groupID, actorID uint, name, description *string, system *models.GroupMessage, ctx context.Context) (*models.Group, error)
+	SetGroupDisappearing(actorID, groupID uint, seconds int, sysMsg *models.GroupMessage, ctx context.Context) (bool, *models.GroupMessage, error)
+	GetGroupDisappearing(groupID uint, ctx context.Context) (int, error)
 	GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error)
 	GetGroupMembers(groupID uint, ctx context.Context) ([]models.GroupMember, error)
 	GetUserGroups(userID uint, ctx context.Context) ([]models.UserGroupRow, error)

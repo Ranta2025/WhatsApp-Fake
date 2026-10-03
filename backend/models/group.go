@@ -26,6 +26,8 @@ const (
 	SystemEventAdminRevoked    = "admin_revoked"
 	SystemEventSettingsChanged = "settings_changed"
 	SystemEventInfoChanged     = "info_changed"
+	// SystemEventDisappearingChanged también se usa en mensajes 1:1.
+	SystemEventDisappearingChanged = "disappearing_changed"
 )
 
 // Group representa un grupo de chat.
@@ -43,6 +45,9 @@ type Group struct {
 	OnlyAdminsCanSend       bool `gorm:"not null;default:false"`
 	OnlyAdminsCanEditInfo   bool `gorm:"not null;default:false"`
 	OnlyAdminsCanAddMembers bool `gorm:"not null;default:false"`
+
+	// Temporizador de mensajes temporales en segundos (0 = desactivado).
+	DisappearSeconds int `gorm:"not null;default:0"`
 
 	Creator UserDataBase  `gorm:"foreignKey:CreatorID;references:ID"`
 	Members []GroupMember `gorm:"foreignKey:GroupID"`
@@ -95,8 +100,10 @@ type GroupMessage struct {
 	// cliente desde datos estructurados (no guardan texto por espectador).
 	// Kind "" = mensaje normal; "system" = evento. SystemTargets son los
 	// teléfonos afectados (p. ej. los añadidos en un member_added).
-	Kind          string   `gorm:"size:20;not null;default:''"`
-	SystemEvent   string   `gorm:"size:30;not null;default:''"`
+	Kind        string `gorm:"size:20;not null;default:''"`
+	SystemEvent string `gorm:"size:30;not null;default:''"`
+	// ExpiresAt es el instante de expiración (nil = no expira).
+	ExpiresAt     *time.Time
 	SystemTargets []string `gorm:"type:jsonb;serializer:json"`
 
 	Group  Group        `gorm:"foreignKey:GroupID;references:ID"`
