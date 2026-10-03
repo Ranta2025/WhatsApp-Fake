@@ -32,7 +32,7 @@ func (r *RepoReaction) DirectMessageTarget(messageID, userID uint, ctx context.C
 
 	var msg models.Message // gorm excluye los soft-deleted
 	err := r.data.WithContext(c).
-		Select("id", "id_user", "id_receptor").
+		Select("id", "id_user", "id_receptor", "message", "media_type").
 		Where("id = ? AND "+directVisibility, messageID, userID, userID).
 		First(&msg).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -45,7 +45,15 @@ func (r *RepoReaction) DirectMessageTarget(messageID, userID uint, ctx context.C
 	if userID == msg.IdReceptor {
 		other = msg.IdUser
 	}
-	return &models.ReactionTarget{AuthorID: msg.IdUser, OtherUserID: other}, nil
+	tels, err := r.telephons(c, msg.IdUser, other)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ReactionTarget{
+		AuthorID: msg.IdUser, AuthorTelephon: tels[msg.IdUser],
+		OtherUserID: other, OtherTelephon: tels[other],
+		Text: msg.Message, MediaType: msg.MediaType,
+	}, nil
 }
 
 // GroupMessageTarget devuelve el mensaje de grupo si pertenece a groupID, no
@@ -56,7 +64,7 @@ func (r *RepoReaction) GroupMessageTarget(groupID, messageID uint, ctx context.C
 
 	var msg models.GroupMessage
 	err := r.data.WithContext(c).
-		Select("id", "group_id", "sender_id").
+		Select("id", "group_id", "sender_id", "message", "media_type").
 		Where("id = ? AND group_id = ? AND "+systemMessageFilter, messageID, groupID).
 		First(&msg).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -65,7 +73,43 @@ func (r *RepoReaction) GroupMessageTarget(groupID, messageID uint, ctx context.C
 	if err != nil {
 		return nil, err
 	}
-	return &models.ReactionTarget{AuthorID: msg.SenderID, GroupID: msg.GroupID}, nil
+	tels, err := r.telephons(c, msg.SenderID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ReactionTarget{
+		AuthorID: msg.SenderID, AuthorTelephon: tels[msg.SenderID], GroupID: msg.GroupID,
+		Text: msg.Message, MediaType: msg.MediaType,
+	}, nil
+}
+
+// telephons resuelve id -> teléfono con una sola consulta.
+func (r *RepoReaction) telephons(ctx context.Context, ids ...uint) (map[uint]string, error) {
+	var users []models.UserDataBase
+	if err := r.data.WithContext(ctx).Select("id", "telephon").Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[uint]string, len(users))
+	for _, u := range users {
+		out[u.ID] = u.Telephon
+	}
+	return out, nil
+}
+
+// ActorByTelephon resuelve el id y el nombre de quien reacciona.
+func (r *RepoReaction) ActorByTelephon(telephon string, ctx context.Context) (*models.ReactionActor, error) {
+	c, cancel := context.WithTimeout(ctx, reactionTimeout)
+	defer cancel()
+
+	var u models.UserDataBase
+	err := r.data.WithContext(c).Select("id", "username").Where("telephon = ?", telephon).First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, models.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &models.ReactionActor{ID: u.ID, Username: u.Username}, nil
 }
 
 // IsGroupMember indica si userID es miembro activo del grupo.
@@ -81,26 +125,32 @@ func (r *RepoReaction) IsGroupMember(groupID, userID uint, ctx context.Context) 
 	return count > 0, err
 }
 
-// UpsertReaction crea o reemplaza la reacción del usuario al mensaje.
-func (r *RepoReaction) UpsertReaction(kind string, messageID, userID uint, emoji string, ctx context.Context) error {
+// UpsertReaction crea o reemplaza la reacción del usuario al mensaje. Devuelve
+// true si se insertó o cambió de emoji; con el mismo emoji no toca la fila
+// (la cláusula WHERE del DO UPDATE lo impide) y devuelve false.
+func (r *RepoReaction) UpsertReaction(kind string, messageID, userID uint, emoji string, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, reactionTimeout)
 	defer cancel()
 
 	row := models.MessageReaction{MessageKind: kind, MessageID: messageID, UserID: userID, Emoji: emoji}
-	return r.data.WithContext(c).Clauses(clause.OnConflict{
+	res := r.data.WithContext(c).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "message_kind"}, {Name: "message_id"}, {Name: "user_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"emoji", "updated_at"}),
-	}).Create(&row).Error
+		Where:     clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "message_reactions.emoji <> excluded.emoji"}}},
+	}).Create(&row)
+	return res.RowsAffected > 0, res.Error
 }
 
-// DeleteReaction elimina la reacción del usuario (idempotente).
-func (r *RepoReaction) DeleteReaction(kind string, messageID, userID uint, ctx context.Context) error {
+// DeleteReaction elimina la reacción del usuario. Devuelve true si había una
+// fila que borrar (borrar lo inexistente es un no-op idempotente).
+func (r *RepoReaction) DeleteReaction(kind string, messageID, userID uint, ctx context.Context) (bool, error) {
 	c, cancel := context.WithTimeout(ctx, reactionTimeout)
 	defer cancel()
 
-	return r.data.WithContext(c).
+	res := r.data.WithContext(c).
 		Where("message_kind = ? AND message_id = ? AND user_id = ?", kind, messageID, userID).
-		Delete(&models.MessageReaction{}).Error
+		Delete(&models.MessageReaction{})
+	return res.RowsAffected > 0, res.Error
 }
 
 // reactionRow es la proyección mínima que se agrega en Go.
@@ -114,7 +164,9 @@ type reactionRow struct {
 // con UNA consulta. Mine se calcula para viewerID. Los mensajes sin reacciones
 // no aparecen en el mapa.
 func (r *RepoReaction) ReactionsForMessages(kind string, ids []uint, viewerID uint, ctx context.Context) (map[uint][]models.ReactionAggregate, error) {
-	if len(ids) == 0 {
+	// Un *RepoReaction nil dentro de ReactionAggregator no es == nil: se trata
+	// como "sin reacciones" en vez de provocar un pánico.
+	if r == nil || len(ids) == 0 {
 		return map[uint][]models.ReactionAggregate{}, nil
 	}
 	c, cancel := context.WithTimeout(ctx, reactionTimeout)

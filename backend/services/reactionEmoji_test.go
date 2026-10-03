@@ -17,6 +17,10 @@ func TestNormalizeReactionEmoji(t *testing.T) {
 		"keycap":              "1️⃣",
 		"keycap without FE0F": "1⃣",
 		"face":                "😂",
+		"rainbow flag":        "🏳️‍🌈",
+		"scotland flag":       "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+		"ZWJ with skin tones": "👩🏽‍🤝‍👨🏻",
+		"pictograph VS16":     "❤️",
 	}
 	for name, e := range valid {
 		t.Run("valid "+name, func(t *testing.T) {
@@ -27,18 +31,23 @@ func TestNormalizeReactionEmoji(t *testing.T) {
 	}
 
 	invalid := map[string]string{
-		"empty":        "",
-		"letter":       "a",
-		"two emojis":   "👍👍",
-		"word":         "ok",
-		"space":        " ",
-		"digit":        "1",
-		"hash":         "#",
-		"emoji+letter": "👍a",
-		"letter+skin":  "a🏽",
-		"single RI":    "🇦",
-		"too long":     strings.Repeat("‍", 40),
-		"newline":      "👍\n",
+		"empty":                   "",
+		"letter":                  "a",
+		"two emojis":              "👍👍",
+		"word":                    "ok",
+		"space":                   " ",
+		"digit":                   "1",
+		"hash":                    "#",
+		"emoji+letter":            "👍a",
+		"letter+skin":             "a🏽",
+		"single RI":               "🇦",
+		"too long":                strings.Repeat("‍", 40),
+		"newline":                 "👍\n",
+		"combining accent":        "👍\u0301",
+		"trailing ZWJ":            "👍\u200d",
+		"ZWJ then letter":         "👍\u200da",
+		"pictograph + ZWJ ZWJ":    "👍\u200d\u200d👍",
+		"double VS16 then accent": "❤\ufe0f\u0301",
 	}
 	for name, e := range invalid {
 		t.Run("invalid "+name, func(t *testing.T) {

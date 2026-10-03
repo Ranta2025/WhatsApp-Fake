@@ -98,6 +98,8 @@ func (c *Client) buildRouter() map[string]func(*MessageHandler) {
 		"group_join":           (*MessageHandler).HandleGroupJoin,
 		"group_delivered":      (*MessageHandler).HandleGroupDelivered,
 		"group_read":           (*MessageHandler).HandleGroupRead,
+		// Reacciones (1:1 y grupo)
+		"react": (*MessageHandler).HandleReaction,
 	}
 }
 

@@ -42,8 +42,29 @@ func isEmojiCluster(cluster string) bool {
 		return (len(runes) == 2 && runes[1] == 0x20E3) ||
 			(len(runes) == 3 && runes[1] == 0xFE0F && runes[2] == 0x20E3)
 	default:
-		return isExtendedPictographic(first)
+		return isExtendedPictographic(first) && validEmojiTail(runes[1:])
 	}
+}
+
+// validEmojiTail comprueba que, tras el pictograma inicial, solo haya
+// continuaciones de emoji legítimas: VS16, modificadores de tono de piel, keycap,
+// tags (banderas de subdivisión) y ZWJ seguido de otro pictograma.
+func validEmojiTail(tail []rune) bool {
+	for i := 0; i < len(tail); i++ {
+		switch r := tail[i]; {
+		case r == 0xFE0F, r == 0x20E3,
+			r >= 0x1F3FB && r <= 0x1F3FF,
+			r >= 0xE0020 && r <= 0xE007F:
+		case r == 0x200D:
+			i++
+			if i >= len(tail) || !isExtendedPictographic(tail[i]) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func isRegionalIndicator(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }

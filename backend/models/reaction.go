@@ -49,9 +49,20 @@ type ReactionUsers struct {
 // ReactionTarget describe el mensaje objetivo ya autorizado: su autor, el otro
 // participante (solo 1:1, respecto al usuario que consulta) y el grupo.
 type ReactionTarget struct {
-	AuthorID    uint
-	OtherUserID uint
-	GroupID     uint
+	AuthorID       uint
+	AuthorTelephon string
+	OtherUserID    uint
+	OtherTelephon  string // solo 1:1
+	GroupID        uint
+	// Text y MediaType alimentan el preview del evento `reaction`.
+	Text      string
+	MediaType string
+}
+
+// ReactionActor es el usuario que reacciona, resuelto desde su teléfono.
+type ReactionActor struct {
+	ID       uint
+	Username string
 }
 
 // Errores de dominio de reacciones. Un mensaje inexistente o invisible reutiliza

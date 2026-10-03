@@ -210,6 +210,8 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	hub := websocket.NewHub(repoContact, m)
 	go hub.Run()
 	registerRuntimeMetrics(m, hub, db, rd)
+	// Reacciones: el evento WS `react` y los endpoints REST comparten servicio.
+	hub.SetReactionService(services.NewReactionService(repoReaction))
 
 	// Servicios
 	serviceUser := services.InitServices(repoUser, cacheUser)

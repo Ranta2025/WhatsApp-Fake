@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"gorm/backend/models"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,11 +45,13 @@ func (f *fakeReactionRepo) DirectMessageTarget(messageID, userID uint, _ context
 	for _, u := range f.visibleTo[messageID] {
 		if u == userID {
 			t := f.direct[messageID] // OtherUserID guarda el receptor
-			other := t.OtherUserID
+			other, otherTel := t.OtherUserID, t.OtherTelephon
 			if userID == t.OtherUserID {
-				other = t.AuthorID
+				other, otherTel = t.AuthorID, t.AuthorTelephon
 			}
-			return &models.ReactionTarget{AuthorID: t.AuthorID, OtherUserID: other}, nil
+			out := t
+			out.OtherUserID, out.OtherTelephon = other, otherTel
+			return &out, nil
 		}
 	}
 	return nil, models.ErrMessageNotFound
@@ -65,16 +69,34 @@ func (f *fakeReactionRepo) IsGroupMember(groupID, userID uint, _ context.Context
 	return f.members[[2]uint{groupID, userID}], nil
 }
 
-func (f *fakeReactionRepo) UpsertReaction(kind string, messageID, userID uint, emoji string, _ context.Context) error {
+func (f *fakeReactionRepo) UpsertReaction(kind string, messageID, userID uint, emoji string, _ context.Context) (bool, error) {
 	f.upserts++
-	f.rows[reactionKey{kind, messageID, userID}] = emoji
-	return nil
+	k := reactionKey{kind, messageID, userID}
+	prev, existed := f.rows[k]
+	f.rows[k] = emoji
+	return !existed || prev != emoji, nil
 }
 
-func (f *fakeReactionRepo) DeleteReaction(kind string, messageID, userID uint, _ context.Context) error {
+func (f *fakeReactionRepo) DeleteReaction(kind string, messageID, userID uint, _ context.Context) (bool, error) {
 	f.deletes++
-	delete(f.rows, reactionKey{kind, messageID, userID})
-	return nil
+	k := reactionKey{kind, messageID, userID}
+	_, existed := f.rows[k]
+	delete(f.rows, k)
+	return existed, nil
+}
+
+var fakeActors = map[string]models.ReactionActor{
+	"+1": {ID: userA, Username: "ana"},
+	"+2": {ID: userB, Username: "luis"},
+	"+3": {ID: userC, Username: "marta"},
+}
+
+func (f *fakeReactionRepo) ActorByTelephon(telephon string, _ context.Context) (*models.ReactionActor, error) {
+	a, ok := fakeActors[telephon]
+	if !ok {
+		return nil, models.ErrUserNotFound
+	}
+	return &a, nil
 }
 
 func (f *fakeReactionRepo) ListReactionUsers(kind string, messageID uint, _ context.Context) ([]models.ReactionUsers, error) {
@@ -96,13 +118,13 @@ const (
 func reactionFixture() (*ReactionService, *fakeReactionRepo, *time.Time) {
 	repo := newFakeReactionRepo()
 	// mensaje 1:1 id 10 de A hacia B; visible para ambos
-	repo.direct[10] = models.ReactionTarget{AuthorID: userA, OtherUserID: userB}
+	repo.direct[10] = models.ReactionTarget{AuthorID: userA, AuthorTelephon: "+1", OtherUserID: userB, OtherTelephon: "+2", Text: "hola mundo"}
 	repo.visibleTo[10] = []uint{userA, userB}
 	// mensaje 1:1 id 11 de A hacia B pero B lo borró para sí: solo lo ve A
 	repo.direct[11] = models.ReactionTarget{AuthorID: userA, OtherUserID: userB}
 	repo.visibleTo[11] = []uint{userA}
 	// mensaje de grupo 20 (grupo 5), sistema 21 (grupo 5), mensaje de otro grupo 22 (grupo 6)
-	repo.group[20] = models.ReactionTarget{AuthorID: userA, GroupID: 5}
+	repo.group[20] = models.ReactionTarget{AuthorID: userA, AuthorTelephon: "+1", GroupID: 5, MediaType: "image"}
 	repo.members[[2]uint{5, userA}] = true
 	repo.members[[2]uint{5, userB}] = true
 	now := time.Unix(1000, 0)
@@ -265,6 +287,112 @@ type failingUpsertRepo struct {
 	err error
 }
 
-func (f *failingUpsertRepo) UpsertReaction(string, uint, uint, string, context.Context) error {
-	return f.err
+func (f *failingUpsertRepo) UpsertReaction(string, uint, uint, string, context.Context) (bool, error) {
+	return false, f.err
+}
+
+func TestSetReaction_NoOpSemantics(t *testing.T) {
+	svc, _, _ := reactionFixture()
+	ctx := context.Background()
+
+	// quitar sin reacción previa: no es un cambio
+	ch, err := svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "", ctx)
+	require.NoError(t, err)
+	assert.False(t, ch.Changed, "quitar algo que no existe no debe difundirse")
+
+	// primera reacción: cambio
+	ch, err = svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "👍", ctx)
+	require.NoError(t, err)
+	assert.True(t, ch.Changed)
+
+	// mismo emoji otra vez: no-op
+	ch, err = svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "👍", ctx)
+	require.NoError(t, err)
+	assert.False(t, ch.Changed)
+
+	// otro emoji: cambio
+	ch, err = svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "❤️", ctx)
+	require.NoError(t, err)
+	assert.True(t, ch.Changed)
+
+	// quitar existente: cambio
+	ch, err = svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "", ctx)
+	require.NoError(t, err)
+	assert.True(t, ch.Changed)
+	assert.True(t, ch.Removed)
+}
+
+func TestReact_FillsEventFields(t *testing.T) {
+	svc, _, _ := reactionFixture()
+	ctx := context.Background()
+
+	ch, err := svc.React("+2", models.ReactionKindDirect, 10, 0, "👍", ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "+2", ch.ActorTelephon)
+	assert.Equal(t, "luis", ch.ActorUsername)
+	assert.Equal(t, "+1", ch.AuthorTelephon)
+	assert.Equal(t, "+1", ch.OtherTelephon)
+	assert.Equal(t, "hola mundo", ch.Preview)
+	assert.True(t, ch.Changed)
+
+	ev := ch.Event()
+	assert.Equal(t, models.ReactionKindDirect, ev.Kind)
+	assert.Equal(t, uint(10), ev.MessageID)
+	assert.Equal(t, "+2", ev.Telephon)
+	assert.Equal(t, "luis", ev.Username)
+	assert.Equal(t, "👍", ev.Emoji)
+	assert.Equal(t, "+1", ev.AuthorTelephon)
+	assert.Equal(t, "hola mundo", ev.Preview)
+	assert.Zero(t, ev.GroupID)
+}
+
+func TestReact_GroupMediaPreviewAndGroupID(t *testing.T) {
+	svc, _, _ := reactionFixture()
+	ch, err := svc.React("+2", models.ReactionKindGroup, 20, 5, "🙏", context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "📷 Photo", ch.Preview)
+	assert.Equal(t, uint(5), ch.Event().GroupID)
+}
+
+func TestReact_UnknownActor(t *testing.T) {
+	svc, _, _ := reactionFixture()
+	_, err := svc.React("+999", models.ReactionKindDirect, 10, 0, "👍", context.Background())
+	assert.ErrorIs(t, err, models.ErrUserNotFound)
+}
+
+func TestReactionPreview(t *testing.T) {
+	long := strings.Repeat("á", 100)
+	cases := []struct{ name, text, media, want string }{
+		{"text", "  hola   mundo\n", "", "hola mundo"},
+		{"image", "", "image", "📷 Photo"},
+		{"video", "", "video", "🎥 Video"},
+		{"audio", "", "audio", "🎤 Audio"},
+		{"sticker", "", "sticker", "Sticker"},
+		{"document", "", "document", "📎 File"},
+		{"unknown media", "", "other", "📎 File"},
+		{"caption wins", "mira esto", "image", "mira esto"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, reactionPreview(c.text, c.media))
+		})
+	}
+	got := reactionPreview(long, "")
+	assert.LessOrEqual(t, utf8.RuneCountInString(got), 60)
+	assert.True(t, strings.HasSuffix(got, "…"))
+}
+
+func TestAllow_PrunesIdleUsers(t *testing.T) {
+	svc, _, now := reactionFixture()
+	ctx := context.Background()
+	_, err := svc.SetReaction(userB, models.ReactionKindDirect, 10, 0, "👍", ctx)
+	require.NoError(t, err)
+	_, err = svc.SetReaction(userA, models.ReactionKindDirect, 10, 0, "👍", ctx)
+	require.NoError(t, err)
+	assert.Len(t, svc.calls, 2)
+
+	*now = now.Add(reactionRateWindow + time.Millisecond)
+	_, err = svc.SetReaction(userA, models.ReactionKindDirect, 10, 0, "❤️", ctx)
+	require.NoError(t, err)
+	assert.Len(t, svc.calls, 1, "la clave del usuario inactivo (B) se elimina, sin crecimiento sin límite")
 }

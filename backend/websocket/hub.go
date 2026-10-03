@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"gorm/backend/metrics"
 	"gorm/backend/repos"
+	"gorm/backend/services"
 	"log"
 	"sync"
 	"time"
@@ -23,7 +24,18 @@ type Hub struct {
 	Broadcast chan []byte
 	repo      *repos.ApiContact
 	metrics   *metrics.Metrics
+
+	// reactions atiende el evento WS `react` y los endpoints REST de reacciones;
+	// se inyecta tras construir el hub (SetReactionService).
+	reactions services.ReactionServicer
 }
+
+// SetReactionService inyecta el servicio de reacciones usado por HandleReaction
+// y por el handler REST (vía Reactions).
+func (h *Hub) SetReactionService(s services.ReactionServicer) { h.reactions = s }
+
+// Reactions devuelve el servicio de reacciones inyectado (nil si no hay).
+func (h *Hub) Reactions() services.ReactionServicer { return h.reactions }
 
 // NewHub crea e inicializa un Hub de WebSocket con el repositorio de datos y el
 // conjunto de métricas (m puede ser nil: no se contabiliza nada).

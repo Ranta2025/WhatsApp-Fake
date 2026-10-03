@@ -6,7 +6,9 @@ import (
 	"gorm/backend/metrics"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"gorm/backend/services"
 	"log/slog"
+	"net/http"
 	"time"
 )
 
@@ -522,6 +524,95 @@ func (mh *MessageHandler) HandleGroupRead() {
 	if update != nil {
 		publishGroupReceipt(mh.Hub, update)
 	}
+}
+
+// reactionEventBytes serializa el evento `reaction` ({type, payload}).
+func reactionEventBytes(ch *services.ReactionChange) ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":    "reaction",
+		"payload": ch.Event(),
+	})
+}
+
+// PublishReaction difunde un cambio de reacción: al actor (por su conexión si
+// viene de WS, o por teléfono si viene de REST) y a los demás destinatarios (el
+// otro participante en 1:1; los miembros conectados del grupo). Un cambio nulo
+// o sin efecto (Changed=false) no se difunde.
+func (h *Hub) PublishReaction(ch *services.ReactionChange, actor *Client) {
+	if ch == nil || !ch.Changed {
+		return
+	}
+	msg, err := reactionEventBytes(ch)
+	if err != nil {
+		slog.Error("ws error serializando reaction", "type", "reaction", "err", err)
+		return
+	}
+	if actor != nil {
+		h.SendToClient(actor, msg)
+	} else {
+		h.SendTo(ch.ActorTelephon, msg)
+	}
+	switch ch.Kind {
+	case models.ReactionKindDirect:
+		if ch.OtherTelephon != "" && ch.OtherTelephon != ch.ActorTelephon {
+			h.SendTo(ch.OtherTelephon, msg)
+		}
+	case models.ReactionKindGroup:
+		h.SendToGroup(ch.GroupID, ch.ActorTelephon, msg)
+	}
+}
+
+// HandleReaction gestiona `react`: fija (emoji) o quita (emoji vacío) la reacción
+// del usuario a un mensaje 1:1 o de grupo y difunde el evento `reaction`. Los
+// errores responden al emisor con {type:"error", error, context:{action:"react",
+// kind, messageID, groupID?, status}} para que el cliente revierta su
+// actualización optimista.
+func (mh *MessageHandler) HandleReaction() {
+	var payload struct {
+		Kind      string `json:"kind"`
+		MessageID uint   `json:"messageID"`
+		GroupID   uint   `json:"groupID"`
+		Emoji     string `json:"emoji"`
+	}
+	if err := json.Unmarshal(mh.Payload, &payload); err != nil || payload.MessageID == 0 {
+		mh.sendReactionError("Solicitud de reacción inválida", http.StatusBadRequest, payload.Kind, payload.MessageID, payload.GroupID)
+		return
+	}
+	if mh.Hub.reactions == nil {
+		mh.sendReactionError("Reacciones no disponibles", http.StatusInternalServerError, payload.Kind, payload.MessageID, payload.GroupID)
+		return
+	}
+
+	ctx, cancel := mh.context()
+	defer cancel()
+	change, err := mh.Hub.reactions.React(mh.Client.Telephon, payload.Kind, payload.MessageID, payload.GroupID, payload.Emoji, ctx)
+	if err != nil {
+		status := services.ReactionErrorStatus(err)
+		msg := err.Error()
+		if status == http.StatusInternalServerError {
+			mh.Client.log().Error("ws error al reaccionar", "type", "react", "err", err)
+			msg = "Error al reaccionar"
+		}
+		mh.sendReactionError(msg, status, payload.Kind, payload.MessageID, payload.GroupID)
+		return
+	}
+	mh.Hub.PublishReaction(change, mh.Client)
+}
+
+// sendReactionError responde al emisor con el error y el contexto de la reacción.
+func (mh *MessageHandler) sendReactionError(msg string, status int, kind string, messageID, groupID uint) {
+	ctxInfo := map[string]interface{}{
+		"action": "react", "kind": kind, "messageID": messageID, "status": status,
+	}
+	if groupID != 0 {
+		ctxInfo["groupID"] = groupID
+	}
+	errorMsg, _ := json.Marshal(map[string]interface{}{
+		"type":    "error",
+		"error":   msg,
+		"context": ctxInfo,
+	})
+	mh.reply(errorMsg)
 }
 
 // sendError es un helper para enviar mensajes de error al cliente WebSocket.

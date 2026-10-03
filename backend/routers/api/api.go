@@ -3,6 +3,7 @@ package api
 import (
 	"gorm/backend/handlers"
 	"gorm/backend/middleware"
+	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/websocket"
 
@@ -74,6 +75,23 @@ func (rt *RouterApiMessage) ApiChat() {
 	rt.app.PUT("chat/edit", middleware.MiddlewareChatEdit(), rt.handlerChat.HandlerEditMessage())
 	rt.app.DELETE("chat/:contact", middleware.MiddlewareClearChat(), rt.handlerChat.HandlerClearChat())
 	rt.app.DELETE("message/:id/me", middleware.MiddlewareDeleteMessage(), rt.handlerChat.HandlerDeleteMessageForMe())
+
+	// Reacciones 1:1 (espejo REST del evento WS `react`)
+	if hr := rt.reactionHandler(); hr != nil {
+		const kind = models.ReactionKindDirect
+		rt.app.PUT("chat/message/:id/reaction", middleware.MiddlewareDeleteMessage(), hr.HandlerSetReaction(kind))
+		rt.app.DELETE("chat/message/:id/reaction", middleware.MiddlewareDeleteMessage(), hr.HandlerRemoveReaction(kind))
+		rt.app.GET("chat/message/:id/reactions", middleware.MiddlewareDeleteMessage(), hr.HandlerListReactions(kind))
+	}
+}
+
+// reactionHandler construye el handler REST de reacciones con el servicio que
+// comparte el hub con el handler WS; nil si no hay servicio (tests).
+func (rt *RouterApiMessage) reactionHandler() *handlers.HandlerReaction {
+	if rt.hub == nil || rt.hub.Reactions() == nil {
+		return nil
+	}
+	return handlers.InitHandlerReaction(rt.hub.Reactions(), rt.hub)
 }
 
 // ApiSearch registra la búsqueda global de mensajes (chats 1:1 y grupos).
@@ -121,6 +139,9 @@ func (rt *RouterApiMessage) ApiCall() {
 //	DELETE /api/v1/group/:groupID/message          → eliminar mensaje
 //	GET    /api/v1/group/:groupID/message/search → buscar mensajes (solo miembros)
 //	GET    /api/v1/group/:groupID/message/:messageID/receipts → acuses (solo el autor)
+//	PUT    /api/v1/group/:groupID/message/:messageID/reaction  → reaccionar {emoji}
+//	DELETE /api/v1/group/:groupID/message/:messageID/reaction  → quitar la reacción
+//	GET    /api/v1/group/:groupID/message/:messageID/reactions → quién reaccionó
 func (rt *RouterApiMessage) ApiGroup() {
 	g := rt.app.Group("group")
 	{
@@ -145,5 +166,13 @@ func (rt *RouterApiMessage) ApiGroup() {
 		g.GET("/:groupID/message/search", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleSearchGroupMessages())
 		g.GET("/:groupID/message/:messageID/receipts", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageID(), rt.handlerGroup.HandleGetMessageReceipts())
 		g.DELETE("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageDelete(), rt.handlerGroup.HandleDeleteGroupMessage())
+
+		// Reacciones de grupo
+		if hr := rt.reactionHandler(); hr != nil {
+			const kind = models.ReactionKindGroup
+			g.PUT("/:groupID/message/:messageID/reaction", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageID(), hr.HandlerSetReaction(kind))
+			g.DELETE("/:groupID/message/:messageID/reaction", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageID(), hr.HandlerRemoveReaction(kind))
+			g.GET("/:groupID/message/:messageID/reactions", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessageID(), hr.HandlerListReactions(kind))
+		}
 	}
 }

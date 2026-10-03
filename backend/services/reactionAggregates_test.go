@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"gorm/backend/models"
+	"gorm/backend/repos"
 	"gorm/backend/schemas"
 	"testing"
 
@@ -297,4 +298,16 @@ func TestReactionsJSON_PascalCaseKeys(t *testing.T) {
 	b, err := json.Marshal(schemas.Message{Reactions: wantThumbs()})
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"Reactions":[{"Emoji":"👍","Count":2,"Mine":true}]`)
+}
+
+// Un *RepoReaction nil dentro de la interfaz no es == nil: el receptor debe ser
+// seguro para que una cadena de inicialización incompleta no provoque pánico.
+func TestPickAggregator_TypedNilRepoIsSafe(t *testing.T) {
+	var nilRepo *repos.RepoReaction
+	agg := pickAggregator([]ReactionAggregator{nilRepo})
+
+	got, err := fetchReactions(agg, models.ReactionKindDirect, []uint{1, 2}, 1, context.Background())
+
+	require.NoError(t, err)
+	assert.Empty(t, got)
 }
