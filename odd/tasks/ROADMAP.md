@@ -5,7 +5,7 @@ Index of every feature in this repo, its branch, status, and feature document. E
 ## Branch chain (all local, NOT pushed)
 Branches are chained: each is created from the previous one. Push, PR and merge are the user's decisions.
 
-`main` -> `feat/status-stories` -> `feat/typescript-migration` -> `feat/group-media` -> `feat/message-pagination` -> `feat/e2e-ci` -> `feat/group-read-receipts` -> `feat/message-search` -> (pending features, in the recommended order below)
+`main` -> `feat/status-stories` -> `feat/typescript-migration` -> `feat/group-media` -> `feat/message-pagination` -> `feat/e2e-ci` -> `feat/group-read-receipts` -> `feat/message-search` -> `feat/observability` -> `feat/group-admin-permissions` -> (pending features, in the recommended order below)
 
 Before creating a branch: `git branch --show-current`, `git status`, and branch from the LATEST feature branch in the chain (never from `main` while earlier branches are unmerged).
 
@@ -20,7 +20,7 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | group-read-receipts | `feat/group-read-receipts` | done | [group-read-receipts.md](group-read-receipts.md) |
 | message-search | `feat/message-search` | done | [message-search.md](message-search.md) |
 | observability | `feat/observability` | done | [observability.md](observability.md) |
-| group-admin-permissions | `feat/group-admin-permissions` | pending | [group-admin-permissions.md](group-admin-permissions.md) |
+| group-admin-permissions | `feat/group-admin-permissions` | done | [group-admin-permissions.md](group-admin-permissions.md) |
 | reactions | `feat/reactions` | pending | [reactions.md](reactions.md) |
 | disappearing-messages | `feat/disappearing-messages` | pending | [disappearing-messages.md](disappearing-messages.md) |
 | pwa | `feat/pwa` | pending | [pwa.md](pwa.md) |
@@ -38,15 +38,16 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 
-## Handoff state (2026-09-30)
-- **Current tip:** `feat/observability`. The message-search follow-up fixes 227a5cc / 2c78969 also live here, at the tip of the chain. Start the next feature with `git switch -c feat/group-admin-permissions` from `feat/observability`.
-- **Done and reviewed:** everything up to and including observability. Every code commit was reviewed per commit and acknowledged.
-- **Next:** `group-admin-permissions.md`. Its open questions have recommended defaults, and creator protection is the one to confirm with the user first.
+## Handoff state (2026-10-03)
+- **Current tip:** `feat/group-admin-permissions` (GA1-GA9 done; full matrix green, see its Progress). Start the next feature with `git switch -c feat/reactions` from `feat/group-admin-permissions`.
+- **Done and reviewed:** everything up to and including observability was reviewed per commit and acknowledged. group-admin-permissions commits are recorded in its document and Engram mirror.
+- **Next:** `reactions.md`. Its open questions are already resolved with the user (see the document); respect the `Kind` discriminator (no reactions on system messages).
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
   - `cd frontend && npm run typecheck && npm run lint && npm run test && npm run build`
   - `npm run test:e2e` against the running stack, after `docker compose up -d --build app web`
+  - Environment notes (this machine): host PostgreSQL 18 holds `127.0.0.1:5432`, so export `POSTGRES_PUBLIC_PORT=55432` for every `docker compose` call and run `POSTGRES_PUBLIC_PORT=55432 make test-integration` (the Makefile defaults to 5432). If `frontend/node_modules/.bin/*` are 0-byte stubs, the frontend checks pass vacuously: confirm `npx tsc --version` / `npx vitest --version` first and repair with `npm rebuild --ignore-scripts`. Playwright e2e global setup also logs in, so keep ~60s between integration and e2e runs (login limit 20/min, 429).
 - **Stack:** `docker compose up -d`. The observability profile is optional: `docker compose --profile observability up -d prometheus grafana`, then Grafana at http://localhost:3000 (admin/admin) and Prometheus at http://127.0.0.1:9090.
 - **Known leftovers:** each feature doc has a "Follow-ups (not fixed)" list.
 - **Stale review lineage:** `review-d33a5f83f9c32c1a` (message-pagination d3fadb6) is still open. Its CRITICAL finding was fixed forward in 22dcd3f/ae77379. Releasing it needs a maintainer-authorized `gentle-ai review abandon`.

@@ -31,7 +31,7 @@ test:          ## Tests unitarios del backend + lint y build del frontend
 	cd frontend && npm run lint && npm run build
 
 test-integration: ## Tests de integración y e2e contra el stack de Docker (make up antes)
-	POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 POSTGRES_USER=whatsapp POSTGRES_PASSWORD=whatsapp POSTGRES_DB=whatsapp \
+	POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=$${POSTGRES_PUBLIC_PORT:-5432} POSTGRES_USER=whatsapp POSTGRES_PASSWORD=whatsapp POSTGRES_DB=whatsapp \
 	E2E_BASE_URL=http://localhost go test -tags e2e -count=1 ./backend/integration/
 
 e2e:           ## Tests e2e de navegador (Playwright) contra el stack de Docker (make up antes)
