@@ -33,6 +33,15 @@ func InitHandlerChat(service services.ChatServicer, hub *websocket.Hub) *Handler
 	return h
 }
 
+// chatErrorStatus mapea un mensaje inexistente, expirado o ajeno (1:1) a 404;
+// cualquier otro error sigue siendo 500.
+func chatErrorStatus(err error) int {
+	if errors.Is(err, models.ErrMessageNotFound) {
+		return http.StatusNotFound
+	}
+	return http.StatusInternalServerError
+}
+
 // HandlerPostChat persiste un nuevo mensaje de chat en base de datos.
 // Los datos del mensaje ya vienen validados por MiddlewareChat.
 func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
@@ -53,7 +62,7 @@ func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 
 		message, err := hd.service.ServiceCreatMessage(messageExtract, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
+			ctx.JSON(chatErrorStatus(err), gin.H{
 				"error": err.Error(),
 			})
 			ctx.Abort()
@@ -262,7 +271,7 @@ func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
 
 		updatedMsg, err := hd.service.ServiceEditMessage(telephon.(string), msgEdit.MessageID, msgEdit.Message, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
+			ctx.JSON(chatErrorStatus(err), gin.H{
 				"error": err.Error(),
 			})
 			return
@@ -305,7 +314,7 @@ func (hd *HandlerChat) HandlerDeleteMessageForMe() gin.HandlerFunc {
 
 		deletedMsg, err := hd.service.ServiceDeleteMessageForMe(telephonUser.(string), messageID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(chatErrorStatus(err), gin.H{"error": err.Error()})
 			return
 		}
 

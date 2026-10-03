@@ -683,7 +683,7 @@ func (app *ApiContact) UpdateMessageContent(messageID uint, idSender uint, newCo
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("mensaje no encontrado o no tienes permiso para editarlo")
+		return models.ErrMessageNotFound
 	}
 	return nil
 }
@@ -712,6 +712,9 @@ func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx
 		Where("id = ? AND id_user = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, idSender).
 		First(&msg)
 	if find.Error != nil {
+		if errors.Is(find.Error, gorm.ErrRecordNotFound) {
+			return nil, models.ErrMessageNotFound
+		}
 		return nil, find.Error
 	}
 	del := app.data.WithContext(c).Delete(&msg)
@@ -719,7 +722,7 @@ func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx
 		return nil, del.Error
 	}
 	if del.RowsAffected == 0 {
-		return nil, errors.New("mensaje no encontrado o no tienes permiso para eliminarlo")
+		return nil, models.ErrMessageNotFound
 	}
 	return &msg, nil
 }
@@ -733,6 +736,9 @@ func (app *ApiContact) DeleteMessageForMe(messageID uint, userID uint, ctx conte
 		Where("id = ? AND (id_user = ? OR id_receptor = ?) AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, userID, userID).
 		First(&msg)
 	if find.Error != nil {
+		if errors.Is(find.Error, gorm.ErrRecordNotFound) {
+			return nil, models.ErrMessageNotFound
+		}
 		return nil, find.Error
 	}
 

@@ -418,15 +418,14 @@ func TestE2EDisappearingMessages(t *testing.T) {
 
 		// Operaciones sobre el vencido.
 		code, out = ca.do("PUT", "/api/v1/chat/edit", map[string]interface{}{"messageID": goneID, "receptor": peer, "message": "editado"})
-		// Códigos observados (DE4): las rutas 1:1 mapean "no encontrado" a 500
-		// (follow-up: deberían ser 404); se fijan exactos para detectar cambios.
-		assert.Equal(t, 500, code, "editar un vencido: %v", out)
+		// Las rutas 1:1 mapean "no encontrado" a 404 (igual que reacciones).
+		assert.Equal(t, 404, code, "editar un vencido: %v", out)
 		code, out = ca.do("DELETE", fmt.Sprintf("/api/v1/message/%d/me", int(goneID)), nil)
-		assert.Equal(t, 500, code, "borrar para mí un vencido: %v", out)
+		assert.Equal(t, 404, code, "borrar para mí un vencido: %v", out)
 		code, out = cl.do("PUT", fmt.Sprintf("/api/v1/chat/message/%d/reaction", int(goneID)), map[string]string{"emoji": "👍"})
 		assert.Equal(t, 404, code, "reaccionar a un vencido: %v", out)
 		code, out = ca.do("POST", "/api/v1/chat", map[string]interface{}{"receptor": peer, "message": "respuesta", "replyToMessageID": goneID})
-		assert.Equal(t, 500, code, "responder a un vencido: %v", out)
+		assert.Equal(t, 404, code, "responder a un vencido: %v", out)
 
 		// El job de expiración (DE4) puede haberlo borrado ya: también vale.
 		var row models.Message
