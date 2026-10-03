@@ -7,17 +7,22 @@ import (
 
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+
+	"gorm.io/gorm"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mensajes temporales: ajuste del temporizador (chat 1:1 y grupo)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ErrChatContactNotFound se devuelve cuando el otro participante del chat 1:1 no existe.
+var ErrChatContactNotFound = errors.New("el receptor no existe")
+
 // SetChatDisappearing cambia el temporizador del chat 1:1 entre el actor y el
 // contacto. Valida la duración ANTES de tocar el repo. changed=false (sin
 // mensaje) cuando el valor ya era el vigente. El mensaje devuelto es el de
-// sistema persistido (DE2 lo mapea a schema/WS).
-func (rp *ServiceChat) SetChatDisappearing(actorTelephon, contactTelephon string, seconds int, ctx context.Context) (bool, *models.Message, error) {
+// sistema persistido ya mapeado al schema de la API.
+func (rp *ServiceChat) SetChatDisappearing(actorTelephon, contactTelephon string, seconds int, ctx context.Context) (bool, *schemas.Message, error) {
 	if !models.ValidDisappearSeconds(seconds) {
 		return false, nil, models.ErrInvalidDisappearDuration
 	}
@@ -39,7 +44,8 @@ func (rp *ServiceChat) SetChatDisappearing(actorTelephon, contactTelephon string
 	if !changed {
 		return false, nil, nil
 	}
-	return true, saved, nil
+	out := messageToSchema(saved, actorTelephon, contactTelephon)
+	return true, &out, nil
 }
 
 // GetChatDisappearing devuelve el temporizador vigente del chat 1:1 (0 = off).
@@ -58,7 +64,12 @@ func (rp *ServiceChat) resolveChatPair(actorTelephon, contactTelephon string, ct
 	}
 	contactID, err := rp.repo.GetIdByTelephon(contactTelephon, ctx)
 	if err != nil {
-		return 0, 0, errors.New("el receptor no existe")
+		// Solo "no encontrado" significa que el receptor no existe; cualquier
+		// otro fallo (BD, timeout) se propaga sin enmascararlo.
+		if errors.Is(err, models.ErrUserNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, 0, ErrChatContactNotFound
+		}
+		return 0, 0, err
 	}
 	return uint(actorID), uint(contactID), nil
 }

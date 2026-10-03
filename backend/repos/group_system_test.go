@@ -72,6 +72,15 @@ func TestGroupSearchSQLExcludesSystemMessages(t *testing.T) {
 	assert.Contains(t, groupSQL, systemMessageFilter)
 	assert.Contains(t, groupSearchVisibleText, systemMessageFilter, "búsqueda de grupo no global también excluye system")
 
-	directSQL := buildGlobalSearchSQL("messages", "CASE WHEN id_user = ? THEN id_receptor ELSE id_user END", directVisibility, false)
-	assert.NotContains(t, directSQL, "kind")
+}
+
+// TestDirectSearchSQLExcludesSystemMessages: la búsqueda 1:1 (global y por chat)
+// también excluye los mensajes de sistema `disappearing_changed`.
+func TestDirectSearchSQLExcludesSystemMessages(t *testing.T) {
+	assert.Contains(t, directGlobalSearchSQL(false), systemMessageFilter)
+	assert.Contains(t, directGlobalSearchSQL(true), systemMessageFilter)
+	assert.Contains(t, directSearchVisibleText, systemMessageFilter)
+	assert.Contains(t, directSearchVisibleText, searchVisibleText, "mantiene el predicado base de los índices parciales")
+	// La visibilidad base (reacciones) no cambia; el filtro se añade aparte.
+	assert.NotContains(t, directVisibility, "kind")
 }

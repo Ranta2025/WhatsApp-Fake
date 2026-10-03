@@ -439,3 +439,14 @@ func (m *MockStatusService) CleanupExpiredStatuses(ctx context.Context) (int64, 
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
+
+func (m *MockChatService) SetChatDisappearing(actorTelephon, contactTelephon string, seconds int, ctx context.Context) (bool, *schemas.Message, error) {
+	args := m.Called(actorTelephon, contactTelephon, seconds, ctx)
+	msg, _ := args.Get(1).(*schemas.Message)
+	return args.Bool(0), msg, args.Error(2)
+}
+
+func (m *MockChatService) GetChatDisappearing(actorTelephon, contactTelephon string, ctx context.Context) (int, error) {
+	args := m.Called(actorTelephon, contactTelephon, ctx)
+	return args.Int(0), args.Error(1)
+}

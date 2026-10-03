@@ -146,6 +146,9 @@ func (r *stubAllChatsRepo) GetIdByTelephon(telephon string, ctx context.Context)
 func (r *stubAllChatsRepo) GetRecentMessagesForUser(userID uint, limit int, ctx context.Context) ([]models.Message, error) {
 	return r.recent, nil
 }
+func (r *stubAllChatsRepo) GetChatDisappearingForUser(userID uint, ctx context.Context) (map[uint]int, error) {
+	return map[uint]int{}, nil
+}
 func (r *stubAllChatsRepo) GetAddedContactIDs(userID uint, ctx context.Context) (map[uint]string, error) {
 	return map[uint]string{}, nil
 }

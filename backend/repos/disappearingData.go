@@ -56,6 +56,29 @@ func (app *ApiContact) GetChatDisappearing(userA, userB uint, ctx context.Contex
 	return setting.DisappearSeconds, nil
 }
 
+// GetChatDisappearingForUser devuelve, en UNA consulta, el temporizador (>0) de
+// todos los chats 1:1 del usuario: mapa id del otro participante -> segundos.
+func (app *ApiContact) GetChatDisappearingForUser(userID uint, ctx context.Context) (map[uint]int, error) {
+	c, cancel := context.WithTimeout(ctx, disappearingTimeout)
+	defer cancel()
+	var rows []models.ChatSetting
+	err := app.data.WithContext(c).
+		Where("(user_low_id = ? OR user_high_id = ?) AND disappear_seconds > 0", userID, userID).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uint]int, len(rows))
+	for _, r := range rows {
+		other := r.UserLowID
+		if other == userID {
+			other = r.UserHighID
+		}
+		out[other] = r.DisappearSeconds
+	}
+	return out, nil
+}
+
 // SetChatDisappearing cambia el temporizador del chat 1:1 en UNA transacción:
 // asegura la fila del par ordenado (ON CONFLICT DO NOTHING), la bloquea
 // (FOR UPDATE) y, solo si el valor cambia, la actualiza e inserta el mensaje

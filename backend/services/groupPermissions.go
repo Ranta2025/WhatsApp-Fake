@@ -53,6 +53,7 @@ type groupPermissionState struct {
 	onlyAdminsCanSend       bool
 	onlyAdminsCanEditInfo   bool
 	onlyAdminsCanAddMembers bool
+	disappearSeconds        int // temporizador de mensajes temporales vigente
 }
 
 // actorIdentity resuelve el usuario y devuelve su ID y su rol en el grupo.
@@ -95,6 +96,7 @@ func (s *ServiceGroup) groupPermissionContext(telephon string, groupID uint, ctx
 		onlyAdminsCanSend:       group.OnlyAdminsCanSend,
 		onlyAdminsCanEditInfo:   group.OnlyAdminsCanEditInfo,
 		onlyAdminsCanAddMembers: group.OnlyAdminsCanAddMembers,
+		disappearSeconds:        group.DisappearSeconds,
 	}, nil
 }
 
@@ -113,14 +115,21 @@ func (s *ServiceGroup) requireAdmin(telephon string, groupID uint, ctx context.C
 
 // requireCanSend exige permiso para enviar (o mostrar "escribiendo") en el grupo.
 func (s *ServiceGroup) requireCanSend(telephon string, groupID uint, ctx context.Context) error {
+	_, err := s.requireCanSendState(telephon, groupID, ctx)
+	return err
+}
+
+// requireCanSendState es requireCanSend devolviendo además el estado cargado
+// (incluye el temporizador vigente, para sellar ExpiresAt sin otra consulta).
+func (s *ServiceGroup) requireCanSendState(telephon string, groupID uint, ctx context.Context) (groupPermissionState, error) {
 	state, err := s.groupPermissionContext(telephon, groupID, ctx)
 	if err != nil {
-		return err
+		return groupPermissionState{}, err
 	}
 	if !canSend(state.actorIsAdmin, state.onlyAdminsCanSend) {
-		return ErrGroupSendRestricted
+		return groupPermissionState{}, ErrGroupSendRestricted
 	}
-	return nil
+	return state, nil
 }
 
 // requireCanEditInfo exige permiso para editar la info del grupo.

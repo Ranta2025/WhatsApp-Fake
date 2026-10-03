@@ -69,6 +69,8 @@ func (rt *RouterApiMessage) ApiChat() {
 	rt.app.POST("chat", middleware.MiddlewareChat(), rt.handlerChat.HandlerPostChat())
 	rt.app.GET("chat/:contact", middleware.MiddlewateGetChat(), rt.handlerChat.HandlerGetChats())
 	rt.app.GET("chat/:contact/search", middleware.MiddlewateGetChat(), rt.handlerChat.HandlerSearchChat())
+	rt.app.PUT("chat/:contact/disappearing", middleware.MiddlewateGetChat(), rt.handlerChat.HandlerSetDisappearing())
+	rt.app.GET("chat/:contact/settings", middleware.MiddlewateGetChat(), rt.handlerChat.HandlerGetChatSettings())
 	rt.app.GET("chats", rt.handlerChat.HandlerGetAllChats())
 	rt.app.PUT("chat/:contact", middleware.MiddlewareChatPutStatus(), rt.handlerChat.HandlerPutChat())
 	rt.app.PUT("chat", rt.handlerChat.HandlerPutAllChat())
@@ -133,6 +135,7 @@ func (rt *RouterApiMessage) ApiCall() {
 //	DELETE /api/v1/group/:groupID/member           → salir del grupo (self)
 //	PATCH  /api/v1/group/:groupID/settings         → configuración de permisos
 //	PATCH  /api/v1/group/:groupID                  → nombre/descripción
+//	PUT    /api/v1/group/:groupID/disappearing     → temporizador de mensajes temporales
 //	POST   /api/v1/group/:groupID/message          → enviar mensaje
 //	GET    /api/v1/group/:groupID/message          → historial (paginado)
 //	PUT    /api/v1/group/:groupID/message          → editar mensaje
@@ -158,6 +161,7 @@ func (rt *RouterApiMessage) ApiGroup() {
 		g.PATCH("/:groupID/avatar", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleUpdateGroupAvatar())
 		g.PATCH("/:groupID/settings", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupSettings(), rt.handlerGroup.HandleUpdateGroupSettings())
 		g.PATCH("/:groupID", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupInfo(), rt.handlerGroup.HandleUpdateGroupInfo())
+		g.PUT("/:groupID/disappearing", middleware.MiddlewareGroupID(), rt.handlerGroup.HandleSetDisappearing())
 
 		// Mensajes de grupo
 		g.POST("/:groupID/message", middleware.MiddlewareGroupID(), middleware.MiddlewareGroupMessage(), rt.handlerGroup.HandleSendGroupMessage())

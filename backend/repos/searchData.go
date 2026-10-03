@@ -29,6 +29,10 @@ const searchVisibleText = "deleted_at IS NULL AND COALESCE(media_type,'') = ''"
 // que el planner sigue pudiendo usar el índice y filtra después).
 const groupSearchVisibleText = searchVisibleText + " AND " + systemMessageFilter
 
+// directSearchVisibleText es el equivalente 1:1 de groupSearchVisibleText: los
+// mensajes de sistema (disappearing_changed) nunca son resultado de búsqueda.
+const directSearchVisibleText = searchVisibleText + " AND " + systemMessageFilter
+
 // groupSearchMembership replica el predicado de pertenencia de la búsqueda
 // global de grupos y excluye los mensajes de sistema.
 const groupSearchMembership = groupMembership + " AND " + systemMessageFilter
@@ -115,7 +119,7 @@ func (app *ApiContact) SearchMessages(userID, contactID uint, q string, before u
 	}
 	db := app.data.WithContext(c).Table("messages").
 		Select(`id, "time", message`).
-		Where(searchVisibleText).
+		Where(directSearchVisibleText).
 		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", userID, contactID, false, contactID, userID, false).
 		Where(SearchMatchSQL(useSearchNorm(c, app.data)), utils.EscapeLike(q))
 	if before > 0 {
@@ -188,12 +192,19 @@ func buildGlobalSearchSQL(from, chat, visible string, useNorm bool) string {
 	return out
 }
 
+// directGlobalSearchSQL es el SQL de la búsqueda global sobre chats 1:1: la
+// visibilidad del usuario más la exclusión de mensajes de sistema.
+func directGlobalSearchSQL(useNorm bool) string {
+	return buildGlobalSearchSQL("messages", "CASE WHEN id_user = ? THEN id_receptor ELSE id_user END",
+		directVisibility+" AND "+systemMessageFilter, useNorm)
+}
+
 // SearchMessagesGlobal busca en todos los chats 1:1 visibles para el usuario.
 // ChatID es el id del otro usuario.
 func (app *ApiContact) SearchMessagesGlobal(userID uint, q string, perChat, maxChats int, ctx context.Context) ([]models.GlobalSearchRow, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	sql := buildGlobalSearchSQL("messages", "CASE WHEN id_user = "+"?"+" THEN id_receptor ELSE id_user END", directVisibility, useSearchNorm(c, app.data))
+	sql := directGlobalSearchSQL(useSearchNorm(c, app.data))
 	var rows []models.GlobalSearchRow
 	// Orden de parámetros: CASE, visibilidad x2, término, maxChats, perChat.
 	err := app.data.WithContext(c).Raw(sql, userID, userID, userID, utils.EscapeLike(q), maxChats, perChat).Scan(&rows).Error

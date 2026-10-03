@@ -18,6 +18,9 @@ type GroupResponse struct {
 	OnlyAdminsCanSend       bool `json:"OnlyAdminsCanSend"`
 	OnlyAdminsCanEditInfo   bool `json:"OnlyAdminsCanEditInfo"`
 	OnlyAdminsCanAddMembers bool `json:"OnlyAdminsCanAddMembers"`
+
+	// Temporizador de mensajes temporales en segundos (0 = off, se omite).
+	DisappearSeconds int `json:"DisappearSeconds,omitempty"`
 }
 
 // GroupMemberResponse son los datos de un miembro dentro de un grupo,
@@ -62,6 +65,9 @@ type GroupMessageResponse struct {
 	Kind          string   `json:"Kind,omitempty"`
 	SystemEvent   string   `json:"SystemEvent,omitempty"`
 	SystemTargets []string `json:"SystemTargets,omitempty"`
+
+	// Instante de expiración (mensajes temporales); nil si no expira.
+	ExpiresAt *time.Time `json:"ExpiresAt,omitempty"`
 }
 
 // GroupDetail combina la info completa del grupo: metadatos, miembros y mensajes.

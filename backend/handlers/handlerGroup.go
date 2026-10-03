@@ -461,6 +461,50 @@ func (h *HandlerGroup) HandleDeleteGroupMessage() gin.HandlerFunc {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/v1/group/:groupID/disappearing
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleSetDisappearing cambia el temporizador de mensajes temporales del grupo
+// (misma regla que editar info). Responde con el sobre
+// {kind,key,seconds,byTelephon,systemMessage} y, solo si cambió, difunde
+// `disappearing_changed` a todos los miembros.
+func (h *HandlerGroup) HandleSetDisappearing() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		if !exists || !exists2 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+		var body struct {
+			Seconds *int `json:"seconds"`
+		}
+		if err := ctx.ShouldBindJSON(&body); err != nil || body.Seconds == nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Debes indicar los segundos"})
+			return
+		}
+		changed, sysMsg, err := h.service.SetGroupDisappearing(telephon.(string), groupID.(uint), *body.Seconds, ctx)
+		if err != nil {
+			h.respondGroupMutationError(ctx, err)
+			return
+		}
+		envelope := map[string]interface{}{
+			"kind":          "group",
+			"key":           groupID.(uint),
+			"seconds":       *body.Seconds,
+			"byTelephon":    telephon.(string),
+			"systemMessage": sysMsg,
+		}
+		if changed {
+			if telephons, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx); notifyErr == nil {
+				h.notifyAllGroupMembers(telephons, "disappearing_changed", envelope)
+			}
+		}
+		ctx.JSON(http.StatusOK, envelope)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/v1/group/:groupID/member
 // ─────────────────────────────────────────────────────────────────────────────
 

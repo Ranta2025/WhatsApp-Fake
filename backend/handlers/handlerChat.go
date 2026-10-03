@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/websocket"
@@ -11,14 +12,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// DirectNotifier es lo mínimo del Hub que necesita HandlerChat para notificar
+// por WS cambios de ajustes del chat 1:1.
+type DirectNotifier interface {
+	SendTo(telephon string, msg []byte)
+}
+
 type HandlerChat struct {
-	service services.ChatServicer
-	hub     *websocket.Hub
+	service  services.ChatServicer
+	hub      *websocket.Hub
+	notifier DirectNotifier // nil si no hay Hub
 }
 
 // InitHandlerChat crea el handler de chat con su servicio y referencia al Hub WebSocket.
 func InitHandlerChat(service services.ChatServicer, hub *websocket.Hub) *HandlerChat {
-	return &HandlerChat{service: service, hub: hub}
+	h := &HandlerChat{service: service, hub: hub}
+	if hub != nil {
+		h.notifier = hub
+	}
+	return h
 }
 
 // HandlerPostChat persiste un nuevo mensaje de chat en base de datos.
@@ -298,5 +310,88 @@ func (hd *HandlerChat) HandlerDeleteMessageForMe() gin.HandlerFunc {
 		}
 
 		ctx.JSON(http.StatusOK, deletedMsg)
+	}
+}
+
+// disappearingBody es el cuerpo de PUT .../disappearing. Seconds es puntero para
+// distinguir "0" (apagar) de "ausente".
+type disappearingBody struct {
+	Seconds *int `json:"seconds"`
+}
+
+// HandlerSetDisappearing cambia el temporizador del chat 1:1 con :contact
+// (cualquiera de los dos participantes). Responde con el sobre
+// {kind,key,seconds,byTelephon,systemMessage} y, solo si cambió, lo difunde por
+// WS (`disappearing_changed`) a ambos usuarios.
+func (hd *HandlerChat) HandlerSetDisappearing() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		contact, exist2 := ctx.Get("contact")
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+		var body disappearingBody
+		if err := ctx.ShouldBindJSON(&body); err != nil || body.Seconds == nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Debes indicar los segundos"})
+			return
+		}
+		actor, other := telephon.(string), contact.(string)
+		changed, sysMsg, err := hd.service.SetChatDisappearing(actor, other, *body.Seconds, ctx)
+		if err != nil {
+			switch {
+			case errors.Is(err, services.ErrChatContactNotFound), errors.Is(err, models.ErrUserNotFound):
+				ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			case errors.Is(err, models.ErrInvalidDisappearDuration):
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			default:
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		envelope := func(key string) gin.H {
+			return gin.H{
+				"kind":          "direct",
+				"key":           key,
+				"seconds":       *body.Seconds,
+				"byTelephon":    actor,
+				"systemMessage": sysMsg,
+			}
+		}
+		if changed && hd.notifier != nil {
+			// Cada participante recibe como clave el teléfono del OTRO.
+			for recipient, key := range map[string]string{actor: other, other: actor} {
+				msg, mErr := json.Marshal(map[string]interface{}{
+					"type":    "disappearing_changed",
+					"payload": envelope(key),
+				})
+				if mErr == nil {
+					hd.notifier.SendTo(recipient, msg)
+				}
+			}
+		}
+		ctx.JSON(http.StatusOK, envelope(other))
+	}
+}
+
+// HandlerGetChatSettings devuelve los ajustes del chat 1:1 con :contact.
+func (hd *HandlerChat) HandlerGetChatSettings() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		contact, exist2 := ctx.Get("contact")
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+		seconds, err := hd.service.GetChatDisappearing(telephon.(string), contact.(string), ctx)
+		if err != nil {
+			if errors.Is(err, services.ErrChatContactNotFound) || errors.Is(err, models.ErrUserNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"disappearSeconds": seconds})
 	}
 }

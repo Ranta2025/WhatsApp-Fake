@@ -49,6 +49,8 @@ type GroupServicer interface {
 	SearchGroupMessages(telephon string, groupID uint, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error)
 	GetGroupMessagesAround(telephon string, groupID, around uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, bool, error)
 	GetGroupMessagesAfter(telephon string, groupID, after uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, error)
+	SetGroupDisappearing(actorTelephon string, groupID uint, seconds int, ctx context.Context) (bool, *schemas.GroupMessageResponse, error)
+	GetGroupDisappearing(telephon string, groupID uint, ctx context.Context) (int, error)
 }
 
 // GroupRepoInterface define las operaciones de persistencia que necesita el servicio.
@@ -99,6 +101,15 @@ type ServiceGroup struct {
 	repo        GroupRepoInterface
 	contactRepo GroupContactRepoInterface
 	reactions   ReactionAggregator // opcional; nil = sin reacciones
+	now         func() time.Time   // reloj inyectable (nil = time.Now)
+}
+
+// clock devuelve la hora actual según el reloj inyectable.
+func (s *ServiceGroup) clock() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 // InitServiceGroup crea el servicio de grupos con sus repositorios,
@@ -236,6 +247,7 @@ func (s *ServiceGroup) GetUserGroups(telephon string, ctx context.Context) ([]sc
 			OnlyAdminsCanSend:       g.OnlyAdminsCanSend,
 			OnlyAdminsCanEditInfo:   g.OnlyAdminsCanEditInfo,
 			OnlyAdminsCanAddMembers: g.OnlyAdminsCanAddMembers,
+			DisappearSeconds:        g.DisappearSeconds,
 		})
 	}
 	return responses, nil
@@ -300,6 +312,7 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 			OnlyAdminsCanSend:       group.OnlyAdminsCanSend,
 			OnlyAdminsCanEditInfo:   group.OnlyAdminsCanEditInfo,
 			OnlyAdminsCanAddMembers: group.OnlyAdminsCanAddMembers,
+			DisappearSeconds:        group.DisappearSeconds,
 		},
 		Members:  convertGroupMembers(members),
 		Messages: detailMessages,
@@ -335,7 +348,8 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 
 	// Enforcement de la matriz: admin siempre; miembro sólo si el grupo permite
 	// enviar (only_admins_can_send apagado). Cubre REST y WS `group_chat`.
-	if err := s.requireCanSend(telephonSender, data.GroupID, ctx); err != nil {
+	state, err := s.requireCanSendState(telephonSender, data.GroupID, ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -348,11 +362,20 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		}
 	}
 
+	// Temporizador vigente (leído con la matriz de permisos): ExpiresAt = now + segundos.
+	now := s.clock()
+	var expiresAt *time.Time
+	if state.disappearSeconds > 0 {
+		t := now.Add(time.Duration(state.disappearSeconds) * time.Second)
+		expiresAt = &t
+	}
+
 	msg := &models.GroupMessage{
 		GroupID:          data.GroupID,
 		SenderID:         uint(senderID),
 		Message:          data.Message,
-		Time:             time.Now(),
+		Time:             now,
+		ExpiresAt:        expiresAt,
 		MediaUrl:         data.MediaUrl,
 		MediaType:        data.MediaType,
 		ReplyToMessageID: data.ReplyToMessageID,
@@ -379,6 +402,7 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		ReplyToMessageID: msg.ReplyToMessageID,
 		ReplyToTelephon:  msg.ReplyToTelephon,
 		ReplyToMessage:   msg.ReplyToMessage,
+		ExpiresAt:        msg.ExpiresAt,
 	}, nil
 }
 
@@ -552,6 +576,7 @@ func groupMessageToSchema(m *models.GroupMessage, senderTelephon, senderUsername
 		Edited:           m.Edited,
 		MediaUrl:         m.MediaUrl,
 		MediaType:        m.MediaType,
+		ExpiresAt:        m.ExpiresAt,
 		ReplyToMessageID: m.ReplyToMessageID,
 		ReplyToTelephon:  m.ReplyToTelephon,
 		ReplyToMessage:   m.ReplyToMessage,

@@ -671,7 +671,7 @@ func (app *ApiContact) UpdateMessageContent(messageID uint, idSender uint, newCo
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	result := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND id_user = ?", messageID, idSender).
+		Where("id = ? AND id_user = ? AND "+systemMessageFilter, messageID, idSender).
 		Updates(map[string]interface{}{
 			"message": newContent,
 			"edited":  true,
@@ -702,7 +702,7 @@ func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx
 	defer cancel()
 	var msg models.Message
 	find := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND id_user = ?", messageID, idSender).
+		Where("id = ? AND id_user = ? AND "+systemMessageFilter, messageID, idSender).
 		First(&msg)
 	if find.Error != nil {
 		return nil, find.Error
@@ -723,7 +723,7 @@ func (app *ApiContact) DeleteMessageForMe(messageID uint, userID uint, ctx conte
 	defer cancel()
 	var msg models.Message
 	find := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND (id_user = ? OR id_receptor = ?)", messageID, userID, userID).
+		Where("id = ? AND (id_user = ? OR id_receptor = ?) AND "+systemMessageFilter, messageID, userID, userID).
 		First(&msg)
 	if find.Error != nil {
 		return nil, find.Error

@@ -32,6 +32,8 @@ type ChatServicer interface {
 	ServiceSearchMessages(telephonUser, telephonContact, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error)
 	ServiceGetMessagesAround(telephonUser, telephonContact string, around uint, limit int, ctx context.Context) ([]schemas.Message, bool, bool, error)
 	ServiceGetMessagesAfter(telephonUser, telephonContact string, after uint, limit int, ctx context.Context) ([]schemas.Message, bool, error)
+	SetChatDisappearing(actorTelephon, contactTelephon string, seconds int, ctx context.Context) (bool, *schemas.Message, error)
+	GetChatDisappearing(actorTelephon, contactTelephon string, ctx context.Context) (int, error)
 }
 
 type ChatRepoInterface interface {
@@ -56,11 +58,21 @@ type ChatRepoInterface interface {
 	GetMessagesAfter(userID, contactID, after uint, limit int, ctx context.Context) ([]models.Message, bool, error)
 	SetChatDisappearing(actorID, otherID uint, seconds int, sysMsg *models.Message, ctx context.Context) (bool, *models.Message, error)
 	GetChatDisappearing(userA, userB uint, ctx context.Context) (int, error)
+	GetChatDisappearingForUser(userID uint, ctx context.Context) (map[uint]int, error)
 }
 
 type ServiceChat struct {
 	repo      ChatRepoInterface
 	reactions ReactionAggregator // opcional; nil = sin reacciones
+	now       func() time.Time   // reloj inyectable (nil = time.Now)
+}
+
+// clock devuelve la hora actual según el reloj inyectado.
+func (rp *ServiceChat) clock() time.Time {
+	if rp.now != nil {
+		return rp.now()
+	}
+	return time.Now()
 }
 
 // InitServiceMessage crea el servicio de chat con su repositorio, devolviendo la interfaz ChatServicer.
@@ -104,12 +116,31 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	if err != nil {
 		return schemas.Message{}, errors.New("el receptor no existe")
 	}
+	// Un mensaje de sistema no es un objetivo válido de respuesta.
+	if id := message.MessageGet.ReplyToMessageID; id != nil && *id != 0 {
+		if target, err := rp.repo.GetMessageByID(*id, ctx); err == nil && target.Kind == models.MessageKindSystem {
+			return schemas.Message{}, errors.New("no puedes responder a un mensaje de sistema")
+		}
+	}
+
+	// Temporizador vigente en este instante: sella ExpiresAt = now + segundos.
+	disappear, err := rp.repo.GetChatDisappearing(uint(id_user), uint(id_receptor), ctx)
+	if err != nil {
+		return schemas.Message{}, err
+	}
+	now := rp.clock()
+	var expiresAt *time.Time
+	if disappear > 0 {
+		t := now.Add(time.Duration(disappear) * time.Second)
+		expiresAt = &t
+	}
 	messageDB := models.Message{
 		IdUser:     uint(id_user),
 		IdReceptor: uint(id_receptor),
 		Message:    content.Message,
 		Status:     status,
-		Time:       time.Now(),
+		Time:       now,
+		ExpiresAt:  expiresAt,
 
 		// Campos de media
 		MediaUrl:  content.MediaUrl,
@@ -144,6 +175,9 @@ func messageToSchema(msg *models.Message, senderTelephon, receptorTelephon strin
 		ReplyToMessageID: msg.ReplyToMessageID,
 		ReplyToTelephon:  msg.ReplyToTelephon,
 		ReplyToMessage:   msg.ReplyToMessage,
+		ExpiresAt:        msg.ExpiresAt,
+		Kind:             msg.Kind,
+		SystemEvent:      msg.SystemEvent,
 	}
 }
 
@@ -292,6 +326,12 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 		return nil, err
 	}
 
+	// Temporizadores de todos los chats del usuario en UNA consulta.
+	timers, err := rp.repo.GetChatDisappearingForUser(userID, ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	result := make([]schemas.ChatGroup, 0, len(otherIDs))
 	for _, otherID := range otherIDs {
 		otherUser, ok := users[otherID]
@@ -308,6 +348,7 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 			ContactAvatarUrl: otherUser.AvatarUrl,
 			IsContact:        isContact,
 			Messages:         chatMsgs,
+			DisappearSeconds: timers[otherID],
 		})
 	}
 

@@ -33,7 +33,7 @@ func (r *RepoReaction) DirectMessageTarget(messageID, userID uint, ctx context.C
 	var msg models.Message // gorm excluye los soft-deleted
 	err := r.data.WithContext(c).
 		Select("id", "id_user", "id_receptor", "message", "media_type").
-		Where("id = ? AND "+directVisibility, messageID, userID, userID).
+		Where("id = ? AND "+directVisibility+" AND "+systemMessageFilter, messageID, userID, userID).
 		First(&msg).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, models.ErrMessageNotFound
