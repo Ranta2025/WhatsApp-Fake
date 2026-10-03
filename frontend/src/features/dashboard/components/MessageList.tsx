@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useDashboard, type ReactionTarget } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import { useLoadOlderOnScroll } from '../hooks/useLoadOlderOnScroll';
 import { composeFocusedMessages } from '../lib/focusedWindow';
@@ -10,6 +10,12 @@ import { isMediaUrl } from '../../../lib/mediaMessage';
 import Popover from '../../../components/ui/Popover';
 import { useRefMap } from '../../../hooks/useRefMap';
 import MessageTicks from './MessageTicks';
+import ReactionPicker from './reactions/ReactionPicker';
+import ReactionChips from './reactions/ReactionChips';
+import ReactionTrigger from './reactions/ReactionTrigger';
+import ReactionsModal from './reactions/ReactionsModal';
+import FullEmojiPicker from './reactions/FullEmojiPicker';
+import { useLongPress } from '../hooks/useLongPress';
 import type { Message } from '../../../types/api';
 
 /**
@@ -43,7 +49,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
     const { 
         selected, messagesByChat, profile, globalWallpaper,
         chatPaging, loadOlderMessages,
-        focusedChat, loadOlderFocused, loadNewerFocused,
+        focusedChat, loadOlderFocused, loadNewerFocused, reactToMessage,
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
@@ -79,6 +85,10 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
     } = useMessaging();
 
     const messagesContainerRef = useRef<HTMLDivElement>(null);
+    // Reactions: "+" full picker and who-reacted modal, both tied to one message id.
+    const [fullPickerFor, setFullPickerFor] = useState<number | null>(null);
+    const [whoFor, setWhoFor] = useState<number | null>(null);
+    const bindLongPress = useLongPress<number>(setMessageMenuOpen);
     // Disparadores del menú de cada mensaje, para el Popover portado (ver T4:
     // R2 — el menú ya no depende del hover del padre para mantenerse visible).
     const getMenuTriggerRef = useRefMap();
@@ -190,6 +200,8 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                             const isMine = m.SenderTelephon === profile?.Telephon;
                             const isMenuOpen = messageMenuOpen === m.MessageID;
                             const time = formatTime(m.Time || m.Timestamp || '');
+                            const reactionTarget: ReactionTarget = { kind: 'direct', messageID: m.MessageID };
+                            const myReaction = m.Reactions?.find(r => r.Mine)?.Emoji;
 
                             return (
                                 <div 
@@ -197,13 +209,19 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                     data-message-id={m.MessageID}
                                     className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 animate-slide-up`}
                                 >
-                                    <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`}>
+                                    <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`} {...bindLongPress(m.MessageID)}>
                                         {/* Disparador del menú: revelado con hover como antes, pero ya NO
                                             envuelve al menú (ver T4: R2 — antes, al dejar de hacer hover, todo
                                             el contenedor (disparador + menú abierto) se volvía invisible por
                                             CSS aunque el estado siguiera "abierto"). También queda visible
                                             si el menú está abierto, o con foco de teclado (accesible/táctil). */}
-                                        <div className={`absolute top-0 ${isMine ? '-left-10' : '-right-10'} transition-opacity z-20 ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'}`}>
+                                        <div className={`absolute top-0 ${isMine ? '-left-[4.5rem]' : '-right-[4.5rem]'} flex items-center gap-1 transition-opacity z-20 ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100'}`}>
+                            <ReactionTrigger
+                                                currentEmoji={myReaction}
+                                                onSelect={(emoji) => reactToMessage(reactionTarget, emoji)}
+                                                onMore={() => setFullPickerFor(m.MessageID)}
+                                                align={isMine ? 'left' : 'right'}
+                                            />
                                             <button
                                                 ref={(el: HTMLButtonElement | null) => {
                                                     // R3-refmap-unbounded: liberar la entrada al desmontarse
@@ -229,8 +247,14 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                             onClose={() => setMessageMenuOpen(null)}
                                             anchorRef={getMenuTriggerRef(m.MessageID)}
                                             align={isMine ? 'left' : 'right'}
-                                            className="w-48 p-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
+                                            className="w-60 p-1 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
                                         >
+                                            <ReactionPicker
+                                                currentEmoji={myReaction}
+                                                onSelect={(emoji) => { reactToMessage(reactionTarget, emoji); setMessageMenuOpen(null); }}
+                                                onMore={() => { setMessageMenuOpen(null); setFullPickerFor(m.MessageID); }}
+                                            />
+                                            <div className="my-1 h-px bg-white/10" />
                                             <button onClick={() => { handleReplyToMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                 Responder
@@ -304,6 +328,12 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                                 {isMine && <MessageTicks status={m.Status} />}
                                             </div>
                                         </div>
+                                        <ReactionChips
+                                            reactions={m.Reactions}
+                                            onToggle={(emoji) => reactToMessage(reactionTarget, emoji)}
+                                            onShowWho={() => setWhoFor(m.MessageID)}
+                                            align={isMine ? 'end' : 'start'}
+                                        />
                                     </div>
                                 </div>
                             );
@@ -311,6 +341,15 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                     </div>
                 </div>
             ))}
+            {fullPickerFor !== null && (
+                <FullEmojiPicker
+                    onClose={() => setFullPickerFor(null)}
+                    onSelect={(emoji) => { reactToMessage({ kind: 'direct', messageID: fullPickerFor }, emoji); setFullPickerFor(null); }}
+                />
+            )}
+            {whoFor !== null && (
+                <ReactionsModal target={{ kind: 'direct', messageID: whoFor }} myTelephon={profile?.Telephon} onClose={() => setWhoFor(null)} />
+            )}
             {/* Indicador de carga de mensajes anteriores: absoluto y al final del DOM
                 (fuera del flujo y sin margen de space-y) para no mover el contenido */}
             {(focused ? focused.loadingOlder : paging?.loadingOlder) && (

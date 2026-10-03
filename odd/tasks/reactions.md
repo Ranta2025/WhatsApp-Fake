@@ -52,7 +52,7 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - [x] RE2 Aggregates in responses: add `Reactions` to `schemas.Message` and `GroupMessageResponse`, batch helper used by every history/window/detail path (find them: `HandlerGetChats` `handlerChat.go:56-125`, `HandleGetGroupMessages` `handlerGroup.go:262-332`, group detail, search around window). Tests assert one extra query per page and correct `Mine`. Route: delegated.
 - [x] RE3 Transport: WS `react` handler + `reaction` event fan-out, REST PUT/DELETE/GET endpoints and routes, handler tests, Go e2e (`-tags e2e`): A reacts, B receives `reaction` over WS, replace, remove, non-member 403, invisible message 404. Route: delegated.
 - [x] RE4 Frontend plumbing (includes the author notification: in-app toast "<name> reaccionó <emoji> a: <snippet>" when the viewer is the message author, not the reactor, the emoji is non-empty and that chat is not open): types (`types/api.ts`, `types/ws.ts`, `WsSend*`), guards/normalizers, `applyReaction` reducer, WS sender + listener in `api/websocket.ts`/`DashboardContext`, optimistic update + rollback, merge preservation in `mergeMessages`/`focusedWindow`. Vitest. Route: delegated.
-- [ ] RE5 UI: `ReactionPicker` (quick row), `ReactionChips`, who-reacted modal, wiring into 1:1 and group bubbles, long-press, aria labels. Component tests. Route: delegated.
+- [x] RE5 UI: `ReactionPicker` (quick row), `ReactionChips`, who-reacted modal, wiring into 1:1 and group bubbles, long-press, aria labels. Component tests. Route: delegated.
 - [ ] RE6 Playwright: Ana reacts to Luis's message, Luis sees the chip live and after reload; Ana changes and removes the reaction; group variant with Marta; chip counts. Unique text per run, no absolute counts. Two green runs. Route: delegated.
 - [ ] RE7 Close: full checks, doc + mirror.
 
@@ -102,6 +102,13 @@ Resolved with the user on 2026-10-03 ("like WhatsApp"):
   - (S) The `UpsertReaction` insert is retried once when the row vanished between the conflict and `SELECT FOR UPDATE`.
   - (S) Added a test for the group `groupID` zero/wrong-type 400.
   - Evidence: RED for the no-op echo ("got 0"), two-taps/error, rollback-keeps-others, 15s cap. The mutation (whole-key delete on echo) was caught. Go build/vet/test and `make test-integration` are green, and the frontend matrix passes (637 tests).
+- RE5 (delegated, sonnet):
+  - Components in `components/reactions/`: `ReactionPicker` (quick row + "Más emojis"), `ReactionTrigger` (hover smile "Reaccionar"), `ReactionChips` (aria-pressed = Mine, "Ver reacciones"), `ReactionsModal` ("Reacciones", per-emoji filter, "Tú"), and `FullEmojiPicker` + `emojiPickerLoader`.
+  - Hook `useLongPress` (400 ms, cancels on move). Wiring is in `MessageList.tsx` and `GroupChatWindow.tsx`; there is no reactions UI on system or deleted messages.
+  - Picker library decided by the parent: `emoji-picker-element` ^1.29.1 + `emoji-picker-element-data` ^1.8.0, lazy `import()` on "+". Spanish i18n, data `es/cldr/data.json?url` served from our own origin (verified `200 application/json` through nginx after rebuilding `web`).
+  - Bundle: Dashboard chunk +3.1 kB gzip (67.32 -> 70.41). Lazy loader 14.35 kB gzip; data 66.8 kB gzip.
+  - Evidence: RED (unresolved imports, 12 wiring failures). Mutations caught: chip aria-pressed, wrong kind in MessageList, long-press move-cancel. typecheck/lint/test (81 files / 673)/build green.
+  - Follow-up: in jsdom, CSS attribute selectors with emoji do not match; Playwright should use getByRole/getByLabel.
 
 ## Next step
-RE5.
+RE6.

@@ -23,6 +23,12 @@ import { deriveGroupMessageStatus } from '../lib/groupReceipts';
 import { isSystemGroupMessage, describeGroupSystemMessage } from '../lib/groupAdminEvents';
 import { canAddMembers, canEditInfo, canManageMembers } from '../lib/groupPermissions';
 import GroupSettingsSection from './GroupSettingsSection';
+import ReactionPicker from './reactions/ReactionPicker';
+import ReactionChips from './reactions/ReactionChips';
+import ReactionTrigger from './reactions/ReactionTrigger';
+import ReactionsModal from './reactions/ReactionsModal';
+import FullEmojiPicker from './reactions/FullEmojiPicker';
+import { useLongPress } from '../hooks/useLongPress';
 import type { GroupMessageResponse, MediaUploadResult, MessageStatus, SearchPage, GroupRole, GroupInfoRequest } from '../../../types/api';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -51,10 +57,18 @@ interface GroupMessageBubbleProps {
     onInfo?: (msg: GroupMessageResponse) => void;
     /** Término de la búsqueda abierta: se resalta dentro del texto. */
     searchQuery?: string;
+    /** Reaccionar con un emoji (alterna: el mismo emoji quita la reacción). Sin esto no hay UI de reacciones. */
+    onReact?: (msg: GroupMessageResponse, emoji: string) => void;
+    /** "+" del selector rápido: abre el selector completo de emojis. */
+    onMoreReactions?: (msg: GroupMessageResponse) => void;
+    /** Abre la lista de quién reaccionó. */
+    onShowReactions?: (msg: GroupMessageResponse) => void;
 }
 
-export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo, searchQuery }: GroupMessageBubbleProps) => {
+export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo, searchQuery, onReact, onMoreReactions, onShowReactions }: GroupMessageBubbleProps) => {
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const bindLongPress = useLongPress<number>(setMenuOpen);
+    const myReaction = msg.Reactions?.find(r => r.Mine)?.Emoji;
 
     const isMenuOpen = menuOpen === msg.MessageID;
 
@@ -76,7 +90,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     ${isMine
                         ? 'bg-indigo-600 text-white rounded-tr-sm'
                         : 'bg-slate-800 text-slate-100 rounded-tl-sm'}`
-                }>
+                } {...bindLongPress(msg.MessageID)}>
                     {/* Sender name for non-mine messages */}
                     {!isMine && (
                         <div className="text-xs font-semibold text-indigo-400 mb-0.5 truncate">
@@ -111,7 +125,29 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                             <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                         </svg>
                     </button>
+
+                    {/* Hover smile: quick reaction row only (same reveal as "Opciones") */}
+                    {onReact && (
+                        <div className={`absolute top-0 ${isMine ? 'left-0 -translate-x-[calc(100%+1.75rem)]' : 'right-0 translate-x-[calc(100%+1.75rem)]'}
+                            transition-opacity focus-within:opacity-100 ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                            <ReactionTrigger
+                                currentEmoji={myReaction}
+                                onSelect={(emoji) => onReact(msg, emoji)}
+                                onMore={() => onMoreReactions?.(msg)}
+                                align={isMine ? 'right' : 'left'}
+                            />
+                        </div>
+                    )}
                 </div>
+
+                {onReact && (
+                    <ReactionChips
+                        reactions={msg.Reactions}
+                        onToggle={(emoji) => onReact(msg, emoji)}
+                        onShowWho={() => onShowReactions?.(msg)}
+                        align={isMine ? 'end' : 'start'}
+                    />
+                )}
 
                 {/* Context menu — portado (Popover) para no quedar recortado por el
                     overflow-y-auto de la lista de mensajes */}
@@ -122,6 +158,16 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     align={isMine ? 'right' : 'left'}
                     className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]"
                 >
+                    {onReact && (
+                        <>
+                            <ReactionPicker
+                                currentEmoji={myReaction}
+                                onSelect={(emoji) => { onReact(msg, emoji); setMenuOpen(null); }}
+                                onMore={() => { setMenuOpen(null); onMoreReactions?.(msg); }}
+                            />
+                            <div className="h-px bg-white/10" />
+                        </>
+                    )}
                     {/* Reply — always available */}
                     <button onClick={() => { onReply(msg); setMenuOpen(null); }}
                             className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
@@ -210,7 +256,7 @@ export const GroupMessageList = ({
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
-    const { selectedGroup, groupReceipts, groupMemberNames } = useDashboard();
+    const { selectedGroup, groupReceipts, groupMemberNames, reactToMessage } = useDashboard();
     // El Info se ata al grupo en que se abrió: si cambia el grupo o el mensaje
     // ya no está en la lista (borrado), se descarta durante el render.
     const [info, setInfo] = useState<{ groupID: number | undefined; message: GroupMessageResponse } | null>(null);
@@ -219,6 +265,15 @@ export const GroupMessageList = ({
     }
     const infoMessage = info?.message ?? null;
     const openInfo = (message: GroupMessageResponse) => setInfo({ groupID, message });
+    // Reacciones: selector completo y lista de "quién reaccionó", atados al grupo abierto.
+    const [fullPicker, setFullPicker] = useState<{ groupID: number | undefined; messageID: number } | null>(null);
+    const [who, setWho] = useState<{ groupID: number | undefined; messageID: number } | null>(null);
+    const activeFullPicker = fullPicker?.groupID === groupID ? fullPicker : null;
+    const activeWho = who?.groupID === groupID ? who : null;
+    const reactTo = useCallback((messageID: number, emoji: string) => {
+        if (groupID === undefined) return;
+        reactToMessage({ kind: 'group', messageID, groupID }, emoji);
+    }, [groupID, reactToMessage]);
 
     // Nombres para los eventos de sistema: la caché del contexto (sobrevive a que
     // un miembro salga) con fallback a los miembros actuales del grupo abierto.
@@ -295,10 +350,26 @@ export const GroupMessageList = ({
                             : undefined}
                         onInfo={openInfo}
                         searchQuery={searchQuery}
+                        onReact={(m, emoji) => reactTo(m.MessageID, emoji)}
+                        onMoreReactions={(m) => setFullPicker({ groupID, messageID: m.MessageID })}
+                        onShowReactions={(m) => setWho({ groupID, messageID: m.MessageID })}
                     />
                 );
             })}
             {infoMessage && <GroupMessageInfoModal message={infoMessage} onClose={() => setInfo(null)} />}
+            {activeFullPicker && (
+                <FullEmojiPicker
+                    onClose={() => setFullPicker(null)}
+                    onSelect={(emoji) => { reactTo(activeFullPicker.messageID, emoji); setFullPicker(null); }}
+                />
+            )}
+            {activeWho && groupID !== undefined && (
+                <ReactionsModal
+                    target={{ kind: 'group', messageID: activeWho.messageID, groupID }}
+                    myTelephon={myTelephon}
+                    onClose={() => setWho(null)}
+                />
+            )}
             {/* Indicador de carga: absoluto y sin margen de space-y (no mueve el contenido) */}
             {loadingOlder && (
                 <div className="absolute inset-x-0 top-2 mt-0! z-20 flex justify-center pointer-events-none">
