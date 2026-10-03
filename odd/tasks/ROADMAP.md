@@ -5,7 +5,7 @@ Index of every feature in this repo, its branch, status, and feature document. E
 ## Branch chain (all local, NOT pushed)
 Branches are chained: each is created from the previous one. Push, PR and merge are the user's decisions.
 
-`main` -> `feat/status-stories` -> `feat/typescript-migration` -> `feat/group-media` -> `feat/message-pagination` -> `feat/e2e-ci` -> `feat/group-read-receipts` -> `feat/message-search` -> `feat/observability` -> `feat/group-admin-permissions` -> (pending features, in the recommended order below)
+`main` -> `feat/status-stories` -> `feat/typescript-migration` -> `feat/group-media` -> `feat/message-pagination` -> `feat/e2e-ci` -> `feat/group-read-receipts` -> `feat/message-search` -> `feat/observability` -> `feat/group-admin-permissions` -> `feat/reactions` -> (pending features, in the recommended order below)
 
 Before creating a branch: `git branch --show-current`, `git status`, and branch from the LATEST feature branch in the chain (never from `main` while earlier branches are unmerged).
 
@@ -21,7 +21,7 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | message-search | `feat/message-search` | done | [message-search.md](message-search.md) |
 | observability | `feat/observability` | done | [observability.md](observability.md) |
 | group-admin-permissions | `feat/group-admin-permissions` | done | [group-admin-permissions.md](group-admin-permissions.md) |
-| reactions | `feat/reactions` | pending | [reactions.md](reactions.md) |
+| reactions | `feat/reactions` | done | [reactions.md](reactions.md) |
 | disappearing-messages | `feat/disappearing-messages` | pending | [disappearing-messages.md](disappearing-messages.md) |
 | pwa | `feat/pwa` | pending | [pwa.md](pwa.md) |
 | web-push | `feat/web-push` | pending | [web-push.md](web-push.md) |
@@ -39,9 +39,9 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 
 ## Handoff state (2026-10-03)
-- **Current tip:** `feat/group-admin-permissions` (GA1-GA9 done; full matrix green, see its Progress). Start the next feature with `git switch -c feat/reactions` from `feat/group-admin-permissions`.
+- **Current tip:** `feat/reactions` (RE1-RE7 done; full matrix green, see its Progress). Start the next feature with `git switch -c feat/disappearing-messages` from `feat/reactions`.
 - **Done and reviewed:** everything up to and including observability was reviewed per commit and acknowledged. group-admin-permissions commits are recorded in its document and Engram mirror.
-- **Next:** `reactions.md`. Its open questions are already resolved with the user (see the document); respect the `Kind` discriminator (no reactions on system messages).
+- **Next:** `disappearing-messages.md`. Its open questions are already resolved with the user (see the document). Its hard-delete paths must also delete `message_reactions` rows for the expired messages (kind `direct`/`group`, no FK).
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)

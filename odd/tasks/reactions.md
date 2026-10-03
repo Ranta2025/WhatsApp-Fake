@@ -54,7 +54,7 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - [x] RE4 Frontend plumbing (includes the author notification: in-app toast "<name> reaccionó <emoji> a: <snippet>" when the viewer is the message author, not the reactor, the emoji is non-empty and that chat is not open): types (`types/api.ts`, `types/ws.ts`, `WsSend*`), guards/normalizers, `applyReaction` reducer, WS sender + listener in `api/websocket.ts`/`DashboardContext`, optimistic update + rollback, merge preservation in `mergeMessages`/`focusedWindow`. Vitest. Route: delegated.
 - [x] RE5 UI: `ReactionPicker` (quick row), `ReactionChips`, who-reacted modal, wiring into 1:1 and group bubbles, long-press, aria labels. Component tests. Route: delegated.
 - [x] RE6 Playwright: Ana reacts to Luis's message, Luis sees the chip live and after reload; Ana changes and removes the reaction; group variant with Marta; chip counts. Unique text per run, no absolute counts. Two green runs. Route: delegated.
-- [ ] RE7 Close: full checks, doc + mirror.
+- [x] RE7 Close: full checks, doc + mirror.
 
 ## Acceptance criteria
 - A user has at most one reaction per message; changing emoji replaces, repeating removes; state matches on all participants live and after reload, in both chat kinds.
@@ -120,6 +120,14 @@ Resolved with the user on 2026-10-03 ("like WhatsApp"):
   - Author toast "Luis reaccionó 🙏" while Ana views another chat.
   - Messages are sent through the UI, because a message sent by API is not in the sender's open view.
   - Spec 3/3, then full `npm run test:e2e` 17/17 twice (about 70s apart), after rebuilding app and web.
+- RE7 (inline): full matrix on `db7e74f`: `go build/vet/test ./...` green (11 packages); `POSTGRES_PUBLIC_PORT=55432 make test-integration` ok (15.0s); frontend typecheck, lint, test (81 files / 678 tests), build green; `npm run test:e2e` 17/17 twice (RE6 evidence, same code). The final tail slice (9d4a734, db7e74f, this close) was reviewed even though it was under budget, see below.
+
+## Follow-ups (not fixed)
+- The reaction service travels on the Hub (`hub.SetReactionService`) instead of `routers` `Deps`.
+- `DashboardContext` calls `wsManager.sendReaction` directly instead of going through `useWebSocket`.
+- A WS-originated reaction reaches only the actor's originating connection (other sessions of the same user see it only after a refetch); REST reaches all of them.
+- The `UpsertReaction` retry branch and the repo SQL are proven only by e2e (there is no DB-free repo test runner).
+- The `disappearing-messages` hard-delete must delete `message_reactions` rows (no FK across the two message tables).
 
 ## Next step
-RE7.
+Feature complete. Next roadmap item: `disappearing-messages` (must add the reaction cleanup hook).
