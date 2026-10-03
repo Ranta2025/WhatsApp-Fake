@@ -3,6 +3,7 @@ import { useDashboard, type ReactionTarget } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import { useLoadOlderOnScroll } from '../hooks/useLoadOlderOnScroll';
 import { composeFocusedMessages } from '../lib/focusedWindow';
+import { isSystemDirectMessage, describeDirectSystemMessage } from '../lib/disappearing';
 import HighlightedText from './HighlightedText';
 import { formatDaySeparator, formatTime } from '../../../utils/format';
 import MediaContent from '../../../components/MediaContent';
@@ -163,6 +164,10 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
 
     if (!selected) return null;
 
+    const resolveSystemName = (telephon: string): string | undefined => (
+        telephon === selected.Number ? (selected.ContactName || selected.Username || selected.Number) : undefined
+    );
+
     // Wallpaper priority: per-chat > global > default pattern
     const activeWallpaper = (selected && chatWallpapers[selected.Number]) || globalWallpaper || null;
 
@@ -197,6 +202,16 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
 
                     <div className="space-y-1.5">
                         {group.messages.map((m) => {
+                            // Avisos de sistema (p. ej. mensajes temporales): píldora centrada, sin burbuja ni acciones.
+                            if (isSystemDirectMessage(m)) {
+                                return (
+                                    <div key={m.MessageID} data-message-id={m.MessageID} data-system-message="true" className="flex justify-center py-1 px-4">
+                                        <span className="bg-black/40 backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full text-center">
+                                            {describeDirectSystemMessage(m, profile?.Telephon, resolveSystemName)}
+                                        </span>
+                                    </div>
+                                );
+                            }
                             const isMine = m.SenderTelephon === profile?.Telephon;
                             const isMenuOpen = messageMenuOpen === m.MessageID;
                             const time = formatTime(m.Time || m.Timestamp || '');

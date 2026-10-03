@@ -6,6 +6,7 @@ import CallHistory from '../../../components/CallHistory';
 import Avatar from '../../../components/ui/Avatar';
 import StatusList from '../../status/components/StatusList';
 import { formatChatTimestamp, formatLastSeen, previewMessage } from '../../../utils/format';
+import { countUnreadFrom, latestPreviewable } from '../lib/disappearing';
 import MessageSearchResults from './MessageSearchResults';
 import { useGlobalMessageSearch } from '../hooks/useGlobalMessageSearch';
 import type { ContactChat, GlobalSearchChat, Message } from '../../../types/api';
@@ -169,8 +170,9 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                 const contact = contactByNumber.get(number);
                 const group = allChatGroups[number];
                 const messages = messagesByChat[number] || [];
-                const last = messages[messages.length - 1] || null;
-                const unread = messages.filter(m => m?.SenderTelephon === number && m.Status !== 'visto').length;
+                // Los avisos de sistema (mensajes temporales) no son vista previa ni cuentan como no leídos.
+                const last = latestPreviewable(messages);
+                const unread = countUnreadFrom(messages, number);
                 return {
                     number,
                     contact,

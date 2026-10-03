@@ -209,6 +209,37 @@ export interface WsGroupReceipt {
   payload: { groupID: number; telephon: string; deliveredUpTo: number; readUpTo: number };
 }
 
+/**
+ * El temporizador de mensajes temporales cambió (camelCase). 1:1: `key` = teléfono
+ * del OTRO participante (perspectiva del receptor del evento); grupo: `key` = id del
+ * grupo (número). `systemMessage` va en el schema normal de cada tipo y se omite
+ * (o es null) cuando el valor no cambió. Es también el cuerpo de las respuestas REST.
+ */
+export interface DisappearingChangedPayload {
+  kind: 'direct' | 'group';
+  key: string | number;
+  seconds: number;
+  byTelephon: string;
+  systemMessage?: Message | GroupMessageResponse | null;
+}
+
+export interface WsDisappearingChanged {
+  type: 'disappearing_changed';
+  payload: DisappearingChangedPayload;
+}
+
+/** Mensajes borrados por caducidad. `key`: 1:1 = teléfono del otro participante; grupo = id. */
+export interface MessagesExpiredPayload {
+  kind: 'direct' | 'group';
+  key: string | number;
+  messageIDs: number[];
+}
+
+export interface WsMessagesExpired {
+  type: 'messages_expired';
+  payload: MessagesExpiredPayload;
+}
+
 export interface WsStatusNew {
   type: 'status_new';
   payload: { owner: StatusOwnerBrief; status: StatusItem };
@@ -307,6 +338,8 @@ export type WsEvent =
   | WsGroupInfo
   | WsGroupReceipt
   | WsReaction
+  | WsDisappearingChanged
+  | WsMessagesExpired
   | WsStatusNew
   | WsStatusViewed
   | WsStatusDeleted

@@ -41,7 +41,14 @@ export type GroupSystemEvent =
   | 'admin_granted'
   | 'admin_revoked'
   | 'settings_changed'
-  | 'info_changed';
+  | 'info_changed'
+  | 'disappearing_changed';
+
+/** backend/models Message.Kind (1:1). Absent = normal message; "system" = persisted chat event. */
+export type MessageKind = 'system';
+
+/** Segundos permitidos del temporizador de mensajes temporales (0 = desactivado). */
+export type DisappearSeconds = 0 | 86400 | 604800 | 7776000;
 
 // ─────────────────────────────────────────────────────────────────────────
 // User / perfil — backend/schemas/schemauser.go UserGet (mixed casing:
@@ -121,6 +128,11 @@ export interface Message {
   ReplyToMessage?: string;
   /** Omitido por el backend cuando no hay reacciones (omitempty). */
   Reactions?: ReactionSummary[];
+  /** RFC 3339; solo si el chat tenía temporizador al enviar (omitempty). Inválido = ignorado. */
+  ExpiresAt?: string;
+  /** Solo en mensajes de sistema (omitempty); su `Message` son los segundos ("0" = off). */
+  Kind?: MessageKind;
+  SystemEvent?: GroupSystemEvent;
 }
 
 /** GET del historial de chat 1:1 con un contacto. */
@@ -131,6 +143,8 @@ export interface ChatGroup {
   ContactAvatarUrl: string;
   IsContact: boolean;
   Messages: Message[];
+  /** Temporizador del chat en segundos (omitempty: ausente = 0). */
+  DisappearSeconds?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -150,6 +164,8 @@ export interface GroupResponse {
   OnlyAdminsCanSend: boolean;
   OnlyAdminsCanEditInfo: boolean;
   OnlyAdminsCanAddMembers: boolean;
+  /** Temporizador de mensajes temporales en segundos (omitempty: ausente = 0). */
+  DisappearSeconds?: number;
 }
 
 export interface GroupMemberResponse {
@@ -184,6 +200,8 @@ export interface GroupMessageResponse {
   SystemTargets?: string[];
   /** Omitido por el backend cuando no hay reacciones (omitempty). */
   Reactions?: ReactionSummary[];
+  /** RFC 3339; solo si el grupo tenía temporizador al enviar (omitempty). Inválido = ignorado. */
+  ExpiresAt?: string;
 }
 
 /** Ficha mínima de un miembro en la lista de acuses (camelCase, ver schemaGroup.go). */

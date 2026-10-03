@@ -1,4 +1,5 @@
 import type { GroupMessageResponse, GroupRole, GroupSystemEvent } from '../../../types/api';
+import { describeDisappearingSystemText } from './disappearing';
 
 /**
  * Runtime guards for the admin WS payloads and the persisted system messages,
@@ -51,6 +52,7 @@ const asRole = (value: unknown): GroupRole | undefined =>
 
 const SYSTEM_EVENTS: ReadonlySet<string> = new Set<GroupSystemEvent>([
     'member_added', 'member_removed', 'member_left', 'admin_granted', 'admin_revoked', 'settings_changed', 'info_changed',
+    'disappearing_changed',
 ]);
 
 const asSystemEvent = (value: unknown): GroupSystemEvent | undefined =>
@@ -197,6 +199,10 @@ export function describeGroupSystemMessage(
             return actorIsViewer
                 ? 'Tú actualizaste la información del grupo'
                 : `${actorName} actualizó la información del grupo`;
+        case 'disappearing_changed':
+            return describeDisappearingSystemText(
+                msg.Message, actor, msg.SenderUsername || resolveName(actor), viewerTelephon,
+            );
         default:
             return 'Evento del grupo';
     }

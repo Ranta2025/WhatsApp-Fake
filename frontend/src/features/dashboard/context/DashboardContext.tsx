@@ -1,10 +1,11 @@
 import {
-    createContext, useContext, useState, useEffect, useRef, useCallback,
+    createContext, useContext, useState, useEffect, useRef, useCallback, useMemo,
     type ReactNode, type Dispatch, type SetStateAction,
 } from 'react';
 import { isAxiosError } from 'axios';
 import api from '../../../api/axios';
 import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/groupApi';
+import { setChatDisappearing as apiSetChatDisappearing, getChatDisappearing, setGroupDisappearing as apiSetGroupDisappearing } from '../../../api/disappearingApi';
 import { useAuth, type AuthContextValue } from '../../../context/AuthContext';
 import { useWebSocket } from '../../../hooks/useWebSocket';
 import {
@@ -44,6 +45,14 @@ import {
 import {
     parseSystemMessage, parseGroupMemberRole, parseGroupMemberRemoved, parseGroupSettings, parseGroupInfo,
 } from '../lib/groupAdminEvents';
+import {
+    normalizeDisappearSeconds, removeMessagesByIds, removeIdsFromWindow, removeExpiredMessages, removeExpiredFromWindow,
+    earliestExpiry, hasUnreadFrom, isSystemDirectMessage,
+} from '../lib/disappearing';
+import {
+    parseDisappearingChanged, parseMessagesExpired, type DisappearingChangedEvent,
+} from '../lib/disappearingEvents';
+import { useExpiryTimer } from '../hooks/useExpiryTimer';
 
 /** Mensajes por página al cargar historial antiguo (scroll hacia arriba). */
 const OLDER_PAGE_SIZE = 50;
@@ -154,6 +163,17 @@ export interface DashboardContextValue {
     /** Carga la página anterior de un chat 1:1 (cursor = id del mensaje más antiguo). */
     loadOlderMessages: (contactNumber: string) => Promise<void>;
     markAsRead: (contactNumber: string) => void;
+    /** Per-chat disappearing timer in seconds, keyed by the other participant's telephon (0 = off, absent = unknown). */
+    chatDisappear: Record<string, number>;
+    /** Timer (seconds) of the selected chat or group; 0 when off or not yet known. */
+    selectedDisappearSeconds: number;
+    /**
+     * Sets the 1:1 timer through the REST API and applies the result through the same
+     * path as the WS `disappearing_changed` event (idempotent). false (+ error toast) on failure.
+     */
+    setChatDisappearing: (contact: string, seconds: number) => Promise<boolean>;
+    /** Group counterpart of `setChatDisappearing` (same permission as editing the group info). */
+    setGroupDisappearing: (groupID: number, seconds: number) => Promise<boolean>;
     groups: LocalGroup[];
     setGroups: Dispatch<SetStateAction<LocalGroup[]>>;
     groupMessages: Record<number, GroupMessageEntry[]>;
@@ -274,6 +294,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const [allChatGroups, setAllChatGroups] = useState<Record<string, DashboardChatGroupEntry>>({});
     const [drafts, setDrafts] = useState<Record<string, string>>({});
     const [chatPaging, setChatPaging] = useState<Record<string, PagingState>>({});
+    const [chatDisappear, setChatDisappear] = useState<Record<string, number>>({});
 
     // Groups
     const [groups, setGroups] = useState<LocalGroup[]>([]);
@@ -351,8 +372,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         setMessagesByChat(prev => {
             const msgs = prev[contactNumber];
             if (!msgs) return prev;
-            const hasUnread = msgs.some(m => m.SenderTelephon === contactNumber && m.Status !== 'visto');
-            if (!hasUnread) return prev;
+            if (!hasUnreadFrom(msgs, contactNumber)) return prev;
             const updated = msgs.map(m =>
                 m.SenderTelephon === contactNumber && m.Status !== 'visto'
                     ? { ...m, Status: 'visto' as const }
@@ -401,6 +421,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => { groupPagingRef.current = groupPaging; }, [groupPaging]);
     useEffect(() => { focusedChatRef.current = focusedChat; }, [focusedChat]);
     useEffect(() => { focusedGroupRef.current = focusedGroup; }, [focusedGroup]);
+    const chatDisappearRef = useRef<Record<string, number>>({});
+    useEffect(() => { chatDisappearRef.current = chatDisappear; }, [chatDisappear]);
     // Acuses de grupo del cliente: entrega (agrupada) y lectura (throttled) del grupo abierto.
     const { noteIncomingGroupMessage } = useGroupReceiptAcks({
         selfTelephon: user?.telephon,
@@ -456,9 +478,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const msgMap: Record<string, Message[]> = {};
             const groupMap: Record<string, DashboardChatGroupEntry> = {};
             const chatAvatarMap: Record<string, string> = {};
+            const timers: Record<string, number> = {};
             chatGroups.forEach(group => {
                 const key = group.ContactTelephon;
                 if (key) {
+                    timers[key] = normalizeDisappearSeconds(group.DisappearSeconds);
                     msgMap[key] = Array.isArray(group.Messages) ? group.Messages : [];
                     groupMap[key] = {
                         ContactTelephon: group.ContactTelephon,
@@ -497,6 +521,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 return next;
             });
             setAllChatGroups(groupMap);
+            setChatDisappear(prev => ({ ...prev, ...timers }));
             // Merge avatares de chats al avatarMap (contactos tienen prioridad, no sobreescribir)
             setAvatarMap(prev => ({ ...chatAvatarMap, ...prev }));
         } catch (err) {
@@ -641,6 +666,148 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         focusedGroupRef.current = apply(focusedGroupRef.current);
         setFocusedGroup(apply);
     }, []);
+
+    // ── Mensajes temporales ─────────────────────────────────────────────────────
+    /** Appends a server-persisted group system message, deduping by its server id. */
+    const appendSystemMessage = useCallback((groupID: number, msg: GroupMessageResponse | undefined) => {
+        if (!msg) return;
+        setGroupMessages(prev => {
+            const list = prev[groupID] ?? [];
+            if (list.some(m => m.MessageID === msg.MessageID)) return prev;
+            return { ...prev, [groupID]: [...list, msg] };
+        });
+    }, []);
+
+    /** 1:1 counterpart: appends the persisted system message to the chat list, deduping by id. */
+    const appendDirectSystemMessage = useCallback((chatKey: string, msg: Message | undefined) => {
+        if (!msg) return;
+        setMessagesByChat(prev => {
+            const list = prev[chatKey] ?? [];
+            if (list.some(m => m.MessageID === msg.MessageID)) return prev;
+            return { ...prev, [chatKey]: [...list, msg] };
+        });
+        setAllChatGroups(prev => {
+            if (prev[chatKey]) return prev;
+            const isContact = contactsRef.current.some(c => c.Number === chatKey);
+            return {
+                ...prev,
+                [chatKey]: { ContactTelephon: chatKey, ContactUsername: chatKey, ContactName: '', IsContact: isContact },
+            };
+        });
+    }, []);
+
+    /**
+     * Single entry point for a timer change, shared by the WS `disappearing_changed` event and
+     * the REST result of the actor: both carry the same envelope, so applying it twice is a no-op
+     * (the timer is idempotent and the system message dedupes by its server id).
+     */
+    const applyDisappearingChanged = useCallback((event: DisappearingChangedEvent) => {
+        if (event.kind === 'direct') {
+            setChatDisappear(prev => (prev[event.key] === event.seconds ? prev : { ...prev, [event.key]: event.seconds }));
+            appendDirectSystemMessage(event.key, event.systemMessage);
+            return;
+        }
+        const patch = { DisappearSeconds: event.seconds };
+        setGroups(prev => prev.map(g => (g.ID === event.key ? { ...g, ...patch } : g)));
+        setSelectedGroupState(prev => (prev?.ID === event.key ? { ...prev, ...patch } : prev));
+        appendSystemMessage(event.key, event.systemMessage);
+    }, [appendDirectSystemMessage, appendSystemMessage]);
+
+    /** Removes messages by id (server `messages_expired`) from the normal list AND the detached window. */
+    const removeExpiredIds = useCallback((kind: 'direct' | 'group', key: string | number, messageIDs: readonly number[]) => {
+        const idSet: ReadonlySet<number> = new Set(messageIDs);
+        if (kind === 'direct' && typeof key === 'string') {
+            setMessagesByChat(prev => {
+                const list = prev[key];
+                if (!list) return prev;
+                const next = removeMessagesByIds(list, idSet);
+                return next === list ? prev : { ...prev, [key]: next };
+            });
+            patchFocusedChat(key, w => removeIdsFromWindow(w, idSet));
+        } else if (kind === 'group' && typeof key === 'number') {
+            setGroupMessages(prev => {
+                const list = prev[key];
+                if (!list) return prev;
+                const next = removeMessagesByIds(list, idSet);
+                return next === list ? prev : { ...prev, [key]: next };
+            });
+            patchFocusedGroup(key, w => removeIdsFromWindow(w, idSet));
+        }
+    }, [patchFocusedChat, patchFocusedGroup]);
+
+    /** Local expiry sweep: drops every loaded message with `now >= ExpiresAt` (lists and windows). */
+    const sweepExpired = useCallback((now: number) => {
+        const sweepRecord = <T extends { MessageID: number | string; Time: string; ExpiresAt?: string; ReplyToMessageID?: number; ReplyToTelephon?: string; ReplyToMessage?: string }, K extends string | number>(
+            prev: Record<K, T[]>,
+        ): Record<K, T[]> => {
+            let out = prev;
+            for (const key of Object.keys(prev) as unknown as K[]) {
+                const list = prev[key];
+                const next = removeExpiredMessages(list, now);
+                if (next === list) continue;
+                if (out === prev) out = { ...prev };
+                out[key] = next;
+            }
+            return out;
+        };
+        setMessagesByChat(sweepRecord);
+        setGroupMessages(sweepRecord);
+        for (const key of Object.keys(focusedChatRef.current)) patchFocusedChat(key, w => removeExpiredFromWindow(w, now));
+        for (const id of Object.keys(focusedGroupRef.current).map(Number)) patchFocusedGroup(id, w => removeExpiredFromWindow(w, now));
+    }, [patchFocusedChat, patchFocusedGroup]);
+
+    // One timeout for the earliest ExpiresAt among everything loaded (all chats, groups, windows).
+    const earliestExpiresAt = useMemo(() => earliestExpiry([
+        ...Object.values(messagesByChat),
+        ...Object.values(groupMessages),
+        ...Object.values(focusedChat).map(w => w.messages),
+        ...Object.values(focusedGroup).map(w => w.messages),
+    ]), [messagesByChat, groupMessages, focusedChat, focusedGroup]);
+    useExpiryTimer({ earliest: earliestExpiresAt, onExpire: sweepExpired });
+
+    const reportDisappearingFailure = useCallback(() => {
+        addToast({ type: 'error', message: 'No se pudo cambiar los mensajes temporales' });
+    }, [addToast]);
+
+    const setChatDisappearing = useCallback(async (contact: string, seconds: number): Promise<boolean> => {
+        try {
+            const event = await apiSetChatDisappearing(contact, seconds);
+            if (!event) { reportDisappearingFailure(); return false; }
+            applyDisappearingChanged(event);
+            return true;
+        } catch (err) {
+            console.error(`Error setting disappearing messages for ${contact}:`, err);
+            reportDisappearingFailure();
+            return false;
+        }
+    }, [applyDisappearingChanged, reportDisappearingFailure]);
+
+    const setGroupDisappearing = useCallback(async (groupID: number, seconds: number): Promise<boolean> => {
+        try {
+            const event = await apiSetGroupDisappearing(groupID, seconds);
+            if (!event) { reportDisappearingFailure(); return false; }
+            applyDisappearingChanged(event);
+            return true;
+        } catch (err) {
+            console.error(`Error setting disappearing messages for group ${groupID}:`, err);
+            reportDisappearingFailure();
+            return false;
+        }
+    }, [applyDisappearingChanged, reportDisappearingFailure]);
+
+    // Timer of a chat that has no value yet (e.g. a chat without messages in /chats): ask once on open.
+    const selectedChatNumber = selected?.Number;
+    useEffect(() => {
+        if (!selectedChatNumber || chatDisappearRef.current[selectedChatNumber] !== undefined) return;
+        let cancelled = false;
+        getChatDisappearing(selectedChatNumber)
+            .then(seconds => {
+                if (cancelled || seconds === null) return;
+                setChatDisappear(prev => (prev[selectedChatNumber] !== undefined ? prev : { ...prev, [selectedChatNumber]: seconds }));
+            })
+            .catch(err => console.error(`Error fetching settings for ${selectedChatNumber}:`, err));
+        return () => { cancelled = true; };
+    }, [selectedChatNumber]);
 
     // ── Reacciones ──────────────────────────────────────────────────────────────
     // Las reacciones viajan dentro de cada mensaje; el mismo reducer puro se aplica a la lista
@@ -840,7 +1007,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             setSelectedGroupState(prev => {
                 // Only update if it's still the same group selected
                 if (prev?.ID !== groupID) return prev;
-                return { ...prev, ...data };
+                // DisappearSeconds is omitempty: absent in the detail means "off", not "unchanged".
+                return { ...prev, ...data, ...(data ? { DisappearSeconds: normalizeDisappearSeconds(data.DisappearSeconds) } : {}) };
             });
             // Sin lista de miembros (null/ausente) no se toca lo ya conocido.
             const detailMembers = data?.Members;
@@ -937,6 +1105,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             });
 
             // si recibimos un mensaje de otro contacto y no lo tenemos abierto, notificar
+            // Un mensaje de sistema (p. ej. cambio de temporizador) nunca notifica ni cuenta como no leído.
+            if (isSystemDirectMessage(messageData)) return;
+
             if (SenderTelephon !== myTelephon && currentSelected?.Number !== contactNumber) {
                 // buscar nombre para mostrar
                 const contact = contactsRef.current.find(c => c.Number === contactNumber);
@@ -1218,16 +1389,6 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             );
         };
 
-        /** Appends a server-persisted system message, deduping by its server id. */
-        const appendSystemMessage = (groupID: number, msg: GroupMessageResponse | undefined) => {
-            if (!msg) return;
-            setGroupMessages(prev => {
-                const list = prev[groupID] ?? [];
-                if (list.some(m => m.MessageID === msg.MessageID)) return prev;
-                return { ...prev, [groupID]: [...list, msg] };
-            });
-        };
-
         /** Caches telephon -> username so a member who left can still be named later. */
         const rememberNames = (groupID: number, entries: ReadonlyArray<{ telephon: string; username: string }>) => {
             setGroupMemberNames(prev => {
@@ -1375,6 +1536,18 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             appendSystemMessage(event.groupID, event.systemMessage);
         };
 
+        /** The disappearing timer of a chat/group changed (either side, or my own REST echo). */
+        const handleDisappearingChanged = (payload: WsHandlerMap['disappearing_changed']) => {
+            const event = parseDisappearingChanged(payload);
+            if (event) applyDisappearingChanged(event);
+        };
+
+        /** The server hard-deleted expired messages: drop them from every store and detached window. */
+        const handleMessagesExpired = (payload: WsHandlerMap['messages_expired']) => {
+            const event = parseMessagesExpired(payload);
+            if (event) removeExpiredIds(event.kind, event.key, event.messageIDs);
+        };
+
         on('message', handleIncomingMessage);
         on('read', handleReadConfirmation);
         on('message_delivered', handleMessageDelivered);
@@ -1397,6 +1570,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         on('group_info', handleGroupInfo);
         on('group_receipt', handleGroupReceipt);
         on('reaction', handleReaction);
+        on('disappearing_changed', handleDisappearingChanged);
+        on('messages_expired', handleMessagesExpired);
         on('error', handleWsError);
 
         return () => {
@@ -1421,9 +1596,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('group_info', handleGroupInfo);
             off('group_receipt', handleGroupReceipt);
             off('reaction', handleReaction);
+            off('disappearing_changed', handleDisappearingChanged);
+            off('messages_expired', handleMessagesExpired);
             off('error', handleWsError);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, addToast]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, addToast, appendSystemMessage, applyDisappearingChanged, removeExpiredIds]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
@@ -1441,6 +1618,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         setSidebarOpen(false);
     }, [contacts, allChatGroups, setSidebarView, setSidebarOpen, setSelectedContact]);
     useNotificationClick(handleNotificationClick);
+
+    const selectedDisappearSeconds = selectedGroup
+        ? normalizeDisappearSeconds(selectedGroup.DisappearSeconds)
+        : (selected ? chatDisappear[selected.Number] ?? 0 : 0);
 
     const value: DashboardContextValue = {
         profile, setProfile,
@@ -1468,6 +1649,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         chatPaging,
         loadOlderMessages,
         markAsRead,
+        chatDisappear,
+        selectedDisappearSeconds,
+        setChatDisappearing,
+        setGroupDisappearing,
         // Groups
         groups, setGroups,
         groupMessages, setGroupMessages,

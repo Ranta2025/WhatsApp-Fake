@@ -12,6 +12,7 @@ import api from '../../../api/axios';
 import Avatar from '../../../components/ui/Avatar';
 import { ChatIcon, PhoneIcon as PhoneEmojiIcon, GroupIcon } from '../../../components/ui/icons';
 import { formatLastSeen } from '../../../utils/format';
+import { hasUnreadFrom } from '../lib/disappearing';
 import type { CallType, SearchPage } from '../../../types/api';
 import type { SearchPageOptions } from '../api/searchApi';
 import type { FocusTarget } from '../context/DashboardContext';
@@ -123,10 +124,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
         if (!selected?.Number || !isConnected || !profile?.Telephon) return;
         const msgs = messagesByChat[selected.Number];
         if (!msgs || msgs.length === 0) return;
-        const hasUnread = msgs.some(
-            m => m.SenderTelephon === selected.Number && m.Status !== 'visto'
-        );
-        if (hasUnread) {
+        if (hasUnreadFrom(msgs, selected.Number)) {
             markAsRead(selected.Number);
         }
     }, [selected?.Number, messagesByChat, isConnected, profile?.Telephon, markAsRead]);
