@@ -38,6 +38,9 @@ const DisappearingSelector = ({ value, onChange, readOnlyHint }: SelectorProps) 
         setPending(true);
         try {
             await onChange(next);
+        } catch (err) {
+            // The context setters toast and resolve false; a rejection is unexpected.
+            console.error('Error changing disappearing messages:', err);
         } finally {
             setPending(false);
         }
@@ -80,6 +83,7 @@ export const ChatDisappearingSection = () => {
     if (!selected) return null;
     return (
         <DisappearingSelector
+            key={selected.Number}
             value={selectedDisappearSeconds}
             onChange={seconds => setChatDisappearing(selected.Number, seconds)}
         />
@@ -94,6 +98,7 @@ export const GroupDisappearingSection = () => {
     return (
         <div className="px-5 py-4">
             <DisappearingSelector
+                key={selectedGroup.ID}
                 value={selectedDisappearSeconds}
                 onChange={editable ? seconds => setGroupDisappearing(selectedGroup.ID, seconds) : undefined}
                 readOnlyHint={selectedGroup.UserRole === 'left' ? undefined : 'Solo los administradores pueden cambiar esta opción'}

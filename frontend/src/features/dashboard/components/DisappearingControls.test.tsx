@@ -58,6 +58,26 @@ describe('DisappearingControls', () => {
         container.remove();
     });
 
+    it('clears the pending state when the setter rejects', async () => {
+        setChatDisappearing.mockRejectedValue(new Error('network'));
+        dash({});
+        mount(<ChatDisappearingSection />);
+        await choose('86400');
+        expect(select()!.disabled).toBe(false);
+        expect(container.querySelector('[data-testid="disappearing-pending"]')).toBeNull();
+    });
+
+    it('does not carry a pending save over to another chat', async () => {
+        setChatDisappearing.mockReturnValue(new Promise<boolean>(() => {}));
+        dash({});
+        mount(<ChatDisappearingSection />);
+        await choose('86400');
+        expect(select()!.disabled).toBe(true);
+        dash({ selected: { Number: '333', ContactName: 'Ana', Username: 'ana' } });
+        mount(<ChatDisappearingSection />);
+        expect(select()!.disabled).toBe(false);
+    });
+
     describe('ChatDisappearingSection (1:1)', () => {
         it('lists the 4 options, reflects the current value and shows the note', () => {
             dash({ selectedDisappearSeconds: 604800 });

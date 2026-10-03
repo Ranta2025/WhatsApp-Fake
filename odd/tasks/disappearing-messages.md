@@ -188,5 +188,8 @@ The Decisions above predate group-admin-permissions/reactions. These points OVER
   - RED/GREEN: lib/context tests failed first (3 failures: unremovable earliest, system with past ExpiresAt in lib and context), green after the fix; component and window tests failed on missing wiring (7 failures) before wiring, green after.
   - Verification: `npm run typecheck`, `npm run lint`, `npm run test` (93 files, 768 tests), `npm run build` ok.
 
+- DE6 committed `56ddd0b` (route: delegated writer). Review slice `a650f65..56ddd0b`: medium / `slice_budget_reached`, consent granted, lens review-reliability, APPROVED and acknowledged, lineage `review-834329927f7d1929`. Last reviewed boundary = `56ddd0b`.
+  - Suggestions fixed inline by the parent (TDD, RED: pending state carried across chats + unhandled rejection; GREEN 18/18): the selector catches a rejecting setter and is keyed by chat number / group id so a pending save does not leak to another chat. Suggestion "ContactDetails wiring untested" is covered by the DE7 Playwright spec.
+
 ## Next step
 DE7.
