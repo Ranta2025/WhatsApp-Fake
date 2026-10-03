@@ -566,7 +566,8 @@ func (h *Hub) PublishReaction(ch *services.ReactionChange, actor *Client) {
 // del usuario a un mensaje 1:1 o de grupo y difunde el evento `reaction`. Los
 // errores responden al emisor con {type:"error", error, context:{action:"react",
 // kind, messageID, groupID?, status}} para que el cliente revierta su
-// actualización optimista.
+// actualización optimista. Un no-op (Changed=false) no se difunde pero se
+// devuelve como eco solo a la conexión del actor, con el estado actual.
 func (mh *MessageHandler) HandleReaction() {
 	var payload struct {
 		Kind      string `json:"kind"`
@@ -594,6 +595,16 @@ func (mh *MessageHandler) HandleReaction() {
 			msg = "Error al reaccionar"
 		}
 		mh.sendReactionError(msg, status, payload.Kind, payload.MessageID, payload.GroupID)
+		return
+	}
+	if change != nil && !change.Changed {
+		// No-op: nobody else needs to hear about it, but the actor's optimistic
+		// state may be stale, so echo the current state to this connection only.
+		echo := *change
+		echo.PreviousEmoji = echo.Emoji
+		if msg, err := reactionEventBytes(&echo); err == nil {
+			mh.reply(msg)
+		}
 		return
 	}
 	mh.Hub.PublishReaction(change, mh.Client)

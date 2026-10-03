@@ -154,9 +154,45 @@ export function applyOptimisticReaction<T extends ReactionBearing>(messages: T[]
     return patch(messages, messageID, r => setMine(r, emoji));
 }
 
-/** Rollback: puts back the pre-send `Reactions` snapshot (undefined = none). */
-export function restoreReactions<T extends ReactionBearing>(messages: T[], messageID: number, snapshot: ReactionSummary[] | undefined): T[] {
-    return patch(messages, messageID, r => (r === snapshot ? r : snapshot));
+/**
+ * Rollback of a failed send: reverts ONLY my reaction to `prevMine` (null = none), leaving
+ * other users' concurrent changes untouched.
+ */
+export function revertMine<T extends ReactionBearing>(messages: T[], messageID: number, prevMine: string | null): T[] {
+    return patch(messages, messageID, r => setMine(r, prevMine ?? ''));
+}
+
+/** My current emoji according to the aggregates (null when none). */
+export function currentMine(reactions: readonly ReactionSummary[] | undefined): string | null {
+    return myEmoji(reactions) || null;
+}
+
+/** One unconfirmed send of mine: the emoji I had before it and when it was sent (epoch ms). */
+export interface PendingReaction {
+    prevMine: string | null;
+    at: number;
+}
+
+/** Per-message FIFO of unconfirmed sends. */
+export type PendingReactions = Map<string, PendingReaction[]>;
+
+/** Entries older than this are dropped when the queue is touched (safety cap for lost echoes). */
+export const PENDING_REACTION_TTL_MS = 15_000;
+
+/** Appends a send to the message's queue (after dropping stale entries). */
+export function enqueuePending(pending: PendingReactions, key: string, prevMine: string | null, now: number): void {
+    const queue = (pending.get(key) ?? []).filter(e => now - e.at <= PENDING_REACTION_TTL_MS);
+    queue.push({ prevMine, at: now });
+    pending.set(key, queue);
+}
+
+/** Takes the oldest non-stale entry of the message's queue; undefined when none. */
+export function shiftPending(pending: PendingReactions, key: string, now: number): PendingReaction | undefined {
+    const queue = (pending.get(key) ?? []).filter(e => now - e.at <= PENDING_REACTION_TTL_MS);
+    const first = queue.shift();
+    if (queue.length > 0) pending.set(key, queue);
+    else pending.delete(key);
+    return first;
 }
 
 /** Reactions of `messageID` in the first list that holds it. */

@@ -196,9 +196,12 @@ func TestE2EReactions(t *testing.T) {
 		assert.Equal(t, false, fromB[0]["Mine"])
 	})
 
-	t.Run("1:1 repetir el mismo emoji es un no-op sin difusión", func(t *testing.T) {
+	t.Run("1:1 repetir el mismo emoji es un no-op: eco solo al actor, sin difusión", func(t *testing.T) {
 		wsA.wait(t, "reaction") // confirmación del reemplazo anterior
 		react(wsA, map[string]interface{}{"kind": "direct", "messageID": directID, "emoji": "❤️"})
+		echo := wsA.wait(t, "reaction")["payload"].(map[string]interface{})
+		assert.Equal(t, "❤️", echo["emoji"])
+		assert.Equal(t, "❤️", echo["previousEmoji"], "el eco de un no-op refleja el estado actual")
 		wsB.none(t, "reaction", 400*time.Millisecond)
 	})
 

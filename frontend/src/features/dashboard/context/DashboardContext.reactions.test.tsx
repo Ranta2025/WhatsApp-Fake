@@ -259,6 +259,66 @@ describe('DashboardProvider reactions', () => {
             expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
         });
 
+        const mine = (emoji: string) => direct({ telephon: '111', username: 'ana', authorTelephon: 'B', emoji });
+        const reactError = (status = 500) => emitError({ type: 'error', error: 'x', context: { action: 'react', kind: 'direct', messageID: 5, status } });
+        const tap = (emoji: string) => act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, emoji); });
+
+        it('two quick taps, echo of tap 1, error for tap 2: my chip reverts to the tap 1 emoji', async () => {
+            await seed();
+            tap('👍');
+            tap('😂');
+            emitReaction(mine('👍'));
+            reactError();
+            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+            expect(ctx!.toasts.at(-1)?.type).toBe('error');
+        });
+
+        it('error for tap 1 then echo of tap 2: final state is tap 2', async () => {
+            await seed();
+            tap('👍');
+            tap('😂');
+            reactError();
+            emitReaction(mine('😂'));
+            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('😂', 1, true)]);
+        });
+
+        it('rollback reverses only my change and keeps concurrent changes from others', async () => {
+            await seed();
+            await act(async () => { ctx!.setMessagesByChat({ B: [chatMsg(5, [chip('❤️', 1)])] }); });
+            tap('👍');
+            emitReaction(direct({ telephon: 'C', emoji: '😂' }));
+            emitReaction(direct({ telephon: 'D', emoji: '❤️', previousEmoji: '' }));
+            reactError();
+            const reactions = ctx!.messagesByChat['B']?.[0]?.Reactions ?? [];
+            expect(reactions).toHaveLength(2);
+            expect(reactions).toContainEqual(chip('❤️', 2));
+            expect(reactions).toContainEqual(chip('😂', 1));
+        });
+
+        it('a no-op echo (server already held that emoji) clears the pending entry', async () => {
+            await seed();
+            await act(async () => { ctx!.setMessagesByChat({ B: [chatMsg(5)] }); });
+            tap('👍');
+            emitReaction(mine('👍'));
+            tap('😂');
+            emitReaction(mine('😂'));
+            reactError(); // stray error: nothing is pending anymore
+            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('😂', 1, true)]);
+        });
+
+        it('drops pending entries older than 15s', async () => {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            try {
+                await seed();
+                tap('👍');
+                vi.setSystemTime(Date.now() + 16_000);
+                reactError();
+                expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
         it('rolls back immediately when the socket cannot send', async () => {
             await seed();
             mockSendReaction.mockReturnValueOnce(false);

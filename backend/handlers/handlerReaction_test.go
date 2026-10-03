@@ -230,3 +230,25 @@ func TestReaction_InvalidContextValuesAreBadRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestReaction_GroupInvalidGroupIDIsBadRequest(t *testing.T) {
+	cases := map[string]any{
+		"zero group id":        uint(0),
+		"wrong group id type":  "7",
+		"signed group id type": 7,
+	}
+	for name, groupID := range cases {
+		t.Run(name, func(t *testing.T) {
+			rig := newReactionRig()
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", "/x", nil)
+			c.Set("telephon", "+1")
+			c.Set("messageID", uint(7))
+			c.Set("groupID", groupID)
+			rig.h.HandlerListReactions(models.ReactionKindGroup)(c)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+	}
+}

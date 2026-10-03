@@ -12,7 +12,7 @@ import {
 } from '../../../utils/notifications';
 import wsManager, { type WsHandlerMap } from '../../../api/websocket';
 import type {
-    UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupRole, GroupDetail, GroupMessageResponse, CallType, ReactionSummary,
+    UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupRole, GroupDetail, GroupMessageResponse, CallType,
 } from '../../../types/api';
 import {
     resolveChatTarget, type DashboardChatGroupEntry, type SelectedChatTarget,
@@ -22,8 +22,8 @@ import {
     normalizeChatMessagesResponse, normalizeHasMore,
 } from '../lib/normalizeResponses';
 import {
-    applyReaction, applyOptimisticReaction, restoreReactions, reactionsOf, toggledEmoji, parseReactionEvent,
-    parseReactionErrorContext, reactionPendingKey, type ReactionBearing, type ReactionKind,
+    applyReaction, applyOptimisticReaction, revertMine, currentMine, enqueuePending, shiftPending, reactionsOf, toggledEmoji,
+    parseReactionEvent, parseReactionErrorContext, reactionPendingKey, type PendingReactions, type ReactionBearing, type ReactionKind,
 } from '../lib/reactions';
 import {
     mergeLatestWindow, isContiguousWindow, prependOlder, oldestRealMessageId, newestRealMessageId, DEFAULT_PAGING, type PagingState,
@@ -671,18 +671,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         for (const key of Object.keys(focusedChatRef.current)) patchFocusedChat(key, w => mapWindow(w, fn));
     }, [patchFocusedChat, patchFocusedGroup]);
 
-    /** Reactions snapshot taken before the first unconfirmed optimistic change, per message. */
-    const pendingReactionsRef = useRef<Map<string, ReactionSummary[] | undefined>>(new Map());
-
-    /** Puts back the pre-send reactions of a message; false when nothing was pending. */
-    const rollbackReaction = useCallback((kind: ReactionKind, messageID: number, groupID?: number): boolean => {
-        const key = reactionPendingKey(kind, messageID);
-        if (!pendingReactionsRef.current.has(key)) return false;
-        const snapshot = pendingReactionsRef.current.get(key);
-        pendingReactionsRef.current.delete(key);
-        mapReactionContainers(kind, groupID, list => restoreReactions(list, messageID, snapshot));
-        return true;
-    }, [mapReactionContainers]);
+    /** Per-message FIFO of my unconfirmed reaction sends (each remembers my previous emoji). */
+    const pendingReactionsRef = useRef<PendingReactions>(new Map());
 
     const reactToMessage = useCallback((target: ReactionTarget, tapped: string) => {
         const { kind, messageID, groupID } = target;
@@ -699,14 +689,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         }
         const current = reactionsOf(lists, messageID);
         const emoji = toggledEmoji(current, tapped);
-        const key = reactionPendingKey(kind, messageID);
-        if (!pendingReactionsRef.current.has(key)) pendingReactionsRef.current.set(key, current);
+        const prevMine = currentMine(current);
         mapReactionContainers(kind, groupID, list => applyOptimisticReaction(list, messageID, emoji));
-        if (!wsManager.sendReaction(kind, messageID, emoji, groupID)) {
-            rollbackReaction(kind, messageID, groupID);
+        if (wsManager.sendReaction(kind, messageID, emoji, groupID)) {
+            enqueuePending(pendingReactionsRef.current, reactionPendingKey(kind, messageID), prevMine, Date.now());
+        } else {
+            mapReactionContainers(kind, groupID, list => revertMine(list, messageID, prevMine));
             addToast({ type: 'error', message: 'No se pudo enviar la reacción' });
         }
-    }, [mapReactionContainers, rollbackReaction, addToast]);
+    }, [mapReactionContainers, addToast]);
 
     const bumpFocusEpoch = useCallback((fk: string): number => {
         const next = (focusEpochRef.current.get(fk) ?? 0) + 1;
@@ -1116,7 +1107,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const event = parseReactionEvent(payload);
             if (!event) return;
             const me = profileRef.current?.Telephon ?? selfTelephonRef.current;
-            if (event.telephon === me) pendingReactionsRef.current.delete(reactionPendingKey(event.kind, event.messageID));
+            if (event.telephon === me) shiftPending(pendingReactionsRef.current, reactionPendingKey(event.kind, event.messageID), Date.now());
             mapReactionContainers(event.kind, event.groupID, list => applyReaction(list, event, me));
 
             // Author notification: only for a new/changed emoji from somebody else, in a chat that is not open.
@@ -1143,7 +1134,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         const handleWsError = (envelope: WsHandlerMap['error']) => {
             const target = parseReactionErrorContext(envelope);
             if (!target) return;
-            if (rollbackReaction(target.kind, target.messageID, target.groupID)) {
+            const entry = shiftPending(pendingReactionsRef.current, reactionPendingKey(target.kind, target.messageID), Date.now());
+            if (entry) {
+                mapReactionContainers(target.kind, target.groupID, list => revertMine(list, target.messageID, entry.prevMine));
                 addToast({ type: 'error', message: 'No se pudo enviar la reacción' });
             }
         };
@@ -1430,7 +1423,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('reaction', handleReaction);
             off('error', handleWsError);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, rollbackReaction, addToast]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, addToast]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".

@@ -196,15 +196,44 @@ func mustMarshalEvent(t *testing.T, ch *services.ReactionChange) []byte {
 	return b
 }
 
-func TestHandleReaction_NoOpDoesNotFanOut(t *testing.T) {
+func TestHandleReaction_NoOpEchoesToActorOnly(t *testing.T) {
+	cases := map[string]string{"same emoji": "👍", "remove missing": ""}
+	for name, emoji := range cases {
+		t.Run(name, func(t *testing.T) {
+			rh, outsider := newReactionHarness(t)
+			rh.svc.change = directChange(false, emoji)
+
+			rh.send(`{"kind":"direct","messageID":10,"emoji":"` + emoji + `"}`)
+
+			got := reactionsIn(t, drain(rh.actor))
+			if len(got) != 1 {
+				t.Fatalf("el actor debe recibir un eco del no-op, got %d", len(got))
+			}
+			if got[0].Payload.Emoji != emoji || got[0].Payload.PreviousEmoji != emoji {
+				t.Fatalf("el eco debe reflejar el estado actual (emoji=previousEmoji=%q): %+v", emoji, got[0].Payload)
+			}
+			for n, c := range map[string]*Client{"other": rh.other, "bystander": rh.bystand, "outsider": outsider} {
+				if msgs := drain(c); len(msgs) != 0 {
+					t.Fatalf("un no-op no debe difundirse a %s: %s", n, msgs)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleReaction_GroupNoOpEchoesToActorOnly(t *testing.T) {
 	rh, _ := newReactionHarness(t)
-	rh.svc.change = directChange(false, "")
+	rh.svc.change = groupChange(false, "🔥")
 
-	rh.send(`{"kind":"direct","messageID":10,"emoji":""}`)
+	rh.send(`{"kind":"group","groupID":7,"messageID":20,"emoji":"🔥"}`)
 
-	for name, c := range map[string]*Client{"actor": rh.actor, "other": rh.other} {
+	got := reactionsIn(t, drain(rh.actor))
+	if len(got) != 1 || got[0].Payload.Emoji != "🔥" || got[0].Payload.PreviousEmoji != "🔥" {
+		t.Fatalf("eco esperado al actor: %+v", got)
+	}
+	for n, c := range map[string]*Client{"other": rh.other, "bystander": rh.bystand} {
 		if msgs := drain(c); len(msgs) != 0 {
-			t.Fatalf("un no-op no debe enviar nada a %s: %s", name, msgs)
+			t.Fatalf("un no-op no debe difundirse a %s: %s", n, msgs)
 		}
 	}
 }

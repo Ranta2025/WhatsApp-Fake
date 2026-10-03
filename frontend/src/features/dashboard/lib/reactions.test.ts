@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ReactionSummary } from '../../../types/api';
 import type { ReactionEventPayload } from '../../../types/ws';
 import {
-    applyReaction, applyOptimisticReaction, restoreReactions, reactionsOf, toggledEmoji,
+    applyReaction, applyOptimisticReaction, revertMine, currentMine, enqueuePending, shiftPending, PENDING_REACTION_TTL_MS, type PendingReactions, reactionsOf, toggledEmoji,
     parseReactionEvent, parseReactionErrorContext, reactionPendingKey,
 } from './reactions';
 
@@ -130,20 +130,38 @@ describe('optimistic update, toggle and rollback', () => {
         expect(toggledEmoji(undefined, '👍')).toBe('👍');
     });
 
-    it('restoreReactions puts the pre-send snapshot back', () => {
-        const before = [chip('👍', 1, true)];
-        const sent = applyOptimisticReaction([msg(1, before)], 1, '');
-        expect(restoreReactions(sent, 1, before)[0]?.Reactions).toEqual(before);
+    it('revertMine puts my previous emoji back and keeps other users', () => {
+        const live = [chip('👍', 2, true), chip('😂', 1)];
+        expect(revertMine([msg(1, live)], 1, '😂')[0]?.Reactions).toEqual([chip('😂', 2, true), chip('👍', 1)]);
     });
 
-    it('restoreReactions with an undefined snapshot removes the field', () => {
+    it('revertMine with null removes only my reaction and the field when empty', () => {
         const sent = applyOptimisticReaction([msg(1)], 1, '👍');
-        expect('Reactions' in (restoreReactions(sent, 1, undefined)[0] ?? {})).toBe(false);
+        expect('Reactions' in (revertMine(sent, 1, null)[0] ?? {})).toBe(false);
     });
 
-    it('restoreReactions on an unknown id is a no-op', () => {
-        const list = [msg(2)];
-        expect(restoreReactions(list, 1, [chip('👍')])).toBe(list);
+    it('revertMine never goes negative and is a no-op on an unknown id or when already there', () => {
+        const list = [msg(2, [chip('👍', 1, true)])];
+        expect(revertMine(list, 1, null)).toBe(list);
+        expect(revertMine(list, 2, '👍')).toBe(list);
+    });
+
+    it('currentMine reads my emoji or null', () => {
+        expect(currentMine([chip('👍', 2, true)])).toBe('👍');
+        expect(currentMine([chip('👍')])).toBeNull();
+        expect(currentMine(undefined)).toBeNull();
+    });
+
+    it('pending queue is FIFO per key and drops entries older than the TTL', () => {
+        const q: PendingReactions = new Map();
+        enqueuePending(q, 'direct:1', null, 0);
+        enqueuePending(q, 'direct:1', '👍', 1_000);
+        enqueuePending(q, 'direct:2', '❤️', 1_000);
+        expect(shiftPending(q, 'direct:1', 2_000)?.prevMine).toBeNull();
+        expect(shiftPending(q, 'direct:1', 2_000)?.prevMine).toBe('👍');
+        expect(shiftPending(q, 'direct:1', 2_000)).toBeUndefined();
+        expect(q.has('direct:1')).toBe(false);
+        expect(shiftPending(q, 'direct:2', 1_000 + PENDING_REACTION_TTL_MS + 1)).toBeUndefined();
     });
 
     it('reactionsOf reads the reactions of a message id across lists', () => {

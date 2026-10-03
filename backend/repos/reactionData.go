@@ -138,31 +138,41 @@ func (r *RepoReaction) UpsertReaction(kind string, messageID, userID uint, emoji
 	var previous string
 	var changed bool
 	err := r.data.WithContext(c).Transaction(func(tx *gorm.DB) error {
-		row := models.MessageReaction{MessageKind: kind, MessageID: messageID, UserID: userID, Emoji: emoji}
-		res := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "message_kind"}, {Name: "message_id"}, {Name: "user_id"}},
-			DoNothing: true,
-		}).Create(&row)
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected > 0 { // inserción nueva
+		// The insert may conflict with a row that is deleted before the locking
+		// SELECT runs (record not found). One retry is enough: the conflicting row
+		// is gone, so the second INSERT wins unless another writer re-created it,
+		// in which case the SELECT then finds it.
+		for attempt := 0; ; attempt++ {
+			row := models.MessageReaction{MessageKind: kind, MessageID: messageID, UserID: userID, Emoji: emoji}
+			res := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "message_kind"}, {Name: "message_id"}, {Name: "user_id"}},
+				DoNothing: true,
+			}).Create(&row)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected > 0 { // inserción nueva
+				previous, changed = "", true
+				return nil
+			}
+			var cur models.MessageReaction
+			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Select("id", "emoji").
+				Where("message_kind = ? AND message_id = ? AND user_id = ?", kind, messageID, userID).
+				First(&cur).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) && attempt == 0 {
+				continue // deleted between the conflict and the lock: insert again
+			}
+			if err != nil {
+				return err
+			}
+			previous = cur.Emoji
+			if cur.Emoji == emoji {
+				return nil
+			}
 			changed = true
-			return nil
+			return tx.Model(&models.MessageReaction{}).Where("id = ?", cur.ID).Update("emoji", emoji).Error
 		}
-		var cur models.MessageReaction
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Select("id", "emoji").
-			Where("message_kind = ? AND message_id = ? AND user_id = ?", kind, messageID, userID).
-			First(&cur).Error; err != nil {
-			return err
-		}
-		previous = cur.Emoji
-		if cur.Emoji == emoji {
-			return nil
-		}
-		changed = true
-		return tx.Model(&models.MessageReaction{}).Where("id = ?", cur.ID).Update("emoji", emoji).Error
 	})
 	if err != nil {
 		return "", false, err
