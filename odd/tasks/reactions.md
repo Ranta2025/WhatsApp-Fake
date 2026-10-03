@@ -53,7 +53,7 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - [x] RE3 Transport: WS `react` handler + `reaction` event fan-out, REST PUT/DELETE/GET endpoints and routes, handler tests, Go e2e (`-tags e2e`): A reacts, B receives `reaction` over WS, replace, remove, non-member 403, invisible message 404. Route: delegated.
 - [x] RE4 Frontend plumbing (includes the author notification: in-app toast "<name> reaccionó <emoji> a: <snippet>" when the viewer is the message author, not the reactor, the emoji is non-empty and that chat is not open): types (`types/api.ts`, `types/ws.ts`, `WsSend*`), guards/normalizers, `applyReaction` reducer, WS sender + listener in `api/websocket.ts`/`DashboardContext`, optimistic update + rollback, merge preservation in `mergeMessages`/`focusedWindow`. Vitest. Route: delegated.
 - [x] RE5 UI: `ReactionPicker` (quick row), `ReactionChips`, who-reacted modal, wiring into 1:1 and group bubbles, long-press, aria labels. Component tests. Route: delegated.
-- [ ] RE6 Playwright: Ana reacts to Luis's message, Luis sees the chip live and after reload; Ana changes and removes the reaction; group variant with Marta; chip counts. Unique text per run, no absolute counts. Two green runs. Route: delegated.
+- [x] RE6 Playwright: Ana reacts to Luis's message, Luis sees the chip live and after reload; Ana changes and removes the reaction; group variant with Marta; chip counts. Unique text per run, no absolute counts. Two green runs. Route: delegated.
 - [ ] RE7 Close: full checks, doc + mirror.
 
 ## Acceptance criteria
@@ -109,6 +109,17 @@ Resolved with the user on 2026-10-03 ("like WhatsApp"):
   - Bundle: Dashboard chunk +3.1 kB gzip (67.32 -> 70.41). Lazy loader 14.35 kB gzip; data 66.8 kB gzip.
   - Evidence: RED (unresolved imports, 12 wiring failures). Mutations caught: chip aria-pressed, wrong kind in MessageList, long-press move-cancel. typecheck/lint/test (81 files / 673)/build green.
   - Follow-up: in jsdom, CSS attribute selectors with emoji do not match; Playwright should use getByRole/getByLabel.
+- RE5 slice review (64c2422 + b1db80a): RDD medium, granted, lens reliability approved, acknowledged (lineage `review-b412ca976cb4c078`). Follow-ups were fixed in a separate `fix(reactions)` commit (delegated, sonnet):
+  - `useLongPress` suppresses the native `contextmenu` and swallows the ghost click after a fired press (RED observed, mutation caught).
+  - The WS no-op echo serialization failure is now logged and answered with a `react` error context of status 500.
+  - "No reactions UI on deleted messages" needed no change: delete-for-everyone removes the message from state in both lists (verified at `DashboardContext.tsx` handleDeleteMessage/handleGroupDeleteMessage), so there is no tombstone.
+  - Not fixed: the `UpsertReaction` retry branch has no deterministic test (covered by e2e only; there is no DB-free repo runner).
+- RE6 (delegated, sonnet), `frontend/e2e/reactions.e2e.ts`, with Ana/Luis/Marta and a group per run:
+  - 1:1: live chip, the chip after reload, replace 👍 -> ❤️, removal for both.
+  - Group: 😂 2 from Luis and Marta, and the "Ver reacciones" modal lists both.
+  - Author toast "Luis reaccionó 🙏" while Ana views another chat.
+  - Messages are sent through the UI, because a message sent by API is not in the sender's open view.
+  - Spec 3/3, then full `npm run test:e2e` 17/17 twice (about 70s apart), after rebuilding app and web.
 
 ## Next step
-RE6.
+RE7.
