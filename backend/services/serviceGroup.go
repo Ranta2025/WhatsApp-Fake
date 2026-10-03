@@ -96,12 +96,14 @@ type GroupContactRepoInterface interface {
 type ServiceGroup struct {
 	repo        GroupRepoInterface
 	contactRepo GroupContactRepoInterface
+	reactions   ReactionAggregator // opcional; nil = sin reacciones
 }
 
 // InitServiceGroup crea el servicio de grupos con sus repositorios,
 // devolviendo la interfaz GroupServicer.
-func InitServiceGroup(repo GroupRepoInterface, contactRepo GroupContactRepoInterface) GroupServicer {
-	return &ServiceGroup{repo: repo, contactRepo: contactRepo}
+// El agregador de reacciones es opcional (nil = los mensajes salen sin reacciones).
+func InitServiceGroup(repo GroupRepoInterface, contactRepo GroupContactRepoInterface, reactions ...ReactionAggregator) GroupServicer {
+	return &ServiceGroup{repo: repo, contactRepo: contactRepo, reactions: pickAggregator(reactions)}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,6 +268,11 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 		return nil, err
 	}
 
+	detailMessages, err := s.groupMessagesWithReactions(messages, uint(userID), ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	creatorTel, _ := s.contactRepo.GetTelephonByID(group.CreatorID, ctx)
 
 	// Rol del usuario que consulta (antes no se devolvía en el detalle)
@@ -293,7 +300,7 @@ func (s *ServiceGroup) GetGroupDetail(telephon string, groupID uint, ctx context
 			OnlyAdminsCanAddMembers: group.OnlyAdminsCanAddMembers,
 		},
 		Members:  convertGroupMembers(members),
-		Messages: convertGroupMessages(messages),
+		Messages: detailMessages,
 	}
 	return detail, nil
 }
@@ -407,7 +414,11 @@ func (s *ServiceGroup) GetGroupMessagesPage(telephon string, groupID, before uin
 	if err != nil {
 		return nil, false, err
 	}
-	return convertGroupMessages(messages), hasMore, nil
+	out, err := s.groupMessagesWithReactions(messages, uint(userID), ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return out, hasMore, nil
 }
 
 // EditGroupMessage edita el contenido de un mensaje de grupo.
@@ -617,42 +628,58 @@ func (s *ServiceGroup) GetUsernameByTelephon(telephon string, ctx context.Contex
 // requireGroupMember resuelve al usuario y exige que sea miembro activo del
 // grupo (ErrNotGroupMember en otro caso).
 func (s *ServiceGroup) requireGroupMember(telephon string, groupID uint, ctx context.Context) error {
+	_, err := s.requireGroupMemberID(telephon, groupID, ctx)
+	return err
+}
+
+// requireGroupMemberID es requireGroupMember devolviendo además el id del usuario.
+func (s *ServiceGroup) requireGroupMemberID(telephon string, groupID uint, ctx context.Context) (uint, error) {
 	userID, err := s.contactRepo.GetIdByTelephon(telephon, ctx)
 	if err != nil {
-		return errors.New("usuario no encontrado")
+		return 0, errors.New("usuario no encontrado")
 	}
 	isMember, err := s.repo.IsMember(groupID, uint(userID), ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !isMember {
-		return ErrNotGroupMember
+		return 0, ErrNotGroupMember
 	}
-	return nil
+	return uint(userID), nil
 }
 
 // GetGroupMessagesAround devuelve una ventana cronológica (más antiguo primero)
 // centrada en el mensaje around y si hay más mensajes antes/después.
 func (s *ServiceGroup) GetGroupMessagesAround(telephon string, groupID, around uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, bool, error) {
-	if err := s.requireGroupMember(telephon, groupID, ctx); err != nil {
+	viewerID, err := s.requireGroupMemberID(telephon, groupID, ctx)
+	if err != nil {
 		return nil, false, false, err
 	}
 	msgs, hasOlder, hasNewer, err := s.repo.GetGroupMessagesAround(groupID, around, clampWindowLimit(limit), ctx)
 	if err != nil {
 		return nil, false, false, err
 	}
-	return convertGroupMessages(msgs), hasOlder, hasNewer, nil
+	out, err := s.groupMessagesWithReactions(msgs, viewerID, ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return out, hasOlder, hasNewer, nil
 }
 
 // GetGroupMessagesAfter devuelve hasta limit mensajes posteriores a after en
 // orden cronológico y si quedan más.
 func (s *ServiceGroup) GetGroupMessagesAfter(telephon string, groupID, after uint, limit int, ctx context.Context) ([]schemas.GroupMessageResponse, bool, error) {
-	if err := s.requireGroupMember(telephon, groupID, ctx); err != nil {
+	viewerID, err := s.requireGroupMemberID(telephon, groupID, ctx)
+	if err != nil {
 		return nil, false, err
 	}
 	msgs, hasNewer, err := s.repo.GetGroupMessagesAfter(groupID, after, clampWindowLimit(limit), ctx)
 	if err != nil {
 		return nil, false, err
 	}
-	return convertGroupMessages(msgs), hasNewer, nil
+	out, err := s.groupMessagesWithReactions(msgs, viewerID, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return out, hasNewer, nil
 }

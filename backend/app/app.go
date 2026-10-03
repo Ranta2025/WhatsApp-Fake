@@ -203,6 +203,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	repoUser := repos.GetRespositorieUser(db)
 	repoContact := repos.InitRepoContact(db, rd)
 	repoGroup := repos.InitRepoGroup(db, rd)
+	repoReaction := repos.InitRepoReaction(db)
 	cacheUser := cache.InitChacheUser(rd)
 
 	// Hub de WebSocket (presencia y mensajería en tiempo real)
@@ -213,9 +214,9 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	// Servicios
 	serviceUser := services.InitServices(repoUser, cacheUser)
 	serviceContact := services.InitServiceContact(repoContact)
-	serviceChat := services.InitServiceMessage(repoContact)
+	serviceChat := services.InitServiceMessage(repoContact, repoReaction)
 	serviceCall := services.InitServiceCall(repoContact)
-	serviceGroup := services.InitServiceGroup(repoGroup, repoContact)
+	serviceGroup := services.InitServiceGroup(repoGroup, repoContact, repoReaction)
 	serviceMedia := services.InitServiceMedia(mc)
 	serviceBugReport := services.InitServiceBugReport()
 	serviceStatus := services.InitServiceStatus(repoContact)

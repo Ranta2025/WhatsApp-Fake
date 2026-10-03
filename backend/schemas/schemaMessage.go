@@ -20,6 +20,9 @@ type Message struct {
 	ReplyToMessageID *uint   `json:"ReplyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"ReplyToTelephon,omitempty"` // Número de teléfono del autor del mensaje original
 	ReplyToMessage   *string `json:"ReplyToMessage,omitempty"`
+
+	// Agregados de reacciones para el espectador; se omite si no hay ninguna.
+	Reactions []ReactionSummary `json:"Reactions,omitempty"`
 }
 
 // ChatGroup agrupa todos los mensajes de una conversación con un contacto.

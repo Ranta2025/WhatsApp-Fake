@@ -53,6 +53,9 @@ type GroupMessageResponse struct {
 	ReplyToTelephon  *string `json:"ReplyToTelephon,omitempty"`
 	ReplyToMessage   *string `json:"ReplyToMessage,omitempty"`
 
+	// Agregados de reacciones para el espectador; se omite si no hay ninguna.
+	Reactions []ReactionSummary `json:"Reactions,omitempty"`
+
 	// Mensajes de sistema persistidos. Kind "" en los mensajes normales; en los
 	// de sistema Kind="system" y SystemEvent describe el evento. SystemTargets
 	// son los teléfonos afectados para que el cliente redacte por espectador.

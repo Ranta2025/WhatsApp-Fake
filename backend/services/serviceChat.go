@@ -57,13 +57,16 @@ type ChatRepoInterface interface {
 }
 
 type ServiceChat struct {
-	repo ChatRepoInterface
+	repo      ChatRepoInterface
+	reactions ReactionAggregator // opcional; nil = sin reacciones
 }
 
 // InitServiceMessage crea el servicio de chat con su repositorio, devolviendo la interfaz ChatServicer.
-func InitServiceMessage(repo ChatRepoInterface) ChatServicer {
+// El agregador de reacciones es opcional (nil = los mensajes salen sin reacciones).
+func InitServiceMessage(repo ChatRepoInterface, reactions ...ReactionAggregator) ChatServicer {
 	return &ServiceChat{
-		repo: repo,
+		repo:      repo,
+		reactions: pickAggregator(reactions),
 	}
 }
 
@@ -171,7 +174,11 @@ func (rp *ServiceChat) ServiceGetMessagesPage(telephonUser string, telephonConta
 	if err != nil {
 		return nil, false, err
 	}
-	return convertMessagesToSchemas(messagesDB, telephonUser, telephonContact, id_user), hasMore, nil
+	out, err := rp.directMessagesWithReactions(messagesDB, telephonUser, telephonContact, id_user, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return out, hasMore, nil
 }
 
 // convertMessagesToSchemas transforma una lista de modelos Message en schemas,
@@ -277,6 +284,12 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 		return nil, err
 	}
 
+	// Reacciones de todos los chats en una sola consulta (no una por chat).
+	byID, err := fetchReactions(rp.reactions, models.ReactionKindDirect, directIDs(recentMessages), userID, ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	result := make([]schemas.ChatGroup, 0, len(otherIDs))
 	for _, otherID := range otherIDs {
 		otherUser, ok := users[otherID]
@@ -284,13 +297,15 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 			continue
 		}
 		contactName, isContact := addedContacts[otherID]
+		chatMsgs := convertMessagesToSchemas(groupMessages[otherID], telephonUser, otherUser.Telephon, id_user)
+		attachDirectReactions(chatMsgs, byID)
 		result = append(result, schemas.ChatGroup{
 			ContactTelephon:  otherUser.Telephon,
 			ContactUsername:  otherUser.Username,
 			ContactName:      contactName,
 			ContactAvatarUrl: otherUser.AvatarUrl,
 			IsContact:        isContact,
-			Messages:         convertMessagesToSchemas(groupMessages[otherID], telephonUser, otherUser.Telephon, id_user),
+			Messages:         chatMsgs,
 		})
 	}
 
@@ -438,7 +453,11 @@ func (rp *ServiceChat) ServiceGetMessagesAround(telephonUser, telephonContact st
 	if err != nil {
 		return nil, false, false, err
 	}
-	return convertMessagesToSchemas(msgs, telephonUser, telephonContact, idUser), hasOlder, hasNewer, nil
+	out, err := rp.directMessagesWithReactions(msgs, telephonUser, telephonContact, idUser, ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return out, hasOlder, hasNewer, nil
 }
 
 // ServiceGetMessagesAfter devuelve hasta limit mensajes posteriores a after en
@@ -456,5 +475,9 @@ func (rp *ServiceChat) ServiceGetMessagesAfter(telephonUser, telephonContact str
 	if err != nil {
 		return nil, false, err
 	}
-	return convertMessagesToSchemas(msgs, telephonUser, telephonContact, idUser), hasNewer, nil
+	out, err := rp.directMessagesWithReactions(msgs, telephonUser, telephonContact, idUser, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return out, hasNewer, nil
 }
