@@ -108,6 +108,21 @@ describe('useLongPress', () => {
             expect(click().reached).toBe(true);
         });
 
+        it('does not swallow a real tap outside the pressed element (engines without a ghost click)', () => {
+            touch('touchstart', 10, 10);
+            act(() => { vi.advanceTimersByTime(400); });
+            touch('touchend', 10, 10);
+            const outside = document.createElement('button');
+            document.body.appendChild(outside);
+            const seen = vi.fn();
+            outside.addEventListener('click', seen);
+            act(() => { outside.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); });
+            outside.remove();
+            expect(seen).toHaveBeenCalledTimes(1);
+            // The guard is still armed for the ghost click on the pressed element.
+            expect(click().reached).toBe(false);
+        });
+
         it('does not swallow clicks after a press that never fired', () => {
             touch('touchstart', 10, 10);
             act(() => { vi.advanceTimersByTime(100); });

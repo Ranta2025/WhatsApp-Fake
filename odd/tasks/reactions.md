@@ -121,8 +121,10 @@ Resolved with the user on 2026-10-03 ("like WhatsApp"):
   - Messages are sent through the UI, because a message sent by API is not in the sender's open view.
   - Spec 3/3, then full `npm run test:e2e` 17/17 twice (about 70s apart), after rebuilding app and web.
 - RE7 (inline): full matrix on `db7e74f`: `go build/vet/test ./...` green (11 packages); `POSTGRES_PUBLIC_PORT=55432 make test-integration` ok (15.0s); frontend typecheck, lint, test (81 files / 678 tests), build green; `npm run test:e2e` 17/17 twice (RE6 evidence, same code). The final tail slice (9d4a734, db7e74f, this close) was reviewed even though it was under budget, see below.
+- Final tail review (9d4a734 + db7e74f + 730e531): RDD medium, granted, lens reliability approved, acknowledged (lineage `review-53268269d181b835`). Its WARNING was fixed inline: the long-press ghost guard swallowed the next click anywhere for 500 ms, eating a real tap on engines without a ghost click. It now only swallows clicks inside the pressed element. RED test: "does not swallow a real tap outside the pressed element". GREEN; the frontend suite passes. This last fix commit is under budget and pending review.
 
 ## Follow-ups (not fixed)
+- e2e `reactions.e2e.ts`: after Luis reloads, the test waits for the chip (REST) and not for the WebSocket to be live, so the live ❤️ assertion could race (two green full runs so far).
 - The reaction service travels on the Hub (`hub.SetReactionService`) instead of `routers` `Deps`.
 - `DashboardContext` calls `wsManager.sendReaction` directly instead of going through `useWebSocket`.
 - A WS-originated reaction reaches only the actor's originating connection (other sessions of the same user see it only after a refetch); REST reaches all of them.

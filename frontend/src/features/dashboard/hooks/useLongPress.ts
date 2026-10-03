@@ -20,8 +20,8 @@ interface LongPressHandlers {
  * releasing, by moving the finger past a small tolerance, and by any scroll
  * (captured on the document, so a scrolling message list cancels it too).
  * Once it fires, the native context menu is suppressed and the single click
- * that follows the touchend is swallowed (capture phase, one-shot), so neither
- * closes the Popover the long press just opened.
+ * that follows the touchend on the pressed element is swallowed (capture phase,
+ * one-shot), so neither closes the Popover the long press just opened.
  * One timer is shared: only one touch gesture is tracked at a time.
  */
 export function useLongPress<T>(onLongPress: (arg: T) => void, delayMs: number = LONG_PRESS_MS): (arg: T) => LongPressHandlers {
@@ -34,16 +34,24 @@ export function useLongPress<T>(onLongPress: (arg: T) => void, delayMs: number =
     const suppressRef = useRef(false);
     const firedRef = useRef(false);
     const ghostCleanupRef = useRef<(() => void) | null>(null);
+    // Element that received the touchstart: only its ghost click is swallowed.
+    const pressedRef = useRef<Element | null>(null);
 
     const clearGhost = useCallback(() => {
         ghostCleanupRef.current?.();
         ghostCleanupRef.current = null;
     }, []);
 
-    /** Swallows the next click (capture) and stops suppressing after GHOST_WINDOW_MS. */
+    /**
+     * Swallows the next click on the pressed element (capture) and stops
+     * suppressing after GHOST_WINDOW_MS. Clicks elsewhere pass through: some
+     * engines fire no ghost click, and a real tap on another control must work.
+     */
     const armGhostGuard = useCallback(() => {
         clearGhost();
+        const pressed = pressedRef.current;
         const swallow = (e: Event) => {
+            if (!pressed || !(e.target instanceof Node) || !pressed.contains(e.target)) return;
             e.stopPropagation();
             e.preventDefault();
             clearGhost();
@@ -79,6 +87,7 @@ export function useLongPress<T>(onLongPress: (arg: T) => void, delayMs: number =
             const t = e.touches[0];
             if (!t) return;
             suppressRef.current = true;
+            pressedRef.current = e.currentTarget instanceof Element ? e.currentTarget : null;
             originRef.current = { x: t.clientX, y: t.clientY };
             const cancel = cancelRef.current;
             document.addEventListener('scroll', cancel, true);
