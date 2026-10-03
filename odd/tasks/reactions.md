@@ -21,7 +21,7 @@ Approved roadmap item, plan only (not yet authorized to implement). Scope: DB ta
 ## Decisions (recommended defaults)
 - **Table `message_reactions`** (model `backend/models/reaction.go`, add to AutoMigrate in `backend/database/postgres.go:109-122`): `id`, `message_kind size:10 not null` (`'direct'|'group'`), `message_id uint not null`, `user_id uint not null`, `emoji size:32 not null`, `created_at`, `updated_at`. No soft delete (removing = delete row). Indexes via `execMigration` (`postgres.go:18`): `UNIQUE (message_kind, message_id, user_id)` (enforces one reaction per user, "replace on change" = upsert `ON CONFLICT (...) DO UPDATE SET emoji, updated_at`) and `INDEX (message_kind, message_id)`. `CHECK (message_kind IN ('direct','group'))` like the existing status CHECK constraints (`postgres.go:141-160` style).
 - **Authorization:** 1:1 - the user must be the sender or receptor of the message and it must be visible to them (same predicate as search: `(id_user=me AND NOT deleted_by_sender) OR (id_receptor=me AND NOT deleted_by_receiver)` and not soft-deleted). Group - active member (`group_members.deleted_at IS NULL`), message not soft-deleted. Non-visible target -> 404 (do not leak existence), non-member -> 403 using the shared typed errors (`ErrNotGroupMember`, `ErrGroupMessageNotFound`, `models`/`services`).
-- **Emoji validation:** recommended allowlist for v1: `👍 ❤️ 😂 😮 😢 🙏` (server constant, exact string match after NFC normalization; note `❤️` includes U+FE0F). Any-emoji support needs grapheme segmentation (Go stdlib has none; `github.com/rivo/uniseg` is an option, to verify) and abuse limits (max 32 bytes, must be `Extended_Pictographic`); listed as an open question.
+- **Emoji validation:** recommended allowlist for v1: `👍 ❤️ 😂 😮 😢 🙏` (server constant, exact string match after NFC normalization; note `❤️` includes U+FE0F). Any-emoji support needs grapheme segmentation (Go stdlib has none; `github.com/rivo/uniseg` is an option, to verify) and abuse limits (max 32 bytes, must be `Extended_Pictographic`). DECIDED (2026-10-03): any single emoji (see Open questions); the 6 above are only the quick-row defaults in the UI.
 - **Mutation API (one service, two transports, like group send):**
   - WS client -> server `react` payload `{kind:"direct"|"group", messageID, groupID?, emoji}` where empty `emoji` removes. Registered in the dispatch table `backend/websocket/cliente.go:69-90` (`"react": (*MessageHandler).HandleReaction`), handler in `message_handlers.go` next to `HandleGroupRead` (`:492`).
   - REST mirror for tests/e2e/automation: `PUT /api/v1/chat/message/:id/reaction` body `{emoji}`, `DELETE /api/v1/chat/message/:id/reaction`, `PUT|DELETE /api/v1/group/:groupID/message/:messageID/reaction` (routes in `backend/routers/api/api.go`; mind the existing `DELETE message/:id/me` at `api.go:76` and the group routes at `:120-139`, and use the `MiddlewareGroupID`/`MiddlewareGroupMessageID` middlewares already used for receipts at `:137`).
@@ -45,7 +45,7 @@ Approved roadmap item, plan only (not yet authorized to implement). Scope: DB ta
 - New fields are optional/omitempty: old clients and existing tests keep passing.
 
 ## TDD
-Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run test`, `make test-integration` (Go `-tags e2e`, stack up), `cd frontend && npm run test:e2e`. RED first for each task (missing symbols / failing assertion), then GREEN, then mutation checks on the critical rules (unique per user, replace-on-change, visibility predicate, emoji allowlist, fan-out targets).
+Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run test`, `make test-integration` (Go `-tags e2e`, stack up), `cd frontend && npm run test:e2e`. RED first for each task (missing symbols / failing assertion), then GREEN, then mutation checks on the critical rules (unique per user, replace-on-change, visibility predicate, single-emoji validation, fan-out targets).
 
 ## Tasks
 - [ ] RE1 Data + repo + service: `MessageReaction` model, AutoMigrate, unique/idx/CHECK migrations, repo (`UpsertReaction`, `DeleteReaction`, `ReactionsForMessages`, `ListReactionUsers`), service with visibility/membership checks and emoji validation, typed errors. Unit tests (mock repo like `services/mocks_test.go`), including replace-on-change and toggle-off. Route: delegated.
@@ -69,9 +69,10 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - Touches every message list path: keep RE2 in its own reviewed commit.
 
 ## Open questions (user decision)
-- **Open question (user decision):** emoji set. Recommended: fixed 6-emoji allowlist. Alternative: any single emoji with a full picker (needs `uniseg` and a picker UI).
-- **Open question (user decision):** notify the message author of a reaction (toast/push). Recommended: no in v1.
-- **Open question (user decision):** show "who reacted" to everyone or only in groups. Recommended: everyone, as WhatsApp does.
+Resolved with the user on 2026-10-03 ("like WhatsApp"):
+- **Emoji set:** quick row with the 6 fixed emojis (👍 ❤️ 😂 😮 😢 🙏) plus a "+" button that opens a full emoji picker. Backend accepts ANY single emoji (one grapheme cluster, validated with `uniseg` + emoji check), not an allowlist. Picker library to be chosen in RE5 after a bundle-size check (lazy-loaded).
+- **Notify the author:** yes. The message author (never the reactor) gets a notification when someone reacts to THEIR message: in-app toast/notification "<name> reaccionó <emoji> a: <snippet>" when online and not viewing that chat; web-push hook added later by the `web-push` feature. Removing a reaction sends no notification.
+- **Who reacted:** visible to everyone in the chat (1:1 and groups), as WhatsApp does.
 
 ## Progress / Evidence
 (not started)

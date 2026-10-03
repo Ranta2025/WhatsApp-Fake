@@ -73,17 +73,13 @@ Contract-test design:
 5. **Frontend**: Vitest for guards/normalizers on camel fixtures; a type-level test file (`tsc`) asserting the types match sample JSON fixtures shared with the backend goldens (copy the golden camel JSON into `frontend/src/test-fixtures/` via a small script or a test that reads `../../backend/casing/testdata/contract`).
 6. **Playwright**: existing specs are the regression net; update helpers in `e2e/support/api.ts` per domain.
 
-## Tasks
-- [ ] AC0 Freeze current behavior: golden legacy fixtures for every response/WS payload + reflection inventory test; no production code change. Route: delegated.
-- [ ] AC1 Shim core: `backend/casing` (`ToCamel`, exceptions table, unit tests), REST middleware with domain enablement, WS per-client transform in `writePump` + `Client.camel` from `?casing=camel` at upgrade, CORS `AllowHeaders`, request alias structs. All domains disabled. Route: delegated.
-- [ ] AC2 Frontend plumbing: axios default header `X-API-Casing: camel`, WS URL param, keep everything working (all domains still legacy). Tests for the header/URL. Route: delegated.
-- [ ] AC3 Domain user/auth/contacts: enable in backend, rename `UserGet`, `ContactChat`, profile responses, WS `online/offline/username_changed/avatar_changed` payloads, request alias for `contact_name`; frontend types, `authUser.ts`, `ProfileModal.tsx`, `usePresence.ts`, DashboardContext contact/presence code; e2e helpers. Route: delegated. (One commit.)
-- [ ] AC4 Domain chat 1:1: `Message`, `ChatGroup`, chat WS events, `normalizeChatMessagesResponse`, `mergeMessages`, `focusedWindow`, `MessageList`, search jump code paths, e2e chat/pagination helpers, Go integration files for chat. Route: delegated. (One commit; largest slice.)
-- [ ] AC5 Domain groups: `Group*` schemas, wrappers, `group_*` WS events (`group_delete_message`), `groupReceipts.ts`, `normalizeResponses.ts` group parts, `GroupChatWindow.tsx`, `groupApi.ts`, e2e/integration group files. Route: delegated. (One commit.)
-- [ ] AC6 Domain status: `Status*` schemas, `status_*` events (`statusId` -> `statusID`), `statusApi.ts`, status feature components, e2e status. Route: delegated. (One commit.)
-- [ ] AC7 Leftovers: bug-report request aliases (`user_email`, `screen_size`), calls/media/search verification, `docs/API_CONTRACT.md` (rules, table old -> new, deprecation dates). Route: delegated.
-- [ ] AC8 Flip default to camel + `legacy` opt-out, update goldens; ship and wait the window. Route: inline (small) after the window is agreed.
-- [ ] AC9 Remove the shim: struct tags natively camelCase, delete `backend/casing` middleware/transform and the header/param handling, frontend stops sending the header, remove legacy goldens. Only after the window expires. Route: delegated.
+## Tasks (direct cutover, superseding the shim plan; 2026-10-03)
+- [ ] AC0 Contract inventory test: reflection test that walks every response/WS/request schema and fails on any non-camelCase JSON key (allowlist starts with the full current list and shrinks per domain; empty at the end). No production change. Route: delegated.
+- [ ] AC3 Domain user/auth/contacts: rename tags natively (incl. `Gmail` -> `email`, `Number`/`numero` -> `telephon`), WS `online/offline/username_changed/avatar_changed`, request bodies (`contact_name` -> `contactName`), frontend types/guards/`authUser.ts`/`ProfileModal.tsx`/`usePresence.ts`/DashboardContext, Go integration + e2e helpers. Matrix green. One commit. Route: delegated.
+- [ ] AC4 Domain chat 1:1 (`Message`, `ChatGroup`, chat WS events, normalizers, `mergeMessages`, `focusedWindow`, `MessageList`, search jump, reactions/disappearing/outbox fields added by earlier features). Matrix green. One commit. Route: delegated.
+- [ ] AC5 Domain groups (`Group*` schemas, `group_*` WS events, receipts, admin/settings, `GroupChatWindow.tsx`, `groupApi.ts`). Matrix green. One commit. Route: delegated.
+- [ ] AC6 Domain status (`Status*`, `status_*` events, `statusApi.ts`). Matrix green. One commit. Route: delegated.
+- [ ] AC7 Leftovers: bug-report (`user_email`, `screen_size`), calls, media, search, push/mute endpoints; inventory allowlist empty; `docs/API_CONTRACT.md` (rules + old -> new table). Route: delegated.
 - [ ] AC10 Close: full matrix twice, doc + mirror.
 
 ## Acceptance criteria
@@ -101,10 +97,10 @@ Contract-test design:
 - Partial enablement mistakes (a domain flipped in backend but not renamed in frontend): the per-domain single-commit rule and full matrix per slice.
 
 ## Open questions (user decision)
-- **Open question (user decision):** order. Recommended: last (see above). Alternative: first, accepting rebases of all later branches.
-- **Open question (user decision):** semantic renames while touching keys (`Gmail` -> `email`, `Number` -> `telephon`, `numero` -> `telephon`). Recommended: NO in this feature; casing only. They can follow as a separate feature with the same shim.
-- **Open question (user decision):** compatibility window length. Recommended: at least two weeks after the frontend switch (covers PWA cache); or "until the user says so".
-- **Open question (user decision):** negotiation mechanism. Recommended: `X-API-Casing` header + `?casing=camel` for WS. Alternative: URL versioning `/api/v2/`, which is cleaner but duplicates routes.
+Resolved 2026-10-03. The app runs ONLY locally (no deployed clients, user: "haz todo sin miedo"):
+- **Order:** last, after web-push (orchestrator).
+- **No compatibility shim, no window, no negotiation header:** direct cutover. Backend struct tags, WS payloads, frontend types/guards/normalizers, Go integration/e2e tests and Playwright helpers change together, domain by domain, each commit leaving the whole matrix green. `backend/casing` middleware, `X-API-Casing`, `?casing=camel`, legacy goldens and the deprecation window are DROPPED. AC1/AC2/AC8/AC9 are superseded by the direct-cutover task list below.
+- **Semantic renames (orchestrator):** included in the same cutover (`Gmail` -> `email`, `Number`/`numero` -> `telephon`), because breaking the contract once is cheaper than twice and there are no external clients. Each rename listed in `docs/API_CONTRACT.md`.
 
 ## Progress / Evidence
 (not started)

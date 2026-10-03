@@ -60,6 +60,8 @@ Playwright cannot receive a real push (headless Chromium has no FCM path; `Notif
 - [ ] WP4 Frontend subscription: `frontend/src/utils/push.ts` (`urlBase64ToUint8Array`, `ensurePushSubscription`, `removePushSubscription`), API wrappers with guards, types in `types/api.ts`, toggle in settings/banner, unsubscribe-on-logout hook, re-sync on login. Vitest with a mocked `PushManager`. Route: delegated.
 - [ ] WP5 Service worker + click routing: `push` handler, extended `notificationclick` (`telephon`/`groupID`, `openWindow` with query), union type in `notificationClick.ts`, group selection in `handleNotificationClick`, boot-time query consumption. Tests for `extractNotificationTelephon` union and hook wiring (existing `useNotificationClick.test.tsx`, `notificationClick.test.ts` show the style). SW logic kept in small pure helpers so it can be unit-tested. Route: delegated.
 - [ ] WP6 Playwright + docs: spec `frontend/e2e/push.e2e.ts` (toggle visible when enabled, REST contract), README section (VAPID setup, HTTPS requirement, iOS caveat, privacy option), manual smoke checklist. Two green runs of `npm run test:e2e`. Route: delegated.
+- [ ] WP8 Mute backend: `ChatMute` model + migration, repo/service (set with duration, clear, list for user, `IsMuted(user, chat, now)`), endpoints, `MutedUntil` in contact chat list and `GroupResponse`, `PushNotifier` skips muted + blocked. Unit/handler tests + Go e2e. Route: delegated.
+- [ ] WP9 Mute frontend + Playwright: menu option with 3 durations + "Activar notificaciones", 🔇 sidebar icon, in-app sound/notification suppressed when muted (`useNotifications`/notification utils), unread still counts. Vitest + Playwright (mute, receive message: unread badge increments, no in-app notification; unmute restores). Two green runs. Route: delegated.
 - [ ] WP7 Close: all checks, doc + mirror update.
 
 ## Acceptance criteria
@@ -76,9 +78,9 @@ Playwright cannot receive a real push (headless Chromium has no FCM path; `Notif
 - Duplicate notifications when the same user has the app open on one device and is offline on another: expected and correct (per-device).
 
 ## Open questions (user decision)
-- **Open question (user decision):** message preview in push. Recommended: show sender + truncated text by default, `PUSH_PREVIEW=off` for generic text. Alternative: default off.
-- **Open question (user decision):** dev keys. Recommended: feature disabled until `make vapid-keys` output is put in `.env`. Alternative: auto-generate and persist a dev pair in Redis when `ENV != production` (convenient, but hidden state).
-- **Open question (user decision):** muted chats / blocked contacts. Recommended: v1 skips blocked contacts only (verify the contact status field in `models/contact.go`) and adds per-chat mute as a follow-up.
+- **RESOLVED 2026-10-03 (user):** preview = sender + truncated text by default (WhatsApp default), with a PER-USER setting "Mostrar vista previa" (persisted server-side on the user, toggle in settings) that switches that user's pushes to generic "Nuevo mensaje de <name>". `PUSH_PREVIEW=off` stays as a server-wide override. Add to WP2 (field + endpoint), WP3 (payload builder reads it), WP4 (toggle UI). Reaction pushes (from the reactions feature) follow the same setting.
+- **RESOLVED 2026-10-03 (orchestrator, technical):** dev keys = feature disabled until `make vapid-keys` output is put in `.env`; no hidden auto-generated state.
+- **RESOLVED 2026-10-03 (user):** blocked contacts never trigger pushes (verify the contact `Status` values in `models/contact.go`). Per-chat MUTE is IN SCOPE (WhatsApp style): mute any 1:1 or group for 8 h / 1 week / always (`chat_mutes` table: user, chat kind, peer/group id, `muted_until` nullable = always; unique per user+chat), REST PUT/DELETE + included in chat/group list responses, "Silenciar notificaciones" in chat and group menus, 🔇 icon in the sidebar. A muted chat sends no push and no in-app sound/notification, but still increments unread. Expired mutes are ignored at read time. See WP8-WP9.
 
 ## Progress / Evidence
 (not started)

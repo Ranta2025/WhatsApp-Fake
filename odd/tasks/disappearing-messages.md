@@ -41,7 +41,7 @@ Approved roadmap item, plan only (not yet authorized to implement). Scope: setti
   - Reactions: deleted with the message (see reactions.md).
   - Edit/delete-for-everyone on an expiring message: allowed until it expires, `expires_at` unchanged by edits.
   - Unread counters/sidebar previews computed on the client must ignore removed ids.
-- **UI.** Chat info panel toggle for 1:1 (`ContactDetails.tsx`) and the existing group side panel ("Info del grupo", `GroupChatWindow.tsx:715-734`, admins only for editing, others read-only) with a 4-option selector; header chip "Mensajes temporales: 24 h" when active; small clock icon next to the time on bubbles that have `ExpiresAt`; centered system-message pill component for `Kind === 'system'`. Accessible labels in Spanish like the rest of the UI.
+- **UI.** Chat info panel toggle for 1:1 (`ContactDetails.tsx`) and the existing group side panel ("Info del grupo", `GroupChatWindow.tsx:715-734`, editable per the "edit group info" permission (`requireCanEditInfo`), read-only otherwise) with a 4-option selector; header chip "Mensajes temporales: 24 h" when active; small clock icon next to the time on bubbles that have `ExpiresAt`; centered system-message pill component for `Kind === 'system'`. Accessible labels in Spanish like the rest of the UI.
 
 ## Constraints
 - TS strict with no `any`; runtime guards for new payloads (`messages_expired`, `disappearing_changed`, `ExpiresAt` parsing).
@@ -54,12 +54,12 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 
 ## Tasks
 - [ ] DE1 Data model + settings: columns (`expires_at`, `kind`, `groups.disappear_seconds`), `chat_settings` table, migrations/indexes, repo + service (`Set/Get`), allowed durations, permissions (participant / admin), unit tests. Route: delegated.
-- [ ] DE2 Stamping + system messages + endpoints + WS `disappearing_changed`: stamp `expires_at` at creation, insert system message in the same tx, PUT endpoints, `GET settings`, `DisappearSeconds` in `GroupResponse`/`ChatGroup`, search excludes `kind='system'`. Handler/service tests + Go e2e (set 24h, message carries `ExpiresAt`, admin-only in groups, invalid value 400). Route: delegated.
+- [ ] DE2 Stamping + system messages + endpoints + WS `disappearing_changed`: stamp `expires_at` at creation, insert system message in the same tx, PUT endpoints, `GET settings`, `DisappearSeconds` in `GroupResponse`/`ChatGroup`, search excludes `kind='system'`. Handler/service tests + Go e2e (set 24h, message carries `ExpiresAt`, group permission follows `requireCanEditInfo` (member allowed when open, 403 when restricted), invalid value 400). Route: delegated.
 - [ ] DE3 Read-path filtering: `notExpired` scope on every message query (list them in the task, one test per site). Route: delegated.
 - [ ] DE4 Expiry job: `messageExpiryLoop` (clock-injected), batch delete with reply scrubbing and reaction cleanup, media GC (`MediaServicer.Remove`, reference check), `messages_expired` fan-out, wiring + graceful stop in `app.go`. Tests for each rule, plus job start/stop like `app_test.go` covers the status loop (`backend/app/app_test.go`, to verify). Route: delegated.
 - [ ] DE5 Frontend plumbing: types/guards, `messages_expired` + `disappearing_changed` handlers, removal from `messagesByChat`/`groupMessages`/`focusedWindow`, local expiry timer, system-message rendering, unread/preview exclusion. Vitest. Route: delegated.
 - [ ] DE6 UI: selector in chat info and group panel, header chip, bubble clock icon, permission gating. Component tests. Route: delegated.
-- [ ] DE7 Playwright: Ana sets a timer with Luis, system pill appears for both; a new message shows the clock icon; expiry removes it live for both and after reload (using the test-only short duration or seeded expiry); group variant, non-admin cannot change. Two green runs. Route: delegated.
+- [ ] DE7 Playwright: Ana sets a timer with Luis, system pill appears for both; a new message shows the clock icon; expiry removes it live for both and after reload (using the test-only short duration or seeded expiry); group variant: member can change while "Editar info" is open; with "Editar info: solo admins" the member cannot change. Two green runs. Route: delegated.
 - [ ] DE8 Close: full checks, doc + mirror.
 
 ## Acceptance criteria
@@ -76,10 +76,10 @@ Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run t
 - Clock skew between app and DB: always compare with DB `now()` in SQL, not Go time, for the job.
 
 ## Open questions (user decision)
-- **Open question (user decision):** who can change the timer in groups. Recommended: admins only (`UserRole == "admin"`, `schemas.GroupResponse.UserRole`). Alternative: any member.
-- **Open question (user decision):** should media objects be deleted from MinIO on expiry. Recommended: yes, with the reference check (this is what "disappearing" implies). Alternative: keep objects and only hide rows (privacy weaker).
-- **Open question (user decision):** failed media deletions. Recommended: log + metric, accept rare orphans in v1. Alternative: persistent `media_gc` queue table with retry.
-- **Open question (user decision):** expiry precision. Recommended: 1-minute job + read-time filtering.
+- **RESOLVED 2026-10-03 (user):** who can change the timer in groups = same rule as "edit group info" (WhatsApp behavior): reuse `requireCanEditInfo` from group-admin-permissions (admins only when `OnlyAdminsCanEditInfo` is on, otherwise any active member). Update DE1/DE2/DE6/DE7 accordingly (permission check, UI gating, Playwright "non-admin cannot change" only when the restriction is on).
+- **RESOLVED 2026-10-03 (user):** media objects ARE deleted from MinIO on expiry, after the reference check (no other live message points to the same object).
+- **RESOLVED 2026-10-03 (user, "the most complete"):** failed media deletions go to a persistent `media_gc` queue table (object key, attempts, next_attempt_at, last_error; unique on object key) retried by the expiry job with exponential backoff and a max-attempts cap; plus log + metric (`media_gc_pending`, deletions ok/failed). Enqueue happens in the same tx as the message delete; the reference check runs again before each delete attempt. Add to DE1 (model/migration) and DE4 (job + tests: success, retry after failure, give-up after cap, skip when re-referenced).
+- **RESOLVED 2026-10-03:** expiry precision = 1-minute job + read-time filtering (`expires_at > now()` on every read path), so users never see an expired message even before the job runs.
 
 ## Progress / Evidence
 (not started)

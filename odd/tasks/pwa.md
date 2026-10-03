@@ -55,6 +55,9 @@ SW logic is kept in small pure modules (route matching / denylist, message parsi
 - [ ] PW4 Registration + update UX: `registerSW` integration preserving `swRegistration` and the click message path; "Nueva versión" toast. Tests. Route: delegated.
 - [ ] PW5 Install button + offline banner: `useInstallPrompt`, `useOnlineStatus`, components, iOS instructions. Component tests. Route: delegated.
 - [ ] PW6 Playwright: manifest valid + SW activated + offline reload shows the shell (login page or dashboard skeleton) and the offline banner; API stays uncached (request after `setOffline(false)` hits network). Two green runs. Route: delegated.
+- [ ] PW8 Backend idempotency: optional `ClientID` on `MessageGet`/group send payloads (WS `chat`, `group_chat`, REST group send), persisted column + unique partial index (`client_id IS NOT NULL`) on `messages` and `group_messages` per sender, repo upsert-or-return-existing, echoed in responses so the client can reconcile. Service/handler tests (first send inserts, replay returns same ID and does not re-broadcast to receivers twice) + Go e2e. Route: delegated.
+- [ ] PW9 Frontend outbox: IndexedDB store (`idb` or hand-written, verify), enqueue when `navigator.onLine` is false or WS not open, optimistic message with `status: 'pending'` + clock icon, flush FIFO on WS open, reconcile by `ClientID`, retry on failure, survive reload (outbox rehydrates into the chat list), clear on logout. Vitest with fake-indexeddb. Route: delegated.
+- [ ] PW10 Playwright offline send: Ana goes offline (`context.setOffline(true)`), sends a 1:1 and a group message (clock icon shown), reloads while offline (messages still pending), goes online, messages delivered exactly once to Luis/group. Two green runs. Route: delegated.
 - [ ] PW7 CI + docs: README section; optional non-blocking Lighthouse job (to verify); update `.github/workflows/ci.yml` only if a new step is really needed (the e2e job already runs Playwright). Close, doc + mirror.
 
 ## Acceptance criteria
@@ -72,9 +75,9 @@ SW logic is kept in small pure modules (route matching / denylist, message parsi
 - iOS quirks (install flow, storage eviction); to verify.
 
 ## Open questions (user decision)
-- **Open question (user decision):** plugin vs hand-written worker. Recommended: `vite-plugin-pwa` injectManifest (see tradeoffs).
-- **Open question (user decision):** offline scope. Recommended: shell only, no offline sending. Alternative: queue outgoing messages in IndexedDB and flush on reconnect (a separate feature: needs idempotency keys to avoid duplicates).
-- **Open question (user decision):** update behavior. Recommended: prompt. Alternative: silent auto-update on next navigation.
+- **RESOLVED 2026-10-03 (orchestrator, technical):** `vite-plugin-pwa` with `injectManifest` (single worker that web-push extends later).
+- **RESOLVED 2026-10-03 (user):** offline scope = shell AND offline sending. Outgoing text messages (1:1 and group) typed while offline are queued in an IndexedDB outbox with a client-generated `ClientID` (UUID v4), shown in the list with the pending clock icon, and flushed in order on reconnect (WS open). Backend makes sends idempotent on (`sender`, `ClientID`): unique partial index, duplicate send returns the already-saved message instead of inserting. Media offline sending is out of scope (text only). See tasks PW8-PW10.
+- **RESOLVED 2026-10-03 (user):** update behavior = prompt ("Nueva versión disponible" toast with "Actualizar" button; no forced `skipWaiting`).
 
 ## Progress / Evidence
 (not started)
