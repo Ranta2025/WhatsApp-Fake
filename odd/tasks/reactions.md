@@ -10,7 +10,7 @@ Emoji reactions on 1:1 and group messages, WhatsApp style:
 There is no reaction concept anywhere. Message bubbles offer Reply/Forward/Edit/Delete only (1:1: `frontend/src/features/dashboard/components/MessageList.tsx:224-258`, group: `GroupMessageBubble` in `frontend/src/features/dashboard/components/GroupChatWindow.tsx:53`, Popover at `:113-172`). The two message tables (`messages`, `group_messages`, `backend/models/message.go`, `backend/models/group.go`) have independent serial ids, so a reaction must be keyed by (kind, id).
 
 ## Scope / Authorized
-Approved roadmap item, plan only (not yet authorized to implement). Scope: DB table, service/repo, WS events, REST read endpoint, aggregates embedded in history/window/search-jump responses, frontend state + UI, tests, Playwright. Out of scope: custom/skin-tone emoji picker, reaction notifications (push/toasts), reactions on status stories.
+Authorized for implementation by the user on 2026-10-03 (branch `feat/reactions` from `feat/group-admin-permissions`). Scope: DB table, service/repo, WS events, REST read endpoint, aggregates embedded in history/window/search-jump responses, frontend state + UI, tests, Playwright. Out of scope: custom/skin-tone emoji picker, reaction notifications (push/toasts), reactions on status stories.
 
 ## Dependencies / ordering
 - Do after `message-search` (touches the same history/around/after responses and the `focusedWindow` state) and after `group-read-receipts` (closed).
@@ -48,10 +48,10 @@ Approved roadmap item, plan only (not yet authorized to implement). Scope: DB ta
 Strict TDD (session config). Runners: `go test ./...`, `cd frontend && npm run test`, `make test-integration` (Go `-tags e2e`, stack up), `cd frontend && npm run test:e2e`. RED first for each task (missing symbols / failing assertion), then GREEN, then mutation checks on the critical rules (unique per user, replace-on-change, visibility predicate, single-emoji validation, fan-out targets).
 
 ## Tasks
-- [ ] RE1 Data + repo + service: `MessageReaction` model, AutoMigrate, unique/idx/CHECK migrations, repo (`UpsertReaction`, `DeleteReaction`, `ReactionsForMessages`, `ListReactionUsers`), service with visibility/membership checks and emoji validation, typed errors. Unit tests (mock repo like `services/mocks_test.go`), including replace-on-change and toggle-off. Route: delegated.
+- [x] RE1 Data + repo + service (no reactions on group system messages, `Kind='system'` -> 404; any single emoji via `uniseg`, max 32 bytes): `MessageReaction` model, AutoMigrate, unique/idx/CHECK migrations, repo (`UpsertReaction`, `DeleteReaction`, `ReactionsForMessages`, `ListReactionUsers`), service with visibility/membership checks and emoji validation, typed errors. Unit tests (mock repo like `services/mocks_test.go`), including replace-on-change and toggle-off. Route: delegated.
 - [ ] RE2 Aggregates in responses: add `Reactions` to `schemas.Message` and `GroupMessageResponse`, batch helper used by every history/window/detail path (find them: `HandlerGetChats` `handlerChat.go:56-125`, `HandleGetGroupMessages` `handlerGroup.go:262-332`, group detail, search around window). Tests assert one extra query per page and correct `Mine`. Route: delegated.
 - [ ] RE3 Transport: WS `react` handler + `reaction` event fan-out, REST PUT/DELETE/GET endpoints and routes, handler tests, Go e2e (`-tags e2e`): A reacts, B receives `reaction` over WS, replace, remove, non-member 403, invisible message 404. Route: delegated.
-- [ ] RE4 Frontend plumbing: types (`types/api.ts`, `types/ws.ts`, `WsSend*`), guards/normalizers, `applyReaction` reducer, WS sender + listener in `api/websocket.ts`/`DashboardContext`, optimistic update + rollback, merge preservation in `mergeMessages`/`focusedWindow`. Vitest. Route: delegated.
+- [ ] RE4 Frontend plumbing (includes the author notification: in-app toast "<name> reaccionó <emoji> a: <snippet>" when the viewer is the message author, not the reactor, the emoji is non-empty and that chat is not open): types (`types/api.ts`, `types/ws.ts`, `WsSend*`), guards/normalizers, `applyReaction` reducer, WS sender + listener in `api/websocket.ts`/`DashboardContext`, optimistic update + rollback, merge preservation in `mergeMessages`/`focusedWindow`. Vitest. Route: delegated.
 - [ ] RE5 UI: `ReactionPicker` (quick row), `ReactionChips`, who-reacted modal, wiring into 1:1 and group bubbles, long-press, aria labels. Component tests. Route: delegated.
 - [ ] RE6 Playwright: Ana reacts to Luis's message, Luis sees the chip live and after reload; Ana changes and removes the reaction; group variant with Marta; chip counts. Unique text per run, no absolute counts. Two green runs. Route: delegated.
 - [ ] RE7 Close: full checks, doc + mirror.
@@ -75,7 +75,9 @@ Resolved with the user on 2026-10-03 ("like WhatsApp"):
 - **Who reacted:** visible to everyone in the chat (1:1 and groups), as WhatsApp does.
 
 ## Progress / Evidence
-(not started)
+- Delivery strategy: `ask-on-risk`. Forecast ~1500-2000 authored lines across RE1-RE6; RDD per work-unit commit with `--base-ref <last reviewed boundary> --committed-only`. First boundary: `dbb993e` (branch point).
+- Route declarations: RE1-RE6 delegated (writer trigger: 2+ non-trivial files each); RE7 inline.
+- RE1 (delegated, sonnet): `models/reaction.go`, `repos/reactionData.go` (`RepoReaction`: `DirectMessageTarget`, `GroupMessageTarget`, `IsGroupMember`, `UpsertReaction`, `DeleteReaction`, `ReactionsForMessages` one query, `ListReactionUsers`), `services/serviceReaction.go` (`SetReaction` -> `ReactionChange{AuthorID, OtherUserID, Removed...}`, `ListReactions`; in-service 10/s/user limit since no WS limiter exists), `services/reactionEmoji.go` (NFC + uniseg single grapheme + own Extended_Pictographic table, flags, keycaps; uniseg v0.4.7 has no public ExtPict property). RED: `undefined: models.ReactionTarget`. Mutations caught: membership skip, empty-emoji upsert, inverted `Mine`. `go build/vet/test ./...` green; migrations verified on the dev Postgres (`\d message_reactions`: unique, index, CHECK). Gap: SQL predicates only covered by RE3 e2e (no safe repo DB runner).
 
 ## Next step
-Implement after `message-search` lands; first task RE1.
+RE2.

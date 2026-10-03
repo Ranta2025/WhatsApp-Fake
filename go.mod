@@ -20,6 +20,8 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
+require github.com/rivo/uniseg v0.4.7
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect

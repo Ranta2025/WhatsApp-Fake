@@ -118,6 +118,8 @@ func Conection() (*gorm.DB, error) {
 		// ── Estados (stories) ──────────────────────────────────────────────
 		&models.Status{},
 		&models.StatusView{},
+		// ── Reacciones ─────────────────────────────────────────────────────
+		&models.MessageReaction{},
 	); err != nil {
 		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}
@@ -329,6 +331,21 @@ func Conection() (*gorm.DB, error) {
 		) THEN
 			ALTER TABLE statuses ADD CONSTRAINT chk_statuses_type
 				CHECK (type IN ('text', 'image', 'video'));
+		END IF;
+	END $$;`)
+
+	// Reacciones: una por usuario y mensaje (el upsert reemplaza el emoji).
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_message_reactions_unique
+		ON message_reactions (message_kind, message_id, user_id)`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_message_reactions_message
+		ON message_reactions (message_kind, message_id)`)
+	execMigration(data, `DO $$ BEGIN
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'message_reactions' AND constraint_name = 'chk_message_reactions_kind'
+		) THEN
+			ALTER TABLE message_reactions ADD CONSTRAINT chk_message_reactions_kind
+				CHECK (message_kind IN ('direct', 'group'));
 		END IF;
 	END $$;`)
 
