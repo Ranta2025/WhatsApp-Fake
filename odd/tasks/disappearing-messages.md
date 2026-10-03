@@ -197,5 +197,9 @@ The Decisions above predate group-admin-permissions/reactions. These points OVER
   - DB seeding: `support/db.ts` `psql()` runs `docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "$1"'` from the repo root with `POSTGRES_PUBLIC_PORT=55432` defaulted in the env (compose only needs it to resolve the port mapping); `setExpiry(table, id, interval)` validates id and interval and asserts exactly one row changed. Message id comes from the bubble's `data-message-id`. Requires the compose stack running; documented in the file header.
   - Verification: `npm run typecheck`, `npm run lint` ok after rebuilding `app web`; `npx playwright test e2e/disappearing.e2e.ts` 2 passed (1.1 m); full `npm run test:e2e` run 1: 19 passed (2.3 m); run 2 (after >= 60 s): 19 passed (2.8 m). No flakes, no 429.
 
+- DE7 committed `aaec4d8`. Review slice `56ddd0b..aaec4d8` (selector fix `e5a23c3` + DE7): HIGH (spec shells out to `docker compose exec`), consent granted, four lenses (risk, resilience, readability, reliability), APPROVED and acknowledged, lineage `review-80f8aa0e7027ada3`. Last reviewed boundary = `aaec4d8`.
+  - Advisories fixed by the parent in the next commit: `psql` helper has a 30 s timeout (fails fast instead of blocking the worker); near-expiry seed raised from 15 s to 45 s with 60 s removal timeouts (two reloads on a slow runner); `TIMER_VALUES` map with a throw on unknown labels; `ensureTimerOff` helper; cleanup errors are logged instead of masking the test failure. Spec re-run: 2 passed (1.1 m).
+  - Accepted: the near-expiry scenario cannot tell whether the local timer or the job removed the message (documented in the spec; the local timer is proven by `useExpiryTimer` unit tests). Locators coupled to an unnamed close button / `text-xs` class (follow-up). Refuted: the key-scoping unit test re-renders into the same React root (`mount` calls `root.render` on one root), so it is not vacuous.
+
 ## Next step
 DE8.

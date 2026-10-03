@@ -38,13 +38,23 @@ async function closeGroupInfo(page: Page): Promise<void> {
   await expect(page.getByText('Info del grupo', { exact: true })).toBeHidden();
 }
 
+// Mirrors the selector options (DISAPPEAR_OPTIONS in features/dashboard/lib/disappearing.ts).
+const TIMER_VALUES: Record<string, string> = {
+  Desactivados: '0', '24 horas': '86400', '7 días': '604800', '90 días': '7776000',
+};
+
 async function setTimer(page: Page, label: string): Promise<void> {
+  const value = TIMER_VALUES[label];
+  if (value === undefined) throw new Error(`opción de temporizador desconocida: ${label}`);
   const select = timerSelect(page);
   await select.selectOption({ label });
   await expect(page.getByTestId('disappearing-pending')).toHaveCount(0);
-  await expect(select).toHaveValue(
-    { Desactivados: '0', '24 horas': '86400', '7 días': '604800', '90 días': '7776000' }[label] ?? '',
-  );
+  await expect(select).toHaveValue(value);
+}
+
+// The 1:1 setting persists between runs: start and end each run with the timer off.
+async function ensureTimerOff(page: Page): Promise<void> {
+  if ((await timerSelect(page).inputValue()) !== '0') await setTimer(page, 'Desactivados');
 }
 
 async function messageId(bubble: Locator): Promise<number> {
@@ -70,7 +80,7 @@ test.describe('mensajes temporales', () => {
 
       // Start from "Desactivados" (the setting persists between runs).
       await openContactInfo(ana.page);
-      if ((await timerSelect(ana.page).inputValue()) !== '0') await setTimer(ana.page, 'Desactivados');
+      await ensureTimerOff(ana.page);
       await expect(ana.page.getByTestId('disappearing-chip')).toHaveCount(0);
 
       const pillsAna = ana.page.getByText('Activaste los mensajes temporales: 24 horas');
@@ -92,11 +102,14 @@ test.describe('mensajes temporales', () => {
       await expect(bubbleWithText(ana.page, keep).getByTestId('expiry-clock')).toBeVisible();
       await expect(bubbleWithText(luis.page, keep).getByTestId('expiry-clock')).toBeVisible();
 
-      // Local timer path: expiry 15 s from now, clients reload to learn the near ExpiresAt.
+      // Near-expiry path: expiry 45 s from now (margin for two reloads on a slow runner);
+      // clients reload to learn the near ExpiresAt. Removal may come from the local timer or
+      // from the job's messages_expired, whichever is first; the local timer alone is proven by
+      // the useExpiryTimer unit tests.
       const soon = uniqueText('temporal local');
       await sendChatText(ana.page, soon);
       await expect(bubbleWithText(luis.page, soon)).toBeVisible();
-      setExpiry('messages', await messageId(bubbleWithText(luis.page, soon)), '15 seconds');
+      setExpiry('messages', await messageId(bubbleWithText(luis.page, soon)), '45 seconds');
       await reopenChat(ana, 'Luis');
       await reopenChat(luis, 'Ana');
       await expect(bubbleWithText(ana.page, soon)).toBeVisible();
@@ -109,8 +122,8 @@ test.describe('mensajes temporales', () => {
       await expect(bubbleWithText(luis.page, jobText)).toBeVisible();
       setExpiry('messages', await messageId(bubbleWithText(luis.page, jobText)), '-1 second');
 
-      await expect(bubbleWithText(ana.page, soon)).toHaveCount(0, { timeout: 30_000 });
-      await expect(bubbleWithText(luis.page, soon)).toHaveCount(0, { timeout: 30_000 });
+      await expect(bubbleWithText(ana.page, soon)).toHaveCount(0, { timeout: 60_000 });
+      await expect(bubbleWithText(luis.page, soon)).toHaveCount(0, { timeout: 60_000 });
       await expect(bubbleWithText(ana.page, jobText)).toHaveCount(0, { timeout: 90_000 });
       await expect(bubbleWithText(luis.page, jobText)).toHaveCount(0, { timeout: 90_000 });
 
@@ -126,7 +139,10 @@ test.describe('mensajes temporales', () => {
       // Leave the chat without a timer for the other specs.
       try {
         await openContactInfo(ana.page);
-        if ((await timerSelect(ana.page).inputValue()) !== '0') await setTimer(ana.page, 'Desactivados');
+        await ensureTimerOff(ana.page);
+      } catch (err) {
+        // Do not let a cleanup failure replace the original test failure.
+        console.warn('disappearing cleanup failed:', err);
       } finally {
         await ana.context.close();
         await luis.context.close();

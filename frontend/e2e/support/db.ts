@@ -15,6 +15,9 @@ export function psql(sql: string): string {
       cwd: REPO_ROOT,
       env: { ...process.env, POSTGRES_PUBLIC_PORT: process.env.POSTGRES_PUBLIC_PORT ?? '55432' },
       encoding: 'utf8',
+      // Fail fast instead of blocking the worker if the stack is down or compose hangs.
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
     },
   ).trim();
 }
