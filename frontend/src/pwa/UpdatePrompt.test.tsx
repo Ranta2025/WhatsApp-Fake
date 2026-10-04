@@ -58,3 +58,18 @@ describe('UpdatePrompt', () => {
     expect(updateSW).not.toHaveBeenCalled();
   });
 });
+
+describe('UpdatePrompt update failure', () => {
+  it('logs a rejected updateSW(true) instead of leaving it unhandled', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = new Error('boom');
+    setUpdater(vi.fn().mockRejectedValue(failure));
+    act(() => root.render(<UpdatePrompt />));
+    act(() => markNeedRefresh());
+    await act(async () => {
+      button('Actualizar')!.click();
+    });
+    expect(error).toHaveBeenCalledWith(expect.any(String), failure);
+    error.mockRestore();
+  });
+});

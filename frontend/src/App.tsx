@@ -3,6 +3,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import FullScreenLoader from './components/ui/FullScreenLoader';
 import UpdatePrompt from './pwa/UpdatePrompt';
+import OfflineBanner from './pwa/OfflineBanner';
 
 // lazy-loaded pages (improves initial bundle and follows good practices)
 const Welcome = lazy(() => import('./pages/Welcome'));
@@ -48,6 +49,7 @@ function App() {
             </Suspense>
         </BrowserRouter>
         <UpdatePrompt />
+        <OfflineBanner />
     </AuthProvider>
   );
 }

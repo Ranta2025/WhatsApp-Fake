@@ -4,6 +4,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { getErrorMessage } from '../../../lib/errors';
+import InstallApp from '../../../pwa/InstallApp';
 import type { MediaUploadResult } from '../../../types/api';
 
 interface ProfileModalProps {
@@ -275,6 +276,8 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                             {status}
                         </div>
                     )}
+
+                    <InstallApp />
 
                     <div className="flex gap-3 pt-4 border-t border-slate-700/50">
                         <button

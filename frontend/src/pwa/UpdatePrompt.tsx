@@ -21,7 +21,9 @@ export default function UpdatePrompt() {
       </button>
       <button
         type="button"
-        onClick={() => void applyUpdate()}
+        onClick={() => {
+          applyUpdate().catch((err: unknown) => console.error('Service worker update failed:', err));
+        }}
         className="rounded-xl bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-500 transition-colors"
       >
         Actualizar
