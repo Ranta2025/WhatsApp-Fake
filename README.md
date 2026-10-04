@@ -36,6 +36,9 @@ Una plataforma de mensajería instantánea completa construida con **Go (Gin)** 
 - 🔄 **Actualizaciones con aviso** — Una nueva versión muestra "Nueva versión disponible · Actualizar"; nunca reemplaza el worker bajo una pestaña abierta sin confirmación
 - 📤 **Envío offline de texto** — Los mensajes de texto (1:1 y grupo) escritos sin conexión quedan en una cola IndexedDB con reloj de pendiente, sobreviven a la recarga y se envían en orden al reconectar. Cada envío lleva un `clientID` (UUID) y el backend es idempotente por (remitente, `clientID`): un reenvío no duplica ni se vuelve a entregar. Los adjuntos no se encolan
 
+### Notificaciones push
+- 🔔 **Web Push (VAPID)** — Avisos de mensajes nuevos 1:1 y de grupo con la app cerrada; al pulsarlos se abre ese chat. Opcional y con vista previa configurable; ver [Notificaciones push](#-notificaciones-push-web-push)
+
 ### Videollamadas
 - 📹 **Llamadas de voz y vídeo** — Integrado con **ZegoCloud**, tokens seguros por sala
 - 📋 **Historial de llamadas** — Registro con duración, tipo (audio/video) y estado (contestada/perdida/rechazada/no disponible)
@@ -137,6 +140,52 @@ cd frontend && npm install && npm run dev    # http://localhost:5173
 
 Para el backend fuera de Docker (Go 1.25+): `docker compose up -d postgres redis minio mailpit`,
 copia `.env.example` a `.env` con los valores de `localhost` y ejecuta `go run .`.
+
+---
+
+## 🔔 Notificaciones push (Web Push)
+
+Avisos del sistema para mensajes nuevos (1:1 y de grupo) aunque la app no esté abierta.
+Al pulsar la notificación se abre (o se enfoca) la app en ese chat, también si estaba cerrada.
+**Es opcional**: sin claves VAPID el push queda deshabilitado y la app funciona igual que
+siempre, sin ningún ajuste de push en la interfaz.
+
+**Activarlo:**
+
+```bash
+make vapid-keys                # imprime VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY y VAPID_SUBJECT
+```
+
+1. Copia las tres variables `VAPID_*` a tu `.env` (ajusta `VAPID_SUBJECT` a un `mailto:` o
+   una URL `https` tuya). Nunca subas estas claves al repositorio.
+2. Reinicia el backend: `docker compose up -d app`.
+3. En la app, abre **Editar Perfil** (icono de ajustes) y activa **Notificaciones push**; el
+   navegador pedirá permiso de notificaciones.
+
+**Privacidad:**
+
+- Por defecto la notificación muestra el remitente (o el grupo) y el texto del mensaje
+  (truncado; "Foto", "Audio"… para multimedia). El contenido viaja cifrado de extremo a
+  extremo hasta el navegador: el servicio de push no puede leerlo.
+- Cada usuario puede desactivar **Mostrar vista previa** en Editar Perfil: la notificación
+  mantiene el remitente pero el texto pasa a ser "Nuevo mensaje".
+- `PUSH_PREVIEW=off` en `.env` fuerza ese cuerpo genérico para todos los usuarios.
+- Al **cerrar sesión** se elimina la suscripción de ese navegador: un navegador compartido no
+  sigue recibiendo los mensajes del usuario anterior.
+
+**Cuándo llega un push:** solo a los usuarios sin conexión abierta con la app (sin WebSocket
+activo). Quien tiene la app abierta ya recibe el mensaje en tiempo real y no recibe un push
+duplicado en ese dispositivo.
+
+**Requisitos del navegador:**
+
+- Web Push exige **HTTPS**. `http://localhost` cuenta como contexto seguro y sirve para
+  probar en el propio equipo; para un móvil u otro dispositivo real usa el túnel de
+  Cloudflare (`make tunnel` o `docker compose --profile tunnel up -d`), que da una URL `https`.
+- **iOS/iPadOS** solo entrega notificaciones push a la **PWA instalada** (Compartir →
+  "Añadir a pantalla de inicio", iOS/iPadOS 16.4 o superior) y abierta desde ese icono; en una
+  pestaña de Safari no está disponible.
+- Chrome, Edge, Firefox, Android y Safari en macOS 13+ funcionan desde el navegador.
 
 ---
 
@@ -385,7 +434,7 @@ make test-integration
 # si el Postgres del stack está publicado en otro puerto (POSTGRES_PUBLIC_PORT), p. ej. 55432:
 POSTGRES_PUBLIC_PORT=55432 make test-integration
 
-# e2e de navegador con Playwright (login, chat, grupo con media, administración de grupos, estados, paginación, búsqueda, PWA y envío offline)
+# e2e de navegador con Playwright (login, chat, grupo con media, administración de grupos, estados, paginación, búsqueda, PWA, envío offline y Web Push)
 cd frontend && npm ci
 npx playwright install chromium   # solo la primera vez
 npm run test:e2e                  # o, desde la raíz: make e2e
