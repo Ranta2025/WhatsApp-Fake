@@ -12,7 +12,7 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: 'prompt',
-      // El registro sigue siendo manual (utils/notifications.ts) hasta PW4
+      // El registro lo hace utils/notifications.ts con registerSW de virtual:pwa-register
       injectRegister: false,
       manifest,
       injectManifest: {

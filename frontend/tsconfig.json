@@ -21,7 +21,8 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "types": [
-      "vite/client"
+      "vite/client",
+      "vite-plugin-pwa/client"
     ]
   },
   "include": [

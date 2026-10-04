@@ -1,6 +1,9 @@
 // Utilidad para manejar notificaciones nativas del sistema operativo
 // Genera iconos circulares dinámicos estilo Telegram/WhatsApp
 
+import { registerSW } from 'virtual:pwa-register';
+import { markNeedRefresh, setUpdater } from '../pwa/updateStore';
+
 let swRegistration: ServiceWorkerRegistration | null = null;
 
 // Cache de iconos generados para no regenerar cada vez
@@ -160,29 +163,31 @@ function hashCode(str: string): number {
 }
 
 /**
- * Registra el Service Worker y guarda la referencia
+ * Registra el Service Worker vía vite-plugin-pwa y guarda la referencia.
+ * Cuando hay una versión nueva esperando, avisa al store de actualización.
  */
-export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+export function registerServiceWorker(): void {
     if (!('serviceWorker' in navigator)) {
         console.warn('[Notif] Service Workers no soportados en este navegador');
-        return null;
+        return;
     }
 
-    try {
-        const registration = await navigator.serviceWorker.register('/sw.js', {
-            scope: '/'
-        });
-        swRegistration = registration;
-        console.log('[Notif] Service Worker registrado con scope:', registration.scope);
+    // Escuchar mensajes del SW (ej: click en notificación)
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
 
-        // Escuchar mensajes del SW (ej: click en notificación)
-        navigator.serviceWorker.addEventListener('message', handleSWMessage);
-
-        return registration;
-    } catch (error) {
-        console.error('[Notif] Error registrando Service Worker:', error);
-        return null;
-    }
+    const updateSW = registerSW({
+        immediate: true,
+        onNeedRefresh: markNeedRefresh,
+        onRegisteredSW(_swUrl, registration) {
+            if (!registration) return;
+            swRegistration = registration;
+            console.log('[Notif] Service Worker registrado con scope:', registration.scope);
+        },
+        onRegisterError(error) {
+            console.error('[Notif] Error registrando Service Worker:', error);
+        },
+    });
+    setUpdater(updateSW);
 }
 
 /**
