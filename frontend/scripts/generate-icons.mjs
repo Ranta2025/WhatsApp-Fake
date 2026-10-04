@@ -1,6 +1,7 @@
 // Genera iconos PNG para PWA desde el logo SVG de la app
 // Se ejecuta con: node scripts/generate-icons.mjs
 import { writeFileSync, mkdirSync } from 'fs';
+import { Resvg } from '@resvg/resvg-js';
 
 // Función para crear un SVG del logo en cualquier tamaño
 function createLogoSVG(size) {
@@ -65,5 +66,35 @@ function createMaskableSVG(size) {
 
 writeFileSync(`${outDir}/maskable-512x512.svg`, createMaskableSVG(512));
 console.log('Generated maskable-512x512.svg');
+
+// Rasterize SVG to PNG (static assets checked into git)
+const BG = '#0a1015';
+
+function toPng(svg, size) {
+    return new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng();
+}
+
+// Logo centered within ~80% of the canvas over a full-bleed opaque background
+function createFullBleedSVG(size, scale) {
+    const inner = Math.round(size * scale);
+    const offset = Math.round((size - inner) / 2);
+    const logo = createLogoSVG(inner).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  <rect width="${size}" height="${size}" fill="${BG}"/>
+  <svg x="${offset}" y="${offset}" width="${inner}" height="${inner}" viewBox="0 0 ${inner} ${inner}">${logo}</svg>
+</svg>`;
+}
+
+const pngs = [
+    ['icon-192.png', createLogoSVG(192), 192],
+    ['icon-512.png', createLogoSVG(512), 512],
+    ['maskable-512.png', createFullBleedSVG(512, 0.8), 512],
+    ['apple-touch-icon-180.png', createFullBleedSVG(180, 0.9), 180],
+];
+
+for (const [name, svg, size] of pngs) {
+    writeFileSync(`${outDir}/${name}`, toPng(svg, size));
+    console.log(`Generated ${name}`);
+}
 
 console.log('\nDone! Icons generated in public/icons/');

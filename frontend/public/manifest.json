@@ -1,4 +1,7 @@
 {
+    "id": "/",
+    "scope": "/",
+    "lang": "es",
     "name": "todos - Chat",
     "short_name": "todos",
     "description": "Chat en tiempo real",
@@ -7,58 +10,34 @@
     "orientation": "any",
     "background_color": "#0a1015",
     "theme_color": "#0a1015",
-    "categories": ["social", "communication"],
+    "categories": [
+        "social",
+        "communication"
+    ],
     "icons": [
         {
-            "src": "/icons/icon-72x72.svg",
-            "sizes": "72x72",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "/icons/icon-96x96.svg",
-            "sizes": "96x96",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "/icons/icon-128x128.svg",
-            "sizes": "128x128",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "/icons/icon-144x144.svg",
-            "sizes": "144x144",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "/icons/icon-152x152.svg",
-            "sizes": "152x152",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "/icons/icon-192x192.svg",
+            "src": "/icons/icon-192.png",
             "sizes": "192x192",
-            "type": "image/svg+xml"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
-            "src": "/icons/icon-384x384.svg",
-            "sizes": "384x384",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "/icons/icon-512x512.svg",
+            "src": "/icons/icon-512.png",
             "sizes": "512x512",
-            "type": "image/svg+xml"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
-            "src": "/icons/maskable-512x512.svg",
+            "src": "/icons/maskable-512.png",
             "sizes": "512x512",
-            "type": "image/svg+xml",
+            "type": "image/png",
             "purpose": "maskable"
         },
         {
-            "src": "/todos.svg",
+            "src": "/icons/icon-512x512.svg",
             "sizes": "any",
-            "type": "image/svg+xml"
+            "type": "image/svg+xml",
+            "purpose": "any"
         }
     ]
 }
