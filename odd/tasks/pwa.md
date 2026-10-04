@@ -93,7 +93,7 @@ Branch `feat/pwa` from `feat/disappearing-messages` @ `27c0937` (2026-10-04).
 | PW2 | delegated (writer: tooling + worker port, 2+ files) | 2f087a1 | slice 5c8b7d3..2f087a1 medium/slice_budget_reached: granted -> approved, acknowledged (review-3b065f8b9e5b7101; advisories: dev SW missing, stale /manifest.json precache, sw.ts wiring untested). Boundary -> 2f087a1 |
 | PW3 | delegated (writer: worker + pure modules + specs) | f38fcf6 | assess 2f087a1..f38fcf6 medium/under_budget (pending in slice) |
 | PW4 | delegated (writer: registration + store + UI, 2+ files) | 40cb711 | slice 2f087a1..40cb711 medium/slice_budget_reached: granted -> approved, acknowledged (review-d077b164fb76ec63; advisories: applyUpdate unhandled rejection -> fixed in PW5; first-install claim flag volatile -> accepted, safe direction). Boundary -> 40cb711 |
-| PW5 | delegated (writer: hooks + components + specs) | (this commit) | pending |
+| PW5 | delegated (writer: hooks + components + specs) | 5e08ff4 + follow-up fix | slice 40cb711..5e08ff4 medium/slice_budget_reached: granted -> approved, acknowledged (review-b07984d9d217ad83; WARNINGs: rejected `prompt()` unhandled and event never cleared -> fixed inline in follow-up `fix(pwa)` commit with RED/GREEN test). Boundary -> 5e08ff4 |
 
 PW1 evidence: RED 3/5 failed -> GREEN 5/5 (`src/pwa/manifest.test.ts`); `npm run test` 775 pass; typecheck/lint clean; `vite build` emits `dist/icons/icon-192.png`. Icons rasterized with `@resvg/resvg-js` ^2.6.2 (`npm run icons`); Arial missing locally so the logo text uses a serif fallback (accepted, PNGs are checked in). Node types scoped to the test via triple-slash reference (not added to app tsconfig).
 

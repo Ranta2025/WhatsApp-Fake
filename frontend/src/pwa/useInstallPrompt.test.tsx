@@ -91,6 +91,22 @@ describe('useInstallPrompt', () => {
     expect(result.canInstall).toBe(false);
   });
 
+  it('promptInstall resolves and clears the event when prompt() rejects', async () => {
+    mount();
+    const { event, prompt } = fakePromptEvent();
+    prompt.mockRejectedValue(new DOMException('already prompted', 'InvalidStateError'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    await act(async () => {
+      await expect(result.promptInstall()).resolves.toBeUndefined();
+    });
+    expect(result.canInstall).toBe(false);
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('is installed when running standalone', () => {
     stubMatchMedia(true);
     mount();

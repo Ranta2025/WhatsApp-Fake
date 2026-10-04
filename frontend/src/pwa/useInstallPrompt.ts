@@ -69,10 +69,15 @@ export function useInstallPrompt() {
 
   const promptInstall = useCallback(async (): Promise<void> => {
     if (!deferred) return;
-    await deferred.prompt();
-    await deferred.userChoice;
-    // The event is single-use: clear it whatever the user chose.
-    setState({ ...state, deferred: null });
+    try {
+      await deferred.prompt();
+      await deferred.userChoice;
+    } catch (error) {
+      console.error('Install prompt failed', error);
+    } finally {
+      // The event is single-use: clear it whatever the outcome.
+      setState({ ...state, deferred: null });
+    }
   }, [deferred]);
 
   const isInstalled = installed || isStandalone();
