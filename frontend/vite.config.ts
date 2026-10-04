@@ -1,9 +1,30 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
+import { manifest } from './src/pwa/manifest'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'prompt',
+      // El registro sigue siendo manual (utils/notifications.ts) hasta PW4
+      injectRegister: false,
+      manifest,
+      injectManifest: {
+        // Se registra como script clásico (sin type: 'module'): sin import/export de nivel superior
+        rollupFormat: 'iife',
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // CallRoom (SDK de ZegoCloud, ~5 MB, carga perezosa) queda fuera del precache
+        globIgnores: ['**/CallRoom-*.js'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+      },
+    }),
+  ],
   build: {
     rollupOptions: {
       output: {

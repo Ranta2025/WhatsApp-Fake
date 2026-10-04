@@ -2,27 +2,12 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { manifest } from './manifest'
 
 const root = process.cwd()
 const publicDir = join(root, 'public')
 
-interface ManifestIcon {
-  src: string
-  sizes?: string
-  type?: string
-  purpose?: string
-}
-
-interface Manifest {
-  id?: string
-  scope?: string
-  lang?: string
-  display?: string
-  start_url?: string
-  icons: ManifestIcon[]
-}
-
-const manifest = JSON.parse(readFileSync(join(publicDir, 'manifest.json'), 'utf8')) as Manifest
+const icons = manifest.icons ?? []
 
 const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 
@@ -44,20 +29,20 @@ describe('PWA manifest', () => {
   })
 
   it('includes PNG icons 192 and 512 (any) and a 512 maskable', () => {
-    const pngs = manifest.icons.filter((i) => i.type === 'image/png')
+    const pngs = icons.filter((i) => i.type === 'image/png')
     expect(pngs.some((i) => i.sizes === '192x192' && i.purpose === 'any')).toBe(true)
     expect(pngs.some((i) => i.sizes === '512x512' && i.purpose === 'any')).toBe(true)
     expect(pngs.some((i) => i.sizes === '512x512' && i.purpose === 'maskable')).toBe(true)
   })
 
   it('references only icon files that exist', () => {
-    for (const icon of manifest.icons) {
+    for (const icon of icons) {
       expect(existsSync(iconPath(icon.src)), icon.src).toBe(true)
     }
   })
 
   it('has PNG real dimensions matching declared sizes', () => {
-    for (const icon of manifest.icons.filter((i) => i.type === 'image/png')) {
+    for (const icon of icons.filter((i) => i.type === 'image/png')) {
       expect(pngSize(iconPath(icon.src)), icon.src).toBe(icon.sizes)
     }
   })
