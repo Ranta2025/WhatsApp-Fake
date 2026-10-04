@@ -94,7 +94,7 @@ func TestE2E_MetricsNotExposedOnPublicPorts(t *testing.T) {
 	}
 }
 
-// Toda respuesta de nginx (SPA, assets, sw, manifest, API, healthz) lleva las
+// Toda respuesta de nginx (SPA, assets, sw, manifest, API, healthz, storage) lleva las
 // cabeceras de seguridad, una sola vez cada una: los location con add_header
 // propio descartan los heredados si no incluyen el snippet.
 func TestE2E_SecurityHeaders(t *testing.T) {
@@ -111,7 +111,7 @@ func TestE2E_SecurityHeaders(t *testing.T) {
 		"X-Frame-Options":         "DENY",
 		"Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
 	}
-	for _, path := range []string{"/", "/login", m, "/sw.js", "/manifest.webmanifest", "/healthz", "/api/v1/user"} {
+	for _, path := range []string{"/", "/login", m, "/sw.js", "/manifest.webmanifest", "/healthz", "/api/v1/user", "/storage/e2e-headers/missing.png"} {
 		t.Run(path, func(t *testing.T) {
 			_, h, _ := getRaw(t, base+path, nil)
 			for k, v := range want {

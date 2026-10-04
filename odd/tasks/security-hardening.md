@@ -40,7 +40,7 @@ Authorized 2026-10-04 (user: "if it is a necessary implementation that improves 
 | Task | Route | Commit | RDD |
 |------|-------|--------|-----|
 | SH1 | delegated (opus: auth/concurrency) | 489a40a | e82d270..489a40a high/high_risk: granted -> 4-lens approved, acknowledged (review-242d5c81b3ec6a58; WARNINGs: GETDEL needs Redis >= 6.2 -> stack runs redis 7.4; Redis error maps to "expired" as before). Boundary -> 489a40a |
-| SH2 | delegated (writer: nginx + Dockerfile + e2e) | (this commit) | pending |
+| SH2 | delegated (writer: nginx + Dockerfile + e2e) | b15fbb5 + follow-up fix | 489a40a..b15fbb5 high/high_risk: granted -> approved, acknowledged (review-6a06b3f4e595d988; WARNING: `/storage/` headers unproved -> parent check found a duplicated `nosniff` (MinIO + snippet); fixed with `proxy_hide_header X-Content-Type-Options` and `/storage/` added to the e2e, RED -> GREEN). Boundary -> b15fbb5 |
 
 Last reviewed boundary at start: branch point `e82d270`.
 
