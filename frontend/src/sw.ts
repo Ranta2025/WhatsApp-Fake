@@ -1,7 +1,11 @@
 /// <reference lib="webworker" />
-import { CACHE_NAME, STATIC_ASSETS, decideFetch, outdatedCacheKeys } from './sw/cache'
+import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
+import { NavigationRoute, registerRoute } from 'workbox-routing'
+import { LEGACY_CACHE_NAME, shouldClaimClients } from './sw/cache'
 import { resolveNotificationClick } from './sw/click'
+import { isSkipWaiting } from './sw/messages'
 import { buildNotificationOptions, parseShowNotification } from './sw/notification'
+import { NAVIGATION_DENYLIST, hasIndexHtml } from './sw/routes'
 
 interface PrecacheEntry {
   url: string
@@ -10,47 +14,42 @@ interface PrecacheEntry {
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<PrecacheEntry | string> }
 
-// Required by vite-plugin-pwa (injectManifest). The list is injected at build time.
-// precacheAndRoute() is intentionally NOT called yet: its fetch route would take over
-// navigations to "/" (cache-first) and change the network-first behavior ported below.
-// The strategy switch to Workbox precaching belongs to PW3.
-const precacheManifest = self.__WB_MANIFEST
+// App shell: everything static is precached from the list injected by vite-plugin-pwa.
+// Not cached on purpose: /api/* (incl. the websocket) and /storage/* (user media); no route matches them.
+// Google Fonts runtime caching is intentionally skipped in v1.
+const manifest = self.__WB_MANIFEST
+precacheAndRoute(manifest)
+cleanupOutdatedCaches()
 
-self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando...', precacheManifest.length, 'entradas de build')
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll([...STATIC_ASSETS]).catch(() => {
-        // Si algún asset falla, no bloquear la instalación
-        console.warn('[SW] Algunos assets no pudieron cachearse')
-      }),
-    ),
-  )
-  void self.skipWaiting()
+// Offline navigation: serve the precached index.html. Without it in the manifest, go network-first
+// (never a blank response: a failed fetch yields a network error the browser can render).
+const navigationHandler = hasIndexHtml(manifest)
+  ? createHandlerBoundToURL('/index.html')
+  : ({ request }: { request: Request }): Promise<Response> => fetch(request).catch(() => Response.error())
+registerRoute(new NavigationRoute(navigationHandler, { denylist: [...NAVIGATION_DENYLIST] }))
+
+// True when this worker is the first one ever installed (no previously active worker).
+let isFirstInstall = false
+
+self.addEventListener('install', () => {
+  isFirstInstall = shouldClaimClients(self.registration.active)
+  // No skipWaiting() here: an update waits until the user accepts it (SKIP_WAITING message).
 })
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activado')
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(outdatedCacheKeys(keys).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim()),
+      .then((keys) => Promise.all(keys.filter((key) => key === LEGACY_CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => (isFirstInstall ? self.clients.claim() : undefined)),
   )
 })
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url)
-  const decision = decideFetch(url.pathname, event.request.mode)
-
-  if (decision === 'navigate') {
-    event.respondWith(fetch(event.request).catch(() => caches.match('/').then((cached) => cached ?? Response.error())))
-  } else if (decision === 'cache-first') {
-    event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)))
-  }
-})
-
 self.addEventListener('message', (event) => {
+  if (isSkipWaiting(event.data)) {
+    void self.skipWaiting()
+    return
+  }
   const payload = parseShowNotification(event.data)
   if (!payload) return
   event.waitUntil(self.registration.showNotification(payload.title, buildNotificationOptions(payload, Date.now())))
