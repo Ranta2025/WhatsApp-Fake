@@ -40,7 +40,7 @@ Cross-feature rules until api-casing lands: fields added inside an existing Pasc
 
 ## Handoff state (2026-10-03)
 - **Current tip:** `feat/disappearing-messages` (DE1-DE8 done; full matrix green, see its Progress). Start the next feature with `git switch -c feat/pwa` from `feat/disappearing-messages`.
-- **Done and reviewed:** everything up to and including observability was reviewed per commit and acknowledged. group-admin-permissions and reactions commits are recorded in their documents. disappearing-messages slices are acknowledged through `aaec4d8`; the final slice (`aaec4d8..HEAD`, DE7 advisory fix `475e196` + DE8 docs) is recorded in its document.
+- **Done and reviewed:** everything up to and including observability was reviewed per commit and acknowledged. group-admin-permissions and reactions commits are recorded in their documents. disappearing-messages slices are acknowledged through `aaec4d8`; the final slice `aaec4d8..d50bd72` (DE7 advisory fix `475e196` + DE8 docs) was `under_budget` and is NOT reviewed: the first review slice of the next feature must use `--base-ref aaec4d8`.
 - **Next:** `pwa.md`. Environment note carried from the disappearing-messages sessions: if subagent profiles in `~/.gentle-shell/agent/subagents.json` point at `anthropic/*` and fail instantly with 0 tool calls, swap them to the native opencode mapping (see disappearing-messages.md DE8 session note); leave `~/.pi/gentle-ai/models.json` (native RDD relay) untouched.
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
