@@ -450,3 +450,28 @@ func (m *MockChatService) GetChatDisappearing(actorTelephon, contactTelephon str
 	args := m.Called(actorTelephon, contactTelephon, ctx)
 	return args.Int(0), args.Error(1)
 }
+
+// MockPushService implementa services.PushServicer para los tests del handler de push.
+type MockPushService struct {
+	mock.Mock
+}
+
+func (m *MockPushService) Config(telephon string, ctx context.Context) (schemas.PushConfigResponse, error) {
+	args := m.Called(telephon, ctx)
+	return args.Get(0).(schemas.PushConfigResponse), args.Error(1)
+}
+
+func (m *MockPushService) Subscribe(telephon string, input models.PushSubscriptionInput, userAgent string, ctx context.Context) (bool, error) {
+	args := m.Called(telephon, input, userAgent, ctx)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockPushService) Unsubscribe(telephon string, endpoint string, ctx context.Context) error {
+	args := m.Called(telephon, endpoint, ctx)
+	return args.Error(0)
+}
+
+func (m *MockPushService) SetPreview(telephon string, preview bool, ctx context.Context) error {
+	args := m.Called(telephon, preview, ctx)
+	return args.Error(0)
+}

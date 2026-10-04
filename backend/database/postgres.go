@@ -123,6 +123,8 @@ func Conection() (*gorm.DB, error) {
 		// ── Mensajes temporales ────────────────────────────────────────────
 		&models.ChatSetting{},
 		&models.MediaGC{},
+		// ── Web Push ───────────────────────────────────────────────────────
+		&models.PushSubscription{},
 	); err != nil {
 		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}
@@ -189,6 +191,10 @@ func Conection() (*gorm.DB, error) {
 
 	// Búsqueda de llamadas por sala (actualizar estado al aceptar/rechazar/colgar)
 	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_call_logs_room_id ON call_logs (room_id)`)
+
+	// Web Push: un endpoint pertenece a una sola fila (el upsert de
+	// suscripción usa ON CONFLICT (endpoint) para reasignarlo de usuario).
+	execMigration(data, "CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions (endpoint)")
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// MIGRACIÓN DE DATOS: normalizar valores de status legacy

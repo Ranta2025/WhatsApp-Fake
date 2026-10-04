@@ -19,6 +19,7 @@ type RouterApiMessage struct {
 	handlerGroup   *handlers.HandlerGroup
 	handlerStatus  *handlers.HandlerStatus
 	handlerSearch  *handlers.HandlerSearch
+	handlerPush    *handlers.HandlerPush
 	hub            *websocket.Hub
 	chatService    services.ChatServicer
 	contactService services.ContactServicer
@@ -46,6 +47,25 @@ func InitRouterApiMessage(app *gin.RouterGroup, handler *handlers.HandlerContact
 	}
 	rout.app.Use(middleware.MiddlewareTokenWithTelephon())
 	return rout
+}
+
+// SetHandlerPush asigna el handler de Web Push (se inyecta aparte para no
+// alargar aún más la firma posicional de InitRouterApiMessage).
+func (rt *RouterApiMessage) SetHandlerPush(h *handlers.HandlerPush) {
+	rt.handlerPush = h
+}
+
+// ApiPush registra las rutas de Web Push (protegidas por el token del grupo):
+// configuración pública, alta/baja de la suscripción del navegador y la
+// preferencia de preview. Sin handler (push no cableado) no registra nada.
+func (rt *RouterApiMessage) ApiPush() {
+	if rt.handlerPush == nil {
+		return
+	}
+	rt.app.GET("push/config", rt.handlerPush.HandlerGetPushConfig())
+	rt.app.POST("push/subscribe", middleware.MiddlewarePushSubscribe(), rt.handlerPush.HandlerSubscribe())
+	rt.app.DELETE("push/subscribe", middleware.MiddlewarePushUnsubscribe(), rt.handlerPush.HandlerUnsubscribe())
+	rt.app.PUT("push/preview", middleware.MiddlewarePushPreview(), rt.handlerPush.HandlerSetPreview())
 }
 
 // ApiUser registra las rutas de gestión de perfil del usuario autenticado.

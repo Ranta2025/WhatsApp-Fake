@@ -204,6 +204,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	repoContact := repos.InitRepoContact(db, rd)
 	repoGroup := repos.InitRepoGroup(db, rd)
 	repoReaction := repos.InitRepoReaction(db)
+	repoPush := repos.InitRepoPush(db, repoContact)
 	cacheUser := cache.InitChacheUser(rd)
 
 	// Hub de WebSocket (presencia y mensajería en tiempo real)
@@ -224,6 +225,9 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	serviceBugReport := services.InitServiceBugReport()
 	serviceStatus := services.InitServiceStatus(repoContact)
 	serviceSearch := services.InitServiceSearch(repoContact, repoGroup)
+	pushCfg := config.LoadPushConfig(os.Getenv)
+	log.Println(pushStartupMessage(pushCfg))
+	servicePush := services.InitServicePush(pushCfg, repoPush)
 
 	cleanupCtx, cancelCleanup := context.WithCancel(context.Background())
 	go statusCleanupLoop(cleanupCtx, serviceStatus, statusCleanupInterval)
@@ -246,6 +250,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 		HandlerStatus:    handlers.InitHandlerStatus(serviceStatus, hub),
 		HandlerSearch:    handlers.InitHandlerSearch(serviceSearch),
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),
+		HandlerPush:      handlers.InitHandlerPush(servicePush),
 		Hub:              hub,
 		WSTickets:        cache.NewWSTicketStore(rd),
 		ChatService:      serviceChat,

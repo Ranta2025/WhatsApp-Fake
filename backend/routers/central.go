@@ -25,6 +25,7 @@ type Deps struct {
 	HandlerStatus    *handlers.HandlerStatus
 	HandlerSearch    *handlers.HandlerSearch
 	HandlerBugReport *handlers.HandlerBugReport
+	HandlerPush      *handlers.HandlerPush
 	Hub              *websocket.Hub
 	WSTickets        *cache.WSTicketStore
 	ChatService      services.ChatServicer
@@ -63,6 +64,8 @@ func Router(app *gin.Engine, d Deps) {
 	apiMessage.ApiCall()
 	apiMessage.ApiGroup()
 	apiMessage.ApiStatus()
+	apiMessage.SetHandlerPush(d.HandlerPush)
+	apiMessage.ApiPush()
 }
 
 // wsTicketHandler emite un ticket de un solo uso (30 s) para abrir el WebSocket.

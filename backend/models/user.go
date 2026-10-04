@@ -21,6 +21,10 @@ type UserDataBase struct {
 	LastSeen     *time.Time `gorm:"column:last_seen" json:"last_seen"`
 	AvatarUrl    string     `gorm:"size:500" json:"avatar_url"`
 	WallpaperUrl string     `gorm:"size:500" json:"wallpaper_url"`
+	// PushPreviewDisabled=true hace que las notificaciones push de este usuario
+	// lleven un cuerpo genérico, sin el texto del mensaje. El valor cero
+	// (false = preview activada) evita migrar las filas existentes.
+	PushPreviewDisabled bool `gorm:"not null;default:false" json:"-"`
 
 	ContactsAdded         []ContactDataBase `gorm:"foreignKey:IdUser"`
 	ContactsWhereIAmAdded []ContactDataBase `gorm:"foreignKey:IdContact"`

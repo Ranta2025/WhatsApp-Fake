@@ -197,3 +197,38 @@ func (m *MockContactRepo) GetUserDataBaseByTelephon(telephon string, ctx context
 	}
 	return args.Get(0).(*schemas.UserGet), args.Error(1)
 }
+
+// MockPushRepo implementa PushRepoInterface para los tests del servicio de Web Push.
+type MockPushRepo struct {
+	mock.Mock
+}
+
+func (m *MockPushRepo) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	args := m.Called(telephon, ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockPushRepo) UpsertSubscription(sub *models.PushSubscription, ctx context.Context) error {
+	args := m.Called(sub, ctx)
+	return args.Error(0)
+}
+
+func (m *MockPushRepo) ListSubscriptionsByUser(userID uint, ctx context.Context) ([]models.PushSubscription, error) {
+	args := m.Called(userID, ctx)
+	return args.Get(0).([]models.PushSubscription), args.Error(1)
+}
+
+func (m *MockPushRepo) DeleteSubscriptionByEndpoint(userID uint, endpoint string, ctx context.Context) error {
+	args := m.Called(userID, endpoint, ctx)
+	return args.Error(0)
+}
+
+func (m *MockPushRepo) GetPushPreviewDisabled(userID uint, ctx context.Context) (bool, error) {
+	args := m.Called(userID, ctx)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockPushRepo) SetPushPreviewDisabled(userID uint, disabled bool, ctx context.Context) error {
+	args := m.Called(userID, disabled, ctx)
+	return args.Error(0)
+}
