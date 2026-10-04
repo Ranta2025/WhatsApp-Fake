@@ -14,6 +14,8 @@ import { getResponseError } from '../../../lib/errors';
 import { groupReplySenderLabel } from '../lib/groupReply';
 import { parseGroupWallpapers, type GroupWallpapers } from '../lib/groupWallpapers';
 import MessageTicks from './MessageTicks';
+import PendingMessages from './PendingMessages';
+import { outboxItemsFor } from '../../outbox/outboxTypes';
 import GroupMessageInfoModal from './GroupMessageInfoModal';
 import ChatSearchBar from './ChatSearchBar';
 import { useChatSearch } from '../hooks/useChatSearch';
@@ -258,7 +260,12 @@ export const GroupMessageList = ({
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
-    const { selectedGroup, groupReceipts, groupMemberNames, reactToMessage } = useDashboard();
+    const { selectedGroup, groupReceipts, groupMemberNames, reactToMessage, outboxItems } = useDashboard();
+    // Outbox (PW9): own texts not yet acked, shown after the live list (not in a detached window).
+    const pendingItems = useMemo(
+        () => (groupID !== undefined && !detached ? outboxItemsFor(outboxItems, { kind: 'group', target: groupID }, messages) : []),
+        [groupID, detached, outboxItems, messages],
+    );
     // El Info se ata al grupo en que se abrió: si cambia el grupo o el mensaje
     // ya no está en la lista (borrado), se descarta durante el render.
     const [info, setInfo] = useState<{ groupID: number | undefined; message: GroupMessageResponse } | null>(null);
@@ -292,7 +299,7 @@ export const GroupMessageList = ({
         containerRef,
         chatKey: groupID,
         firstKey: messages?.[0]?.MessageID,
-        lastKey: messages?.[messages.length - 1]?.MessageID,
+        lastKey: pendingItems.at(-1)?.entry.clientID ?? messages?.[messages.length - 1]?.MessageID,
         hasMore,
         loadingOlder,
         loadOlder: onLoadOlder,
@@ -310,7 +317,7 @@ export const GroupMessageList = ({
     // Sin fondo personalizado se usa la superficie de chat del tema
     const surfaceClass = activeWallpaper ? '' : 'chat-surface';
 
-    if (!messages || messages.length === 0) {
+    if ((!messages || messages.length === 0) && pendingItems.length === 0) {
         return (
             <div className={`flex-1 flex items-center justify-center text-slate-500 text-sm ${surfaceClass}`} style={containerStyle}>
                 No hay mensajes aún. ¡Sé el primero en escribir!
@@ -325,7 +332,7 @@ export const GroupMessageList = ({
             // overflow-anchor: none => el reajuste de scroll al anteponer es solo nuestro
             style={{ ...containerStyle, overflowAnchor: 'none' }}
         >
-            {messages.map((msg) => {
+            {messages?.map((msg) => {
                 if (isSystemGroupMessage(msg)) {
                     return (
                         <div key={msg.MessageID} className="flex justify-center py-1 px-4">
@@ -358,6 +365,7 @@ export const GroupMessageList = ({
                     />
                 );
             })}
+            <PendingMessages items={pendingItems} />
             {infoMessage && <GroupMessageInfoModal message={infoMessage} onClose={() => setInfo(null)} />}
             {activeFullPicker && (
                 <FullEmojiPicker

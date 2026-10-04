@@ -6,6 +6,7 @@ import { useWebSocket } from '../../../hooks/useWebSocket';
 import { useDashboard } from '../context/DashboardContext';
 import api from '../../../api/axios';
 import type { Message, MediaType, MediaUploadResult } from '../../../types/api';
+import { toReplyRef } from '../../outbox/outboxTypes';
 
 /** Return shape of `useMessaging()` — members verified against real consumers
  * (`ChatWindow.jsx`, `MessageList.jsx`, `MessageInput.jsx`, via `rg`). */
@@ -59,7 +60,7 @@ const useMessagingInternal = (): UseMessagingResult => {
     } = useWebSocket();
 
     const {
-        selected, setMessagesByChat, setDrafts, addToast
+        selected, setMessagesByChat, setDrafts, addToast, sendText
     } = useDashboard();
 
     // UI States for messaging
@@ -76,6 +77,23 @@ const useMessagingInternal = (): UseMessagingResult => {
     const handleSend = useCallback((text: string, mediaType: MediaType | null = null) => {
         if (!selected || (!text?.trim() && !mediaType)) return;
 
+        // Text goes through the outbox (PW9): always a clientID, queued while offline.
+        if (!mediaType) {
+            const target = selected.Number;
+            sendText({ kind: 'direct', target, text, replyTo: toReplyRef(replyingTo) })
+                .then(result => {
+                    if (result === 'unavailable') addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+                })
+                .catch((err: unknown) => {
+                    console.error('Error sending message:', err);
+                    addToast({ type: 'error', message: 'Error al enviar el mensaje' });
+                });
+            setDrafts(prev => ({ ...prev, [target]: '' }));
+            setReplyingTo(null);
+            return;
+        }
+
+        // Media keeps the online-only path (offline media sending is out of scope).
         if (!isConnected) {
             addToast({ type: 'error', message: 'No hay conexión con el servidor' });
             return;
@@ -91,7 +109,7 @@ const useMessagingInternal = (): UseMessagingResult => {
             console.error('Error sending message:', err);
             addToast({ type: 'error', message: 'Error al enviar el mensaje' });
         }
-    }, [selected, isConnected, sendMessage, replyingTo, setDrafts, addToast]);
+    }, [selected, isConnected, sendMessage, sendText, replyingTo, setDrafts, addToast]);
 
     const handleEditMessage = useCallback((message: Message) => {
         setEditingMessageId(message.MessageID);
@@ -179,14 +197,15 @@ const useMessagingInternal = (): UseMessagingResult => {
             ? (forwardingMessage.MediaUrl || forwardingMessage.Message)
             : forwardingMessage.Message;
         targetNumbers.forEach(number => {
-            sendMessage(number, content, null, mediaType);
+            if (mediaType) sendMessage(number, content, null, mediaType);
+            else void sendText({ kind: 'direct', target: number, text: content, replyTo: null });
         });
         const label = targetNumbers.length === 1
             ? 'Mensaje reenviado'
             : `Mensaje reenviado a ${targetNumbers.length} contactos`;
         addToast({ type: 'success', message: label });
         setForwardingMessage(null);
-    }, [forwardingMessage, isConnected, sendMessage, addToast]);
+    }, [forwardingMessage, isConnected, sendMessage, sendText, addToast]);
 
     const handleMediaUploadSuccess = useCallback((url: string, type?: MediaType | null) => {
         handleSend(url, type);

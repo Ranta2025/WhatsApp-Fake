@@ -21,7 +21,7 @@ describe('MessageTicks', () => {
         container.remove();
     });
 
-    const svg = (status: MessageStatus) => {
+    const svg = (status: MessageStatus | 'pending') => {
         act(() => { root.render(<MessageTicks status={status} />); });
         return container.querySelector('svg');
     };
@@ -45,5 +45,11 @@ describe('MessageTicks', () => {
         expect(el?.getAttribute('aria-label')).toBe('Visto');
         expect(el?.querySelectorAll('path')).toHaveLength(2);
         expect(el?.getAttribute('class')).toContain('text-sky-300');
+    });
+
+    it('clock for "pending" (outbox), with a stable test id', () => {
+        const el = svg('pending');
+        expect(el?.getAttribute('aria-label')).toBe('Pendiente de envío');
+        expect(el?.getAttribute('data-testid')).toBe('message-pending');
     });
 });

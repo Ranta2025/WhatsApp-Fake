@@ -204,6 +204,29 @@ describe('group receipt frames', () => {
         wsManager.disconnect();
     });
 
+    it('sendMessage / sendGroupMessage carry an optional clientID (omitted when absent)', async () => {
+        const { wsManager, socket } = await connectAndOpen();
+        const id = '0b7f3c1e-2d4a-4f6b-9c8d-1a2b3c4d5e6f';
+        const reply = { MessageID: 3, SenderTelephon: '222', Message: 'q' };
+
+        expect(wsManager.sendMessage('222', 'hola', null, null, id)).toBe(true);
+        expect(wsManager.sendGroupMessage(9, 'grupo', reply, null, id)).toBe(true);
+        expect(wsManager.sendMessage('222', 'legacy')).toBe(true);
+
+        expect(socket.sent.map((raw) => JSON.parse(raw) as unknown)).toEqual([
+            { type: 'chat', payload: { receptor: '222', message: 'hola', clientID: id } },
+            {
+                type: 'group_chat',
+                payload: {
+                    groupID: 9, message: 'grupo', clientID: id,
+                    replyToMessageID: 3, replyToTelephon: '222', replyToMessage: 'q',
+                },
+            },
+            { type: 'chat', payload: { receptor: '222', message: 'legacy' } },
+        ]);
+        wsManager.disconnect();
+    });
+
     it('sendReaction emits the react frame (groupID only for group messages)', async () => {
         const { wsManager, socket } = await connectAndOpen();
 

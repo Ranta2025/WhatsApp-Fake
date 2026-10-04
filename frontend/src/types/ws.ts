@@ -366,6 +366,8 @@ export interface WsSendChat {
   payload: {
     receptor: string;
     message: string;
+    /** Idempotency key (canonical UUID); a replay re-acks the stored message (PW8). */
+    clientID?: string;
     mediaUrl?: string;
     mediaType?: string;
     replyToMessageID?: number;
@@ -419,6 +421,8 @@ export interface WsSendGroupChat {
   payload: {
     groupID: number;
     message: string;
+    /** Idempotency key (canonical UUID); a replay re-acks the stored message (PW8). */
+    clientID?: string;
     mediaUrl?: string;
     mediaType?: string;
     replyToMessageID?: number;

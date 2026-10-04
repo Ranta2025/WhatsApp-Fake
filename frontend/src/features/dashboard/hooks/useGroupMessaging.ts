@@ -4,6 +4,7 @@ import {
 } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import type { GroupMessageResponse, MediaType } from '../../../types/api';
+import { toReplyRef } from '../../outbox/outboxTypes';
 
 /** Return shape of `useGroupMessaging()` — members verified against real
  * consumers (`GroupChatWindow.jsx`'s `GroupMessageInput`/`GroupMessageList`, via `rg`). */
@@ -57,6 +58,7 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
         sendGroupTyping,
         sendGroupEditMessage,
         sendGroupDeleteMessage,
+        sendText,
     } = useDashboard();
 
     // UI state
@@ -70,6 +72,21 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
     const handleSend = useCallback((text: string, mediaType: MediaType | null = null) => {
         if (!selectedGroup || (!text?.trim() && !mediaType)) return;
 
+        // Text goes through the outbox (PW9): always a clientID, queued while offline.
+        if (!mediaType) {
+            sendText({ kind: 'group', target: selectedGroup.ID, text, replyTo: toReplyRef(replyingTo) })
+                .then(result => {
+                    if (result === 'unavailable') addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+                })
+                .catch((err: unknown) => {
+                    console.error('[GroupMessaging] Error sending message:', err);
+                    addToast({ type: 'error', message: 'Error al enviar el mensaje' });
+                });
+            setReplyingTo(null);
+            return;
+        }
+
+        // Media keeps the online-only path (offline media sending is out of scope).
         if (!isConnected) {
             addToast({ type: 'error', message: 'No hay conexión con el servidor' });
             return;
@@ -82,7 +99,7 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
             console.error('[GroupMessaging] Error sending message:', err);
             addToast({ type: 'error', message: 'Error al enviar el mensaje' });
         }
-    }, [selectedGroup, isConnected, sendGroupMessage, replyingTo, addToast]);
+    }, [selectedGroup, isConnected, sendGroupMessage, sendText, replyingTo, addToast]);
 
     // ── Edit ──────────────────────────────────────────────────────────────────
 

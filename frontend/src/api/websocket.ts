@@ -357,8 +357,9 @@ class WebSocketManager {
         };
     }
 
-    sendMessage(to: string, message: string, replyTo: ReplySource | null = null, mediaType: MediaType | null = null): boolean {
+    sendMessage(to: string, message: string, replyTo: ReplySource | null = null, mediaType: MediaType | null = null, clientID?: string): boolean {
         const payload: ClientPayloadOf<'chat'> = { receptor: to, message };
+        if (clientID) payload.clientID = clientID;
         if (replyTo) {
             payload.replyToMessageID = replyTo.MessageID;
             payload.replyToTelephon = replyTo.SenderTelephon;
@@ -412,9 +413,11 @@ class WebSocketManager {
      * @param message  - text content (or media URL if mediaType is set)
      * @param replyTo - message being replied to
      * @param mediaType - 'image'|'video'|'audio'|'document'|null
+     * @param clientID - optional idempotency key (canonical UUID)
      */
-    sendGroupMessage(groupID: number, message: string, replyTo: ReplySource | null = null, mediaType: MediaType | null = null): boolean {
+    sendGroupMessage(groupID: number, message: string, replyTo: ReplySource | null = null, mediaType: MediaType | null = null, clientID?: string): boolean {
         const payload: ClientPayloadOf<'group_chat'> = { groupID, message };
+        if (clientID) payload.clientID = clientID;
         if (replyTo) {
             payload.replyToMessageID = replyTo.MessageID;
             payload.replyToTelephon = replyTo.SenderTelephon;

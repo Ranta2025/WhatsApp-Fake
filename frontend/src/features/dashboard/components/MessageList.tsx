@@ -11,6 +11,8 @@ import { isMediaUrl } from '../../../lib/mediaMessage';
 import Popover from '../../../components/ui/Popover';
 import { useRefMap } from '../../../hooks/useRefMap';
 import MessageTicks from './MessageTicks';
+import PendingMessages from './PendingMessages';
+import { outboxItemsFor } from '../../outbox/outboxTypes';
 import { ExpiryClock } from './DisappearingControls';
 import ReactionPicker from './reactions/ReactionPicker';
 import ReactionChips from './reactions/ReactionChips';
@@ -51,7 +53,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
     const { 
         selected, messagesByChat, profile, globalWallpaper,
         chatPaging, loadOlderMessages,
-        focusedChat, loadOlderFocused, loadNewerFocused, reactToMessage,
+        focusedChat, loadOlderFocused, loadNewerFocused, reactToMessage, outboxItems,
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
@@ -106,6 +108,11 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
         () => (focused ? composeFocusedMessages(focused, liveMessages) : liveMessages),
         [focused, liveMessages],
     );
+    // Outbox (PW9): own texts not yet acked, shown after the live list (not in a detached window).
+    const pendingItems = useMemo(
+        () => (selectedNumber && !focused ? outboxItemsFor(outboxItems, { kind: 'direct', target: selectedNumber }, liveMessages) : []),
+        [selectedNumber, focused, outboxItems, liveMessages],
+    );
     const loadOlder = useCallback(() => {
         if (!selectedNumber) return;
         return focused
@@ -125,7 +132,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
         containerRef: messagesContainerRef,
         chatKey: selectedNumber,
         firstKey: currentMessages?.[0]?.MessageID,
-        lastKey: currentMessages?.[currentMessages.length - 1]?.MessageID,
+        lastKey: pendingItems.at(-1)?.entry.clientID ?? currentMessages?.[currentMessages.length - 1]?.MessageID,
         hasMore: focused ? focused.hasMoreOlder : (paging?.hasMore ?? false),
         loadingOlder: focused ? focused.loadingOlder : (paging?.loadingOlder ?? false),
         loadOlder,
@@ -358,6 +365,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                     </div>
                 </div>
             ))}
+            <PendingMessages items={pendingItems} />
             {fullPickerFor !== null && (
                 <FullEmojiPicker
                     onClose={() => setFullPickerFor(null)}

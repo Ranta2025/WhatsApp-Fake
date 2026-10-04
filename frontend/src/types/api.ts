@@ -133,6 +133,8 @@ export interface Message {
   /** Solo en mensajes de sistema (omitempty); su `Message` son los segundos ("0" = off). */
   Kind?: MessageKind;
   SystemEvent?: GroupSystemEvent;
+  /** Sender's idempotency key echoed back (omitempty); untrusted, read via readClientID. */
+  ClientID?: string;
 }
 
 /** GET del historial de chat 1:1 con un contacto. */
@@ -202,6 +204,8 @@ export interface GroupMessageResponse {
   Reactions?: ReactionSummary[];
   /** RFC 3339; solo si el grupo tenía temporizador al enviar (omitempty). Inválido = ignorado. */
   ExpiresAt?: string;
+  /** Sender's idempotency key echoed back (omitempty); untrusted, read via readClientID. */
+  ClientID?: string;
 }
 
 /** Ficha mínima de un miembro en la lista de acuses (camelCase, ver schemaGroup.go). */

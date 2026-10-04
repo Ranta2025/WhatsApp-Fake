@@ -53,6 +53,8 @@ import {
     parseDisappearingChanged, parseMessagesExpired, type DisappearingChangedEvent,
 } from '../lib/disappearingEvents';
 import { useExpiryTimer } from '../hooks/useExpiryTimer';
+import { useOutbox, type OutboxSendResult } from '../../outbox/useOutbox';
+import { readClientID, type OutboxItem, type OutboxSendInput } from '../../outbox/outboxTypes';
 
 /** Mensajes por página al cargar historial antiguo (scroll hacia arriba). */
 const OLDER_PAGE_SIZE = 50;
@@ -222,7 +224,18 @@ export interface DashboardContextValue {
      * system messages can name a target that already left (it is gone from Members).
      */
     groupMemberNames: Record<number, Record<string, string>>;
+    /**
+     * Offline outbox (PW9): own text messages not yet acknowledged by the server.
+     * `pending` = queued (clock icon), `failed` = dropped after a permanent error.
+     */
+    outboxItems: readonly OutboxItem[];
+    /**
+     * Sends a text message with a fresh clientID: right away when online, otherwise
+     * queued in the outbox and flushed in order when the WebSocket opens.
+     */
+    sendText: (input: OutboxSendInput) => Promise<OutboxSendResult>;
     user: AuthContextValue['user'];
+    /** Clears this user's outbox, then logs out. */
     logout: AuthContextValue['logout'];
 }
 
@@ -400,6 +413,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => { groupMemberNamesRef.current = groupMemberNames; }, [groupMemberNames]);
     const selfTelephonRef = useRef<string | undefined>(user?.telephon);
     useEffect(() => { selfTelephonRef.current = user?.telephon; }, [user?.telephon]);
+    const outbox = useOutbox({ owner: user?.telephon || null, connected: isConnected });
+    const { ack: outboxAck, handleError: outboxHandleError, reconcile: outboxReconcile, clear: clearOutbox } = outbox;
     // Cursor/estado de paginación leídos por loadOlder* sin recrear los callbacks.
     const messagesByChatRef = useRef<Record<string, Message[]>>({});
     const groupMessagesRef = useRef<Record<number, GroupMessageEntry[]>>({});
@@ -1080,10 +1095,17 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const { SenderTelephon, Receptor, MessageID, Message: messageText, MediaType } = messageData;
 
             const contactNumber = SenderTelephon === myTelephon ? Receptor : SenderTelephon;
+            const clientID = readClientID(messageData);
+            // Outbox ack: a possible server replay (retried send) may be a message deleted
+            // since; reload the chat from history instead of inserting the echo.
+            if (clientID && outboxAck(clientID) === 'replayed') {
+                void fetchChatMessages(contactNumber);
+                return;
+            }
 
             setMessagesByChat(prev => {
                 const existing = prev[contactNumber] || [];
-                const alreadyExists = existing.some(m => m.MessageID === MessageID);
+                const alreadyExists = existing.some(m => m.MessageID === MessageID || (clientID !== null && m.ClientID === clientID));
                 if (alreadyExists) return prev;
                 return { ...prev, [contactNumber]: [...existing, messageData] };
             });
@@ -1256,9 +1278,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         /** Incoming group message (from sender confirm or group broadcast). */
         const handleGroupChatMessage = (msg: WsHandlerMap['group_chat']) => {
             if (!msg?.GroupID) return;
+            const clientID = readClientID(msg);
+            // Same as 1:1: a possibly-replayed outbox ack reloads the group instead.
+            if (clientID && outboxAck(clientID) === 'replayed') {
+                void fetchGroupMessages(msg.GroupID);
+                return;
+            }
             setGroupMessages(prev => {
                 const existing = prev[msg.GroupID] || [];
-                if (existing.some(m => m.MessageID === msg.MessageID)) return prev;
+                if (existing.some(m => m.MessageID === msg.MessageID || (clientID !== null && m.ClientID === clientID))) return prev;
                 return { ...prev, [msg.GroupID]: [...existing, msg] };
             });
             // Enviar un mensaje estando en una ventana desprendida vuelve a los últimos mensajes.
@@ -1303,6 +1331,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
         /** A failed `react` (WS error with context): undo the optimistic change of that message. */
         const handleWsError = (envelope: WsHandlerMap['error']) => {
+            if (typeof envelope?.error === 'string') outboxHandleError(envelope.error);
             const target = parseReactionErrorContext(envelope);
             if (!target) return;
             const entry = shiftPending(pendingReactionsRef.current, reactionPendingKey(target.kind, target.messageID), Date.now());
@@ -1600,7 +1629,33 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             off('messages_expired', handleMessagesExpired);
             off('error', handleWsError);
         };
-    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, addToast, appendSystemMessage, applyDisappearingChanged, removeExpiredIds]);
+    }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, addToast, appendSystemMessage, applyDisappearingChanged, removeExpiredIds, outboxAck, outboxHandleError, fetchChatMessages, fetchGroupMessages]);
+
+    // Outbox: a queued entry whose ClientID already came back in loaded history (e.g. sent
+    // before a reload, ack lost) is delivered; drop it so it never shows twice.
+    const outboxItems = outbox.items;
+    useEffect(() => {
+        if (!outboxItems.some(i => i.state === 'pending')) return;
+        const known = new Set<string>();
+        const collect = (list: readonly unknown[] | undefined) => list?.forEach(m => {
+            const id = readClientID(m);
+            if (id) known.add(id);
+        });
+        outboxItems.forEach(({ entry }) => {
+            if (entry.kind === 'direct') collect(messagesByChat[entry.target]);
+            else collect(groupMessages[entry.target]);
+        });
+        if (known.size > 0) outboxReconcile(known);
+    }, [outboxItems, messagesByChat, groupMessages, outboxReconcile]);
+
+    const logoutAndClearOutbox = useCallback(async () => {
+        try {
+            await clearOutbox();
+        } catch (err) {
+            console.error('Error clearing the outbox on logout:', err);
+        }
+        await logout();
+    }, [clearOutbox, logout]);
 
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
@@ -1680,9 +1735,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         reactToMessage,
         groupReceipts,
         groupMemberNames,
+        outboxItems,
+        sendText: outbox.sendText,
         // Auth passthrough
         user,
-        logout
+        logout: logoutAndClearOutbox,
     };
 
     return (

@@ -4,9 +4,12 @@ import type { MessageStatus } from '../../../types/api';
 /**
  * Ticks de estado de un mensaje propio (chat 1:1 y grupos): un check gris =
  * enviado, doble gris = entregado, doble azul = visto. Un estado desconocido
- * (mensaje aún sin confirmar) muestra un reloj.
+ * (mensaje aún sin confirmar) muestra un reloj, igual que `pending` (mensaje en
+ * la bandeja de salida offline, PW9), que además lleva `data-testid="message-pending"`.
  */
-export default function MessageTicks({ status }: { status: MessageStatus }): JSX.Element {
+export type TickStatus = MessageStatus | 'pending';
+
+export default function MessageTicks({ status }: { status: TickStatus }): JSX.Element {
     // Stroke-based ticks: the second check is shifted right so both marks stay distinct
     const strokeProps = {
         fill: 'none',
@@ -49,7 +52,8 @@ export default function MessageTicks({ status }: { status: MessageStatus }): JSX
             viewBox="0 0 24 24"
             className="h-3 w-3 shrink-0 text-white/50"
             role="img"
-            aria-label="Enviando"
+            aria-label={status === 'pending' ? 'Pendiente de envío' : 'Enviando'}
+            {...(status === 'pending' ? { 'data-testid': 'message-pending' } : {})}
         >
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
             <path d="M12 7v5l3 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
