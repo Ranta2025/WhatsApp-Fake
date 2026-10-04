@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"gorm/backend/models"
 	"gorm/backend/services"
-	"log"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -26,7 +26,10 @@ const (
 )
 
 type Client struct {
-	Telephon       string // Identificador único (inmutable)
+	Telephon string // Identificador único (inmutable)
+	// ConnID identifica la conexión en los logs: es el request id del upgrade HTTP
+	// (vacío si no hay). No contiene datos personales.
+	ConnID         string
 	Conn           *websocket.Conn
 	Send           chan []byte
 	ServiceChat    services.ChatServicer
@@ -51,6 +54,14 @@ func NewClient(username, telephon string, conn *websocket.Conn) *Client {
 	}
 	c.username.Store(username)
 	return c
+}
+
+// log devuelve el logger de la conexión (atributo conn_id si hay ConnID).
+func (c *Client) log() *slog.Logger {
+	if c.ConnID == "" {
+		return slog.Default()
+	}
+	return slog.Default().With("conn_id", c.ConnID)
 }
 
 // Username devuelve el nombre de usuario actual (para mostrar en la UI).
@@ -85,7 +96,22 @@ func (c *Client) buildRouter() map[string]func(*MessageHandler) {
 		"group_edit_message":   (*MessageHandler).HandleGroupEditMessage,
 		"group_delete_message": (*MessageHandler).HandleGroupDeleteMessage,
 		"group_join":           (*MessageHandler).HandleGroupJoin,
+		"group_delivered":      (*MessageHandler).HandleGroupDelivered,
+		"group_read":           (*MessageHandler).HandleGroupRead,
+		// Reacciones (1:1 y grupo)
+		"react": (*MessageHandler).HandleReaction,
 	}
+}
+
+// messageMetricType restringe la etiqueta de ws_messages_received_total a los
+// tipos conocidos de buildRouter(). Cualquier otro valor (types arbitrarios
+// enviados por el cliente, "ping", cadena vacía...) colapsa a "unknown" para
+// que un cliente no pueda explotar la cardinalidad de la métrica.
+func messageMetricType(router map[string]func(*MessageHandler), msgType string) string {
+	if _, known := router[msgType]; known {
+		return msgType
+	}
+	return "unknown"
 }
 
 // readPump lee mensajes entrantes del WebSocket, los enruta al handler
@@ -111,7 +137,7 @@ func (c *Client) readPump(hub *Hub) {
 		_, messageBytes, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("[WS] Error de conexión (tel: %s): %v", c.Telephon, err)
+				c.log().Warn("ws error de conexión", "err", err)
 			}
 			break
 		}
@@ -119,11 +145,16 @@ func (c *Client) readPump(hub *Hub) {
 		// 2. Decodificar encabezado (Type)
 		var baseMsg models.BaseMessage
 		if err := json.Unmarshal(messageBytes, &baseMsg); err != nil {
-			log.Println("[WS] Error formato JSON:", err)
+			c.log().Warn("ws formato JSON inválido", "err", err)
 			continue
 		}
 
-		// 3. Ping tiene respuesta directa, no necesita handler
+		// 3. Contabilizar por tipo acotado (ver messageMetricType)
+		if hub.metrics != nil {
+			hub.metrics.WSMessageReceived(messageMetricType(router, baseMsg.Type))
+		}
+
+		// 4. Ping tiene respuesta directa, no necesita handler
 		if baseMsg.Type == "ping" {
 			hub.SendToClient(c, []byte(`{"type":"pong"}`))
 			continue
@@ -134,7 +165,7 @@ func (c *Client) readPump(hub *Hub) {
 			handler := NewMessageHandler(c, hub, baseMsg.Payload)
 			handlerFunc(handler)
 		} else {
-			log.Printf("[WS] Tipo de mensaje desconocido: %q", baseMsg.Type)
+			c.log().Warn("ws tipo de mensaje desconocido", "type", baseMsg.Type)
 		}
 	}
 }

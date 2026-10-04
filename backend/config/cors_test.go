@@ -1,6 +1,13 @@
 package config
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+)
 
 func TestIsAllowedOrigin(t *testing.T) {
 	cases := map[string]bool{
@@ -17,6 +24,61 @@ func TestIsAllowedOrigin(t *testing.T) {
 	for origin, want := range cases {
 		if got := IsAllowedOrigin(origin); got != want {
 			t.Errorf("IsAllowedOrigin(%q) = %v, want %v", origin, got, want)
+		}
+	}
+}
+
+// X-Has-More lo lee el frontend cross-origin en la paginación del chat 1:1.
+func TestCorsExposesHasMoreHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Cors())
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Expose-Headers"); !strings.Contains(got, "X-Has-More") {
+		t.Errorf("Access-Control-Expose-Headers = %q, want X-Has-More", got)
+	}
+}
+
+// El navegador (y los reportes de bug) deben poder leer el request id de la
+// respuesta cross-origin.
+func TestCorsExposesRequestIDHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Cors())
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Expose-Headers"); !strings.Contains(strings.ToLower(got), "x-request-id") {
+		t.Errorf("Access-Control-Expose-Headers = %q, want X-Request-ID", got)
+	}
+}
+
+// El frontend lee los flags de las ventanas around/after (chat 1:1) cross-origin.
+func TestCorsExposesWindowHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(Cors())
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	got := w.Header().Get("Access-Control-Expose-Headers")
+	for _, h := range []string{"X-Has-More-Older", "X-Has-More-Newer"} {
+		if !strings.Contains(got, h) {
+			t.Errorf("Access-Control-Expose-Headers = %q, want %s", got, h)
 		}
 	}
 }

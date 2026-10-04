@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"gorm/backend/metrics"
 	"gorm/backend/models"
+	"gorm/backend/schemas"
 	"gorm/backend/services"
 	"net/http"
 	"strconv"
@@ -23,11 +26,13 @@ type GroupHubNotifier interface {
 type HandlerGroup struct {
 	service  services.GroupServicer
 	notifier GroupHubNotifier // puede ser nil si el Hub no está disponible
+	metrics  *metrics.Metrics // puede ser nil: no se contabiliza nada
 }
 
-// InitHandlerGroup crea el handler de grupos con su servicio y el notificador del Hub.
-func InitHandlerGroup(service services.GroupServicer, notifier GroupHubNotifier) *HandlerGroup {
-	return &HandlerGroup{service: service, notifier: notifier}
+// InitHandlerGroup crea el handler de grupos con su servicio, el notificador del
+// Hub y las métricas (m puede ser nil).
+func InitHandlerGroup(service services.GroupServicer, notifier GroupHubNotifier, m *metrics.Metrics) *HandlerGroup {
+	return &HandlerGroup{service: service, notifier: notifier, metrics: m}
 }
 
 // notifyGroupMembers envía el mensaje WS a cada teléfono de la lista,
@@ -66,6 +71,29 @@ func (h *HandlerGroup) notifyAllGroupMembers(telephons []string, wsType string, 
 	}
 	for _, tel := range telephons {
 		h.notifier.SendTo(tel, msg)
+	}
+}
+
+// respondGroupMutationError traduce los errores tipados de una mutación de
+// membresía/permisos a su código HTTP: 403 permiso, 404 objetivo inexistente,
+// 400 cambio inválido. Incluye las restricciones de la matriz de GA4 (enviar,
+// editar info, agregar).
+func (h *HandlerGroup) respondGroupMutationError(ctx *gin.Context, err error) {
+	switch {
+	case errors.Is(err, services.ErrClientIDConflict):
+		ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrNotGroupAdmin),
+		errors.Is(err, services.ErrNotGroupMember),
+		errors.Is(err, services.ErrGroupSendRestricted),
+		errors.Is(err, services.ErrGroupEditRestricted),
+		errors.Is(err, services.ErrGroupAddRestricted):
+		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrGroupTargetNotMember):
+		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, services.ErrInvalidRoleChange):
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	default:
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 }
 
@@ -175,49 +203,43 @@ func (h *HandlerGroup) HandleAddMembers() gin.HandlerFunc {
 			return
 		}
 
-		err := h.service.AddMembers(telephon.(string), groupID.(uint), data.(models.GroupAddMembers), ctx)
+		added, systemMsg, err := h.service.AddMembers(telephon.(string), groupID.(uint), data.(models.GroupAddMembers), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondGroupMutationError(ctx, err)
 			return
 		}
 
-		detail, detailErr := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx)
-		if detailErr == nil {
-			// Miembros realmente añadidos: los que están en el grupo y venían en la petición
-			requested := make(map[string]struct{}, len(data.(models.GroupAddMembers).Members))
-			for _, tel := range data.(models.GroupAddMembers).Members {
-				requested[tel] = struct{}{}
-			}
-			type addedEntry struct {
-				Telephon string `json:"telephon"`
-				Username string `json:"username"`
-			}
-			added := make([]addedEntry, 0, len(requested))
-			addedTelephons := make([]string, 0, len(requested))
-			allTelephons := make([]string, 0, len(detail.Members))
-			adderUsername := ""
-			for _, m := range detail.Members {
-				allTelephons = append(allTelephons, m.Telephon)
-				if m.Telephon == telephon.(string) {
-					adderUsername = m.Username
-					continue
-				}
-				if _, ok := requested[m.Telephon]; ok {
-					added = append(added, addedEntry{Telephon: m.Telephon, Username: m.Username})
+		if len(added) > 0 {
+			detail, detailErr := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx)
+			if detailErr == nil {
+				// La lista realmente añadida la decide el servicio (no se infiere
+				// de la petición ∩ miembros actuales).
+				addedTelephons := make([]string, 0, len(added))
+				for _, m := range added {
 					addedTelephons = append(addedTelephons, m.Telephon)
 				}
+				allTelephons := make([]string, 0, len(detail.Members))
+				adderUsername := ""
+				for _, m := range detail.Members {
+					allTelephons = append(allTelephons, m.Telephon)
+					if m.Telephon == telephon.(string) {
+						adderUsername = m.Username
+					}
+				}
+
+				// 1. Notificar a los nuevos miembros con el detalle del grupo (sidebar)
+				h.notifyGroupMembers(groupID.(uint), addedTelephons, telephon.(string), detail.GroupResponse)
+
+				// 2. Broadcast "group_member_added" a TODOS los miembros actuales
+				//    (el systemMessage persistido viaja en el propio evento).
+				h.notifyAllGroupMembers(allTelephons, "group_member_added", map[string]interface{}{
+					"groupID":         groupID.(uint),
+					"addedByUsername": adderUsername,
+					"addedMembers":    added,
+					"newMemberCount":  len(allTelephons),
+					"systemMessage":   systemMsg,
+				})
 			}
-
-			// 1. Notificar a los nuevos miembros con el detalle del grupo (sidebar)
-			h.notifyGroupMembers(groupID.(uint), addedTelephons, telephon.(string), detail.GroupResponse)
-
-			// 2. Broadcast "group_member_added" a TODOS los miembros actuales
-			h.notifyAllGroupMembers(allTelephons, "group_member_added", map[string]interface{}{
-				"groupID":         groupID.(uint),
-				"addedByUsername": adderUsername,
-				"addedMembers":    added,
-				"newMemberCount":  len(allTelephons),
-			})
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{"message": "miembros añadidos correctamente"})
@@ -245,8 +267,20 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 
 		msg, err := h.service.SendGroupMessage(telephon.(string), msgData, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			if h.metrics != nil {
+				h.metrics.MessageFailed(metrics.KindGroup)
+			}
+			h.respondGroupMutationError(ctx, err)
 			return
+		}
+		// A replayed clientID returns the stored message with 200 and is not
+		// broadcast or counted again.
+		if msg.Duplicate {
+			ctx.JSON(http.StatusOK, gin.H{"message": msg})
+			return
+		}
+		if h.metrics != nil {
+			h.metrics.MessageSent(metrics.KindGroup)
 		}
 		// Difundir en tiempo real al resto de miembros conectados (igual que por WS)
 		if h.notifier != nil {
@@ -258,18 +292,50 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 	}
 }
 
+// joinGroupRoom une al usuario a la room WS del grupo si hay notificador.
+func (h *HandlerGroup) joinGroupRoom(groupID uint, telephon string) {
+	if h.notifier != nil {
+		h.notifier.JoinRoomByTelephon(groupID, telephon)
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/v1/group/:groupID/message
 // ─────────────────────────────────────────────────────────────────────────────
 
 // HandleGetGroupMessages devuelve el historial de mensajes del grupo con paginación.
-// Query params: limit (default 50), offset (default 0).
+// Query params: limit (default 50), offset (default 0) y before (id de mensaje;
+// devuelve solo los anteriores). La respuesta incluye hasMore.
 func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		telephon, exists := ctx.Get("telephon")
 		groupID, exists2 := ctx.Get("groupID")
 		if !exists || !exists2 {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		// Ventanas para "ir al mensaje" (búsqueda): cronológicas (más antiguo primero).
+		if around, ok := parsePositiveID(ctx.Query("around")); ok {
+			_, limit := parseSearchPaging(ctx)
+			messages, hasOlder, hasNewer, err := h.service.GetGroupMessagesAround(telephon.(string), groupID.(uint), around, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			h.joinGroupRoom(groupID.(uint), telephon.(string))
+			ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMore": hasOlder, "hasMoreOlder": hasOlder, "hasMoreNewer": hasNewer})
+			return
+		}
+		if after, ok := parsePositiveID(ctx.Query("after")); ok {
+			_, limit := parseSearchPaging(ctx)
+			messages, hasNewer, err := h.service.GetGroupMessagesAfter(telephon.(string), groupID.(uint), after, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			h.joinGroupRoom(groupID.(uint), telephon.(string))
+			ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMoreNewer": hasNewer})
 			return
 		}
 
@@ -282,16 +348,73 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 			offset = o
 		}
 
-		messages, err := h.service.GetGroupMessages(telephon.(string), groupID.(uint), limit, offset, ctx)
+		var before uint
+		if b, err := strconv.ParseUint(ctx.Query("before"), 10, 32); err == nil {
+			before = uint(b)
+		}
+
+		messages, hasMore, err := h.service.GetGroupMessagesPage(telephon.(string), groupID.(uint), before, limit, offset, ctx)
 		if err != nil {
 			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 		// Auto-unir al usuario a la room del WS al cargar mensajes (auto-recuperación).
-		if h.notifier != nil {
-			h.notifier.JoinRoomByTelephon(groupID.(uint), telephon.(string))
+		h.joinGroupRoom(groupID.(uint), telephon.(string))
+		ctx.JSON(http.StatusOK, gin.H{"messages": messages, "hasMore": hasMore})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/group/:groupID/message/search
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleSearchGroupMessages busca mensajes de texto en el grupo. Solo miembros
+// (403 en otro caso). Query params: q (2–100 caracteres), before y limit.
+func (h *HandlerGroup) HandleSearchGroupMessages() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		if !exists || !exists2 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
 		}
-		ctx.JSON(http.StatusOK, gin.H{"messages": messages})
+		before, limit := parseSearchPaging(ctx)
+		page, err := h.service.SearchGroupMessages(telephon.(string), groupID.(uint), ctx.Query("q"), before, limit, ctx)
+		if err != nil {
+			respondSearchError(ctx, err)
+			return
+		}
+		ctx.JSON(http.StatusOK, page)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/group/:groupID/message/:messageID/receipts
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleGetMessageReceipts devuelve quién leyó / recibió / no ha recibido un
+// mensaje de grupo. Solo el autor del mensaje puede consultarlo (403 si no).
+func (h *HandlerGroup) HandleGetMessageReceipts() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		messageID, exists3 := ctx.Get("messageID")
+		if !exists || !exists2 || !exists3 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		receipts, err := h.service.GetGroupMessageReceipts(telephon.(string), groupID.(uint), messageID.(uint), ctx)
+		switch {
+		case err == nil:
+			ctx.JSON(http.StatusOK, receipts)
+		case errors.Is(err, services.ErrNotMessageSender), errors.Is(err, services.ErrNotGroupMember):
+			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrGroupMessageNotFound):
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener los acuses"})
+		}
 	}
 }
 
@@ -313,7 +436,7 @@ func (h *HandlerGroup) HandleEditGroupMessage() gin.HandlerFunc {
 
 		msg, err := h.service.EditGroupMessage(telephon.(string), groupID.(uint), data.(models.GroupMessageEdit), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondGroupMutationError(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": msg})
@@ -346,6 +469,50 @@ func (h *HandlerGroup) HandleDeleteGroupMessage() gin.HandlerFunc {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/v1/group/:groupID/disappearing
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleSetDisappearing cambia el temporizador de mensajes temporales del grupo
+// (misma regla que editar info). Responde con el sobre
+// {kind,key,seconds,byTelephon,systemMessage} y, solo si cambió, difunde
+// `disappearing_changed` a todos los miembros.
+func (h *HandlerGroup) HandleSetDisappearing() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		if !exists || !exists2 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+		var body struct {
+			Seconds *int `json:"seconds"`
+		}
+		if err := ctx.ShouldBindJSON(&body); err != nil || body.Seconds == nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Debes indicar los segundos"})
+			return
+		}
+		changed, sysMsg, err := h.service.SetGroupDisappearing(telephon.(string), groupID.(uint), *body.Seconds, ctx)
+		if err != nil {
+			h.respondGroupMutationError(ctx, err)
+			return
+		}
+		envelope := map[string]interface{}{
+			"kind":          "group",
+			"key":           groupID.(uint),
+			"seconds":       *body.Seconds,
+			"byTelephon":    telephon.(string),
+			"systemMessage": sysMsg,
+		}
+		if changed {
+			if telephons, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx); notifyErr == nil {
+				h.notifyAllGroupMembers(telephons, "disappearing_changed", envelope)
+			}
+		}
+		ctx.JSON(http.StatusOK, envelope)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/v1/group/:groupID/member
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -372,7 +539,7 @@ func (h *HandlerGroup) HandleUpdateGroupAvatar() gin.HandlerFunc {
 		}
 
 		if err := h.service.UpdateGroupAvatar(telephon.(string), groupID.(uint), body.AvatarUrl, ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			h.respondGroupMutationError(ctx, err)
 			return
 		}
 
@@ -386,6 +553,178 @@ func (h *HandlerGroup) HandleUpdateGroupAvatar() gin.HandlerFunc {
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{"avatarUrl": body.AvatarUrl})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/v1/group/:groupID/members/:telephon/role
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleChangeMemberRole designa (role=admin) o descarta (role=member) a un
+// miembro. Solo admins. Difunde `group_member_role` a todos los miembros con el
+// mensaje de sistema persistido.
+func (h *HandlerGroup) HandleChangeMemberRole() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		target, exists3 := ctx.Get("groupTelephon")
+		data, exists4 := ctx.Get("groupMemberRole")
+		if !exists || !exists2 || !exists3 || !exists4 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		actor := telephon.(string)
+		targetTel := target.(string)
+		role := data.(models.GroupMemberRoleUpdate).Role
+
+		var (
+			systemMsg *schemas.GroupMessageResponse
+			err       error
+		)
+		if role == models.GroupRoleAdmin {
+			systemMsg, err = h.service.Promote(actor, groupID.(uint), targetTel, ctx)
+		} else {
+			systemMsg, err = h.service.Dismiss(actor, groupID.(uint), targetTel, ctx)
+		}
+		if err != nil {
+			h.respondGroupMutationError(ctx, err)
+			return
+		}
+
+		telephons, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx)
+		if notifyErr == nil {
+			h.notifyAllGroupMembers(telephons, "group_member_role", map[string]interface{}{
+				"groupID":       groupID.(uint),
+				"telephon":      targetTel,
+				"role":          role,
+				"systemMessage": systemMsg,
+			})
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"groupID":       groupID.(uint),
+			"telephon":      targetTel,
+			"role":          role,
+			"systemMessage": systemMsg,
+		})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/v1/group/:groupID/members/:telephon
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleRemoveMember elimina a un miembro del grupo. Solo admins. El removido
+// sale de la room (no recibe más broadcasts), recibe el evento
+// `group_member_removed` (para pasar a estado left) y se avisa al resto.
+func (h *HandlerGroup) HandleRemoveMember() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		target, exists3 := ctx.Get("groupTelephon")
+		if !exists || !exists2 || !exists3 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		actor := telephon.(string)
+		targetTel := target.(string)
+
+		username, _ := h.service.GetUsernameByTelephon(targetTel, ctx)
+
+		systemMsg, err := h.service.Remove(actor, groupID.(uint), targetTel, ctx)
+		if err != nil {
+			h.respondGroupMutationError(ctx, err)
+			return
+		}
+
+		// El removido deja de recibir los broadcasts de la room.
+		if h.notifier != nil {
+			h.notifier.LeaveRoomByTelephon(groupID.(uint), targetTel)
+		}
+
+		remaining, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx)
+		if notifyErr == nil {
+			// El removido también recibe el evento (su UI pasa a estado left).
+			recipients := append(append([]string{}, remaining...), targetTel)
+			h.notifyAllGroupMembers(recipients, "group_member_removed", map[string]interface{}{
+				"groupID":        groupID.(uint),
+				"telephon":       targetTel,
+				"username":       username,
+				"newMemberCount": len(remaining),
+				"systemMessage":  systemMsg,
+			})
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"groupID":       groupID.(uint),
+			"telephon":      targetTel,
+			"systemMessage": systemMsg,
+		})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/v1/group/:groupID/settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleUpdateGroupSettings cambia la configuración de permisos del grupo (solo
+// admins). Difunde `group_settings` con los valores resultantes y el mensaje de
+// sistema persistido.
+func (h *HandlerGroup) HandleUpdateGroupSettings() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		data, exists3 := ctx.Get("groupSettings")
+		if !exists || !exists2 || !exists3 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		result, err := h.service.UpdateSettings(telephon.(string), groupID.(uint), data.(models.GroupSettingsUpdate), ctx)
+		if err != nil {
+			h.respondGroupMutationError(ctx, err)
+			return
+		}
+
+		telephons, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx)
+		if notifyErr == nil {
+			h.notifyAllGroupMembers(telephons, "group_settings", result)
+		}
+
+		ctx.JSON(http.StatusOK, result)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/v1/group/:groupID
+// ─────────────────────────────────────────────────────────────────────────────
+
+// HandleUpdateGroupInfo cambia el nombre/descripción del grupo. Difunde
+// `group_info` con los valores resultantes y el mensaje de sistema persistido.
+func (h *HandlerGroup) HandleUpdateGroupInfo() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exists := ctx.Get("telephon")
+		groupID, exists2 := ctx.Get("groupID")
+		data, exists3 := ctx.Get("groupInfo")
+		if !exists || !exists2 || !exists3 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+
+		result, err := h.service.UpdateInfo(telephon.(string), groupID.(uint), data.(models.GroupInfoUpdate), ctx)
+		if err != nil {
+			h.respondGroupMutationError(ctx, err)
+			return
+		}
+
+		telephons, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx)
+		if notifyErr == nil {
+			h.notifyAllGroupMembers(telephons, "group_info", result)
+		}
+
+		ctx.JSON(http.StatusOK, result)
 	}
 }
 
@@ -406,7 +745,7 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 		// Obtener el username antes de salir para incluirlo en la notificación
 		username, _ := h.service.GetUsernameByTelephon(telephon.(string), ctx)
 
-		err := h.service.LeaveGroup(telephon.(string), groupID.(uint), ctx)
+		systemMsg, err := h.service.LeaveGroup(telephon.(string), groupID.(uint), ctx)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -421,9 +760,10 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 		telephons, notifyErr := h.service.GetMemberTelephons(groupID.(uint), ctx)
 		if notifyErr == nil && len(telephons) > 0 {
 			h.notifyAllGroupMembers(telephons, "group_member_left", map[string]interface{}{
-				"groupID":  groupID.(uint),
-				"telephon": telephon.(string),
-				"username": username,
+				"groupID":       groupID.(uint),
+				"telephon":      telephon.(string),
+				"username":      username,
+				"systemMessage": systemMsg,
 			})
 		}
 

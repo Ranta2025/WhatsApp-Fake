@@ -1,7 +1,7 @@
 # Atajos para el día a día (requiere Docker con Compose v2).
 # En Windows sin make, usa directamente los comandos de cada objetivo.
 
-.PHONY: up down restart logs ps reset tunnel test test-integration lint build
+.PHONY: up down restart logs ps reset tunnel test test-integration e2e lint build
 
 up:            ## Construye y levanta todo el stack
 	docker compose up -d --build
@@ -31,5 +31,8 @@ test:          ## Tests unitarios del backend + lint y build del frontend
 	cd frontend && npm run lint && npm run build
 
 test-integration: ## Tests de integración y e2e contra el stack de Docker (make up antes)
-	POSTGRES_HOST=127.0.0.1 POSTGRES_USER=whatsapp POSTGRES_PASSWORD=whatsapp POSTGRES_DB=whatsapp \
+	POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=$${POSTGRES_PUBLIC_PORT:-5432} POSTGRES_USER=whatsapp POSTGRES_PASSWORD=whatsapp POSTGRES_DB=whatsapp \
 	E2E_BASE_URL=http://localhost go test -tags e2e -count=1 ./backend/integration/
+
+e2e:           ## Tests e2e de navegador (Playwright) contra el stack de Docker (make up antes)
+	cd frontend && npm run test:e2e

@@ -6,7 +6,7 @@ import (
 )
 
 func newTestHub() *Hub {
-	return NewHub(nil)
+	return NewHub(nil, nil)
 }
 
 // TestHubSendAfterReplaceDoesNotPanic reproduce el escenario de reconexión:

@@ -113,6 +113,20 @@ func MiddlewareGroupMessageDelete() gin.HandlerFunc {
 	}
 }
 
+// MiddlewareGroupMessageID extrae el parámetro :messageID de la URL y lo convierte a uint.
+func MiddlewareGroupMessageID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("messageID"), 10, 64)
+		if err != nil || id == 0 {
+			c.JSON(400, gin.H{"error": "El ID del mensaje debe ser un número válido"})
+			c.Abort()
+			return
+		}
+		c.Set("messageID", uint(id))
+		c.Next()
+	}
+}
+
 // MiddlewareGroupID extrae el parámetro :groupID de la URL y lo convierte a uint.
 func MiddlewareGroupID() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -129,6 +143,78 @@ func MiddlewareGroupID() gin.HandlerFunc {
 			return
 		}
 		c.Set("groupID", uint(id))
+		c.Next()
+	}
+}
+
+// MiddlewareGroupTelephon extrae el parámetro :telephon (teléfono del miembro
+// objetivo) de la URL.
+func MiddlewareGroupTelephon() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tel := c.Param("telephon")
+		if tel == "" {
+			c.JSON(400, gin.H{"error": "El teléfono del miembro es obligatorio"})
+			c.Abort()
+			return
+		}
+		c.Set("groupTelephon", tel)
+		c.Next()
+	}
+}
+
+// MiddlewareGroupMemberRole valida el body del cambio de rol ("admin" | "member").
+func MiddlewareGroupMemberRole() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body models.GroupMemberRoleUpdate
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Datos inválidos: " + err.Error()})
+			c.Abort()
+			return
+		}
+		if body.Role != models.GroupRoleAdmin && body.Role != models.GroupRoleMember {
+			c.JSON(400, gin.H{"error": "El rol debe ser 'admin' o 'member'"})
+			c.Abort()
+			return
+		}
+		c.Set("groupMemberRole", body)
+		c.Next()
+	}
+}
+
+// MiddlewareGroupSettings valida el PATCH de configuración (al menos un campo).
+func MiddlewareGroupSettings() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body models.GroupSettingsUpdate
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Datos inválidos: " + err.Error()})
+			c.Abort()
+			return
+		}
+		if !body.AnySet() {
+			c.JSON(400, gin.H{"error": "Debes indicar al menos una configuración"})
+			c.Abort()
+			return
+		}
+		c.Set("groupSettings", body)
+		c.Next()
+	}
+}
+
+// MiddlewareGroupInfo valida el PATCH de info del grupo (al menos un campo).
+func MiddlewareGroupInfo() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body models.GroupInfoUpdate
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Datos inválidos: " + err.Error()})
+			c.Abort()
+			return
+		}
+		if !body.AnySet() {
+			c.JSON(400, gin.H{"error": "Debes indicar el nombre o la descripción"})
+			c.Abort()
+			return
+		}
+		c.Set("groupInfo", body)
 		c.Next()
 	}
 }

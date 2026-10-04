@@ -2,22 +2,50 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/websocket"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
+// DirectNotifier es lo mínimo del Hub que necesita HandlerChat para notificar
+// por WS cambios de ajustes del chat 1:1.
+type DirectNotifier interface {
+	SendTo(telephon string, msg []byte)
+}
+
 type HandlerChat struct {
-	service services.ChatServicer
-	hub     *websocket.Hub
+	service  services.ChatServicer
+	hub      *websocket.Hub
+	notifier DirectNotifier // nil si no hay Hub
 }
 
 // InitHandlerChat crea el handler de chat con su servicio y referencia al Hub WebSocket.
 func InitHandlerChat(service services.ChatServicer, hub *websocket.Hub) *HandlerChat {
-	return &HandlerChat{service: service, hub: hub}
+	h := &HandlerChat{service: service, hub: hub}
+	if hub != nil {
+		h.notifier = hub
+	}
+	return h
+}
+
+// chatErrorStatus mapea un mensaje inexistente, expirado o ajeno (1:1) a 404,
+// un clientID inválido a 400 y uno reutilizado en otro chat a 409; cualquier
+// otro error sigue siendo 500.
+func chatErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, models.ErrMessageNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, services.ErrInvalidClientID):
+		return http.StatusBadRequest
+	case errors.Is(err, services.ErrClientIDConflict):
+		return http.StatusConflict
+	}
+	return http.StatusInternalServerError
 }
 
 // HandlerPostChat persiste un nuevo mensaje de chat en base de datos.
@@ -40,7 +68,7 @@ func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 
 		message, err := hd.service.ServiceCreatMessage(messageExtract, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
+			ctx.JSON(chatErrorStatus(err), gin.H{
 				"error": err.Error(),
 			})
 			ctx.Abort()
@@ -66,7 +94,50 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		message, err := hd.service.ServiceGetMessages(telephon.(string), contact.(string), ctx)
+		// Ventanas para "ir al mensaje" (búsqueda): around=<id> devuelve una
+		// ventana centrada y after=<id> los mensajes posteriores. El cuerpo sigue
+		// siendo un array; los flags viajan en X-Has-More-Older/Newer.
+		if around, ok := parsePositiveID(ctx.Query("around")); ok {
+			_, limit := parseSearchPaging(ctx)
+			msgs, hasOlder, hasNewer, err := hd.service.ServiceGetMessagesAround(telephon.(string), contact.(string), around, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			ctx.Header("X-Has-More-Older", strconv.FormatBool(hasOlder))
+			ctx.Header("X-Has-More-Newer", strconv.FormatBool(hasNewer))
+			ctx.IndentedJSON(http.StatusOK, msgs)
+			return
+		}
+		if after, ok := parsePositiveID(ctx.Query("after")); ok {
+			_, limit := parseSearchPaging(ctx)
+			msgs, hasNewer, err := hd.service.ServiceGetMessagesAfter(telephon.(string), contact.(string), after, limit, ctx)
+			if err != nil {
+				respondWindowError(ctx, err)
+				return
+			}
+			ctx.Header("X-Has-More-Newer", strconv.FormatBool(hasNewer))
+			ctx.IndentedJSON(http.StatusOK, msgs)
+			return
+		}
+
+		// Paginación opcional: sin before ni limit válidos, limit=0 conserva el
+		// comportamiento histórico (últimos 200). Con cualquiera, la página
+		// por defecto es de 50 (el servicio acota el máximo).
+		var before uint
+		hasBefore := false
+		if b, err := strconv.ParseUint(ctx.Query("before"), 10, 32); err == nil && b > 0 {
+			before = uint(b)
+			hasBefore = true
+		}
+		limit := 0
+		if l, err := strconv.Atoi(ctx.Query("limit")); err == nil && l > 0 {
+			limit = l
+		} else if hasBefore {
+			limit = 50
+		}
+
+		message, hasMore, err := hd.service.ServiceGetMessagesPage(telephon.(string), contact.(string), before, limit, ctx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
@@ -74,7 +145,29 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
+		ctx.Header("X-Has-More", strconv.FormatBool(hasMore))
 		ctx.IndentedJSON(http.StatusOK, message)
+	}
+}
+
+// HandlerSearchChat busca mensajes de texto en la conversación con :contact.
+// Query params: q (2–100 caracteres), before (id, pagina hacia atrás) y limit.
+func (hd *HandlerChat) HandlerSearchChat() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		contact, exist2 := ctx.Get("contact")
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			ctx.Abort()
+			return
+		}
+		before, limit := parseSearchPaging(ctx)
+		page, err := hd.service.ServiceSearchMessages(telephon.(string), contact.(string), ctx.Query("q"), before, limit, ctx)
+		if err != nil {
+			respondSearchError(ctx, err)
+			return
+		}
+		ctx.JSON(http.StatusOK, page)
 	}
 }
 
@@ -184,7 +277,7 @@ func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
 
 		updatedMsg, err := hd.service.ServiceEditMessage(telephon.(string), msgEdit.MessageID, msgEdit.Message, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
+			ctx.JSON(chatErrorStatus(err), gin.H{
 				"error": err.Error(),
 			})
 			return
@@ -227,10 +320,93 @@ func (hd *HandlerChat) HandlerDeleteMessageForMe() gin.HandlerFunc {
 
 		deletedMsg, err := hd.service.ServiceDeleteMessageForMe(telephonUser.(string), messageID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			ctx.JSON(chatErrorStatus(err), gin.H{"error": err.Error()})
 			return
 		}
 
 		ctx.JSON(http.StatusOK, deletedMsg)
+	}
+}
+
+// disappearingBody es el cuerpo de PUT .../disappearing. Seconds es puntero para
+// distinguir "0" (apagar) de "ausente".
+type disappearingBody struct {
+	Seconds *int `json:"seconds"`
+}
+
+// HandlerSetDisappearing cambia el temporizador del chat 1:1 con :contact
+// (cualquiera de los dos participantes). Responde con el sobre
+// {kind,key,seconds,byTelephon,systemMessage} y, solo si cambió, lo difunde por
+// WS (`disappearing_changed`) a ambos usuarios.
+func (hd *HandlerChat) HandlerSetDisappearing() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		contact, exist2 := ctx.Get("contact")
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+		var body disappearingBody
+		if err := ctx.ShouldBindJSON(&body); err != nil || body.Seconds == nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Debes indicar los segundos"})
+			return
+		}
+		actor, other := telephon.(string), contact.(string)
+		changed, sysMsg, err := hd.service.SetChatDisappearing(actor, other, *body.Seconds, ctx)
+		if err != nil {
+			switch {
+			case errors.Is(err, services.ErrChatContactNotFound), errors.Is(err, models.ErrUserNotFound):
+				ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			case errors.Is(err, models.ErrInvalidDisappearDuration):
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			default:
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		envelope := func(key string) gin.H {
+			return gin.H{
+				"kind":          "direct",
+				"key":           key,
+				"seconds":       *body.Seconds,
+				"byTelephon":    actor,
+				"systemMessage": sysMsg,
+			}
+		}
+		if changed && hd.notifier != nil {
+			// Cada participante recibe como clave el teléfono del OTRO.
+			for recipient, key := range map[string]string{actor: other, other: actor} {
+				msg, mErr := json.Marshal(map[string]interface{}{
+					"type":    "disappearing_changed",
+					"payload": envelope(key),
+				})
+				if mErr == nil {
+					hd.notifier.SendTo(recipient, msg)
+				}
+			}
+		}
+		ctx.JSON(http.StatusOK, envelope(other))
+	}
+}
+
+// HandlerGetChatSettings devuelve los ajustes del chat 1:1 con :contact.
+func (hd *HandlerChat) HandlerGetChatSettings() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		telephon, exist := ctx.Get("telephon")
+		contact, exist2 := ctx.Get("contact")
+		if !(exist && exist2) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "error al obtener los datos"})
+			return
+		}
+		seconds, err := hd.service.GetChatDisappearing(telephon.(string), contact.(string), ctx)
+		if err != nil {
+			if errors.Is(err, services.ErrChatContactNotFound) || errors.Is(err, models.ErrUserNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"disappearSeconds": seconds})
 	}
 }

@@ -1,0 +1,63 @@
+# Feature: message-pagination
+
+## Objective
+Cursor-based history pagination with infinite scroll up, for 1:1 chats and group chats.
+
+## Problem / Why
+History loads as one block: up to 200 messages per 1:1 chat (`/api/v1/chats`, `GET /chat/:contact`) and 50 per group (`limit/offset`). Older messages are unreachable, and offset paging with a `time`/`created_at` order and no tie-break can duplicate or skip rows that share a timestamp.
+
+## Scope / Authorized
+The user approved the roadmap queue item "message-pagination". Scope is the backend endpoints, the frontend state and both message lists. The initial `/api/v1/chats` and `GetGroupDetail` payload sizes are out of scope (unchanged).
+
+## Decisions (orchestrator defaults)
+- **Cursor:** message `id`, with `WHERE id < :before ORDER BY id DESC LIMIT limit+1` to derive `hasMore`. This assumes id order equals chronological order. The writer verifies how `Time` is set; if `Time` can diverge from insert order, use a `(time,id)` keyset instead and record why.
+- **1:1 `GET /chat/:contact`:** add optional `before` and `limit` (default page 50, max 100). The body stays a bare array, and `hasMore` goes in the `X-Has-More: true|false` header. With no params, behavior stays exactly as today (latest 200).
+- **Group `GET /group/:id/message`:** add optional `before`, keep `limit/offset` working, and add a `hasMore` sibling to `{messages}`.
+- **Indexes:** add `(group_id, id) WHERE deleted_at IS NULL`, `(id_user, id_receptor, id)` and the reverse, via `execMigration`.
+- Per-user delete flags and soft-delete filters stay in the paged queries.
+
+## Constraints
+- Branch: feat/message-pagination (from feat/group-media).
+- TS strict, no `any`, keep the M4b principle (runtime guards on network data).
+- Synthetic `IsSystem` entries are never used as a cursor.
+- Reconnect re-sync, `fetchGroupDetail` and `fetchChatMessages` must not clobber pages that are already loaded. Merge with dedupe by `MessageID`.
+- Prepending older messages must not jump the scroll. Auto-scroll to the bottom only on a chat change or an appended tail message.
+- Commits: Conventional Commits, no AI attribution, explicit pathspecs (`git reset -q` first).
+
+## TDD
+Strict TDD (session config). Runners: `cd backend && go test ./...`, `cd frontend && npm run test` (Vitest). RED → GREEN → REFACTOR, with mutation checks when tests only pin existing behavior.
+
+## Delivery
+ask-on-risk. There is one reviewed work-unit commit per task. Reviews run per commit via `.git/rdd-state/cycle.zsh`.
+
+## Tasks
+- [x] MP1 Backend group cursor: `before` + `hasMore` in the repo, service and handler; add the index; unit tests plus an integration test for the boundary and same-timestamp rows. Route: delegated.
+- [x] MP2 Backend 1:1 cursor: `before`/`limit` + the `X-Has-More` header; default behavior unchanged; add the indexes; update the mocks and tests. Route: delegated.
+- [x] MP3 Frontend state: `getGroupMessages({before})`, a 1:1 fetch with `before`, and `loadOlderMessages` / `loadOlderGroupMessages` in DashboardContext (prepend, dedupe, sort, per-chat `hasMore`/`loadingOlder`). Re-sync and detail fetches merge instead of replacing. Tests. Route: delegated.
+- [x] MP4 1:1 MessageList infinite scroll up: a top sentinel triggers `loadOlder`, the scroll anchor is preserved on prepend, and there is a loading indicator. Tests. Route: delegated.
+- [x] MP5 Group list infinite scroll up: same behavior in GroupChatWindow's list. Tests. Route: delegated.
+- [x] MP6 Close: browser smoke (seed more than 60 messages, scroll up, confirm no jump or duplicates), doc + mirror.
+
+## Acceptance criteria
+- Scrolling to the top of a long chat or group loads older pages until `hasMore` is false, with no duplicates, gaps or scroll jumps.
+- Existing clients and default endpoint behavior are unchanged.
+- `go test ./...`, typecheck, test, lint and build are green, with no `any`.
+
+## Progress / Evidence
+- Decision check: group `Time` is `time.Now()` at creation (serviceGroup.go:283), so id order == chronological; id cursor kept. Group repo now orders by `id DESC` (tie-break-free) in all paths.
+- MP1: RED = services test build failure (`GetGroupMessagesPage` undefined) + handler `hasMore` mutation (`"hasMore": false`) fails `TestHandleGetGroupMessages_DefaultsAndHasMore`; GREEN = `go test ./...` ok, `go vet ./...` ok. Added 3 service tests, 3 handler tests, integration test (build-tagged; compiled with `go vet -tags integration`, NOT run: no Postgres reachable, pg_isready no response).
+- Decision check MP2: 1:1 `Time` is `time.Now()` at creation (serviceChat.go:96), id cursor kept; repo orders by `id DESC` then reverses to chronological. Handler: no/invalid params => limit 0 => legacy 200; `before` w/o limit => 50; service clamps to 100; `X-Has-More` always set. Found: CORS `ExposeHeaders` lacked it, so added `X-Has-More` in config/cors.go (cross-origin clients could not read it).
+- MP2: RED = services build failure (`ServiceGetMessagesPage`/`maxChatMessagesPage` undefined), handler tests panicked on unexpected mock call, CORS test failed before exposing header; mutation = clamp `limit > 100000` fails `TestServiceGetMessagesPage_LimitRules`; GREEN = `go test ./...` ok, `go vet ./...` ok. Integration test (same-timestamp rows, per-user delete flag, boundary) compiled via `go vet -tags integration`, NOT run (no Postgres). Indexes `idx_messages_conv_cursor(_rev)` added.
+- MP3: new `lib/mergeMessages.ts` (`mergeLatestWindow` = server truth inside the latest window, keeps older loaded pages; `prependOlder` = dedupe+sort; `oldestRealMessageId` ignores synthetic ids), context `loadOlderMessages`/`loadOlderGroupMessages` + `chatPaging`/`groupPaging` (hasMore/loadingOlder/olderLoaded), `getGroupMessages(id,limit,offset,before?)`, normalizers `normalizeChatMessagesResponse`/`normalizeHasMore`. hasMore: `X-Has-More` header (1:1) / `hasMore` body (group), fallback heuristic full window (200 chats, 50 group) or page size when absent. RED: mergeMessages/pagination/groupApi tests failed before impl (normalizer tests were written but impl landed before their first run, covered by mutation instead). Mutations: mergeLatestWindow returning fresh only -> 5 fail; normalizer filter removed -> 1 fail; hasMore cast -> 1 fail; in-flight guard removed -> 1 fail. GREEN: vitest 38 files / 244 tests, typecheck, lint (0 warnings), build ok, no `any`. Removed two now-unused `eslint-disable set-state-in-effect` directives (lint warnings otherwise).
+- MP4: chose a scroll listener (scrollTop <= 80) over IntersectionObserver (jsdom has none). New shared hook `hooks/useLoadOlderOnScroll.ts` (also used by MP5): loads older at top, restores anchor on prepend (`scrollTop = lastTop + (newHeight - lastHeight)`; container `overflow-anchor: none` so the browser does not double-compensate), bottom-scroll only on chat change or changed last id (never on prepend/edit). Indicator is absolute, last in DOM, `mt-0!` so it adds no height/margin. Context tweak: an empty older page forces `hasMore=false` (prevents request loops). RED: hook test (module missing), MessageList tests 3/4 failing, context empty-page tests 2 failing. Mutations on hook: drop height delta -> 1 fail; treat prepend as tail change -> 1 fail; drop loading guard -> 1 fail. GREEN: vitest 40 files / 257 tests, typecheck, lint, build, no `any`. Not implemented (YAGNI): auto-fill when the list does not fill the viewport; late image loads after prepend can still shift by their growth (browser smoke in MP6).
+- MP5: `GroupMessageList` (now exported, props `groupID/hasMore/loadingOlder/onLoadOlder`) reuses `useLoadOlderOnScroll` with `smoothTail`; replaces the `bottomRef.scrollIntoView` (which fired on every length change, now only on group change or new last entry). Same overflow-anchor/indicator approach. RED: tests failed against the committed component (named export missing); mutations: drop overflow-anchor -> 1 fail, no-op loadOlder -> 2 fail. GREEN: vitest 41 files / 262 tests, typecheck, lint, build, no `any`.
+
+- MP3b (review fix R3-merge-latest-window-gap): `mergeLatestWindow(prev, fresh, windowHasMore=true)` now keeps older loaded entries only if `isContiguousWindow` holds (prev empty, window is the full history, or prev has a real id >= the window's oldest id); otherwise the older block is dropped. Callers (fetchAllChats, fetchChatMessages, fetchGroupMessages, fetchGroupDetail) compute contiguity from the loaded-list ref and `windowPaging(prev, hasMore, contiguous)` resets paging (olderLoaded=false, fresh hasMore) so loadOlder resumes from the fresh window's oldest id. RED: 3 mergeMessages + 3 context tests failed before impl. GREEN: vitest 270 tests, typecheck, lint, build ok, no `any`.
+- MP3c (review warning R3-contiguity-defeated-by-newer-realtime-id on 22dcd3f): contiguity now requires `prev` to contain the fresh window's oldest real id (exact overlap); a newer live id no longer bridges a reconnect gap. RED: new test failed (1/19) -> GREEN; vitest 271, typecheck, lint green.
+- MP5b (smoke: auto-load on open + duplicate request): real-browser smoke showed (1) opening a group auto-fired loadOlder: first population of an empty list only flagged `tailChanged`, so `smoothTail` animated from top 0 and the smooth-scroll events (top<=80) triggered the load; fix = `useLoadOlderOnScroll` treats first population (prev lastKey undefined) as a chat change -> instant jump. (2) duplicate `before=35` request: a synchronous in-flight Set already existed, but it is released in `finally` before the effect-updated refs (messages/paging) refresh, so a second trigger reused the stale cursor; fix = loadOlderMessages/loadOlderGroupMessages update the refs synchronously on success. RED: 3 new tests failed (hook instant-bottom, 1:1 and group repeated cursor) -> GREEN. vitest 41 files / 274 tests, typecheck, lint, build ok, no `any`.
+- Reviews (per commit): 30fad6c, 4c1e5be, 206bd4c, 7a74112, 22dcd3f, ae77379, e2229d2 approved + acknowledged. d3fadb6 hit correction_required (CRITICAL R3-merge-latest-window-gap); fixed forward in 22dcd3f/ae77379 instead of rewriting history (the native correction needs the candidate itself changed); that lineage (review-d33a5f83f9c32c1a) stays open — releasing it needs a maintainer-authorized `gentle-ai review abandon`.
+- MP6: Playwright smoke on rebuilt docker stack, seeded 215 1:1 msgs (ana→luis) + 70 group msgs. 1:1: opens with the 200-window, scroll to top loads the remaining 15 (1..215 present, no dups; the 1 "dup" is the sidebar preview), scrollTop anchored (3017, no jump). Group: open issues only `GET /group/1` (no auto-load after MP5b), 50 rendered; scroll to top loads older (50→70, 1..70, no dups), anchored at 2168. No page errors. FEATURE CLOSED.
+- Follow-ups (not fixed): DB integration tests compiled but not run (no reachable Postgres/.env); repo `GetGroupMessagesPage` panics on negative limit (unreachable: handler only passes >0); malformed `before` silently ignored instead of 400; no auto-fill when the list is shorter than the viewport; late image loads after prepend may shift slightly; MP5b regression tests can short-circuit on hasMore=false (use hasMore=true pages to make them strict).
+
+## Next step
+Feature closed. Next queued: e2e-ci.

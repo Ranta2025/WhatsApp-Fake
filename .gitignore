@@ -99,5 +99,7 @@ desktop.ini
 
 *.trae
 *.github
+# ...pero versionar .github/ (workflows y skills)
+!.github/
 # Volcados locales de Redis
 dump.rdb

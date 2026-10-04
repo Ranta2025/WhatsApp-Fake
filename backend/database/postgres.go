@@ -115,6 +115,14 @@ func Conection() (*gorm.DB, error) {
 		&models.Group{},
 		&models.GroupMember{},
 		&models.GroupMessage{},
+		// ── Estados (stories) ──────────────────────────────────────────────
+		&models.Status{},
+		&models.StatusView{},
+		// ── Reacciones ─────────────────────────────────────────────────────
+		&models.MessageReaction{},
+		// ── Mensajes temporales ────────────────────────────────────────────
+		&models.ChatSetting{},
+		&models.MediaGC{},
 	); err != nil {
 		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}
@@ -163,6 +171,14 @@ func Conection() (*gorm.DB, error) {
 		WHERE deleted_at IS NULL`)
 	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_conv_rev
 		ON messages (id_receptor, id_user, time)
+		WHERE deleted_at IS NULL`)
+
+	// Índices para paginación por cursor (id < before ORDER BY id DESC) del chat 1:1.
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_conv_cursor
+		ON messages (id_user, id_receptor, id)
+		WHERE deleted_at IS NULL`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_conv_cursor_rev
+		ON messages (id_receptor, id_user, id)
 		WHERE deleted_at IS NULL`)
 
 	// Índice parcial para consulta de mensajes pendientes de entrega
@@ -249,6 +265,11 @@ func Conection() (*gorm.DB, error) {
 		ON group_messages (group_id, created_at)
 		WHERE deleted_at IS NULL`)
 
+	// Índice para paginación por cursor (id < before ORDER BY id DESC) del historial.
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_messages_cursor
+		ON group_messages (group_id, id)
+		WHERE deleted_at IS NULL`)
+
 	// Índice para lookup de miembros por grupo
 	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_members_group
 		ON group_members (group_id)
@@ -274,8 +295,131 @@ func Conection() (*gorm.DB, error) {
 				CHECK (media_type IS NULL OR media_type = ''
 					OR media_type IN ('image', 'audio', 'video', 'sticker', 'document'));
 		END IF;
+
+		-- group_messages.kind ("" normal | "system" evento persistido)
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'group_messages' AND constraint_name = 'chk_group_messages_kind'
+		) THEN
+			ALTER TABLE group_messages ADD CONSTRAINT chk_group_messages_kind
+				CHECK (kind IN ('', 'system'));
+		END IF;
 	END $$;`)
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// MENSAJES TEMPORALES: índices y constraints (idempotentes)
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// Un único registro de ajustes por par ordenado de usuarios.
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_settings_pair
+		ON chat_settings (user_low_id, user_high_id)`)
+
+	// Un único objeto pendiente de borrar por key en la cola de GC de media.
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_media_gc_object_key
+		ON media_gc (object_key)`)
+
+	// Índices parciales para el barrido de expiración (solo filas con timer).
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_expires_at
+		ON messages (expires_at)
+		WHERE expires_at IS NOT NULL`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_messages_expires_at
+		ON group_messages (expires_at)
+		WHERE expires_at IS NOT NULL`)
+
+	// Idempotent sends (PW8): client_id is nullable (AutoMigrate adds it without
+	// backfill); a replay with the same (sender, client_id) never duplicates.
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_sender_client_id
+		ON messages (id_user, client_id) WHERE client_id IS NOT NULL`)
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_group_messages_sender_client_id
+		ON group_messages (sender_id, client_id) WHERE client_id IS NOT NULL`)
+
+	execMigration(data, `DO $$ BEGIN
+		-- messages.kind ("" normal | "system" evento persistido)
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'messages' AND constraint_name = 'chk_messages_kind'
+		) THEN
+			ALTER TABLE messages ADD CONSTRAINT chk_messages_kind
+				CHECK (kind IN ('', 'system'));
+		END IF;
+	END $$;`)
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// ESTADOS (stories): índices y constraints
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// Índice único parcial: evita vistas duplicadas de un mismo espectador
+	// sobre un mismo estado (idempotencia de "marcar como visto").
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_status_view_unique
+		ON status_views (status_id, viewer_id)
+		WHERE deleted_at IS NULL`)
+
+	// Índice para el filtro de expiración (todas las lecturas de estados lo usan).
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_statuses_expires_at
+		ON statuses (expires_at)
+		WHERE deleted_at IS NULL`)
+
+	// Índice para cargar los estados de una lista de dueños (feed), ordenados.
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_statuses_user_created
+		ON statuses (user_id, created_at)
+		WHERE deleted_at IS NULL`)
+
+	execMigration(data, `DO $$ BEGIN
+		-- statuses.type
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'statuses' AND constraint_name = 'chk_statuses_type'
+		) THEN
+			ALTER TABLE statuses ADD CONSTRAINT chk_statuses_type
+				CHECK (type IN ('text', 'image', 'video'));
+		END IF;
+	END $$;`)
+
+	// Reacciones: una por usuario y mensaje (el upsert reemplaza el emoji).
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_message_reactions_unique
+		ON message_reactions (message_kind, message_id, user_id)`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_message_reactions_message
+		ON message_reactions (message_kind, message_id)`)
+	execMigration(data, `DO $$ BEGIN
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.constraint_column_usage
+			WHERE table_name = 'message_reactions' AND constraint_name = 'chk_message_reactions_kind'
+		) THEN
+			ALTER TABLE message_reactions ADD CONSTRAINT chk_message_reactions_kind
+				CHECK (message_kind IN ('direct', 'group'));
+		END IF;
+	END $$;`)
+
+	setupMessageSearch(data)
 
 	log.Println("[DB] Conexión con PostgreSQL establecida")
 	return data, nil
+}
+
+// setupMessageSearch prepara la búsqueda de mensajes: extensiones pg_trgm y
+// unaccent, la función IMMUTABLE norm(text) = lower(unaccent(text)) y los
+// índices GIN trigram parciales (solo mensajes de texto no borrados) sobre
+// messages y group_messages. En hosts donde no se pueden crear las extensiones
+// se omite todo y la capa de repos cae a ILIKE (ver repos/searchData.go).
+func setupMessageSearch(data *gorm.DB) {
+	for _, ext := range []string{"pg_trgm", "unaccent"} {
+		if err := data.Exec("CREATE EXTENSION IF NOT EXISTS " + ext).Error; err != nil {
+			log.Printf("[DB] Búsqueda de mensajes: extensión %s no disponible (%v); se usará ILIKE", ext, err)
+			return
+		}
+	}
+	// unaccent() es STABLE; el wrapper se declara IMMUTABLE (el diccionario es
+	// fijo) para poder usarlo en índices de expresión.
+	if err := data.Exec(`CREATE OR REPLACE FUNCTION norm(text) RETURNS text
+		LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+		AS $$ SELECT lower(public.unaccent('public.unaccent'::regdictionary, $1)) $$`).Error; err != nil {
+		log.Printf("[DB] Búsqueda de mensajes: no se pudo crear norm() (%v); se usará ILIKE", err)
+		return
+	}
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_messages_search_trgm
+		ON messages USING gin (norm(message) gin_trgm_ops)
+		WHERE deleted_at IS NULL AND COALESCE(media_type,'') = ''`)
+	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_group_messages_search_trgm
+		ON group_messages USING gin (norm(message) gin_trgm_ops)
+		WHERE deleted_at IS NULL AND COALESCE(media_type,'') = ''`)
 }

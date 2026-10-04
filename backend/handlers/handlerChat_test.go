@@ -5,6 +5,7 @@ import (
 	"gorm/backend/schemas"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -50,7 +51,8 @@ func TestHandlerGetChatsSuccess(t *testing.T) {
 	contact := "87654321"
 	messages := []schemas.Message{{MessageID: 1, Message: "Hola"}}
 
-	mockService.On("ServiceGetMessages", telephon, contact, mock.Anything).Return(messages, nil)
+	// Sin parámetros: límite 0 = comportamiento histórico (el servicio aplica 200).
+	mockService.On("ServiceGetMessagesPage", telephon, contact, uint(0), 0, mock.Anything).Return(messages, false, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -61,6 +63,59 @@ func TestHandlerGetChatsSuccess(t *testing.T) {
 	handler.HandlerGetChats()(c)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "false", w.Header().Get("X-Has-More"))
+	assert.True(t, strings.HasPrefix(strings.TrimSpace(w.Body.String()), "["), "el cuerpo sigue siendo un array")
+	mockService.AssertExpectations(t)
+}
+
+func TestHandlerGetChatsWithCursor(t *testing.T) {
+	mockService := new(MockChatService)
+	handler := &HandlerChat{service: mockService}
+	messages := []schemas.Message{{MessageID: 3, Message: "viejo"}}
+	mockService.On("ServiceGetMessagesPage", "1", "2", uint(42), 20, mock.Anything).Return(messages, true, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/chat/2?before=42&limit=20", nil)
+	c.Set("telephon", "1")
+	c.Set("contact", "2")
+
+	handler.HandlerGetChats()(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "true", w.Header().Get("X-Has-More"))
+	mockService.AssertExpectations(t)
+}
+
+func TestHandlerGetChatsBeforeWithoutLimitUsesPageDefault(t *testing.T) {
+	mockService := new(MockChatService)
+	handler := &HandlerChat{service: mockService}
+	mockService.On("ServiceGetMessagesPage", "1", "2", uint(7), 50, mock.Anything).Return([]schemas.Message{}, false, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/chat/2?before=7", nil)
+	c.Set("telephon", "1")
+	c.Set("contact", "2")
+
+	handler.HandlerGetChats()(c)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestHandlerGetChatsInvalidParamsFallBackToLegacy(t *testing.T) {
+	mockService := new(MockChatService)
+	handler := &HandlerChat{service: mockService}
+	mockService.On("ServiceGetMessagesPage", "1", "2", uint(0), 0, mock.Anything).Return([]schemas.Message{}, false, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/chat/2?before=abc&limit=-1", nil)
+	c.Set("telephon", "1")
+	c.Set("contact", "2")
+
+	handler.HandlerGetChats()(c)
+
 	mockService.AssertExpectations(t)
 }
 

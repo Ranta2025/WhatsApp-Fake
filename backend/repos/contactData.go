@@ -236,26 +236,118 @@ func (app *ApiContact) CreateMessage(message *models.Message, ctx context.Contex
 }
 
 // GetMessages obtiene los mensajes entre dos usuarios excluyendo los borrados por cada parte.
-// Limitado a los últimos 200 mensajes por conversación (paginación por cursor pendiente).
+// Devuelve los últimos 200 mensajes de la conversación (primera página sin cursor).
 func (app *ApiContact) GetMessages(id_user uint, id_contact uint, ctx context.Context) ([]models.Message, error) {
+	messages, _, err := app.GetMessagesPage(id_user, id_contact, 0, 200, ctx)
+	return messages, err
+}
+
+// GetMessagesPage devuelve hasta limit mensajes de la conversación en orden
+// cronológico (más antiguo primero), excluyendo los borrados por cada parte.
+// Si before > 0 solo incluye mensajes con id < before (cursor por id, estable
+// con timestamps repetidos). hasMore indica si existen mensajes más antiguos;
+// se calcula pidiendo limit+1 filas.
+func (app *ApiContact) GetMessagesPage(id_user uint, id_contact uint, before uint, limit int, ctx context.Context) ([]models.Message, bool, error) {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var messages []models.Message
-	// Consultar en DESC LIMIT 200 para obtener los más recientes, luego invertir
-	// para devolver en orden cronológico (más antiguo primero) sin cambiar la interfaz.
-	result := app.data.Model(&models.Message{}).WithContext(c).
+	q := app.data.Model(&models.Message{}).WithContext(c).
 		Where("((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))", id_user, id_contact, false, id_contact, id_user, false).
-		Order("time DESC").
-		Limit(200).
-		Scan(&messages)
+		Where(notExpiredFilter)
+	if before > 0 {
+		q = q.Where("id < ?", before)
+	}
+	// DESC + LIMIT para obtener los más recientes de la página; luego se invierte.
+	result := q.Order("id DESC").Limit(limit + 1).Scan(&messages)
 	if result.Error != nil {
-		return nil, result.Error
+		return nil, false, result.Error
+	}
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
 	}
 	// Invertir para devolver en orden cronológico (más antiguo primero)
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
-	return messages, nil
+	return messages, hasMore, nil
+}
+
+// conversationVisibility es el predicado de visibilidad de la conversación
+// userID<->contactID: excluye los mensajes borrados "para mí" por cada parte.
+const conversationVisibility = "((id_user = ? AND id_receptor = ? AND deleted_by_sender = ?) OR (id_user = ? AND id_receptor = ? AND deleted_by_receiver = ?))"
+
+func (app *ApiContact) visibleConversation(c context.Context, userID, contactID uint) *gorm.DB {
+	return app.data.Model(&models.Message{}).WithContext(c).
+		Where(conversationVisibility, userID, contactID, false, contactID, userID, false).
+		Where(notExpiredFilter)
+}
+
+// GetMessagesAround devuelve una ventana cronológica centrada en el mensaje
+// around: hasta limit/2 mensajes anteriores, el objetivo y hasta limit/2
+// posteriores (solo los visibles para el usuario). hasOlder/hasNewer indican si
+// hay más mensajes fuera de la ventana. Si el objetivo no existe o no es
+// visible devuelve models.ErrMessageNotFound.
+func (app *ApiContact) GetMessagesAround(userID, contactID, around uint, limit int, ctx context.Context) ([]models.Message, bool, bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	half := limit / 2
+	if half < 1 {
+		half = 1
+	}
+
+	var target models.Message
+	res := app.visibleConversation(c, userID, contactID).Where("id = ?", around).Limit(1).Scan(&target)
+	if res.Error != nil {
+		return nil, false, false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, false, false, models.ErrMessageNotFound
+	}
+
+	var older []models.Message
+	if err := app.visibleConversation(c, userID, contactID).Where("id < ?", around).
+		Order("id DESC").Limit(half + 1).Scan(&older).Error; err != nil {
+		return nil, false, false, err
+	}
+	var newer []models.Message
+	if err := app.visibleConversation(c, userID, contactID).Where("id > ?", around).
+		Order("id ASC").Limit(half + 1).Scan(&newer).Error; err != nil {
+		return nil, false, false, err
+	}
+	hasOlder := len(older) > half
+	if hasOlder {
+		older = older[:half]
+	}
+	hasNewer := len(newer) > half
+	if hasNewer {
+		newer = newer[:half]
+	}
+
+	out := make([]models.Message, 0, len(older)+1+len(newer))
+	for i := len(older) - 1; i >= 0; i-- {
+		out = append(out, older[i])
+	}
+	out = append(out, target)
+	out = append(out, newer...)
+	return out, hasOlder, hasNewer, nil
+}
+
+// GetMessagesAfter devuelve hasta limit mensajes visibles con id > after en
+// orden cronológico; hasNewer indica si quedan más posteriores.
+func (app *ApiContact) GetMessagesAfter(userID, contactID, after uint, limit int, ctx context.Context) ([]models.Message, bool, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var msgs []models.Message
+	if err := app.visibleConversation(c, userID, contactID).Where("id > ?", after).
+		Order("id ASC").Limit(limit + 1).Scan(&msgs).Error; err != nil {
+		return nil, false, err
+	}
+	hasNewer := len(msgs) > limit
+	if hasNewer {
+		msgs = msgs[:limit]
+	}
+	return msgs, hasNewer, nil
 }
 
 // PutStatusMessageDelivered marca como 'entregado' los mensajes con estado 'enviado'
@@ -279,7 +371,7 @@ func (app *ApiContact) GetSenderTelephonsWithPendingMessages(id_receiver uint, c
 		Table("messages").
 		Select("DISTINCT user_data_bases.telephon").
 		Joins("INNER JOIN user_data_bases ON messages.id_user = user_data_bases.id").
-		Where("messages.id_receptor = ? AND messages.status = ? AND messages.deleted_at IS NULL", id_receiver, "enviado").
+		Where("messages.id_receptor = ? AND messages.status = ? AND messages.deleted_at IS NULL AND "+notExpiredOn("messages"), id_receiver, "enviado").
 		Scan(&telephons)
 	if result.Error != nil {
 		return nil, result.Error
@@ -314,6 +406,7 @@ func (app *ApiContact) GetRecentMessagesForUser(id_user uint, perChat int, ctx c
 			) AS rn
 			FROM messages m
 			WHERE m.deleted_at IS NULL
+			  AND `+notExpiredOn("m")+`
 			  AND ((m.id_user = @user AND m.deleted_by_sender = false)
 			    OR (m.id_receptor = @user AND m.deleted_by_receiver = false))
 		) recent
@@ -436,8 +529,11 @@ func (app *ApiContact) GetIdByTelephon(telephon string, ctx context.Context) (in
 	defer cancel()
 	var id int
 	result := app.data.Model(&models.UserDataBase{}).WithContext(c).Select("id").Where("telephon = ?", telephon).Scan(&id)
-	if result.Error != nil || id == 0 {
-		return -1, errors.New("id usuario no encontrado")
+	if result.Error != nil {
+		return -1, fmt.Errorf("buscar id de usuario: %w", result.Error)
+	}
+	if id == 0 {
+		return -1, models.ErrUserNotFound
 	}
 
 	// 3. Guardar en Redis para futuras consultas (TTL 24h)
@@ -578,7 +674,7 @@ func (app *ApiContact) UpdateMessageContent(messageID uint, idSender uint, newCo
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	result := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND id_user = ?", messageID, idSender).
+		Where("id = ? AND id_user = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, idSender).
 		Updates(map[string]interface{}{
 			"message": newContent,
 			"edited":  true,
@@ -587,7 +683,7 @@ func (app *ApiContact) UpdateMessageContent(messageID uint, idSender uint, newCo
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("mensaje no encontrado o no tienes permiso para editarlo")
+		return models.ErrMessageNotFound
 	}
 	return nil
 }
@@ -597,8 +693,12 @@ func (app *ApiContact) GetMessageByID(messageID uint, ctx context.Context) (*mod
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var msg models.Message
-	result := app.data.Model(&models.Message{}).WithContext(c).Where("id = ?", messageID).First(&msg)
+	result := app.data.Model(&models.Message{}).WithContext(c).
+		Where("id = ? AND "+notExpiredFilter, messageID).First(&msg)
 	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, models.ErrMessageNotFound
+		}
 		return nil, result.Error
 	}
 	return &msg, nil
@@ -609,9 +709,12 @@ func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx
 	defer cancel()
 	var msg models.Message
 	find := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND id_user = ?", messageID, idSender).
+		Where("id = ? AND id_user = ? AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, idSender).
 		First(&msg)
 	if find.Error != nil {
+		if errors.Is(find.Error, gorm.ErrRecordNotFound) {
+			return nil, models.ErrMessageNotFound
+		}
 		return nil, find.Error
 	}
 	del := app.data.WithContext(c).Delete(&msg)
@@ -619,7 +722,7 @@ func (app *ApiContact) DeleteMessageForSender(messageID uint, idSender uint, ctx
 		return nil, del.Error
 	}
 	if del.RowsAffected == 0 {
-		return nil, errors.New("mensaje no encontrado o no tienes permiso para eliminarlo")
+		return nil, models.ErrMessageNotFound
 	}
 	return &msg, nil
 }
@@ -630,9 +733,12 @@ func (app *ApiContact) DeleteMessageForMe(messageID uint, userID uint, ctx conte
 	defer cancel()
 	var msg models.Message
 	find := app.data.Model(&models.Message{}).WithContext(c).
-		Where("id = ? AND (id_user = ? OR id_receptor = ?)", messageID, userID, userID).
+		Where("id = ? AND (id_user = ? OR id_receptor = ?) AND "+systemMessageFilter+" AND "+notExpiredFilter, messageID, userID, userID).
 		First(&msg)
 	if find.Error != nil {
+		if errors.Is(find.Error, gorm.ErrRecordNotFound) {
+			return nil, models.ErrMessageNotFound
+		}
 		return nil, find.Error
 	}
 

@@ -88,6 +88,11 @@ func (m *MockChatRepo) GetMessages(id1, id2 uint, ctx context.Context) ([]models
 	return args.Get(0).([]models.Message), args.Error(1)
 }
 
+func (m *MockChatRepo) GetMessagesPage(id1, id2, before uint, limit int, ctx context.Context) ([]models.Message, bool, error) {
+	args := m.Called(id1, id2, before, limit, ctx)
+	return args.Get(0).([]models.Message), args.Bool(1), args.Error(2)
+}
+
 type MockContactRepo struct {
 	mock.Mock
 }
@@ -186,6 +191,26 @@ func (m *MockChatService) ServiceCreatMessageWithStatus(message models.MessageCr
 func (m *MockChatService) ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error) {
 	args := m.Called(telephonUser, telephonContact, ctx)
 	return args.Get(0).([]schemas.Message), args.Error(1)
+}
+
+func (m *MockChatService) ServiceSearchMessages(telephonUser, telephonContact, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error) {
+	args := m.Called(telephonUser, telephonContact, q, before, limit, ctx)
+	return args.Get(0).(*schemas.SearchPage), args.Error(1)
+}
+
+func (m *MockChatService) ServiceGetMessagesAround(telephonUser, telephonContact string, around uint, limit int, ctx context.Context) ([]schemas.Message, bool, bool, error) {
+	args := m.Called(telephonUser, telephonContact, around, limit, ctx)
+	return args.Get(0).([]schemas.Message), args.Bool(1), args.Bool(2), args.Error(3)
+}
+
+func (m *MockChatService) ServiceGetMessagesAfter(telephonUser, telephonContact string, after uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
+	args := m.Called(telephonUser, telephonContact, after, limit, ctx)
+	return args.Get(0).([]schemas.Message), args.Bool(1), args.Error(2)
+}
+
+func (m *MockChatService) ServiceGetMessagesPage(telephonUser string, telephonContact string, before uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
+	args := m.Called(telephonUser, telephonContact, before, limit, ctx)
+	return args.Get(0).([]schemas.Message), args.Bool(1), args.Error(2)
 }
 
 func (m *MockChatService) ServicePutMessageStatusDelivered(telephonSender string, telephonReceiver string, ctx context.Context) error {
@@ -379,4 +404,49 @@ type MockMediaService struct {
 func (m *MockMediaService) UploadMedia(file multipart.File, header *multipart.FileHeader, ctx context.Context) (services.MediaUploadResult, error) {
 	args := m.Called(file, header, ctx)
 	return args.Get(0).(services.MediaUploadResult), args.Error(1)
+}
+
+type MockStatusService struct {
+	mock.Mock
+}
+
+func (m *MockStatusService) CreateStatus(telephon string, input models.StatusCreate, ctx context.Context) (schemas.StatusItem, schemas.StatusOwnerBrief, []string, error) {
+	args := m.Called(telephon, input, ctx)
+	return args.Get(0).(schemas.StatusItem), args.Get(1).(schemas.StatusOwnerBrief), args.Get(2).([]string), args.Error(3)
+}
+
+func (m *MockStatusService) GetFeed(telephon string, ctx context.Context) (schemas.StatusFeed, error) {
+	args := m.Called(telephon, ctx)
+	return args.Get(0).(schemas.StatusFeed), args.Error(1)
+}
+
+func (m *MockStatusService) MarkStatusViewed(telephon string, statusID uint, ctx context.Context) (bool, string, schemas.StatusViewer, int64, error) {
+	args := m.Called(telephon, statusID, ctx)
+	return args.Bool(0), args.String(1), args.Get(2).(schemas.StatusViewer), args.Get(3).(int64), args.Error(4)
+}
+
+func (m *MockStatusService) GetStatusViewers(telephon string, statusID uint, ctx context.Context) ([]schemas.StatusViewer, error) {
+	args := m.Called(telephon, statusID, ctx)
+	return args.Get(0).([]schemas.StatusViewer), args.Error(1)
+}
+
+func (m *MockStatusService) DeleteStatus(telephon string, statusID uint, ctx context.Context) ([]string, error) {
+	args := m.Called(telephon, statusID, ctx)
+	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockStatusService) CleanupExpiredStatuses(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockChatService) SetChatDisappearing(actorTelephon, contactTelephon string, seconds int, ctx context.Context) (bool, *schemas.Message, error) {
+	args := m.Called(actorTelephon, contactTelephon, seconds, ctx)
+	msg, _ := args.Get(1).(*schemas.Message)
+	return args.Bool(0), msg, args.Error(2)
+}
+
+func (m *MockChatService) GetChatDisappearing(actorTelephon, contactTelephon string, ctx context.Context) (int, error) {
+	args := m.Called(actorTelephon, contactTelephon, ctx)
+	return args.Int(0), args.Error(1)
 }

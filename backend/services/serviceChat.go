@@ -13,10 +13,14 @@ import (
 // por conversación en el listado de chats (mismo límite que GetMessages).
 const chatListMessagesPerChat = 200
 
+// maxChatMessagesPage es el máximo de mensajes por página al paginar con cursor.
+const maxChatMessagesPage = 100
+
 type ChatServicer interface {
 	ServiceCreatMessage(message models.MessageCreat, ctx context.Context) (schemas.Message, error)
 	ServiceCreatMessageWithStatus(message models.MessageCreat, status string, ctx context.Context) (schemas.Message, error)
 	ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error)
+	ServiceGetMessagesPage(telephonUser string, telephonContact string, before uint, limit int, ctx context.Context) ([]schemas.Message, bool, error)
 	ServicePutMessageStatusDelivered(telephonSender string, telephonReceiver string, ctx context.Context) error
 	ServicePutAllMessageStatusDelivered(telephon string, ctx context.Context) error
 	ServiceGetSendersAndMarkDelivered(telephon string, ctx context.Context) ([]string, error)
@@ -25,12 +29,22 @@ type ChatServicer interface {
 	ServiceDeleteMessage(telephonSender string, messageID uint, ctx context.Context) (schemas.Message, error)
 	ServiceClearChat(telephonUser string, telephonContact string, ctx context.Context) error
 	ServiceDeleteMessageForMe(telephonUser string, messageID uint, ctx context.Context) (schemas.Message, error)
+	ServiceSearchMessages(telephonUser, telephonContact, q string, before uint, limit int, ctx context.Context) (*schemas.SearchPage, error)
+	ServiceGetMessagesAround(telephonUser, telephonContact string, around uint, limit int, ctx context.Context) ([]schemas.Message, bool, bool, error)
+	ServiceGetMessagesAfter(telephonUser, telephonContact string, after uint, limit int, ctx context.Context) ([]schemas.Message, bool, error)
+	SetChatDisappearing(actorTelephon, contactTelephon string, seconds int, ctx context.Context) (bool, *schemas.Message, error)
+	GetChatDisappearing(actorTelephon, contactTelephon string, ctx context.Context) (int, error)
 }
 
 type ChatRepoInterface interface {
 	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
 	CreateMessage(msg *models.Message, ctx context.Context) error
+	// CreateMessageIdempotent inserts msg unless a row with the same
+	// (id_user, client_id) exists; then msg is overwritten with the stored row
+	// and duplicate is true. msg.ClientID must be non-nil.
+	CreateMessageIdempotent(msg *models.Message, ctx context.Context) (duplicate bool, err error)
 	GetMessages(id1, id2 uint, ctx context.Context) ([]models.Message, error)
+	GetMessagesPage(id1, id2, before uint, limit int, ctx context.Context) ([]models.Message, bool, error)
 	GetTelephonByID(id uint, ctx context.Context) (string, error)
 	PutStatusMessageSeenByContact(senderID, receiverID uint, ctx context.Context) error
 	PutStatusMessageDelivered(userID uint, ctx context.Context) error
@@ -43,16 +57,34 @@ type ChatRepoInterface interface {
 	UpdateMessageContent(messageID uint, senderID uint, newContent string, ctx context.Context) error
 	DeleteMessageForSender(messageID uint, senderID uint, ctx context.Context) (*models.Message, error)
 	ClearChatForUser(userID uint, contactID uint, ctx context.Context) error
+	SearchMessages(userID, contactID uint, q string, before uint, limit int, ctx context.Context) ([]models.SearchRow, bool, error)
+	GetMessagesAround(userID, contactID, around uint, limit int, ctx context.Context) ([]models.Message, bool, bool, error)
+	GetMessagesAfter(userID, contactID, after uint, limit int, ctx context.Context) ([]models.Message, bool, error)
+	SetChatDisappearing(actorID, otherID uint, seconds int, sysMsg *models.Message, ctx context.Context) (bool, *models.Message, error)
+	GetChatDisappearing(userA, userB uint, ctx context.Context) (int, error)
+	GetChatDisappearingForUser(userID uint, ctx context.Context) (map[uint]int, error)
 }
 
 type ServiceChat struct {
-	repo ChatRepoInterface
+	repo      ChatRepoInterface
+	reactions ReactionAggregator // opcional; nil = sin reacciones
+	now       func() time.Time   // reloj inyectable (nil = time.Now)
+}
+
+// clock devuelve la hora actual según el reloj inyectado.
+func (rp *ServiceChat) clock() time.Time {
+	if rp.now != nil {
+		return rp.now()
+	}
+	return time.Now()
 }
 
 // InitServiceMessage crea el servicio de chat con su repositorio, devolviendo la interfaz ChatServicer.
-func InitServiceMessage(repo ChatRepoInterface) ChatServicer {
+// El agregador de reacciones es opcional (nil = los mensajes salen sin reacciones).
+func InitServiceMessage(repo ChatRepoInterface, reactions ...ReactionAggregator) ChatServicer {
 	return &ServiceChat{
-		repo: repo,
+		repo:      repo,
+		reactions: pickAggregator(reactions),
 	}
 }
 
@@ -77,6 +109,10 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	if err := validateMessageContent(&content); err != nil {
 		return schemas.Message{}, err
 	}
+	clientID, err := normalizeClientID(message.MessageGet.ClientID)
+	if err != nil {
+		return schemas.Message{}, err
+	}
 
 	// message.Telephon contiene el telephon del remitente
 	// message.MessageGet.Receptor contiene el telephon del receptor
@@ -88,12 +124,38 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	if err != nil {
 		return schemas.Message{}, errors.New("el receptor no existe")
 	}
+	// Un mensaje de sistema no es un objetivo válido de respuesta.
+	if id := message.MessageGet.ReplyToMessageID; id != nil && *id != 0 {
+		target, err := rp.repo.GetMessageByID(*id, ctx)
+		switch {
+		case errors.Is(err, models.ErrMessageNotFound):
+			// Inexistente, borrado o ya expirado: no se puede responder a él.
+			return schemas.Message{}, models.ErrMessageNotFound
+		case err == nil && target.Kind == models.MessageKindSystem:
+			return schemas.Message{}, errors.New("no puedes responder a un mensaje de sistema")
+		}
+	}
+
+	// Temporizador vigente en este instante: sella ExpiresAt = now + segundos.
+	disappear, err := rp.repo.GetChatDisappearing(uint(id_user), uint(id_receptor), ctx)
+	if err != nil {
+		return schemas.Message{}, err
+	}
+	// Postgres keeps microseconds: rounding here makes the live echo identical
+	// to the stored row (and to a replayed clientID ack).
+	now := rp.clock().Round(time.Microsecond)
+	var expiresAt *time.Time
+	if disappear > 0 {
+		t := now.Add(time.Duration(disappear) * time.Second)
+		expiresAt = &t
+	}
 	messageDB := models.Message{
 		IdUser:     uint(id_user),
 		IdReceptor: uint(id_receptor),
 		Message:    content.Message,
 		Status:     status,
-		Time:       time.Now(),
+		Time:       now,
+		ExpiresAt:  expiresAt,
 
 		// Campos de media
 		MediaUrl:  content.MediaUrl,
@@ -103,14 +165,29 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 		ReplyToMessageID: message.MessageGet.ReplyToMessageID,
 		ReplyToTelephon:  content.ReplyToTelephon,
 		ReplyToMessage:   content.ReplyToMessage,
+
+		ClientID: clientID,
 	}
 
-	if err := rp.repo.CreateMessage(&messageDB, ctx); err != nil {
+	// Without a clientID the send is not idempotent (legacy path). With one, a
+	// replay returns the stored row (same ID, timestamps and status) flagged as
+	// Duplicate so the transport skips re-delivery and side effects.
+	if clientID == nil {
+		if err := rp.repo.CreateMessage(&messageDB, ctx); err != nil {
+			return schemas.Message{}, err
+		}
+		return messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor), nil
+	}
+	duplicate, err := rp.repo.CreateMessageIdempotent(&messageDB, ctx)
+	if err != nil {
 		return schemas.Message{}, err
 	}
-
-	// Devolver el schema con telephons
-	return messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor), nil
+	if duplicate && messageDB.IdReceptor != uint(id_receptor) {
+		return schemas.Message{}, ErrClientIDConflict
+	}
+	out := messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor)
+	out.Duplicate = duplicate
+	return out, nil
 }
 
 // messageToSchema mapea un Message de BD al schema de la API con los telephons ya resueltos.
@@ -128,26 +205,47 @@ func messageToSchema(msg *models.Message, senderTelephon, receptorTelephon strin
 		ReplyToMessageID: msg.ReplyToMessageID,
 		ReplyToTelephon:  msg.ReplyToTelephon,
 		ReplyToMessage:   msg.ReplyToMessage,
+		ExpiresAt:        msg.ExpiresAt,
+		Kind:             msg.Kind,
+		SystemEvent:      msg.SystemEvent,
+		ClientID:         msg.ClientID,
 	}
 }
 
 // ServiceGetMessages devuelve los mensajes entre dos usuarios (por telephon)
-// excluyendo los eliminados por cada parte.
+// excluyendo los eliminados por cada parte (últimos 200).
 func (rp *ServiceChat) ServiceGetMessages(telephonUser string, telephonContact string, ctx context.Context) ([]schemas.Message, error) {
+	messages, _, err := rp.ServiceGetMessagesPage(telephonUser, telephonContact, 0, 0, ctx)
+	return messages, err
+}
+
+// ServiceGetMessagesPage devuelve una página de la conversación en orden
+// cronológico. before > 0 activa el cursor por id (solo mensajes anteriores).
+// limit <= 0 conserva el comportamiento histórico (últimos 200); un limit
+// explícito se acota a maxChatMessagesPage. hasMore indica si quedan más antiguos.
+func (rp *ServiceChat) ServiceGetMessagesPage(telephonUser string, telephonContact string, before uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
 	id_user, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	id_contact, err := rp.repo.GetIdByTelephon(telephonContact, ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	messagesDB, err := rp.repo.GetMessages(uint(id_user), uint(id_contact), ctx)
+	if limit <= 0 {
+		limit = chatListMessagesPerChat
+	} else if limit > maxChatMessagesPage {
+		limit = maxChatMessagesPage
+	}
+	messagesDB, hasMore, err := rp.repo.GetMessagesPage(uint(id_user), uint(id_contact), before, limit, ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	messagesSchemas := convertMessagesToSchemas(messagesDB, telephonUser, telephonContact, id_user)
-	return messagesSchemas, nil
+	out, err := rp.directMessagesWithReactions(messagesDB, telephonUser, telephonContact, id_user, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return out, hasMore, nil
 }
 
 // convertMessagesToSchemas transforma una lista de modelos Message en schemas,
@@ -253,6 +351,18 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 		return nil, err
 	}
 
+	// Reacciones de todos los chats en una sola consulta (no una por chat).
+	byID, err := fetchReactions(rp.reactions, models.ReactionKindDirect, directIDs(recentMessages), userID, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Temporizadores de todos los chats del usuario en UNA consulta.
+	timers, err := rp.repo.GetChatDisappearingForUser(userID, ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	result := make([]schemas.ChatGroup, 0, len(otherIDs))
 	for _, otherID := range otherIDs {
 		otherUser, ok := users[otherID]
@@ -260,13 +370,16 @@ func (rp *ServiceChat) ServiceGetAllChats(telephonUser string, ctx context.Conte
 			continue
 		}
 		contactName, isContact := addedContacts[otherID]
+		chatMsgs := convertMessagesToSchemas(groupMessages[otherID], telephonUser, otherUser.Telephon, id_user)
+		attachDirectReactions(chatMsgs, byID)
 		result = append(result, schemas.ChatGroup{
 			ContactTelephon:  otherUser.Telephon,
 			ContactUsername:  otherUser.Username,
 			ContactName:      contactName,
 			ContactAvatarUrl: otherUser.AvatarUrl,
 			IsContact:        isContact,
-			Messages:         convertMessagesToSchemas(groupMessages[otherID], telephonUser, otherUser.Telephon, id_user),
+			Messages:         chatMsgs,
+			DisappearSeconds: timers[otherID],
 		})
 	}
 
@@ -381,4 +494,64 @@ func (rp *ServiceChat) ServiceDeleteMessageForMe(telephonUser string, messageID 
 	}
 
 	return messageToSchema(msgDB, senderTelephon, receptorTelephon), nil
+}
+
+const (
+	windowDefaultLimit = 50  // tamaño por defecto de una ventana around/after
+	windowMaxLimit     = 100 // máximo de mensajes por ventana around/after
+)
+
+func clampWindowLimit(limit int) int {
+	if limit <= 0 {
+		return windowDefaultLimit
+	}
+	if limit > windowMaxLimit {
+		return windowMaxLimit
+	}
+	return limit
+}
+
+// ServiceGetMessagesAround devuelve una ventana cronológica centrada en el
+// mensaje around (hasta limit/2 por lado) y si hay más mensajes antes/después.
+// models.ErrMessageNotFound si el mensaje no es visible para el usuario.
+func (rp *ServiceChat) ServiceGetMessagesAround(telephonUser, telephonContact string, around uint, limit int, ctx context.Context) ([]schemas.Message, bool, bool, error) {
+	idUser, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	idContact, err := rp.repo.GetIdByTelephon(telephonContact, ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	msgs, hasOlder, hasNewer, err := rp.repo.GetMessagesAround(uint(idUser), uint(idContact), around, clampWindowLimit(limit), ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	out, err := rp.directMessagesWithReactions(msgs, telephonUser, telephonContact, idUser, ctx)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return out, hasOlder, hasNewer, nil
+}
+
+// ServiceGetMessagesAfter devuelve hasta limit mensajes posteriores a after en
+// orden cronológico y si quedan más.
+func (rp *ServiceChat) ServiceGetMessagesAfter(telephonUser, telephonContact string, after uint, limit int, ctx context.Context) ([]schemas.Message, bool, error) {
+	idUser, err := rp.repo.GetIdByTelephon(telephonUser, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	idContact, err := rp.repo.GetIdByTelephon(telephonContact, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	msgs, hasNewer, err := rp.repo.GetMessagesAfter(uint(idUser), uint(idContact), after, clampWindowLimit(limit), ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	out, err := rp.directMessagesWithReactions(msgs, telephonUser, telephonContact, idUser, ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return out, hasNewer, nil
 }

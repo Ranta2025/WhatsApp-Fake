@@ -20,6 +20,24 @@ type Message struct {
 	ReplyToMessageID *uint   `json:"ReplyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"ReplyToTelephon,omitempty"` // Número de teléfono del autor del mensaje original
 	ReplyToMessage   *string `json:"ReplyToMessage,omitempty"`
+
+	// Agregados de reacciones para el espectador; se omite si no hay ninguna.
+	Reactions []ReactionSummary `json:"Reactions,omitempty"`
+
+	// Mensajes temporales (PascalCase por regla cross-feature). ExpiresAt solo
+	// existe si el chat tenía temporizador al enviar; Kind="system" marca los
+	// mensajes de sistema y SystemEvent el evento (p. ej. disappearing_changed).
+	ExpiresAt   *time.Time `json:"ExpiresAt,omitempty"`
+	Kind        string     `json:"Kind,omitempty"`
+	SystemEvent string     `json:"SystemEvent,omitempty"`
+
+	// ClientID echoes the sender's idempotency key so the client can reconcile
+	// its optimistic copy; receivers may see it too (it is an opaque UUID).
+	ClientID *string `json:"ClientID,omitempty"`
+
+	// Duplicate marks a replayed send that returned the stored message. It is a
+	// transport hint for handlers (skip re-broadcast) and is never serialized.
+	Duplicate bool `json:"-"`
 }
 
 // ChatGroup agrupa todos los mensajes de una conversación con un contacto.
@@ -32,4 +50,5 @@ type ChatGroup struct {
 	ContactAvatarUrl string    `json:"ContactAvatarUrl"` // URL del avatar del otro participante
 	IsContact        bool      `json:"IsContact"`        // true = está en la lista de contactos
 	Messages         []Message `json:"Messages"`
+	DisappearSeconds int       `json:"DisappearSeconds,omitempty"` // temporizador del chat (0 = off)
 }

@@ -1,0 +1,116 @@
+package services
+
+import (
+	"gorm/backend/models"
+	"unicode/utf8"
+
+	"github.com/rivo/uniseg"
+	"golang.org/x/text/unicode/norm"
+)
+
+// ErrInvalidReactionEmoji se re-exporta desde models para el mapeo HTTP/WS.
+var ErrInvalidReactionEmoji = models.ErrInvalidReactionEmoji
+
+// reactionEmojiMaxBytes acota el tamaño de la columna (size:32) y el abuso con
+// secuencias ZWJ/tags largas.
+const reactionEmojiMaxBytes = 32
+
+// NormalizeReactionEmoji valida que s sea UN solo emoji (un único grapheme
+// cluster que empieza por un pictograma, una bandera o un keycap) y lo devuelve
+// normalizado a NFC. Rechaza vacío, letras/dígitos sueltos, texto y más de un
+// emoji.
+func NormalizeReactionEmoji(s string) (string, error) {
+	s = norm.NFC.String(s)
+	if s == "" || len(s) > reactionEmojiMaxBytes || !utf8.ValidString(s) {
+		return "", ErrInvalidReactionEmoji
+	}
+	if uniseg.GraphemeClusterCount(s) != 1 || !isEmojiCluster(s) {
+		return "", ErrInvalidReactionEmoji
+	}
+	return s, nil
+}
+
+func isEmojiCluster(cluster string) bool {
+	runes := []rune(cluster)
+	first := runes[0]
+	switch {
+	case isRegionalIndicator(first):
+		// una bandera son exactamente dos indicadores regionales
+		return len(runes) == 2 && isRegionalIndicator(runes[1])
+	case isKeycapBase(first):
+		// keycap: base + (FE0F)? + 20E3
+		return (len(runes) == 2 && runes[1] == 0x20E3) ||
+			(len(runes) == 3 && runes[1] == 0xFE0F && runes[2] == 0x20E3)
+	default:
+		return isExtendedPictographic(first) && validEmojiTail(runes[1:])
+	}
+}
+
+// validEmojiTail comprueba que, tras el pictograma inicial, solo haya
+// continuaciones de emoji legítimas: VS16, modificadores de tono de piel, keycap,
+// tags (banderas de subdivisión) y ZWJ seguido de otro pictograma.
+func validEmojiTail(tail []rune) bool {
+	for i := 0; i < len(tail); i++ {
+		switch r := tail[i]; {
+		case r == 0xFE0F, r == 0x20E3,
+			r >= 0x1F3FB && r <= 0x1F3FF,
+			r >= 0xE0020 && r <= 0xE007F:
+		case r == 0x200D:
+			i++
+			if i >= len(tail) || !isExtendedPictographic(tail[i]) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isRegionalIndicator(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }
+
+func isKeycapBase(r rune) bool { return (r >= '0' && r <= '9') || r == '#' || r == '*' }
+
+// extPictRanges son los rangos Extended_Pictographic de emoji-data.txt
+// (Unicode 15.1), fusionando los contiguos. La stdlib no expone la propiedad.
+var extPictRanges = [][2]rune{
+	{0x00A9, 0x00A9}, {0x00AE, 0x00AE}, {0x203C, 0x203C}, {0x2049, 0x2049},
+	{0x2122, 0x2122}, {0x2139, 0x2139}, {0x2194, 0x2199}, {0x21A9, 0x21AA},
+	{0x231A, 0x231B}, {0x2328, 0x2328}, {0x2388, 0x2388}, {0x23CF, 0x23CF},
+	{0x23E9, 0x23F3}, {0x23F8, 0x23FA}, {0x24C2, 0x24C2}, {0x25AA, 0x25AB},
+	{0x25B6, 0x25B6}, {0x25C0, 0x25C0}, {0x25FB, 0x25FE}, {0x2600, 0x2605},
+	{0x2607, 0x2612}, {0x2614, 0x2685}, {0x2690, 0x2705}, {0x2708, 0x2712},
+	{0x2714, 0x2714}, {0x2716, 0x2716}, {0x271D, 0x271D}, {0x2721, 0x2721},
+	{0x2728, 0x2728}, {0x2733, 0x2734}, {0x2744, 0x2744}, {0x2747, 0x2747},
+	{0x274C, 0x274C}, {0x274E, 0x274E}, {0x2753, 0x2755}, {0x2757, 0x2757},
+	{0x2763, 0x2767}, {0x2795, 0x2797}, {0x27A1, 0x27A1}, {0x27B0, 0x27B0},
+	{0x27BF, 0x27BF}, {0x2934, 0x2935}, {0x2B05, 0x2B07}, {0x2B1B, 0x2B1C},
+	{0x2B50, 0x2B50}, {0x2B55, 0x2B55}, {0x3030, 0x3030}, {0x303D, 0x303D},
+	{0x3297, 0x3297}, {0x3299, 0x3299},
+	{0x1F000, 0x1F0FF}, {0x1F10D, 0x1F10F}, {0x1F12F, 0x1F12F},
+	{0x1F16C, 0x1F171}, {0x1F17E, 0x1F17F}, {0x1F18E, 0x1F18E},
+	{0x1F191, 0x1F19A}, {0x1F1AD, 0x1F1E5}, {0x1F201, 0x1F20F},
+	{0x1F21A, 0x1F21A}, {0x1F22F, 0x1F22F}, {0x1F232, 0x1F23A},
+	{0x1F23C, 0x1F23F}, {0x1F249, 0x1F3FA}, {0x1F400, 0x1F53D},
+	{0x1F546, 0x1F64F}, {0x1F680, 0x1F6FF}, {0x1F774, 0x1F77F},
+	{0x1F7D5, 0x1F7FF}, {0x1F80C, 0x1F80F}, {0x1F848, 0x1F84F},
+	{0x1F85A, 0x1F85F}, {0x1F888, 0x1F88F}, {0x1F8AE, 0x1F8FF},
+	{0x1F90C, 0x1F93A}, {0x1F93C, 0x1F945}, {0x1F947, 0x1FAFF},
+	{0x1FC00, 0x1FFFD},
+}
+
+func isExtendedPictographic(r rune) bool {
+	lo, hi := 0, len(extPictRanges)-1
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		switch rg := extPictRanges[mid]; {
+		case r < rg[0]:
+			hi = mid - 1
+		case r > rg[1]:
+			lo = mid + 1
+		default:
+			return true
+		}
+	}
+	return false
+}

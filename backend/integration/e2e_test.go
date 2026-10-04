@@ -62,6 +62,23 @@ func (c *e2eClient) do(method, path string, body interface{}) (int, map[string]i
 	return resp.StatusCode, out
 }
 
+type rawResponse struct {
+	status int
+	header http.Header
+	body   []byte
+}
+
+// raw hace una petición GET/DELETE sin cuerpo y devuelve estado, cabeceras y cuerpo tal cual.
+func (c *e2eClient) raw(method, path string) rawResponse {
+	req, err := http.NewRequest(method, c.base+path, nil)
+	require.NoError(c.t, err)
+	resp, err := c.http.Do(req)
+	require.NoError(c.t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return rawResponse{status: resp.StatusCode, header: resp.Header, body: body}
+}
+
 func (c *e2eClient) ws(query string) *websocket.Conn {
 	u, _ := url.Parse(c.base)
 	wsURL := "ws://" + u.Host + "/api/v1/ws" + query
@@ -203,6 +220,14 @@ func TestE2E(t *testing.T) {
 	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "hola grupo"}}))
 	ev = waitFor(t, wsBob, "group_chat")
 	assert.Equal(t, "hola grupo", ev["payload"].(map[string]interface{})["Message"])
+
+	// Media en grupo: ida y vuelta con mediaUrl/mediaType y rechazo de URL peligrosa
+	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "", "mediaUrl": up["url"], "mediaType": "image"}}))
+	ev = waitFor(t, wsBob, "group_chat")
+	assert.Equal(t, up["url"], ev["payload"].(map[string]interface{})["MediaUrl"])
+	assert.Equal(t, "image", ev["payload"].(map[string]interface{})["MediaType"])
+	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "x", "mediaUrl": "javascript:alert(1)", "mediaType": "document"}}))
+	waitFor(t, wsAlice, "error")
 
 	code, groups := cb.do("GET", "/api/v1/group", nil)
 	require.Equal(t, 200, code)

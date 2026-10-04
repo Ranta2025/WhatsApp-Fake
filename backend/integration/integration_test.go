@@ -86,12 +86,68 @@ func TestIntegration(t *testing.T) {
 		assert.Len(t, msgs, 1)
 	})
 
+	t.Run("chat messages cursor pagination", func(t *testing.T) {
+		// Conversación b<->c (independiente del resto de subtests). Todos los
+		// mensajes comparten timestamp para forzar el desempate por id.
+		same := time.Now()
+		var ids []uint
+		for i := 0; i < 7; i++ {
+			from, to := b.ID, c.ID
+			if i%2 == 1 {
+				from, to = c.ID, b.ID
+			}
+			m := &models.Message{IdUser: from, IdReceptor: to, Message: fmt.Sprintf("p%d", i), Status: "enviado", Time: same}
+			require.NoError(t, contactRepo.CreateMessage(m, ctx))
+			ids = append(ids, m.ID)
+		}
+		// El mensaje 3 lo borra solo b (per-user delete flag): b no debe verlo, c sí.
+		_, err := contactRepo.DeleteMessageForMe(ids[3], b.ID, ctx)
+		require.NoError(t, err)
+
+		seen := map[uint]bool{}
+		var before uint
+		pages := 0
+		for {
+			page, hasMore, err := contactRepo.GetMessagesPage(b.ID, c.ID, before, 3, ctx)
+			require.NoError(t, err)
+			pages++
+			for i, m := range page {
+				assert.False(t, seen[m.ID], "mensaje duplicado %d", m.ID)
+				seen[m.ID] = true
+				if i > 0 {
+					assert.Less(t, page[i-1].ID, m.ID, "orden cronológico dentro de la página")
+				}
+			}
+			if !hasMore {
+				break
+			}
+			require.Len(t, page, 3)
+			before = page[0].ID // el más antiguo de la página
+			require.Less(t, pages, 10, "no debe ciclar")
+		}
+		assert.Len(t, seen, 6, "7 mensajes menos el borrado para b")
+		assert.False(t, seen[ids[3]])
+
+		// Frontera exacta y visibilidad del otro lado.
+		page, hasMore, err := contactRepo.GetMessagesPage(b.ID, c.ID, 0, 6, ctx)
+		require.NoError(t, err)
+		assert.Len(t, page, 6)
+		assert.False(t, hasMore)
+		_, hasMore, err = contactRepo.GetMessagesPage(b.ID, c.ID, 0, 5, ctx)
+		require.NoError(t, err)
+		assert.True(t, hasMore)
+		page, _, err = contactRepo.GetMessagesPage(c.ID, b.ID, 0, 10, ctx)
+		require.NoError(t, err)
+		assert.Len(t, page, 7, "el otro participante aún ve el mensaje")
+	})
+
 	t.Run("groups", func(t *testing.T) {
 		g := &models.Group{Name: "grupo", CreatorID: a.ID}
 		require.NoError(t, groupRepo.CreateGroupWithMembers(g, a.ID, []uint{b.ID}, ctx))
 
 		// Añadir un miembro ya existente no debe fallar (ON CONFLICT DO NOTHING)
-		require.NoError(t, groupRepo.AddMembers(g.ID, []models.GroupMember{{UserID: b.ID, Role: "member", AddedByID: a.ID}, {UserID: c.ID, Role: "member", AddedByID: a.ID}}, ctx))
+		_, addErr := groupRepo.AddMembers(g.ID, []models.GroupMember{{UserID: b.ID, Role: "member", AddedByID: a.ID}, {UserID: c.ID, Role: "member", AddedByID: a.ID}}, nil, ctx)
+		require.NoError(t, addErr)
 
 		rows, err := groupRepo.GetUserGroups(b.ID, ctx)
 		require.NoError(t, err)
@@ -102,7 +158,7 @@ func TestIntegration(t *testing.T) {
 		assert.Equal(t, "grupo", rows[0].Name)
 
 		// El admin sale: el miembro más antiguo pasa a ser admin
-		require.NoError(t, groupRepo.LeaveGroup(g.ID, a.ID, ctx))
+		require.NoError(t, groupRepo.LeaveGroup(g.ID, a.ID, nil, ctx))
 		rows, err = groupRepo.GetUserGroups(b.ID, ctx)
 		require.NoError(t, err)
 		assert.Equal(t, "admin", rows[0].UserRole)
@@ -117,6 +173,56 @@ func TestIntegration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, b.Telephon, msgs[0].Sender.Telephon)
 		assert.Empty(t, msgs[0].Sender.Password, "no se deben cargar datos sensibles")
+	})
+
+	t.Run("group messages cursor pagination", func(t *testing.T) {
+		g := &models.Group{Name: "paginado", CreatorID: a.ID}
+		require.NoError(t, groupRepo.CreateGroupWithMembers(g, a.ID, []uint{b.ID}, ctx))
+		// 7 mensajes; los 4 últimos comparten exactamente el mismo timestamp.
+		same := time.Now()
+		var ids []uint
+		for i := 0; i < 7; i++ {
+			ts := same
+			if i < 3 {
+				ts = same.Add(-time.Hour + time.Duration(i)*time.Second)
+			}
+			m := &models.GroupMessage{GroupID: g.ID, SenderID: b.ID, Message: fmt.Sprintf("m%d", i), Time: ts}
+			require.NoError(t, groupRepo.CreateGroupMessage(m, ctx))
+			ids = append(ids, m.ID)
+		}
+
+		seen := map[uint]bool{}
+		var before uint
+		pages := 0
+		for {
+			page, hasMore, err := groupRepo.GetGroupMessagesPage(g.ID, before, 3, 0, ctx)
+			require.NoError(t, err)
+			pages++
+			for _, m := range page {
+				assert.False(t, seen[m.ID], "mensaje duplicado %d", m.ID)
+				seen[m.ID] = true
+			}
+			if !hasMore {
+				break
+			}
+			require.Len(t, page, 3)
+			before = page[len(page)-1].ID
+			require.Less(t, pages, 10, "no debe ciclar")
+		}
+		assert.Equal(t, 3, pages)
+		assert.Len(t, seen, 7, "sin huecos ni duplicados con timestamps iguales")
+		for _, id := range ids {
+			assert.True(t, seen[id])
+		}
+
+		// Frontera exacta: 7 mensajes con limit 7 => hasMore=false; limit 6 => true.
+		page, hasMore, err := groupRepo.GetGroupMessagesPage(g.ID, 0, 7, 0, ctx)
+		require.NoError(t, err)
+		assert.Len(t, page, 7)
+		assert.False(t, hasMore)
+		_, hasMore, err = groupRepo.GetGroupMessagesPage(g.ID, 0, 6, 0, ctx)
+		require.NoError(t, err)
+		assert.True(t, hasMore)
 	})
 
 	t.Run("calls only updatable by participants", func(t *testing.T) {

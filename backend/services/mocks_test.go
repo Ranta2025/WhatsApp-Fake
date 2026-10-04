@@ -181,6 +181,11 @@ func (m *MockChatRepo) GetMessages(id1, id2 uint, ctx context.Context) ([]models
 	return args.Get(0).([]models.Message), args.Error(1)
 }
 
+func (m *MockChatRepo) GetMessagesPage(id1, id2, before uint, limit int, ctx context.Context) ([]models.Message, bool, error) {
+	args := m.Called(id1, id2, before, limit, ctx)
+	return args.Get(0).([]models.Message), args.Bool(1), args.Error(2)
+}
+
 type MockContactRepo struct {
 	mock.Mock
 }

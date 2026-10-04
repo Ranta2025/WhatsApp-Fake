@@ -1,0 +1,281 @@
+import { useEffect, useState, useRef, useCallback, type SyntheticEvent } from 'react';
+import { useDashboard } from '../context/DashboardContext';
+import { resolveChatTarget } from '../lib/chatSelection';
+import type { Toast } from '../context/DashboardContext';
+import type { MediaType } from '../../../types/api';
+
+/**
+ * `Toast` (DashboardContext.tsx) is typed after what `addToast` actually
+ * receives (`{type, message}`) — `telephon`/`senderName`/`icon`/`mediaType`/
+ * `avatarUrl` below are dead fields no `addToast` call site ever provides
+ * (documented in M4's notes), kept optional here rather than widening the
+ * canonical `Toast` type app-wide.
+ */
+interface DisplayToast extends Toast {
+    telephon?: string;
+    senderName?: string;
+    icon?: string;
+    mediaType?: MediaType;
+}
+
+const NOTIF_DURATION = 4000;
+// Máximo tiempo que una notificación se mantiene en cola esperando que el usuario vuelva (30s)
+const MAX_QUEUE_AGE = 30000;
+
+// Paleta Telegram-style para avatares sin foto
+const AVATAR_GRADIENTS = [
+    'from-rose-500 to-pink-600',
+    'from-violet-500 to-purple-600',
+    'from-emerald-500 to-teal-600',
+    'from-amber-500 to-orange-600',
+    'from-blue-500 to-indigo-600',
+    'from-fuchsia-500 to-pink-600',
+    'from-cyan-500 to-teal-600',
+    'from-red-500 to-rose-600',
+];
+
+function hashStr(str: string | undefined) {
+    let h = 0;
+    const s = str || '';
+    for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) - h) + s.charCodeAt(i);
+        h |= 0;
+    }
+    return Math.abs(h);
+}
+
+type NotifPhase = 'enter' | 'visible' | 'exit';
+
+interface InAppNotificationProps {
+    notif: DisplayToast;
+    onDismiss: (id: number) => void;
+    onOpen: (notif: DisplayToast) => void;
+}
+
+// ─── Notificación individual ───────────────────────────────────
+const InAppNotification = ({ notif, onDismiss, onOpen }: InAppNotificationProps) => {
+    const [phase, setPhase] = useState<NotifPhase>('enter');
+    const progressRef = useRef<number | null>(null);
+    // Track elapsed time to pause/resume when visibility changes
+    const elapsedRef = useRef(0);
+    const lastTickRef = useRef(0);
+    const [progress, setProgress] = useState(100);
+    const dismissed = useRef(false);
+
+    const dismiss = useCallback(() => {
+        if (dismissed.current) return;
+        dismissed.current = true;
+        if (progressRef.current) cancelAnimationFrame(progressRef.current);
+        setPhase('exit');
+        setTimeout(() => onDismiss(notif.id), 350);
+    }, [notif.id, onDismiss]);
+
+    useEffect(() => {
+        // Entrada
+        requestAnimationFrame(() => requestAnimationFrame(() => setPhase('visible')));
+
+        const startTimer = () => {
+            lastTickRef.current = Date.now();
+            // Progress bar — solo corre cuando la pestaña es visible
+            const tick = () => {
+                if (document.hidden) {
+                    // Pausar: seguir el loop pero no avanzar el tiempo
+                    progressRef.current = requestAnimationFrame(tick);
+                    return;
+                }
+                const now = Date.now();
+                elapsedRef.current += now - lastTickRef.current;
+                lastTickRef.current = now;
+                const pct = Math.max(0, 100 - (elapsedRef.current / NOTIF_DURATION) * 100);
+                setProgress(pct);
+                if (pct > 0) {
+                    progressRef.current = requestAnimationFrame(tick);
+                } else {
+                    dismiss();
+                }
+            };
+            progressRef.current = requestAnimationFrame(tick);
+        };
+
+        startTimer();
+
+        return () => {
+            if (progressRef.current) cancelAnimationFrame(progressRef.current);
+        };
+    }, [dismiss]);
+
+    const handleClick = () => {
+        if (dismissed.current) return;
+        dismissed.current = true;
+        if (progressRef.current) cancelAnimationFrame(progressRef.current);
+        onOpen(notif);
+    };
+
+    const hasAvatar = notif.icon && notif.icon !== '/vite.svg' && notif.icon !== '/todos.svg';
+    const initial = (notif.senderName || '?').charAt(0).toUpperCase();
+    // Modulo siempre en rango; noUncheckedIndexedAccess no puede saberlo.
+    const gradientClass = AVATAR_GRADIENTS[hashStr(notif.senderName) % AVATAR_GRADIENTS.length]!;
+
+    // Media label
+    const bodyText = (() => {
+        if (notif.mediaType) {
+            switch (notif.mediaType) {
+                case 'audio': return '🎵 Mensaje de voz';
+                case 'image': return '📷 Foto';
+                case 'video': return '🎥 Video';
+                case 'document': return '📄 Documento';
+                default: break;
+            }
+        }
+        return notif.message || 'Nuevo mensaje';
+    })();
+
+    const isVisible = phase === 'visible';
+    const isExit = phase === 'exit';
+
+    return (
+        <div
+            onClick={handleClick}
+            className="pointer-events-auto cursor-pointer group"
+            style={{
+                transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                transform: isVisible
+                    ? 'translateY(0) scale(1)'
+                    : isExit
+                        ? 'translateY(-20px) scale(0.95)'
+                        : 'translateY(-30px) scale(0.9)',
+                opacity: isVisible ? 1 : 0,
+            }}
+        >
+            {/* Card principal */}
+            <div
+                className="relative overflow-hidden rounded-2xl border border-white/[0.06]"
+                style={{
+                    background: 'linear-gradient(145deg, #1e1b4b 0%, #0f172a 50%, #1e1b4b 100%)',
+                    boxShadow: '0 20px 60px -12px rgba(0,0,0,0.6), 0 4px 20px -4px rgba(79,70,229,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+                }}
+            >
+                {/* Glow sutil en hover */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{ background: 'radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(99,102,241,0.06), transparent 40%)' }}
+                />
+
+                <div className="relative flex items-center gap-3.5 p-3.5 pr-3">
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0">
+                        <div className="w-[52px] h-[52px] rounded-[16px] overflow-hidden shadow-lg ring-1 ring-white/10">
+                            {hasAvatar ? (
+                                <img
+                                    src={notif.icon}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={(e: SyntheticEvent<HTMLImageElement>) => {
+                                        e.currentTarget.style.display = 'none';
+                                        const sibling = e.currentTarget.nextElementSibling;
+                                        if (sibling instanceof HTMLElement) sibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : null}
+                            <div
+                                className={`w-full h-full bg-gradient-to-br ${gradientClass} items-center justify-center text-white font-bold text-xl`}
+                                style={{ display: hasAvatar ? 'none' : 'flex' }}
+                            >
+                                {initial}
+                            </div>
+                        </div>
+
+                        {/* Badge app */}
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center shadow-lg ring-2 ring-slate-900">
+                            <span className="text-[9px] font-black text-white leading-none">T</span>
+                        </div>
+                    </div>
+
+                    {/* Contenido */}
+                    <div className="flex-1 min-w-0 py-0.5">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="font-semibold text-[14px] text-white truncate leading-tight">
+                                {notif.senderName}
+                            </span>
+                            <span className="text-[10px] text-indigo-400/60 flex-shrink-0 font-medium uppercase tracking-wider">
+                                Ahora
+                            </span>
+                        </div>
+                        <p className="text-[13px] text-slate-400 truncate leading-snug">
+                            {bodyText}
+                        </p>
+                    </div>
+
+                    {/* Cerrar */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); dismiss(); }}
+                        className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl
+                                   text-white/0 group-hover:text-white/40 hover:!text-white/80 hover:bg-white/[0.06]
+                                   transition-all duration-200"
+                    >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                    </button>
+                </div>
+
+                {/* Barra de progreso */}
+                <div className="h-[2px] w-full bg-white/[0.03]">
+                    <div
+                        className="h-full rounded-full"
+                        style={{
+                            width: `${progress}%`,
+                            background: 'linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7)',
+                            transition: 'none',
+                        }}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Container ─────────────────────────────────────────────────
+const ToastContainer = () => {
+    const { toasts, dismissToast, setSelected, setSidebarOpen, contacts, allChatGroups } = useDashboard();
+
+    // Limpiar toasts viejos que acumularon mientras la app estaba en background (>30s)
+    useEffect(() => {
+        if (toasts.length === 0) return;
+        const now = Date.now();
+        const stale = toasts.filter(t => t.createdAt && (now - t.createdAt) > MAX_QUEUE_AGE);
+        stale.forEach(t => dismissToast(t.id));
+    }, [toasts, dismissToast]);
+
+    // Solo mostrar máximo 3 notificaciones a la vez
+    const visibleToasts = toasts.slice(-3) as DisplayToast[];
+
+    if (visibleToasts.length === 0) return null;
+
+    // R3 (M6): antes caía directo a `allChatGroups[notif.telephon]` — esa
+    // entrada tiene `ContactTelephon`, no `Number`, rompiendo silenciosamente
+    // toda comparación posterior con `selected.Number` (mismo bug que
+    // `resolveChatTarget`, M4, arregló para el mismo patrón). M6b: se pasa
+    // además `notif.senderName` para que el fallback final restaure el
+    // `ContactName: notif.senderName` del JS original (M6 lo había perdido).
+    const handleOpen = (notif: DisplayToast) => {
+        const target = resolveChatTarget(notif.telephon || '', contacts, allChatGroups, notif.senderName);
+        setSelected(target);
+        setSidebarOpen(false);
+        dismissToast(notif.id);
+    };
+
+    return (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-toast flex flex-col gap-2.5 pointer-events-none w-[400px] max-w-[calc(100vw-2rem)]">
+            {visibleToasts.map(notif => (
+                <InAppNotification
+                    key={notif.id}
+                    notif={notif}
+                    onDismiss={dismissToast}
+                    onOpen={handleOpen}
+                />
+            ))}
+        </div>
+    );
+};
+
+export default ToastContainer;

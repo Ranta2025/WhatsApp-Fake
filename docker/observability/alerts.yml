@@ -1,0 +1,24 @@
+# Reglas de ejemplo (no hay Alertmanager en el stack: se ven en la UI de Prometheus).
+groups:
+  - name: backend
+    rules:
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "El backend no responde al scrape"
+      - alert: DependencyDown
+        expr: dependency_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Dependencia {{ $labels.dependency }} caída"
+      - alert: High5xxRatio
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_requests_total[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Más del 5% de las respuestas son 5xx"

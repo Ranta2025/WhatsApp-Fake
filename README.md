@@ -29,6 +29,13 @@ Una plataforma de mensajería instantánea completa construida con **Go (Gin)** 
 - ⌨️ **Indicador de escritura** — En chats 1:1 y grupales
 - ↪️ **Reenviar mensajes** — A otros contactos
 
+### PWA y modo offline
+- 📲 **Instalable** — Manifest con iconos PNG (192/512/maskable) y `apple-touch-icon`; botón "Instalar app" en el perfil (Chromium/Edge/Android) e instrucciones para iOS (regenerar iconos: `cd frontend && npm run icons`)
+- 🧱 **App shell offline** — Service worker (`vite-plugin-pwa`, modo `injectManifest`, fuente en `frontend/src/sw.ts`) que precachea `index.html`, `/assets/*` e iconos; tras una visita, recargar sin red muestra la app y el aviso "Sin conexión"
+- 🚫 **Sin caché de datos** — `/api/*` (incluido el WebSocket), `/storage/*`, `/healthz` y `/metrics` siempre van a la red
+- 🔄 **Actualizaciones con aviso** — Una nueva versión muestra "Nueva versión disponible · Actualizar"; nunca reemplaza el worker bajo una pestaña abierta sin confirmación
+- 📤 **Envío offline de texto** — Los mensajes de texto (1:1 y grupo) escritos sin conexión quedan en una cola IndexedDB con reloj de pendiente, sobreviven a la recarga y se envían en orden al reconectar. Cada envío lleva un `clientID` (UUID) y el backend es idempotente por (remitente, `clientID`): un reenvío no duplica ni se vuelve a entregar. Los adjuntos no se encolan
+
 ### Videollamadas
 - 📹 **Llamadas de voz y vídeo** — Integrado con **ZegoCloud**, tokens seguros por sala
 - 📋 **Historial de llamadas** — Registro con duración, tipo (audio/video) y estado (contestada/perdida/rechazada/no disponible)
@@ -47,7 +54,9 @@ Una plataforma de mensajería instantánea completa construida con **Go (Gin)** 
 
 ### Grupos
 - 🏗️ **Crear grupos** — Con nombre, descripción y miembros iniciales
-- 👑 **Roles** — Admin y miembro, el creador es admin por defecto
+- 👑 **Roles** — Admin y miembro, el creador es admin por defecto; los admins designan/descartan admins y eliminan participantes
+- ⚙️ **Permisos estilo WhatsApp** — "Enviar mensajes", "Editar info del grupo" y "Agregar otros participantes", cada uno todos / solo admins, aplicados en el servidor (REST y WS); ver [Administración de grupos](#administración-de-grupos)
+- 📜 **Mensajes de sistema** — Altas, bajas, cambios de rol, de configuración y de nombre/descripción quedan persistidos en el historial
 - 🖼️ **Avatar de grupo** — Imagen personalizada almacenada en MinIO
 - 💬 **Mensajería grupal** — Enviar, editar y eliminar mensajes con broadcast a todos los miembros
 - 📄 **Paginación** — Mensajes de grupo paginados
@@ -242,9 +251,13 @@ peticiones por IP.
 | `POST` | `/api/v1/group` | Crear grupo |
 | `GET` | `/api/v1/group` | Obtener grupos del usuario |
 | `GET` | `/api/v1/group/:groupID` | Obtener detalle del grupo |
-| `POST` | `/api/v1/group/:groupID/members` | Agregar miembros |
+| `POST` | `/api/v1/group/:groupID/members` | Agregar miembros (según "Agregar otros participantes") |
+| `PUT` | `/api/v1/group/:groupID/members/:telephon/role` | Designar/descartar admin, body `{"role":"admin"\|"member"}` (solo admins) |
+| `DELETE` | `/api/v1/group/:groupID/members/:telephon` | Eliminar a un participante (solo admins) |
 | `DELETE` | `/api/v1/group/:groupID/member` | Salir del grupo |
-| `PATCH` | `/api/v1/group/:groupID/avatar` | Actualizar avatar del grupo |
+| `PATCH` | `/api/v1/group/:groupID/settings` | Configuración de permisos (solo admins) |
+| `PATCH` | `/api/v1/group/:groupID` | Cambiar nombre/descripción (según "Editar info del grupo") |
+| `PATCH` | `/api/v1/group/:groupID/avatar` | Actualizar avatar del grupo (según "Editar info del grupo") |
 | `POST` | `/api/v1/group/:groupID/message` | Enviar mensaje al grupo |
 | `GET` | `/api/v1/group/:groupID/message` | Obtener mensajes del grupo (paginados) |
 | `PUT` | `/api/v1/group/:groupID/message` | Editar mensaje del grupo |
@@ -279,7 +292,7 @@ peticiones por IP.
 | Tipo | Payload | Descripción |
 |------|---------|-------------|
 | `ping` | — | Keepalive |
-| `chat` | `MessageGet` | Enviar mensaje 1:1 |
+| `chat` | `MessageGet` | Enviar mensaje 1:1 (`clientID` opcional para idempotencia) |
 | `read` | `{from}` | Marcar mensajes de `from` como vistos |
 | `typing` | `{to}` | Indicador de escritura |
 | `edit_message` | `{messageId, receptor, message}` | Editar mensaje |
@@ -288,7 +301,7 @@ peticiones por IP.
 | `call_accept` | `{to, roomId}` | Aceptar llamada |
 | `call_reject` | `{to, roomId}` | Rechazar llamada |
 | `call_end` | `{to, roomId}` | Terminar llamada |
-| `group_chat` | `GroupMessageSend` | Enviar mensaje grupal |
+| `group_chat` | `GroupMessageSend` | Enviar mensaje grupal (`clientID` opcional para idempotencia) |
 | `group_typing` | `{groupID}` | Typing en grupo |
 | `group_edit_message` | `{groupID, messageID, message}` | Editar mensaje grupal |
 | `group_delete_message` | `{groupID, messageID}` | Eliminar mensaje grupal |
@@ -321,7 +334,24 @@ peticiones por IP.
 | `group_typing` | `{groupID, from}` | Typing en grupo |
 | `group_edit_message` | `GroupMessageResponse` | Mensaje grupal editado |
 | `group_delete_message` | `{groupID, messageID}` | Mensaje grupal eliminado |
+| `group_member_added` | `{groupID, addedByUsername, addedMembers, newMemberCount, systemMessage}` | Participantes añadidos |
+| `group_member_left` | `{groupID, telephon, username, systemMessage}` | Un participante salió |
+| `group_member_role` | `{groupID, telephon, role, systemMessage}` | Admin designado/descartado |
+| `group_member_removed` | `{groupID, telephon, username, newMemberCount, systemMessage}` | Participante eliminado (también lo recibe el eliminado) |
+| `group_settings` | `{groupID, onlyAdminsCanSend, onlyAdminsCanEditInfo, onlyAdminsCanAddMembers, systemMessage?}` | Configuración de permisos cambiada |
+| `group_info` | `{groupID, name, description, systemMessage?}` | Nombre/descripción cambiados |
 | `error` | `{error}` | Mensaje de error |
+
+### Administración de grupos
+
+Modelo estilo WhatsApp, aplicado en el servidor en cada ruta (REST y WebSocket); ocultar controles en la UI es solo comodidad.
+
+- **Roles:** `admin` y `member`. El creador nace admin. Cualquier admin puede designar o descartar a otro admin (incluido el creador; no hay dueño protegido) y eliminar participantes. Nadie puede descartarse ni eliminarse a sí mismo por estas rutas (para salir está `DELETE .../member`); si el último admin sale, se promueve al miembro más antiguo.
+- **Configuración** (`PATCH /api/v1/group/:groupID/settings`, al menos un campo): `onlyAdminsCanSend` ("Enviar mensajes"), `onlyAdminsCanEditInfo` ("Editar info del grupo": nombre, descripción y avatar) y `onlyAdminsCanAddMembers` ("Agregar otros participantes"). Por defecto todo abierto (`false`), también en los grupos existentes; `POST /api/v1/group` acepta los tres valores al crear. Repetir los valores vigentes no escribe ni genera mensaje de sistema.
+- **Solo admins envían:** un miembro restringido no puede enviar (REST ni WS `group_chat`), editar mensajes ni emitir `group_typing`; sí puede borrar sus propios mensajes. Los admins no se ven afectados.
+- **Errores:** permiso denegado → `403` en REST y frame `error` en WS sin efectos; objetivo que no es miembro → `404`; transición inválida (rol ya asignado, auto-descarte o auto-eliminación) → `400`.
+- **Participante eliminado:** sale de la sala WS, recibe `group_member_removed`, pierde acceso a detalle, historial y búsqueda, y si se lo vuelve a añadir empieza con una línea base de acuses nueva.
+- **Mensajes de sistema:** cada alta, baja, salida, cambio de rol, de configuración y de nombre/descripción se persiste (el cambio de avatar emite `group_avatar_update` sin mensaje de sistema) en el historial como un `GroupMessageResponse` con `Kind: "system"`, `SystemEvent` (`member_added`, `member_removed`, `member_left`, `admin_granted`, `admin_revoked`, `settings_changed`, `info_changed`) y `SystemTargets` (teléfonos afectados); el texto se renderiza por cliente. Viajan en el campo `systemMessage` de los eventos y quedan fuera de búsqueda, Info/acuses, respuestas, ediciones y media.
 
 ---
 
@@ -345,6 +375,30 @@ go test -v ./backend/services/...
 
 Ver: [docs/TESTS_INSTRUCTIONS.md](docs/TESTS_INSTRUCTIONS.md)
 
+### Tests e2e (navegador y API) e integración continua
+
+Con el stack levantado (`make up`, usuarios demo incluidos):
+
+```bash
+# e2e de API/WebSocket en Go (-tags e2e)
+make test-integration
+# si el Postgres del stack está publicado en otro puerto (POSTGRES_PUBLIC_PORT), p. ej. 55432:
+POSTGRES_PUBLIC_PORT=55432 make test-integration
+
+# e2e de navegador con Playwright (login, chat, grupo con media, administración de grupos, estados, paginación, búsqueda, PWA y envío offline)
+cd frontend && npm ci
+npx playwright install chromium   # solo la primera vez
+npm run test:e2e                  # o, desde la raíz: make e2e
+```
+
+- Base URL por defecto `http://localhost`; se cambia con `E2E_BASE_URL`.
+- El global setup inicia sesión una vez con `ana_demo`, `luis_demo` y `marta_demo` y guarda el estado en `frontend/e2e/.auth/` (ignorado por git).
+- Los specs usan texto único y no asumen conteos absolutos: pueden repetirse sobre una BD con datos previos.
+- Informe HTML en `frontend/playwright-report/` (`npx playwright show-report`).
+- No ejecutes `go test -tags integration` contra este stack: hace `TRUNCATE` de las tablas.
+
+GitHub Actions (`.github/workflows/ci.yml`) ejecuta el job `unit` (`go test ./...` y lint, typecheck, test y build del frontend) y, si pasa, el job `e2e` (levanta el stack con Docker Compose, `make test-integration` y Playwright; sube siempre el informe de Playwright y, si falla o se cancela, los logs de Docker Compose).
+
 ---
 
 ## 🌐 Variables de Entorno
@@ -362,6 +416,7 @@ imprescindibles son `SECRETKEY` (≥ 32 caracteres), la base de datos (`DATABASE
 | Documento | Descripción |
 |-----------|-------------|
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Despliegue gratuito (Render + Vercel) |
+| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Métricas Prometheus, request id, Grafana (perfil `observability`) |
 | [docs/WEBSOCKET_GUIDE.md](docs/WEBSOCKET_GUIDE.md) | Protocolo WebSocket detallado |
 | [docs/BUG_REPORT_SYSTEM.md](docs/BUG_REPORT_SYSTEM.md) | Sistema de reportes a GitHub |
 | [scripts/setup-cloudflare.ps1](scripts/setup-cloudflare.ps1) | Obtener URL pública con Cloudflare (Windows) |
