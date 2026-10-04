@@ -42,3 +42,12 @@ type PushUnsubscribeInput struct {
 type PushPreviewInput struct {
 	Preview *bool `json:"preview"`
 }
+
+// PushTarget es una suscripción junto con el teléfono de su dueño y su
+// preferencia de preview: lo que necesita el despacho de notificaciones para
+// cada destinatario, leído en una sola consulta.
+type PushTarget struct {
+	PushSubscription    `gorm:"embedded"`
+	Telephon            string
+	PushPreviewDisabled bool
+}

@@ -25,8 +25,30 @@ type GroupHubNotifier interface {
 // HandlerGroup gestiona los endpoints REST del dominio de grupos.
 type HandlerGroup struct {
 	service  services.GroupServicer
-	notifier GroupHubNotifier // puede ser nil si el Hub no está disponible
-	metrics  *metrics.Metrics // puede ser nil: no se contabiliza nada
+	notifier GroupHubNotifier      // puede ser nil si el Hub no está disponible
+	metrics  *metrics.Metrics      // puede ser nil: no se contabiliza nada
+	push     services.PushNotifier // nil = sin Web Push (SetPushNotifier)
+}
+
+// presenceChecker lo implementa el Hub: indica si un usuario está conectado.
+type presenceChecker interface {
+	IsOnline(telephon string) bool
+}
+
+// SetPushNotifier inyecta el notificador Web Push del envío REST a grupos.
+func (h *HandlerGroup) SetPushNotifier(n services.PushNotifier) { h.push = n }
+
+// notifyGroupPush dispara Web Push a los miembros desconectados. La presencia
+// sale del notificador del Hub; sin él se tratan todos como desconectados.
+func (h *HandlerGroup) notifyGroupPush(groupID uint, sender string, msg *schemas.GroupMessageResponse) {
+	if h.push == nil || msg == nil {
+		return
+	}
+	isOnline := func(string) bool { return false }
+	if p, ok := h.notifier.(presenceChecker); ok {
+		isOnline = p.IsOnline
+	}
+	h.push.NotifyGroup(groupID, sender, *msg, isOnline)
 }
 
 // InitHandlerGroup crea el handler de grupos con su servicio, el notificador del
@@ -288,6 +310,7 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 				h.notifier.SendToGroup(msgData.GroupID, telephon.(string), payload)
 			}
 		}
+		h.notifyGroupPush(msgData.GroupID, telephon.(string), msg)
 		ctx.JSON(http.StatusCreated, gin.H{"message": msg})
 	}
 }

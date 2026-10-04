@@ -51,8 +51,13 @@ func (r *recordingGroupNotifier) SendToGroup(uint, string, []byte) { r.groupSend
 // exercised end to end.
 func runIdemGroupSend(t *testing.T, svc services.GroupServicer, n GroupHubNotifier, body string) *httptest.ResponseRecorder {
 	t.Helper()
+	return runGroupSendWith(t, InitHandlerGroup(svc, n, nil), body)
+}
+
+// runGroupSendWith envía body por POST /group/7/message como +1 con el handler dado.
+func runGroupSendWith(t *testing.T, h *HandlerGroup, body string) *httptest.ResponseRecorder {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
-	h := InitHandlerGroup(svc, n, nil)
 	r := gin.New()
 	r.POST("/group/:groupID/message", func(c *gin.Context) {
 		c.Set("telephon", "+1")

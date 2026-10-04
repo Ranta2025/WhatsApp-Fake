@@ -228,6 +228,12 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	pushCfg := config.LoadPushConfig(os.Getenv)
 	log.Println(pushStartupMessage(pushCfg))
 	servicePush := services.InitServicePush(pushCfg, repoPush)
+	// Web Push a destinatarios desconectados: lo usan el WS (1:1 y grupo) y
+	// el envío REST a grupos. Asíncrono (pool acotado), nunca bloquea.
+	pushNotifier := buildPushNotifier(pushCfg, repoPush, repoContact, repoGroup)
+	hub.SetPushNotifier(pushNotifier)
+	handlerGroup := handlers.InitHandlerGroup(serviceGroup, hub, m)
+	handlerGroup.SetPushNotifier(pushNotifier)
 
 	cleanupCtx, cancelCleanup := context.WithCancel(context.Background())
 	go statusCleanupLoop(cleanupCtx, serviceStatus, statusCleanupInterval)
@@ -246,7 +252,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 		HandlerChat:      handlers.InitHandlerChat(serviceChat, hub),
 		HandlerCall:      handlers.InitHandlerCall(serviceCall),
 		HandlerMedia:     handlers.InitHandlerMedia(serviceMedia),
-		HandlerGroup:     handlers.InitHandlerGroup(serviceGroup, hub, m),
+		HandlerGroup:     handlerGroup,
 		HandlerStatus:    handlers.InitHandlerStatus(serviceStatus, hub),
 		HandlerSearch:    handlers.InitHandlerSearch(serviceSearch),
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),

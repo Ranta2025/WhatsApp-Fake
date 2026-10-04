@@ -28,6 +28,10 @@ type Hub struct {
 	// reactions atiende el evento WS `react` y los endpoints REST de reacciones;
 	// se inyecta tras construir el hub (SetReactionService).
 	reactions services.ReactionServicer
+
+	// push dispara las notificaciones Web Push a destinatarios desconectados;
+	// se inyecta tras construir el hub (SetPushNotifier). nil = no-op.
+	push services.PushNotifier
 }
 
 // SetReactionService inyecta el servicio de reacciones usado por HandleReaction
@@ -36,6 +40,18 @@ func (h *Hub) SetReactionService(s services.ReactionServicer) { h.reactions = s 
 
 // Reactions devuelve el servicio de reacciones inyectado (nil si no hay).
 func (h *Hub) Reactions() services.ReactionServicer { return h.reactions }
+
+// SetPushNotifier inyecta el notificador Web Push usado por los handlers de
+// mensajes (1:1 y grupo). Debe llamarse antes de aceptar conexiones.
+func (h *Hub) SetPushNotifier(n services.PushNotifier) { h.push = n }
+
+// PushNotifier devuelve el notificador inyectado o un no-op si no hay.
+func (h *Hub) PushNotifier() services.PushNotifier {
+	if h.push == nil {
+		return services.NoopPushNotifier{}
+	}
+	return h.push
+}
 
 // NewHub crea e inicializa un Hub de WebSocket con el repositorio de datos y el
 // conjunto de métricas (m puede ser nil: no se contabiliza nada).

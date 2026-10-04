@@ -67,7 +67,8 @@ func (mh *MessageHandler) HandleChatMessage() {
 
 	// El estado inicial depende de si el receptor está conectado
 	status := "enviado"
-	if mh.Hub.IsOnline(msgGet.Receptor) {
+	receptorOnline := mh.Hub.IsOnline(msgGet.Receptor)
+	if receptorOnline {
 		status = "entregado"
 	}
 
@@ -103,6 +104,11 @@ func (mh *MessageHandler) HandleChatMessage() {
 	mh.reply(responseBytes)
 	if messageSaved.Receptor != mh.Client.Telephon {
 		mh.Hub.SendTo(messageSaved.Receptor, responseBytes)
+	}
+	// Web Push solo si el receptor no estaba conectado (asíncrono: no bloquea
+	// el bucle de lectura del WS).
+	if !receptorOnline && messageSaved.Receptor != mh.Client.Telephon {
+		mh.Hub.PushNotifier().NotifyDirect(messageSaved.Receptor, mh.Client.Telephon, messageSaved)
 	}
 }
 
@@ -349,6 +355,8 @@ func (mh *MessageHandler) HandleGroupChatMessage() {
 	}
 	mh.Hub.messageSent(metrics.KindGroup)
 	mh.Hub.SendToGroup(msgSend.GroupID, mh.Client.Telephon, responseBytes)
+	// Web Push a los miembros desconectados (el notificador excluye al remitente).
+	mh.Hub.PushNotifier().NotifyGroup(msgSend.GroupID, mh.Client.Telephon, *savedMsg, mh.Hub.IsOnline)
 }
 
 // HandleGroupTyping notifica a los miembros conectados del grupo que alguien está escribiendo.

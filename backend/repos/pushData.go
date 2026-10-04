@@ -59,6 +59,26 @@ func (r *RepoPush) ListSubscriptionsByUser(userID uint, ctx context.Context) ([]
 	return subs, err
 }
 
+// ListPushTargetsByTelephons devuelve las suscripciones de los usuarios
+// (activos) con esos teléfonos, cada una con el teléfono del dueño y su
+// preferencia de preview. Sin teléfonos no consulta.
+func (r *RepoPush) ListPushTargetsByTelephons(telephons []string, ctx context.Context) ([]models.PushTarget, error) {
+	if len(telephons) == 0 {
+		return nil, nil
+	}
+	c, cancel := context.WithTimeout(ctx, pushTimeout)
+	defer cancel()
+	var targets []models.PushTarget
+	err := r.data.WithContext(c).
+		Table("push_subscriptions").
+		Select("push_subscriptions.*, u.telephon, u.push_preview_disabled").
+		Joins("JOIN user_data_bases u ON u.id = push_subscriptions.user_id AND u.deleted_at IS NULL").
+		Where("u.telephon IN ?", telephons).
+		Order("push_subscriptions.id").
+		Find(&targets).Error
+	return targets, err
+}
+
 // CountSubscriptionsByUser cuenta las suscripciones del usuario.
 func (r *RepoPush) CountSubscriptionsByUser(userID uint, ctx context.Context) (int64, error) {
 	c, cancel := context.WithTimeout(ctx, pushTimeout)

@@ -107,3 +107,26 @@ func TestPushRepoPreviewDisabledGetSet(t *testing.T) {
 	assert.True(t, strings.HasPrefix(s, `UPDATE "user_data_bases" SET "push_preview_disabled"=true`), s)
 	assert.Contains(t, s, "id = 2")
 }
+
+func TestPushRepoListTargetsByTelephonsJoinsActiveUsers(t *testing.T) {
+	db, rec := dryRunDB(t)
+	r := InitRepoPush(db, nil)
+	_, err := r.ListPushTargetsByTelephons([]string{"+1", "+2"}, context.Background())
+	require.NoError(t, err)
+	s := pushStmt(t, rec)
+	assert.Contains(t, s, `push_subscriptions.*`)
+	assert.Contains(t, s, `u.telephon`)
+	assert.Contains(t, s, `u.push_preview_disabled`)
+	assert.Contains(t, s, `JOIN user_data_bases u ON u.id = push_subscriptions.user_id AND u.deleted_at IS NULL`)
+	assert.Contains(t, s, `u.telephon IN ('+1','+2')`)
+	assert.Contains(t, s, "ORDER BY push_subscriptions.id")
+}
+
+func TestPushRepoListTargetsByTelephonsEmptySkipsQuery(t *testing.T) {
+	db, rec := dryRunDB(t)
+	r := InitRepoPush(db, nil)
+	targets, err := r.ListPushTargetsByTelephons(nil, context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, targets)
+	assert.Empty(t, rec.all())
+}
