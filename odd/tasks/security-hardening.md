@@ -41,7 +41,7 @@ Authorized 2026-10-04 (user: "if it is a necessary implementation that improves 
 |------|-------|--------|-----|
 | SH1 | delegated (opus: auth/concurrency) | 489a40a | e82d270..489a40a high/high_risk: granted -> 4-lens approved, acknowledged (review-242d5c81b3ec6a58; WARNINGs: GETDEL needs Redis >= 6.2 -> stack runs redis 7.4; Redis error maps to "expired" as before). Boundary -> 489a40a |
 | SH2 | delegated (writer: nginx + Dockerfile + e2e) | b15fbb5 + follow-up fix | 489a40a..b15fbb5 high/high_risk: granted -> approved, acknowledged (review-6a06b3f4e595d988; WARNING: `/storage/` headers unproved -> parent check found a duplicated `nosniff` (MinIO + snippet); fixed with `proxy_hide_header X-Content-Type-Options` and `/storage/` added to the e2e, RED -> GREEN). Boundary -> b15fbb5 |
-| SH3 | delegated (writer: handler/WS sweep + register) | (this commit) | pending |
+| SH3 | delegated (writer: handler/WS sweep + register) | ef1925f | b15fbb5..ef1925f (incl. 019f5e2) high/high_risk: granted -> 4-lens approved, acknowledged (review-fab4ad5957467d31). Boundary -> ef1925f |
 
 Last reviewed boundary at start: branch point `e82d270`.
 
@@ -54,5 +54,16 @@ SH3 evidence: `utils.IsInternalError` (pgconn PgError/ConnectError, net.Error, c
 Known limit: text-only (non-wrapped) repo errors on 4xx paths still pass through (they are hand-written messages).
 Incident: the branch had been switched back to `main` right after creation, so SH1/SH2 commits landed on local `main` (never pushed); recovered by pointing `feat/security-hardening` at them and resetting local `main` to `origin/main` (`e82d270`).
 
+## Close (2026-10-04)
+SH1-SH3 done on `feat/security-hardening` (`489a40a`, `b15fbb5`, `019f5e2`, `ef1925f`, close commit), every slice reviewed and acknowledged. Not pushed/merged (user decision).
+
+## Follow-ups (not blocking)
+- WS chat send failures duplicate the sentinel list between HTTP and WS (`backend/websocket/message_handlers.go:666-680`); consolidate.
+- `context.Canceled` (client went away) is classified as internal and logged as an error (`backend/utils/internalError.go:30-33`): log noise, consider debug level.
+- Group receipts default branch (`backend/handlers/handlerGroup.go:415-416`) not swept.
+- Hand-written (non-wrapped) repo error strings on 4xx paths still reach clients by design.
+- Full CSP (`script-src`/`connect-src`) and Permissions-Policy, HSTS at the Cloudflare edge.
+- Optional: 409 for duplicate contacts; group calls (product feature, absent from main).
+
 ## Next step
-Close + review last slice.
+Feature complete. Next: `web-push`.

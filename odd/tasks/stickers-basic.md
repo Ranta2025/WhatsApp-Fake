@@ -1,0 +1,98 @@
+# Feature: stickers-basic
+
+## Objective
+Let users send stickers from a fixed, built-in sticker pack in 1:1 and group chats. A sticker is a normal media message with `MediaType: 'sticker'` whose URL points to a static asset shipped with the frontend. It renders without a bubble background at a fixed size, with alt text.
+
+## Problem / Why
+The data model already accepts stickers, but no part of the UI can send or render one:
+- Backend accepts `sticker` as a media type: `backend/utils/validationMedia.go:12-19` (`allowedMediaTypes`), DB CHECK constraints `backend/database/postgres.go:214-222` and `:296`, `backend/models/message.go:34`, `backend/models/json.go:23`, `backend/schemas/schemaMessage.go:17`. Reactions label it "Sticker" (`backend/services/serviceReaction.go:252-259`, test `serviceReaction_test.go:374`).
+- Frontend: `MediaType` includes `'sticker'` (`frontend/src/types/api.ts:19`), sidebar preview label `'✨ Sticker'` (`frontend/src/utils/format.ts:62-68`, `previewMessage`).
+- **No sticker picker exists.** The composers (`frontend/src/features/dashboard/components/MessageInput.tsx`, 147 lines; `GroupMessageInput.tsx`, 243 lines) only have an attach button (`MediaUploadMenu`, `MessageInput.tsx:66-86`, `GroupMessageInput.tsx:167-169`), a textarea, and a send/voice button. **There is no emoji picker in the composer.** `emoji-picker-element` is only used for reactions (`components/reactions/FullEmojiPicker.tsx`, lazy loader `reactions/emojiPickerLoader.ts`, mounted at `MessageList.tsx:370` and `GroupChatWindow.tsx:371`).
+- **No sticker rendering.** `frontend/src/components/MediaContent.tsx:18-59` handles `image|video|audio|document` and returns `null` for `sticker` (the `default` branch). A sticker message today renders as an empty bubble.
+- **Backend URL rule blocks static assets.** `validateMessageContent` (`backend/services/validation.go:31-46`, used by 1:1 `serviceChat.go:109` and group `serviceGroup.go:343`) requires `utils.IsSafeMediaURL(m.MediaUrl)` (`backend/utils/validationMedia.go:31-43`), which accepts only `/storage/...` paths or absolute `http(s)` URLs. A relative static path like `/stickers/basic/hola.webp` is rejected with "URL del archivo adjunto no válida". `IsSafeMediaURL` is also used for contact wallpapers (`servicesContact.go:313`), group avatars (`serviceGroup.go:659`) and statuses (`serviceStatus.go:135`). Those uses must not start accepting `/stickers/`.
+
+### How media is sent today (reference for the implementation)
+- 1:1: `useMessaging.handleSend(text, mediaType)` (`frontend/src/features/dashboard/hooks/useMessaging.ts:77-112`). Text goes through the outbox (`sendText`). Media goes through an **online-only** path: if `!isConnected` it shows the toast "No hay conexión con el servidor" and returns (`:96-100`), otherwise it calls `sendMessage(selected.Number, text, replyingTo, mediaType)`. `handleMediaUploadSuccess(url, type)` calls `handleSend(url, type)` (`:213-215`).
+- Group: `useGroupMessaging.handleSend` (`frontend/src/features/dashboard/hooks/useGroupMessaging.ts:72-102`), with the same split: text goes to the outbox and media is online-only (`:90`). It calls `sendGroupMessage(groupID, text, replyingTo, mediaType)`. `handleMediaUploadSuccess` is at `:186`.
+- WS client: `wsManager.sendMessage` (`frontend/src/api/websocket.ts:360-373`) and `sendGroupMessage` (`:418-431`) set `mediaType`, and set `mediaUrl = message`, so for media the message text is the URL.
+- Uploads (`MediaUploadMenu` / `useMessaging.handleFileUpload`, `useMessaging.ts:229-251`) POST to `/api/v1/upload` (`backend/routers/api/api.go:106` -> `handlers/handlerMedia.go:24-60` -> `services/serviceMedia.go:96-171`). This returns `/storage/<bucket>/<folder>/<yyyy-mm>/<xid><ext>`. Stickers-basic does **not** upload anything.
+- Forward (1:1 only): `executeForward` (`useMessaging.ts:189-210`) re-sends `MediaUrl` with the original `MediaType`, so it works for stickers unchanged. There is no group forward.
+- Bubbles: 1:1 bubble wrapper `MessageList.tsx:307-312` (`px-3.5 py-2 rounded-2xl shadow-md`, `bg-indigo-700` / `bg-slate-800`), then `<MediaContent>` (`:323`) and text hidden by `isMediaUrl` (`:326`, `frontend/src/lib/mediaMessage.ts:41-54`). Group bubble `GroupChatWindow.tsx:92-109` (`GroupMessageBubble`, `:71`). Its text is hidden when `msg.Message === msg.MediaUrl` (`:107`).
+- Edit is offered for every own message, media included (`MessageList.tsx:289-293`, `GroupChatWindow.tsx:196-200`).
+
+### Storage / PWA facts
+- nginx: `/storage/` is proxied to MinIO (`docker/nginx.conf:69-79`). Any other path falls into `location /` with `try_files $uri $uri/ /index.html` and `Cache-Control: no-cache` (`:104-108`). A missing `/stickers/x.webp` therefore returns **index.html with 200**, not 404.
+- Service worker: `vite.config.ts:18-25` `injectManifest.globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}']`. `.webp` is **not** precached today (`.png` would be). `frontend/src/sw/routes.ts:3` `NAVIGATION_DENYLIST` keeps `/api/`, `/storage/`, `/healthz`, `/metrics` out of the navigation fallback. `/storage/*` stays uncached (asserted by `frontend/e2e/pwa.e2e.ts`).
+- Disappearing-message media GC: `RepoExpiry.ExpireBatch` (`backend/repos/expiryData.go:210-230`) enqueues only keys for which `ServiceMedia.ObjectKeyFromURL` (`backend/services/serviceMedia.go:183-197`) returns ok. That function only matches `/storage/<bucket>/` or `MEDIA_PUBLIC_BASE_URL`, so built-in sticker URLs are never garbage-collected. This is correct and needs no change.
+
+## Scope / Authorized
+Approved roadmap item, plan only (not yet authorized to implement).
+Scope: built-in pack assets plus a generator script, a typed manifest, a minimal backend URL rule for `sticker`, nginx `/stickers/` location, SW precache of the pack, sticker panel in both composers, sticker rendering, reply/forward/reaction/disappearing compatibility, tests.
+Out of scope (see `stickers-full`): custom stickers, uploads, favorites/recents, animated stickers, multiple packs, search, offline queueing of stickers.
+
+## Dependencies / ordering
+- Roadmap order: `web-push` -> **`stickers-basic`** -> `stickers-full` -> `api-casing`. `api-casing` stays last because it renames the contract. Until then, new fields inside existing PascalCase schemas stay PascalCase, and brand-new endpoints/events use camelCase. This feature adds **no** new fields or endpoints.
+- web-push: if its notification body maps media types to labels, `sticker` must map to "✨ Sticker"/"Sticker" (check `frontend/src/sw.ts` push handler and the backend push payload builder once web-push lands).
+- Branch: `feat/stickers-basic` from the latest feature branch in the chain at implementation time (branches are chained and unpushed).
+
+## Decisions (recommended defaults)
+- **Static asset URL, no MinIO upload.** Message `MediaUrl` = `/stickers/<pack>/<id>.webp` (relative, same origin).
+  - Why: zero storage growth, no upload round-trip, so sending is instant. The assets are versioned with the app, and the expiry GC ignores them by construction.
+  - Tradeoff: old messages break if an asset is renamed or removed. Rule: **never rename or delete a shipped sticker file**. Add new ones only. Uploading each sticker to MinIO was rejected because every send would create a new object, or it would need a dedupe that belongs in `stickers-full`.
+- **Minimal backend change: sticker-specific URL rule.** Add `utils.IsBuiltinStickerURL(raw)` (regex `^/stickers/[a-z0-9-]{1,40}/[a-z0-9-]{1,60}\.webp$`, no `..`, no query, length <= `MaxMediaURLLen`). In `validateMessageContent` (`validation.go:44`), when `m.MediaType == "sticker"`, accept `IsBuiltinStickerURL(url) || IsSafeMediaURL(url)` (the second keeps `stickers-full` `/storage/` stickers working). Other media types still use `IsSafeMediaURL` only. Do **not** widen `IsSafeMediaURL` itself, because that would let avatars, wallpapers and statuses point at `/stickers/`.
+  - The backend does not check that the sticker exists in the pack. The manifest lives in the frontend, and a Go allowlist would duplicate it. A non-existent path renders the alt-text fallback. Alternative: generate a Go allowlist from the manifest at build time. Rejected for v1 because it adds cross-stack codegen for little gain.
+- **Assets: original pack generated by script** (licensing-safe). `frontend/scripts/generate-stickers.mjs` holds 12-16 simple hand-written SVG sources (faces/gestures/words such as "Hola", "Gracias", "OK", "Jaja", heart, thumbs up, party, sleepy, ...). It rasterizes them with `@resvg/resvg-js` (already a devDependency, `frontend/package.json:31`, used by `scripts/generate-icons.mjs:4`) at **320x320** (2x the display size) and encodes them to **WebP**. resvg-js only outputs PNG, so WebP encoding needs one more dev-only encoder: `sharp` (to verify that it installs and runs locally; CI does not need it because the generated `.webp` files are committed, like the PNG icons from `pwa` PW1). Add an npm script `stickers`. Fallback if `sharp` is unwanted: commit PNGs instead (no new dep, roughly 1.5-3x larger, and automatically precached by the current `globPatterns`).
+- **Typed manifest module** `frontend/src/features/stickers/builtinPack.ts`: `export interface BuiltinSticker { id: string; url: string; alt: string; tags: readonly string[] }`, `export const BUILTIN_PACKS: readonly { id: string; name: string; stickers: readonly BuiltinSticker[] }[]` (one pack `basic` in v1), and `findBuiltinSticker(url): BuiltinSticker | undefined`. A Vitest test asserts that every `url` matches the backend regex shape and that every file exists under `frontend/public/stickers/` (node fs via triple-slash reference, as `src/pwa/manifest.test.ts` does).
+- **Panel placement:** a new sticker button (smiley/sticker icon, `aria-label="Stickers"`) between the attach button and the textarea in both composers. It opens a `StickerPanel` inside the existing `Popover` (`frontend/src/components/ui/Popover.tsx:38`; the same pattern as `MediaUploadMenu`). The panel is a grid of 4 columns of 64-72px thumbnails, each a `<button aria-label={alt}>`, and selecting one sends immediately and closes the panel. No emoji picker is added to the composer (none exists today; out of scope).
+- **Rendering:** add a `case 'sticker'` to `MediaContent.tsx` that renders `<img src alt={findBuiltinSticker(url)?.alt ?? 'Sticker'} width=150 height=150 loading="lazy" draggable={false} className="block w-[150px] h-[150px] object-contain">`. It does not open in a new tab on click. In `MessageList.tsx:307-312` and `GroupChatWindow.tsx:92-96`, when `MediaType === 'sticker'`, drop the bubble background/padding/shadow (transparent wrapper) and keep the time/ticks footer as a small pill overlay or below. Hide "Editar" for sticker messages in both menus.
+- **Reply/quote:** replying to a sticker currently quotes `replyTo.Message`, which is the URL (`websocket.ts:366`, `:424`; the same pre-existing issue exists for images). For stickers, set `replyToMessage` to `previewMessage(msg)` ("✨ Sticker") when building the reply in `sendMessage`/`sendGroupMessage`, or in the reply source. Recommended: do it for all media types in the same place, as a one-line change, with tests. The reply banners in the composers (`MessageInput.tsx:56`, `GroupMessageInput.tsx:126`) also show `replyingTo.Message`, so use `previewMessage` there too.
+- **Offline:** stickers follow the existing media path, which is online-only. When offline or with the WS closed, the user gets the toast "No hay conexión con el servidor" and nothing is queued (`useMessaging.ts:96-100`, `useGroupMessaging.ts:90`). The outbox (`frontend/src/features/outbox/`) stays text-only. Keep this. The panel stays usable (the grid renders from precached assets) but sending shows the toast.
+- **PWA:** add `webp` to `globPatterns` (`vite.config.ts:21`) so the built-in pack (about 16 files at roughly 5-15 KB each, to verify after generation) is precached and received stickers render offline. `/storage/*` stays uncached. Asset paths are not hashed, so precache revisioning (Workbox content hash) handles updates.
+- **nginx:** add `location /stickers/ { try_files $uri =404; add_header Cache-Control "public, max-age=604800"; include /etc/nginx/snippets/security-headers.conf; }` before `location /`. A missing sticker then returns 404 instead of index.html. Not `immutable`, because the names are not content-hashed.
+
+## Constraints
+- TS strict, no `any`; Go `go vet` clean. UI copy in Spanish (matching the app). Code, comments and tests in English.
+- Conventional Commits, no AI attribution, explicit pathspecs (`git reset -q` first). One commit per task.
+- Never `docker compose down -v` unless intended; never `go test -tags integration` against the shared stack.
+- Do not widen `IsSafeMediaURL`. Do not rename or delete shipped sticker files.
+
+## TDD
+Strict TDD. Runners: `cd frontend && npm run test` (Vitest, jsdom), `npm run typecheck`, `npm run lint`, `npm run build`, `npm run test:e2e` (Playwright); `go test ./...` and `go vet ./...` from repo root (module `go.mod` at root).
+RED examples:
+- Go: `TestValidateMessageContent` (`backend/services/validation_test.go:10`) case "sticker with /stickers/basic/hola.webp" expected valid. It fails today with "URL del archivo adjunto no válida". Also the case "image with /stickers/... still invalid". `TestIsBuiltinStickerURL` (next to `TestIsSafeMediaURL`, `backend/utils/validationMedia_test.go:5`): traversal `/stickers/../x.webp`, query string, uppercase, `.svg`, and an over-long URL are all rejected.
+- Vitest: `MediaContent` renders `<img alt="Hola">` for a sticker (it renders null today); the 1:1/group bubble has no `bg-indigo-*` class for stickers; the `StickerPanel` click calls `handleSend(url, 'sticker')`; the manifest test above.
+- Playwright: Ana sends a sticker to Luis and Luis sees the `img[alt=...]` at 150px without the bubble background.
+
+## Tasks
+- [ ] SB1 Backend URL rule: `IsBuiltinStickerURL` in `backend/utils/validationMedia.go` and the `sticker` branch in `validateMessageContent` (`backend/services/validation.go:44`). Table tests first (utils + services; 1:1 path via `serviceChat` and group via `serviceGroup` use the same validator, so add one service-level test each if cheap). Check whether editing a media message is rejected server-side (`ServiceEditMessage` `backend/services/serviceChat.go:398`, `EditGroupMessage` `serviceGroup.go:482`). If not, add a guard that rejects editing `sticker` messages, with tests (to verify). Route: inline if 2 files plus tests, else delegated.
+- [ ] SB2 Assets + manifest: `frontend/scripts/generate-stickers.mjs` (original SVG sources, resvg -> WebP; add `sharp` dev dep after a version check, or use the PNG fallback per the open question), `npm run stickers`, committed `frontend/public/stickers/basic/*.webp`, `frontend/src/features/stickers/builtinPack.ts` + test (URLs match the regex, files exist, ids unique, alt non-empty). `vite.config.ts` `globPatterns` += `webp`. nginx `location /stickers/` (`docker/nginx.conf`, before `location /`). Route: delegated (writer: script + assets + config, 2+ files).
+- [ ] SB3 Rendering: `MediaContent` `case 'sticker'` (alt from manifest, fallback "Sticker"), transparent bubble for stickers in `MessageList.tsx` and `GroupMessageBubble` (`GroupChatWindow.tsx`), hide "Editar" for stickers, reply quote/banner uses `previewMessage` for media. Reactions UI (chips/trigger) still work on sticker messages. Vitest: `MediaContent`, `MessageList` (extend `MessageList.reactions.test.tsx` or a new `MessageList.sticker.test.tsx`), `GroupMessageBubble.media.test.tsx`. Route: delegated.
+- [ ] SB4 Panel + send: `frontend/src/features/stickers/StickerPanel.tsx` (Popover grid, keyboard accessible, closes on select/Escape/outside), a sticker button in `MessageInput.tsx` and `GroupMessageInput.tsx`, send via `handleMediaUploadSuccess(url, 'sticker')` (1:1 and group) honoring `replyingTo`. Offline/WS-closed shows the existing toast (pinned by test). Vitest component tests for both composers (extend `GroupMessageInput.test.tsx`). Route: delegated.
+- [ ] SB5 Playwright + docs + close: `frontend/e2e/stickers.e2e.ts`: (1) Ana sends a sticker 1:1, and Luis sees it (img alt, 150px, no bubble bg) live and after reload; (2) group sticker; (3) Luis reacts to the sticker and the reaction chip shows; (4) Luis replies to the sticker and the quote shows "✨ Sticker"; (5) Ana forwards the sticker to a third contact; (6) a sticker in a disappearing chat expires like any message (reuse the helpers from `disappearing.e2e.ts`); (7) sidebar preview "✨ Sticker"; (8) `GET /stickers/basic/<missing>.webp` returns 404. Two green runs. README line under the media section. Route: delegated.
+
+## Acceptance criteria
+- Both composers have a "Stickers" button that opens a grid of the built-in pack. One click sends the sticker and closes the panel.
+- The receiver (1:1 and group) sees the sticker live and after reload, at a fixed ~150px with no bubble background and with alt text.
+- Backend accepts `MediaType: 'sticker'` with `/stickers/<pack>/<id>.webp`, rejects traversal and other shapes, and still rejects `/stickers/...` for non-sticker types, avatars, wallpapers and statuses.
+- Reply, forward (1:1), reactions, disappearing timers, delete-for-me/everyone and the sidebar preview ("✨ Sticker") work on sticker messages. Edit is not offered for stickers.
+- Offline: sending a sticker shows "No hay conexión con el servidor" and queues nothing. Previously received stickers still render offline (precached).
+- A missing sticker path returns 404 (not index.html). `/storage/*` stays uncached by the SW.
+- No `any`; typecheck, lint, test, build, `go test ./...`, `go vet ./...`, `stickers.e2e.ts` (twice) green.
+
+## Risks
+- Renaming/deleting a shipped asset breaks old messages (mitigated by the rule plus the manifest test; consider a test that compares against a frozen list of shipped ids).
+- `sharp` native binary install issues (dev-only; assets committed; PNG fallback available).
+- Any client can send any `/stickers/<pack>/<id>.webp` path, including non-existent ones. This is harmless (it renders the alt fallback) and cannot escape `/stickers/` because the regex blocks traversal.
+- Message text stores the URL (`websocket.ts:370`, `:428`), so message search can match sticker paths (pre-existing for all media).
+- Popover layout on small screens (the 4-column grid must fit 320px width; check at phone width).
+
+## Open questions (user decision)
+- **Asset source/licensing:** recommended default = an original pack of 12-16 simple stickers generated from in-repo SVG by script (no third-party license). Alternative: an openly licensed set (e.g. CC-BY), which needs an attribution screen and a license file.
+- **Format:** recommended default = WebP via the dev-only `sharp` encoder (smaller). Alternative: PNG with no new dependency (larger, and precached with no config change).
+- **Edit on media:** recommended default = hide "Editar" for stickers only (minimal). Alternative: hide it for all media messages, a broader behavior change.
+
+## Progress / Evidence
+(not started)
+
+## Next step
+On authorization: create `feat/stickers-basic` from the latest chain branch, then implement SB1 (RED: `TestValidateMessageContent` sticker case).
