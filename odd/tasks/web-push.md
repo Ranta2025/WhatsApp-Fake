@@ -54,7 +54,7 @@ Strict TDD (session config). Runners:
 Playwright cannot receive a real push (headless Chromium has no FCM path; `Notification`/`pushManager` work only partially). E2E therefore covers: permission granted through `context.grantPermissions(['notifications'])`, the toggle visibility driven by `push/config`, and the REST subscribe/unsubscribe contract (fake endpoint). Real delivery is a manual smoke on a device (documented in Progress).
 
 ## Tasks
-- [ ] WP1 Library decision + keys: verify webpush-go (version, API, license, Go 1.25 build), add dependency, `make vapid-keys` generator, compose/`.env.example` pass-through, `PushConfig` loader that returns disabled when keys are missing. Unit tests for the loader. Route: delegated.
+- [x] WP1 Library decision + keys: verify webpush-go (version, API, license, Go 1.25 build), add dependency, `make vapid-keys` generator, compose/`.env.example` pass-through, `PushConfig` loader that returns disabled when keys are missing. Unit tests for the loader. Route: delegated.
 - [ ] WP2 Data + REST: `PushSubscription` model, AutoMigrate + unique endpoint index, repo (upsert by endpoint, list by user, delete by endpoint, delete by id), service, middleware validation + SSRF allowlist, handler and routes (`config`, `subscribe`, `unsubscribe`). Handler/service/allowlist tests, plus a Go e2e (`-tags e2e`) for subscribe -> duplicate -> unsubscribe and 401 without cookie. Route: delegated.
 - [ ] WP3 Dispatch: `PushSender` interface + webpush-go implementation + fake, `PushNotifier` with `NotifyDirect/NotifyGroup`, bounded goroutine pool, 404/410 cleanup, payload builder with `PUSH_PREVIEW`. Hook into `HandleChatMessage`, `HandleGroupChatMessage`, `HandleSendGroupMessage`. Tests: online recipient -> no send; offline -> exactly one send per subscription; group excludes sender and online members; 410 deletes; media label; long body truncated; disabled config -> no-op. Route: delegated.
 - [ ] WP4 Frontend subscription: `frontend/src/utils/push.ts` (`urlBase64ToUint8Array`, `ensurePushSubscription`, `removePushSubscription`), API wrappers with guards, types in `types/api.ts`, toggle in settings/banner, unsubscribe-on-logout hook, re-sync on login. Vitest with a mocked `PushManager`. Route: delegated.
@@ -82,8 +82,13 @@ Playwright cannot receive a real push (headless Chromium has no FCM path; `Notif
 - **RESOLVED 2026-10-03 (orchestrator, technical):** dev keys = feature disabled until `make vapid-keys` output is put in `.env`; no hidden auto-generated state.
 - **RESOLVED 2026-10-03 (user):** blocked contacts never trigger pushes (verify the contact `Status` values in `models/contact.go`). Per-chat MUTE is IN SCOPE (WhatsApp style): mute any 1:1 or group for 8 h / 1 week / always (`chat_mutes` table: user, chat kind, peer/group id, `muted_until` nullable = always; unique per user+chat), REST PUT/DELETE + included in chat/group list responses, "Silenciar notificaciones" in chat and group menus, 🔇 icon in the sidebar. A muted chat sends no push and no in-app sound/notification, but still increments unread. Expired mutes are ignored at read time. See WP8-WP9.
 
+## Assumptions
+- Session run in a cloud container: Engram and the RDD `assess` tool are not available there, so the Engram mirror is replaced by this section + Progress, and each slice review is a subagent review of `git diff <boundary>..HEAD` (committed only). Boundary for the first slice: 171f69d.
+- `feat/security-hardening` was already merged into main (ef542a5, same tree as 5997fd3); `feat/web-push` starts from ef542a5 and is pushed to the session branch `claude/wizardly-sagan-j0p2mi`.
+- `pwa` is not implemented yet, so web-push extends the hand-written `frontend/public/sw.js` (PU-merge in pwa.md migrates it later).
+
 ## Progress / Evidence
-(not started)
+- WP1 done: `github.com/SherClockHolmes/webpush-go` v1.4.0 (latest tag, MIT, API `SendNotificationWithContext(ctx, msg, *Subscription, *Options)` with `Subscriber/TTL/Urgency/VAPIDPublicKey/VAPIDPrivateKey`, builds with go 1.25.5). `config.LoadPushConfig(getenv)` (disabled unless public+private key and a `mailto:`/https subject are set; `PUSH_PREVIEW=off|false|0|no` disables preview server-wide). `make vapid-keys` -> `go run ./backend/cmd/vapidgen`. compose `app` env pass-through + `.env.example` section. Tests: `backend/config/push_test.go`, `backend/cmd/vapidgen/main_test.go`.
 
 ## Next step
 Implement after `pwa` (shared service worker). First task: WP1 (verify the library before writing code).

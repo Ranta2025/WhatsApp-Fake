@@ -1,7 +1,7 @@
 # Atajos para el día a día (requiere Docker con Compose v2).
 # En Windows sin make, usa directamente los comandos de cada objetivo.
 
-.PHONY: up down restart logs ps reset tunnel test test-integration e2e lint build
+.PHONY: up down restart logs ps reset tunnel test test-integration e2e lint build vapid-keys
 
 up:            ## Construye y levanta todo el stack
 	docker compose up -d --build
@@ -36,3 +36,6 @@ test-integration: ## Tests de integración y e2e contra el stack de Docker (make
 
 e2e:           ## Tests e2e de navegador (Playwright) contra el stack de Docker (make up antes)
 	cd frontend && npm run test:e2e
+
+vapid-keys:    ## Genera un par de claves VAPID (Web Push) para copiar a .env
+	go run ./backend/cmd/vapidgen

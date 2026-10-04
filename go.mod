@@ -21,6 +21,7 @@ require (
 )
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/rivo/uniseg v0.4.7
 )
