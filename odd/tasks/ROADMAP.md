@@ -45,7 +45,7 @@ Cross-feature rules until api-casing lands: fields added inside an existing Pasc
 
 ## Handoff state (2026-10-04)
 - **Current tip:** `feat/security-hardening` (SH1-SH3 done, all slices reviewed and acknowledged through `ef1925f` + close commit). Start the next feature with `git switch -c feat/web-push` from `feat/security-hardening`.
-- **Done and reviewed:** pwa (PW1-PW10) merged to `main` and pushed (`e82d270`); every slice acknowledged (see pwa.md Progress). security-hardening slices acknowledged (see its Progress). Last reviewed boundary for the next feature: the security-hardening close commit.
+- **Done and reviewed:** pwa (PW1-PW10) merged to `main` and pushed (`e82d270`); every slice acknowledged (see pwa.md Progress). security-hardening slices acknowledged (see its Progress). Last reviewed boundary for the next feature: `171f69d` (roadmap/stickers docs commit, reviewed and acknowledged); later doc-only commits are passive.
 - **Next:** `web-push.md`, then `stickers-basic.md`, `stickers-full.md`, `api-casing.md`.
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
