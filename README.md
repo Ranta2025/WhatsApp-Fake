@@ -29,6 +29,13 @@ Una plataforma de mensajería instantánea completa construida con **Go (Gin)** 
 - ⌨️ **Indicador de escritura** — En chats 1:1 y grupales
 - ↪️ **Reenviar mensajes** — A otros contactos
 
+### PWA y modo offline
+- 📲 **Instalable** — Manifest con iconos PNG (192/512/maskable) y `apple-touch-icon`; botón "Instalar app" en el perfil (Chromium/Edge/Android) e instrucciones para iOS (regenerar iconos: `cd frontend && npm run icons`)
+- 🧱 **App shell offline** — Service worker (`vite-plugin-pwa`, modo `injectManifest`, fuente en `frontend/src/sw.ts`) que precachea `index.html`, `/assets/*` e iconos; tras una visita, recargar sin red muestra la app y el aviso "Sin conexión"
+- 🚫 **Sin caché de datos** — `/api/*` (incluido el WebSocket), `/storage/*`, `/healthz` y `/metrics` siempre van a la red
+- 🔄 **Actualizaciones con aviso** — Una nueva versión muestra "Nueva versión disponible · Actualizar"; nunca reemplaza el worker bajo una pestaña abierta sin confirmación
+- 📤 **Envío offline de texto** — Los mensajes de texto (1:1 y grupo) escritos sin conexión quedan en una cola IndexedDB con reloj de pendiente, sobreviven a la recarga y se envían en orden al reconectar. Cada envío lleva un `clientID` (UUID) y el backend es idempotente por (remitente, `clientID`): un reenvío no duplica ni se vuelve a entregar. Los adjuntos no se encolan
+
 ### Videollamadas
 - 📹 **Llamadas de voz y vídeo** — Integrado con **ZegoCloud**, tokens seguros por sala
 - 📋 **Historial de llamadas** — Registro con duración, tipo (audio/video) y estado (contestada/perdida/rechazada/no disponible)
@@ -285,7 +292,7 @@ peticiones por IP.
 | Tipo | Payload | Descripción |
 |------|---------|-------------|
 | `ping` | — | Keepalive |
-| `chat` | `MessageGet` | Enviar mensaje 1:1 |
+| `chat` | `MessageGet` | Enviar mensaje 1:1 (`clientID` opcional para idempotencia) |
 | `read` | `{from}` | Marcar mensajes de `from` como vistos |
 | `typing` | `{to}` | Indicador de escritura |
 | `edit_message` | `{messageId, receptor, message}` | Editar mensaje |
@@ -294,7 +301,7 @@ peticiones por IP.
 | `call_accept` | `{to, roomId}` | Aceptar llamada |
 | `call_reject` | `{to, roomId}` | Rechazar llamada |
 | `call_end` | `{to, roomId}` | Terminar llamada |
-| `group_chat` | `GroupMessageSend` | Enviar mensaje grupal |
+| `group_chat` | `GroupMessageSend` | Enviar mensaje grupal (`clientID` opcional para idempotencia) |
 | `group_typing` | `{groupID}` | Typing en grupo |
 | `group_edit_message` | `{groupID, messageID, message}` | Editar mensaje grupal |
 | `group_delete_message` | `{groupID, messageID}` | Eliminar mensaje grupal |
@@ -378,7 +385,7 @@ make test-integration
 # si el Postgres del stack está publicado en otro puerto (POSTGRES_PUBLIC_PORT), p. ej. 55432:
 POSTGRES_PUBLIC_PORT=55432 make test-integration
 
-# e2e de navegador con Playwright (login, chat, grupo con media, administración de grupos, estados, paginación, búsqueda)
+# e2e de navegador con Playwright (login, chat, grupo con media, administración de grupos, estados, paginación, búsqueda, PWA y envío offline)
 cd frontend && npm ci
 npx playwright install chromium   # solo la primera vez
 npm run test:e2e                  # o, desde la raíz: make e2e

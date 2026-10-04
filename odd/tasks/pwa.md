@@ -58,7 +58,7 @@ SW logic is kept in small pure modules (route matching / denylist, message parsi
 - [x] PW8 Backend idempotency: optional `ClientID` on `MessageGet`/group send payloads (WS `chat`, `group_chat`, REST group send), persisted column + unique partial index (`client_id IS NOT NULL`) on `messages` and `group_messages` per sender, repo upsert-or-return-existing, echoed in responses so the client can reconcile. Service/handler tests (first send inserts, replay returns same ID and does not re-broadcast to receivers twice) + Go e2e. Route: delegated.
 - [x] PW9 Frontend outbox: IndexedDB store (`idb` or hand-written, verify), enqueue when `navigator.onLine` is false or WS not open, optimistic message with `status: 'pending'` + clock icon, flush FIFO on WS open, reconcile by `ClientID`, retry on failure, survive reload (outbox rehydrates into the chat list), clear on logout. Vitest with fake-indexeddb. Route: delegated.
 - [x] PW10 Playwright offline send: Ana goes offline (`context.setOffline(true)`), sends a 1:1 and a group message (clock icon shown), reloads while offline (messages still pending), goes online, messages delivered exactly once to Luis/group. Two green runs. Route: delegated.
-- [ ] PW7 CI + docs: README section; optional non-blocking Lighthouse job (to verify); update `.github/workflows/ci.yml` only if a new step is really needed (the e2e job already runs Playwright). Close, doc + mirror.
+- [x] PW7 CI + docs: README section; optional non-blocking Lighthouse job (to verify); update `.github/workflows/ci.yml` only if a new step is really needed (the e2e job already runs Playwright). Close, doc + mirror.
 
 ## Acceptance criteria
 - Chrome shows the install option (DevTools > Application > Manifest without errors) and installs the app; installed app opens standalone.
@@ -98,7 +98,8 @@ Branch `feat/pwa` from `feat/disappearing-messages` @ `27c0937` (2026-10-04).
 | PW6 | delegated (writer: e2e + stack runs) | b2f3031 | assess 5e08ff4..b2f3031 medium/under_budget (pending in slice) |
 | PW8 | delegated (opus writer: idempotency + migration, high-risk) | e903d07 | slice 5e08ff4..e903d07 medium/slice_budget_reached: granted -> approved, acknowledged (review-f444e8568f9587ce; WARNINGs: REST 1:1 duplicate returns 200 with no side effects (harmless); soft-deleted replay returns the deleted row -> handled client-side in PW9). Boundary -> e903d07 |
 | PW9 | delegated (opus writer: client half of idempotency) | 7dca05b + follow-up fix | slice e903d07..7dca05b medium/slice_budget_reached: granted -> approved, acknowledged (review-e93a5a81da4db7dc; WARNINGs: entry stuck forever after ack timeout while WS stays open, blocking all later text sends; forward `void sendText` unhandled rejection -> both fixed in follow-up `fix(outbox)` commit). Boundary -> 7dca05b |
-| PW10 | delegated (sonnet writer found 2 bugs; opus writer fixed + finished) | (prev `fix(offline)` commit) + this commit | pending |
+| PW10 | delegated (sonnet writer found 2 bugs; opus writer fixed + finished) | c387f9a + 3a58430 | slice 7dca05b..3a58430 medium/slice_budget_reached: granted -> approved, acknowledged (review-f282a7aca675c8b6; WARNINGs recorded as follow-ups). Boundary -> 3a58430 |
+| PW7 | inline (docs only, passive) | close commit | assess 3a58430..close: passive, no review; boundary advances |
 
 PW1 evidence: RED 3/5 failed -> GREEN 5/5 (`src/pwa/manifest.test.ts`); `npm run test` 775 pass; typecheck/lint clean; `vite build` emits `dist/icons/icon-192.png`. Icons rasterized with `@resvg/resvg-js` ^2.6.2 (`npm run icons`); Arial missing locally so the logo text uses a serif fallback (accepted, PNGs are checked in). Node types scoped to the test via triple-slash reference (not added to app tsconfig).
 
@@ -121,5 +122,17 @@ PW9 follow-up fix: timeout/transient error while the WS is open schedules a retr
 
 PW10 evidence: `frontend/e2e/offline-send.e2e.ts` (Ana offline sends 1:1 + group text -> pending clocks + 2 IndexedDB entries; offline reload stays on `/dashboard` with banner and 2 entries; online -> Luis sees each text exactly once incl. 4s late-duplicate wait, one row each in `messages`/`group_messages`, outbox empty, online reload shows each once). Green 3 times (2 writer runs ~70s apart + parent spot check); `pwa.e2e.ts` 5/5 still green. Product fixes found by this spec (separate `fix(offline)` commit): `src/context/sessionCache.ts` caches `{username, telephon, avatar}` under `whatsapp-fake:session-user` (guarded read); AuthContext keeps the cached user on network errors (axios error without response / `navigator.onLine === false`) and re-validates on `online` (real HTTP response clears user + cache; logout clears cache); `OutboxQueue.handleOnline()` flushes on `online` with an open socket while respecting a scheduled backoff. RED 10 failing -> GREEN 56/56 focused; `npm run test` 902 pass; typecheck/lint/build clean.
 
+PW7 evidence: README "PWA y modo offline" section (install, offline shell, uncached API/storage, update prompt, offline text outbox + `clientID` idempotency, `npm run icons`), `clientID` noted on WS `chat`/`group_chat`, Playwright list updated. CI unchanged on purpose: the `e2e` job already runs every `*.e2e.ts` (new `pwa.e2e.ts`, `offline-send.e2e.ts`) and Go `-tags e2e` (new `e2e_client_id_test.go`). Lighthouse job skipped (Lighthouse dropped the PWA category; Playwright checks cover installability/offline instead).
+
+## Close (2026-10-04)
+All tasks PW1-PW10 done on `feat/pwa` (`5c8b7d3`..close commit). Final checks observed: `npm run test` 902 pass, typecheck/lint/build clean, `pwa.e2e.ts` 5/5, `offline-send.e2e.ts` green 3x, full Playwright suite 24/24 (at PW6; later specs run individually), Go unit + `make test-integration` green (PW8). All committed slices reviewed and acknowledged up to `3a58430`.
+
+## Follow-ups (not blocking)
+- nginx: location-level `add_header` drops server-level `X-Content-Type-Options`/`Referrer-Policy` (pre-existing pattern).
+- Backend WS send error frames carry no `clientID`; the outbox pins errors to the in-flight entry by prefix.
+- Cached offline session re-validates only on the browser `online` event (a server-side outage while the browser stays online keeps the cached user until the next request fails/`online`).
+- Outbox `attempts` count across reconnect cycles, so a single later timeout can mark an entry failed early; no retry UI for failed entries.
+- Sidebar last-message preview ignores pending items; dev-mode service worker disabled; Google Fonts runtime cache skipped; logo PNGs rendered with a serif fallback font.
+
 ## Next step
-PW7 (CI + docs, close).
+Feature complete. Next roadmap item: `web-push` (extends `frontend/src/sw.ts`).
