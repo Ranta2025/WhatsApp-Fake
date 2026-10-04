@@ -20,6 +20,9 @@ vi.mock('../api/axios', () => ({
     SESSION_EXPIRED_EVENT: 'auth:session-expired',
 }));
 
+const mockRemovePush = vi.fn();
+vi.mock('../utils/push', () => ({ removePushSubscription: (...args: unknown[]) => mockRemovePush(...args) }));
+
 function Harness({ onReady }: { onReady: (value: AuthContextValue) => void }) {
     const auth = useAuth();
     onReady(auth);
@@ -185,5 +188,56 @@ describe('AuthProvider offline session cache', () => {
         await mount();
         expect(ctx?.user).toBeNull();
         expect(ctx?.loading).toBe(false);
+    });
+});
+
+// WP4: on a shared browser the previous user's push subscription must be gone
+// before the session ends (the DELETE needs the still-valid cookie).
+describe('AuthProvider logout and Web Push', () => {
+    let container: HTMLDivElement;
+    let root: Root;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockGet.mockResolvedValue({ data: null });
+        mockPost.mockResolvedValue({ data: null });
+        mockRemovePush.mockResolvedValue(undefined);
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        root = createRoot(container);
+    });
+
+    afterEach(() => {
+        act(() => { root.unmount(); });
+        container.remove();
+    });
+
+    const mount = async (): Promise<AuthContextValue> => {
+        let ctx: AuthContextValue | undefined;
+        await act(async () => {
+            root.render(<AuthProvider><Harness onReady={(v) => { ctx = v; }} /></AuthProvider>);
+        });
+        return ctx!;
+    };
+
+    it('removes the push subscription before the logout request', async () => {
+        const order: string[] = [];
+        mockRemovePush.mockImplementation(() => { order.push('push'); return Promise.resolve(); });
+        mockPost.mockImplementation((url: string) => { order.push(url); return Promise.resolve({ data: null }); });
+        const ctx = await mount();
+        await act(async () => { await ctx.logout(); });
+        expect(order).toEqual(['push', '/api/v1/auth/logout']);
+    });
+
+    it('still logs out when removing the push subscription rejects', async () => {
+        mockRemovePush.mockRejectedValue(new Error('boom'));
+        let latest: AuthContextValue | undefined;
+        await act(async () => {
+            root.render(<AuthProvider><Harness onReady={(v) => { latest = v; }} /></AuthProvider>);
+        });
+        expect(latest?.user).not.toBeNull();
+        await act(async () => { await latest!.logout(); });
+        expect(mockPost).toHaveBeenCalledWith('/api/v1/auth/logout');
+        expect(latest?.user).toBeNull();
     });
 });

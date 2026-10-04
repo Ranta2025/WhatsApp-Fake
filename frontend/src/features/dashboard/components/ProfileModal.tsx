@@ -5,6 +5,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { getErrorMessage } from '../../../lib/errors';
 import InstallApp from '../../../pwa/InstallApp';
+import PushSettings from './PushSettings';
 import type { MediaUploadResult } from '../../../types/api';
 
 interface ProfileModalProps {
@@ -276,6 +277,8 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                             {status}
                         </div>
                     )}
+
+                    <PushSettings />
 
                     <InstallApp />
 

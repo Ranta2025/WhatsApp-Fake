@@ -37,6 +37,7 @@ import {
     getChatWindowAround, getChatAfter, getChatBefore, getGroupWindowAround, getGroupAfter, getGroupBefore, WINDOW_LIMIT,
 } from '../api/historyApi';
 import { useNotificationClick } from '../hooks/useNotificationClick';
+import { usePushSync } from '../hooks/usePushSync';
 import { useGroupReceiptAcks } from '../hooks/useGroupReceiptAcks';
 import {
     marksFromMembers, mergeMarks, parseGroupReceipt, applyReceiptEvent, latestRealMessageId,
@@ -1673,6 +1674,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         setSidebarOpen(false);
     }, [contacts, allChatGroups, setSidebarView, setSidebarOpen, setSelectedContact]);
     useNotificationClick(handleNotificationClick);
+
+    // Web Push: re-sync the subscription on boot and right after permission is granted (banner).
+    usePushSync(user?.telephon || null, notifPermission);
 
     const selectedDisappearSeconds = selectedGroup
         ? normalizeDisappearSeconds(selectedGroup.DisappearSeconds)

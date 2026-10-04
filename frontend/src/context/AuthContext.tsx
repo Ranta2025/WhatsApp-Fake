@@ -7,6 +7,7 @@ import api, { SESSION_EXPIRED_EVENT } from '../api/axios';
 import type { UserGet, UserLoginRequest } from '../types/api';
 import { toUser, type AuthUser } from './authUser';
 import { clearCachedUser, readCachedUser, writeCachedUser } from './sessionCache';
+import { removePushSubscription } from '../utils/push';
 
 export type { AuthUser } from './authUser';
 
@@ -120,6 +121,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [refreshUser]);
 
     const logout = useCallback(async () => {
+        // Antes de cerrar la sesión (el DELETE necesita la cookie aún válida):
+        // en un navegador compartido no deben llegar pushes del usuario anterior.
+        try {
+            await removePushSubscription();
+        } catch (err) {
+            console.error('[Push] Error eliminando la suscripción al cerrar sesión:', err);
+        }
         try {
             await api.post('/api/v1/auth/logout');
         } catch {

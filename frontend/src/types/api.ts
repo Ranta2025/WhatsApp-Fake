@@ -486,6 +486,30 @@ export interface BugReportRequest {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Web Push (camelCase, /api/v1/push/*)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** GET /api/v1/push/config. `publicKey` is "" when disabled; `preview` is the effective per-user setting. */
+export interface PushConfig {
+  enabled: boolean;
+  publicKey: string;
+  preview: boolean;
+}
+
+/** POST /api/v1/push/subscribe body: exactly `PushSubscription.toJSON()`. */
+export type PushSubscribeRequest = PushSubscriptionJSON;
+
+/** DELETE /api/v1/push/subscribe body. */
+export interface PushUnsubscribeRequest {
+  endpoint: string;
+}
+
+/** PUT /api/v1/push/preview body. */
+export interface PushPreviewRequest {
+  preview: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Búsqueda de mensajes (camelCase, ver backend/schemas/schemaSearch.go)
 // ─────────────────────────────────────────────────────────────────────────
 
