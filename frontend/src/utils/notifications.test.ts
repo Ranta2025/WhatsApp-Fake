@@ -105,6 +105,20 @@ describe('registerServiceWorker', () => {
     expect(handler).toHaveBeenCalledWith({ telephon: '+5355' });
   });
 
+  it('delivers group NOTIFICATION_CLICK messages and ignores malformed targets', async () => {
+    stubServiceWorker();
+    const { notifications } = await load();
+    const handler = vi.fn();
+    notifications.onNotificationClick(handler);
+    notifications.registerServiceWorker();
+    listeners[0]!({ data: { type: 'NOTIFICATION_CLICK', groupID: 4 } } as MessageEvent);
+    listeners[0]!({ data: { type: 'NOTIFICATION_CLICK', groupID: '4' } } as MessageEvent);
+    listeners[0]!({ data: { type: 'NOTIFICATION_CLICK' } } as MessageEvent);
+    listeners[0]!({ data: undefined } as MessageEvent);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith({ groupID: 4 });
+  });
+
   it('onNeedRefresh flips the update store and applyUpdate calls updateSW(true)', async () => {
     stubServiceWorker();
     const { notifications, store } = await load();

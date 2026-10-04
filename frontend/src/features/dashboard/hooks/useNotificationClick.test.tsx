@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useNotificationClick } from './useNotificationClick';
 import * as notifications from '../../../utils/notifications';
+import type { NotificationTarget } from '../lib/notificationClick';
 
 // R3-notification-handler-wiring-unproved: DashboardContext registers ONE
 // handler both via `onNotificationClick` (Service Worker click path) and
@@ -22,7 +23,7 @@ vi.mock('../../../utils/notifications', () => ({
     offNotificationClick: vi.fn(),
 }));
 
-function Harness({ handler }: { handler: (telephon: string) => void }) {
+function Harness({ handler }: { handler: (target: NotificationTarget) => void }) {
     useNotificationClick(handler);
     return null;
 }
@@ -51,7 +52,7 @@ describe('useNotificationClick', () => {
         expect(registered).toBeDefined();
         act(() => { registered!({ telephon: '111' }); });
 
-        expect(handler).toHaveBeenCalledWith('111');
+        expect(handler).toHaveBeenCalledWith({ kind: 'direct', telephon: '111' });
     });
 
     it('reads telephon from a window CustomEvent (native Notification fallback)', () => {
@@ -62,7 +63,28 @@ describe('useNotificationClick', () => {
             window.dispatchEvent(new CustomEvent('notification-click', { detail: { telephon: '222' } }));
         });
 
-        expect(handler).toHaveBeenCalledWith('222');
+        expect(handler).toHaveBeenCalledWith({ kind: 'direct', telephon: '222' });
+    });
+
+    it('forwards a group target from the Service Worker path', () => {
+        const handler = vi.fn();
+        act(() => { root.render(<Harness handler={handler} />); });
+
+        const registered = vi.mocked(notifications.onNotificationClick).mock.calls[0]?.[0];
+        act(() => { registered!({ groupID: 42 }); });
+
+        expect(handler).toHaveBeenCalledWith({ kind: 'group', groupID: 42 });
+    });
+
+    it('forwards a group target from a window CustomEvent', () => {
+        const handler = vi.fn();
+        act(() => { root.render(<Harness handler={handler} />); });
+
+        act(() => {
+            window.dispatchEvent(new CustomEvent('notification-click', { detail: { groupID: 5 } }));
+        });
+
+        expect(handler).toHaveBeenCalledWith({ kind: 'group', groupID: 5 });
     });
 
     it('ignores a CustomEvent with no telephon and does not call the handler', () => {

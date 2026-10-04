@@ -2,9 +2,10 @@
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { LEGACY_CACHE_NAME, shouldClaimClients } from './sw/cache'
-import { resolveNotificationClick } from './sw/click'
+import { clickMessageFor, resolveNotificationClick } from './sw/click'
 import { isSkipWaiting } from './sw/messages'
 import { buildNotificationOptions, parseShowNotification } from './sw/notification'
+import { notificationForPush, readPushJson } from './sw/push'
 import { NAVIGATION_DENYLIST, hasIndexHtml } from './sw/routes'
 
 interface PrecacheEntry {
@@ -55,6 +56,14 @@ self.addEventListener('message', (event) => {
   event.waitUntil(self.registration.showNotification(payload.title, buildNotificationOptions(payload, Date.now())))
 })
 
+// Web Push from the backend. Every push shows a notification (Chrome's userVisibleOnly requires it),
+// falling back to a generic one when the payload is unusable. No "is a client focused?" suppression here:
+// the backend already skips users connected over the websocket, and a silent push would be penalised.
+self.addEventListener('push', (event) => {
+  const { title, options } = notificationForPush(readPushJson(event.data), Date.now())
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
@@ -65,9 +74,7 @@ self.addEventListener('notificationclick', (event) => {
         const client = clientList[decision.clientIndex]
         if (!client) return
         void client.focus()
-        if (decision.telephon) {
-          client.postMessage({ type: 'NOTIFICATION_CLICK', telephon: decision.telephon })
-        }
+        if (decision.target) client.postMessage(clickMessageFor(decision.target))
       } else if (decision.kind === 'open') {
         return self.clients.openWindow(decision.url)
       }

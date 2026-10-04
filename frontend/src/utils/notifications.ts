@@ -3,6 +3,9 @@
 
 import { registerSW } from 'virtual:pwa-register';
 import { markNeedRefresh, setUpdater } from '../pwa/updateStore';
+import { parseNotificationClickPayload, type NotificationClickPayload } from './notificationTarget';
+
+export type { NotificationClickPayload } from './notificationTarget';
 
 let swRegistration: ServiceWorkerRegistration | null = null;
 
@@ -238,7 +241,7 @@ export interface ShowNativeNotificationArgs {
     icon?: string;
     image?: string;
     tag?: string;
-    data?: { telephon?: string };
+    data?: NotificationClickPayload;
     contactName?: string;
 }
 
@@ -283,10 +286,8 @@ export async function showNativeNotification({ title, body, icon, image, tag, da
         notif.onclick = () => {
             window.focus();
             notif.close();
-            if (data?.telephon) {
-                window.dispatchEvent(new CustomEvent('notification-click', {
-                    detail: { telephon: data.telephon }
-                }));
+            if (data) {
+                window.dispatchEvent(new CustomEvent<NotificationClickPayload>('notification-click', { detail: data }));
             }
         };
 
@@ -296,7 +297,6 @@ export async function showNativeNotification({ title, body, icon, image, tag, da
     }
 }
 
-export type NotificationClickPayload = { telephon: string };
 export type NotificationClickHandler = (payload: NotificationClickPayload) => void;
 
 // Callbacks registrados para manejar clicks en notificaciones
@@ -304,7 +304,7 @@ const notificationClickHandlers: NotificationClickHandler[] = [];
 
 /**
  * Registra un callback para cuando el usuario hace click en una notificación
- * @param handler - Recibe { telephon }
+ * @param handler - Recibe { telephon } (chat 1:1) o { groupID } (grupo)
  */
 export function onNotificationClick(handler: NotificationClickHandler): void {
     notificationClickHandlers.push(handler);
@@ -318,17 +318,14 @@ export function offNotificationClick(handler: NotificationClickHandler): void {
     if (idx > -1) notificationClickHandlers.splice(idx, 1);
 }
 
-interface ServiceWorkerClickMessage {
-    type?: string;
-    telephon?: string;
-}
-
 /**
- * Maneja mensajes del Service Worker
+ * Maneja mensajes del Service Worker: `{ type: 'NOTIFICATION_CLICK', telephon }`
+ * o `{ type: 'NOTIFICATION_CLICK', groupID }` (ver src/sw/click.ts).
  */
-function handleSWMessage(event: MessageEvent<ServiceWorkerClickMessage | undefined>): void {
-    const { type, telephon } = event.data || {};
-    if (type === 'NOTIFICATION_CLICK' && telephon) {
-        notificationClickHandlers.forEach(h => h({ telephon }));
-    }
+function handleSWMessage(event: MessageEvent<unknown>): void {
+    const data = event.data;
+    if (typeof data !== 'object' || data === null || !('type' in data) || data.type !== 'NOTIFICATION_CLICK') return;
+    const payload = parseNotificationClickPayload(data);
+    if (!payload) return;
+    notificationClickHandlers.forEach(h => h(payload));
 }

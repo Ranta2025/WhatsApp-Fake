@@ -16,25 +16,29 @@ interface Harness {
   skipWaiting: ReturnType<typeof vi.fn>
   claim: ReturnType<typeof vi.fn>
   deleteCache: ReturnType<typeof vi.fn>
+  showNotification: ReturnType<typeof vi.fn>
+  openWindow: ReturnType<typeof vi.fn>
 }
 
-async function load(manifest: unknown[], active: unknown): Promise<Harness> {
+async function load(manifest: unknown[], active: unknown, windows: unknown[] = []): Promise<Harness> {
   vi.resetModules()
   const listeners = new Map<string, Listener>()
   const skipWaiting = vi.fn(() => Promise.resolve())
   const claim = vi.fn(() => Promise.resolve())
   const deleteCache = vi.fn(() => Promise.resolve(true))
+  const showNotification = vi.fn(() => Promise.resolve())
+  const openWindow = vi.fn(() => Promise.resolve(null))
   vi.stubGlobal('self', {
     __WB_MANIFEST: manifest,
     addEventListener: (type: string, fn: Listener) => listeners.set(type, fn),
     skipWaiting,
-    clients: { claim },
-    registration: { active, showNotification: vi.fn() },
+    clients: { claim, matchAll: () => Promise.resolve(windows), openWindow },
+    registration: { active, showNotification },
     location: { origin: 'https://app.test' },
   })
   vi.stubGlobal('caches', { keys: () => Promise.resolve(['todos-chat-v3', 'workbox-precache-v2-x']), delete: deleteCache })
   await import('./sw')
-  return { listeners, skipWaiting, claim, deleteCache }
+  return { listeners, skipWaiting, claim, deleteCache, showNotification, openWindow }
 }
 
 function waitable(): { event: { waitUntil: (p: Promise<unknown>) => void }; done: () => Promise<unknown> } {
@@ -109,5 +113,45 @@ describe('sw wiring', () => {
     h.listeners.get('activate')?.(event)
     await done()
     expect(h.claim).not.toHaveBeenCalled()
+  })
+
+  it('shows a notification built from a valid push payload', async () => {
+    const h = await load([], null)
+    const { event, done } = waitable()
+    const payload = { v: 1, kind: 'group', groupID: 3, messageID: 1, title: 'Equipo', body: 'hola', tag: 'group-3' }
+    h.listeners.get('push')?.({ ...event, data: { json: () => payload } })
+    await done()
+    expect(h.showNotification).toHaveBeenCalledWith('Equipo', expect.objectContaining({ body: 'hola', tag: 'group-3', data: { groupID: 3 } }))
+  })
+
+  it('still shows a generic notification when the push body is not JSON or missing', async () => {
+    const h = await load([], null)
+    const { event, done } = waitable()
+    h.listeners.get('push')?.({ ...event, data: { json: () => { throw new SyntaxError('x') } } })
+    h.listeners.get('push')?.({ ...event, data: null })
+    await done()
+    expect(h.showNotification).toHaveBeenCalledTimes(2)
+    expect(h.showNotification).toHaveBeenCalledWith('todos - Chat', expect.objectContaining({ body: 'Nuevo mensaje' }))
+  })
+
+  it('focuses an open client and posts the group target on click', async () => {
+    const client = { url: 'https://app.test/dashboard', focus: vi.fn(() => Promise.resolve()), postMessage: vi.fn() }
+    const h = await load([], null, [client])
+    const { event, done } = waitable()
+    const close = vi.fn()
+    h.listeners.get('notificationclick')?.({ ...event, action: '', notification: { close, data: { groupID: 4 } } })
+    await done()
+    expect(close).toHaveBeenCalled()
+    expect(client.focus).toHaveBeenCalled()
+    expect(client.postMessage).toHaveBeenCalledWith({ type: 'NOTIFICATION_CLICK', groupID: 4 })
+    expect(h.openWindow).not.toHaveBeenCalled()
+  })
+
+  it('opens the dashboard with the chat query when no client is open', async () => {
+    const h = await load([], null, [])
+    const { event, done } = waitable()
+    h.listeners.get('notificationclick')?.({ ...event, action: '', notification: { close: vi.fn(), data: { telephon: '+34' } } })
+    await done()
+    expect(h.openWindow).toHaveBeenCalledWith('/dashboard?chat=%2B34')
   })
 })

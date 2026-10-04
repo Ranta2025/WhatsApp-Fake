@@ -37,6 +37,8 @@ import {
     getChatWindowAround, getChatAfter, getChatBefore, getGroupWindowAround, getGroupAfter, getGroupBefore, WINDOW_LIMIT,
 } from '../api/historyApi';
 import { useNotificationClick } from '../hooks/useNotificationClick';
+import { useColdStartTarget } from '../hooks/useColdStartTarget';
+import type { NotificationTarget } from '../lib/notificationClick';
 import { usePushSync } from '../hooks/usePushSync';
 import { useGroupReceiptAcks } from '../hooks/useGroupReceiptAcks';
 import {
@@ -1069,12 +1071,13 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     // los mensajes que llegaron mientras estábamos desconectados no se
     // recibieron por WS, así que se recargan chats y grupos desde la API.
     const wasConnectedRef = useRef(false);
+    // true once the first contacts/chats/groups load settles (gates the notification cold-start deep link).
+    const [initialDataLoaded, setInitialDataLoaded] = useState(false);
     useEffect(() => {
         if (!user) return;
         fetchProfile();
-        fetchContacts();
-        fetchAllChats();
-        fetchUserGroups();
+        void Promise.allSettled([fetchContacts(), fetchAllChats(), fetchUserGroups()])
+            .then(() => setInitialDataLoaded(true));
     }, [user, fetchProfile, fetchContacts, fetchAllChats, fetchUserGroups]);
 
     useEffect(() => {
@@ -1666,14 +1669,28 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         sendGroupJoin(groupId);
     }, [selectedGroup?.ID, isConnected, sendGroupJoin]);
 
-    // manejar clicks sobre notificaciones (fuerza apertura de chat)
-    const handleNotificationClick = useCallback((telephon: string) => {
-        // intentar seleccionar contacto o grupo existente
-        setSelectedContact(resolveChatTarget(telephon, contacts, allChatGroups));
+    // manejar clicks sobre notificaciones (fuerza apertura del chat 1:1 o del grupo)
+    const handleNotificationClick = useCallback((target: NotificationTarget) => {
+        if (target.kind === 'group') {
+            // Igual que el Sidebar: solo se puede abrir un grupo que ya está en `groups`.
+            const group = groups.find(g => g.ID === target.groupID);
+            if (!group) {
+                addToast({ type: 'error', message: 'No se pudo abrir el grupo' });
+                return;
+            }
+            setSelectedGroup(group);
+            setSidebarView('groups');
+            setSidebarOpen(false);
+            return;
+        }
+        // intentar seleccionar contacto o chat existente
+        setSelectedContact(resolveChatTarget(target.telephon, contacts, allChatGroups));
         setSidebarView('chats');
         setSidebarOpen(false);
-    }, [contacts, allChatGroups, setSidebarView, setSidebarOpen, setSelectedContact]);
+    }, [groups, contacts, allChatGroups, addToast, setSidebarView, setSidebarOpen, setSelectedContact, setSelectedGroup]);
     useNotificationClick(handleNotificationClick);
+    // Cold start: el SW abrió /dashboard?chat=… o ?group=… (ninguna ventana abierta).
+    useColdStartTarget(initialDataLoaded, handleNotificationClick);
 
     // Web Push: re-sync the subscription on boot and right after permission is granted (banner).
     usePushSync(user?.telephon || null, notifPermission);
