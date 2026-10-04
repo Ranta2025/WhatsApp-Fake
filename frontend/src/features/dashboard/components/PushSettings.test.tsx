@@ -11,7 +11,9 @@ const mockIsSupported = vi.fn<() => boolean>();
 const mockEnsure = vi.fn<(c: PushConfig) => Promise<boolean>>();
 const mockRemove = vi.fn<() => Promise<void>>();
 const mockCurrent = vi.fn<() => Promise<unknown>>();
+const mockSetOptOut = vi.fn<(userKey: string, optedOut: boolean) => void>();
 vi.mock('../../../utils/push', () => ({
+    setPushOptedOut: (u: string, o: boolean) => mockSetOptOut(u, o),
     isPushSupported: () => mockIsSupported(),
     ensurePushSubscription: (c: PushConfig) => mockEnsure(c),
     removePushSubscription: () => mockRemove(),
@@ -27,8 +29,9 @@ vi.mock('../../../api/pushApi', () => ({
 
 const mockRequestPermission = vi.fn<() => Promise<NotificationPermission>>();
 vi.mock('../context/DashboardContext', () => ({
-    useDashboard: (): Pick<DashboardContextValue, 'requestNotificationPermission'> => ({
+    useDashboard: (): Pick<DashboardContextValue, 'requestNotificationPermission' | 'user'> => ({
         requestNotificationPermission: () => mockRequestPermission(),
+        user: { username: 'Ana', telephon: '111', avatar: '' },
     }),
 }));
 
@@ -111,6 +114,20 @@ describe('PushSettings', () => {
         expect(mockRequestPermission).not.toHaveBeenCalled();
         expect(mockEnsure).toHaveBeenCalledWith(CONFIG);
         expect(toggle.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('turning push on clears the per-user opt-out', async () => {
+        await render();
+        await click(getSwitch('Notificaciones push')!);
+        expect(mockSetOptOut).toHaveBeenCalledWith('111', false);
+    });
+
+    it('turning push off records the per-user opt-out so it sticks across reloads', async () => {
+        mockCurrent.mockResolvedValueOnce({ endpoint: 'x' }).mockResolvedValue(null);
+        await render();
+        await click(getSwitch('Notificaciones push')!);
+        expect(mockSetOptOut).toHaveBeenCalledWith('111', true);
+        expect(mockSetOptOut).not.toHaveBeenCalledWith('111', false);
     });
 
     it('turning push on requests permission first when not yet granted', async () => {

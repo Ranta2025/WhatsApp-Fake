@@ -39,10 +39,35 @@ describe('resolveNotificationClick', () => {
     expect(resolveNotificationClick('close', {}, [{ url: `${origin}/` }], origin)).toEqual({ kind: 'none' })
   })
 
-  it('focuses the first client of this origin and forwards a direct target', () => {
-    const clients = [{ url: 'https://other.com/' }, { url: `${origin}/chat` }, { url: `${origin}/x` }]
+  it('prefers a same-origin dashboard client over other same-origin tabs', () => {
+    const clients = [
+      { url: 'https://other.com/dashboard' },
+      { url: `${origin}/login` },
+      { url: `${origin}/dashboard?chat=1` },
+    ]
     expect(resolveNotificationClick('open', { telephon: '+34' }, clients, origin)).toEqual({
-      kind: 'focus', clientIndex: 1, target: { kind: 'direct', telephon: '+34' },
+      kind: 'focus', clientIndex: 2, target: { kind: 'direct', telephon: '+34' },
+    })
+  })
+
+  it('does not treat a lookalike origin or path as the dashboard', () => {
+    const clients = [
+      { url: `${origin}.evil.com/dashboard` },
+      { url: `${origin}/dashboardx` },
+      { url: 'not a url' },
+    ]
+    expect(resolveNotificationClick('open', { groupID: 3 }, clients, origin)).toEqual({
+      kind: 'navigate', clientIndex: 1, url: '/dashboard?group=3',
+    })
+  })
+
+  it('navigates a non-dashboard same-origin tab to the cold-start URL', () => {
+    const clients = [{ url: 'https://other.com/' }, { url: `${origin}/` }, { url: `${origin}/login` }]
+    expect(resolveNotificationClick('open', { telephon: '+34' }, clients, origin)).toEqual({
+      kind: 'navigate', clientIndex: 1, url: '/dashboard?chat=%2B34',
+    })
+    expect(resolveNotificationClick('', {}, [{ url: `${origin}/register` }], origin)).toEqual({
+      kind: 'navigate', clientIndex: 0, url: '/dashboard',
     })
   })
 
@@ -53,7 +78,7 @@ describe('resolveNotificationClick', () => {
   })
 
   it('focuses without target when data has none', () => {
-    expect(resolveNotificationClick('', {}, [{ url: `${origin}/` }], origin)).toEqual({
+    expect(resolveNotificationClick('', {}, [{ url: `${origin}/dashboard` }], origin)).toEqual({
       kind: 'focus', clientIndex: 0, target: undefined,
     })
   })
@@ -67,7 +92,7 @@ describe('resolveNotificationClick', () => {
   })
 
   it('tolerates non-object notification data', () => {
-    expect(resolveNotificationClick('open', null, [{ url: `${origin}/` }], origin)).toEqual({
+    expect(resolveNotificationClick('open', null, [{ url: `${origin}/dashboard` }], origin)).toEqual({
       kind: 'focus', clientIndex: 0, target: undefined,
     })
   })

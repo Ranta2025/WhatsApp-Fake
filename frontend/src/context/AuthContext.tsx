@@ -7,7 +7,8 @@ import api, { SESSION_EXPIRED_EVENT } from '../api/axios';
 import type { UserGet, UserLoginRequest } from '../types/api';
 import { toUser, type AuthUser } from './authUser';
 import { clearCachedUser, readCachedUser, writeCachedUser } from './sessionCache';
-import { removePushSubscription } from '../utils/push';
+import { clearLocalPushSubscription, removePushSubscription } from '../utils/push';
+import { PUSH_CLEANUP_TIMEOUT_MS, settleWithin } from './settleWithin';
 
 export type { AuthUser } from './authUser';
 
@@ -22,6 +23,17 @@ export interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * The session ended without `logout()` (expired / rejected): the server DELETE
+ * would 401, so only the browser subscription is dropped (fire-and-forget) so a
+ * shared browser stops receiving this user's pushes.
+ */
+const dropLocalPush = (): void => {
+    Promise.resolve().then(clearLocalPushSubscription).catch((err: unknown) => {
+        console.error('[Push] Error cancelando la suscripción tras el fin de sesión:', err);
+    });
+};
 
 /**
  * The request never got an HTTP response (offline, DNS, server unreachable).
@@ -75,6 +87,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .catch((err: unknown) => {
                     if (cancelled || isNetworkFailure(err)) return; // still unreachable: retry on the next online
+                    dropLocalPush();
                     setUser(null);
                     setNeedsRevalidation(false);
                 });
@@ -98,6 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // se cierra la sesión local para que PrivateRoute redirija al login.
     useEffect(() => {
         const onExpired = () => {
+            dropLocalPush();
             setUser(null);
             setNeedsRevalidation(false);
         };
@@ -123,11 +137,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = useCallback(async () => {
         // Antes de cerrar la sesión (el DELETE necesita la cookie aún válida):
         // en un navegador compartido no deben llegar pushes del usuario anterior.
-        try {
-            await removePushSubscription();
-        } catch (err) {
+        // Bounded: a Service Worker that never becomes ready must not hang the logout.
+        const cleanup = Promise.resolve().then(removePushSubscription).catch((err: unknown) => {
             console.error('[Push] Error eliminando la suscripción al cerrar sesión:', err);
-        }
+        });
+        await settleWithin(cleanup, PUSH_CLEANUP_TIMEOUT_MS);
         try {
             await api.post('/api/v1/auth/logout');
         } catch {

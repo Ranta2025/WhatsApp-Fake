@@ -11,6 +11,7 @@ export type NotificationClickMessage =
 export type NotificationClickDecision =
   | { kind: 'none' }
   | { kind: 'focus'; clientIndex: number; target: ClickTarget | undefined }
+  | { kind: 'navigate'; clientIndex: number; url: string }
   | { kind: 'open'; url: string }
 
 /** The SPA route that renders the dashboard (`/` is the public welcome page). */
@@ -38,7 +39,22 @@ export function clickMessageFor(target: ClickTarget): NotificationClickMessage {
     : { type: 'NOTIFICATION_CLICK', groupID: target.groupID }
 }
 
-/** Decides what a notification click does: nothing, focus an existing client, or open a window. */
+const parseUrl = (url: string): URL | undefined => {
+  try {
+    return new URL(url)
+  } catch {
+    return undefined
+  }
+}
+
+const isDashboardPath = (pathname: string): boolean =>
+  pathname === DASHBOARD_PATH || pathname.startsWith(`${DASHBOARD_PATH}/`)
+
+/**
+ * Decides what a notification click does: nothing, focus a dashboard client
+ * (it handles the target via postMessage), navigate another tab of this origin
+ * to the cold-start URL (it has no dashboard listening), or open a window.
+ */
 export function resolveNotificationClick(
   action: string,
   data: unknown,
@@ -48,7 +64,11 @@ export function resolveNotificationClick(
   if (action === 'close') return { kind: 'none' }
 
   const target = parseClickTarget(data)
-  const clientIndex = clients.findIndex((client) => client.url.includes(origin))
-  if (clientIndex === -1) return { kind: 'open', url: openUrlFor(target) }
-  return { kind: 'focus', clientIndex, target }
+  const urls = clients.map((client) => parseUrl(client.url))
+  const dashboardIndex = urls.findIndex((url) => url?.origin === origin && isDashboardPath(url.pathname))
+  if (dashboardIndex !== -1) return { kind: 'focus', clientIndex: dashboardIndex, target }
+
+  const sameOriginIndex = urls.findIndex((url) => url?.origin === origin)
+  if (sameOriginIndex !== -1) return { kind: 'navigate', clientIndex: sameOriginIndex, url: openUrlFor(target) }
+  return { kind: 'open', url: openUrlFor(target) }
 }

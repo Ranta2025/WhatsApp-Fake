@@ -38,6 +38,11 @@ describe('usePushSync', () => {
         expect(mockSync).toHaveBeenCalledTimes(1);
     });
 
+    it('syncs for the logged-in user so the per-user opt-out is respected', async () => {
+        await act(async () => { root.render(<Harness userKey="111" permission="granted" />); });
+        expect(mockSync).toHaveBeenCalledWith('111');
+    });
+
     it('does nothing without permission or without a user', async () => {
         await act(async () => { root.render(<Harness userKey="111" permission="default" />); });
         await act(async () => { root.render(<Harness userKey="111" permission="denied" />); });

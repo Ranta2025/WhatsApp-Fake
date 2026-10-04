@@ -154,4 +154,35 @@ describe('sw wiring', () => {
     await done()
     expect(h.openWindow).toHaveBeenCalledWith('/dashboard?chat=%2B34')
   })
+
+  it('navigates a non-dashboard tab of this origin to the cold-start URL and focuses it', async () => {
+    const client = {
+      url: 'https://app.test/login',
+      focus: vi.fn(() => Promise.resolve()),
+      postMessage: vi.fn(),
+      navigate: vi.fn(() => Promise.resolve(null)),
+    }
+    const h = await load([], null, [client])
+    const { event, done } = waitable()
+    h.listeners.get('notificationclick')?.({ ...event, action: '', notification: { close: vi.fn(), data: { groupID: 6 } } })
+    await done()
+    expect(client.focus).toHaveBeenCalled()
+    expect(client.navigate).toHaveBeenCalledWith('/dashboard?group=6')
+    expect(client.postMessage).not.toHaveBeenCalled()
+    expect(h.openWindow).not.toHaveBeenCalled()
+  })
+
+  it('opens a window when navigating the existing tab fails', async () => {
+    const client = {
+      url: 'https://app.test/',
+      focus: vi.fn(() => Promise.resolve()),
+      postMessage: vi.fn(),
+      navigate: vi.fn(() => Promise.reject(new TypeError('not controlled'))),
+    }
+    const h = await load([], null, [client])
+    const { event, done } = waitable()
+    h.listeners.get('notificationclick')?.({ ...event, action: '', notification: { close: vi.fn(), data: { telephon: '+34' } } })
+    await done()
+    expect(h.openWindow).toHaveBeenCalledWith('/dashboard?chat=%2B34')
+  })
 })

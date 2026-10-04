@@ -75,6 +75,13 @@ self.addEventListener('notificationclick', (event) => {
         if (!client) return
         void client.focus()
         if (decision.target) client.postMessage(clickMessageFor(decision.target))
+      } else if (decision.kind === 'navigate') {
+        // A tab of this origin outside the dashboard (e.g. /login): nobody there listens for
+        // NOTIFICATION_CLICK, so it loads the cold-start URL. Uncontrolled clients reject navigate().
+        const client = clientList[decision.clientIndex]
+        if (!client) return self.clients.openWindow(decision.url)
+        void client.focus()
+        return client.navigate(decision.url).catch(() => self.clients.openWindow(decision.url))
       } else if (decision.kind === 'open') {
         return self.clients.openWindow(decision.url)
       }

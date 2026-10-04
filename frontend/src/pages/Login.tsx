@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import { getErrorMessage } from '../lib/errors';
+import { postLoginPath } from '../utils/loginRedirect';
 
 export default function Login() {
     const [username, setUsername] = useState('');
@@ -12,6 +13,7 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -23,7 +25,8 @@ export default function Login() {
         setLoading(true);
         try {
             await login(username.trim(), password);
-            navigate('/dashboard');
+            // Back to where PrivateRoute bounced from (e.g. /dashboard?chat=… from a notification).
+            navigate(postLoginPath(location.state), { replace: true });
         } catch (err) {
             setLoading(false);
             const msg = getErrorMessage(err, 'Credenciales inválidas o error de conexión');

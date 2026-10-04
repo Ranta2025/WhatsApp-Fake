@@ -32,16 +32,40 @@ const sameKey = (current: ArrayBuffer | null, expected: Uint8Array): boolean => 
     return bytes.every((b, i) => b === expected[i]);
 };
 
-const getPushManager = async (): Promise<PushManager> => {
-    const registration = await navigator.serviceWorker.ready;
-    return registration.pushManager;
+/** Espera máxima a `serviceWorker.ready` al suscribir (sin SW registrado nunca resuelve). */
+export const SW_READY_TIMEOUT_MS = 5000;
+
+/**
+ * PushManager del SW activo para suscribir. `serviceWorker.ready` no se resuelve
+ * nunca si no hay SW registrado (vite dev, fallo de registerSW): se acota con un
+ * timeout. Resuelve null si el SW no llega a estar listo a tiempo.
+ */
+const getReadyPushManager = async (): Promise<PushManager | null> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), SW_READY_TIMEOUT_MS); });
+    try {
+        const registration = await Promise.race([navigator.serviceWorker.ready, timeout]);
+        return registration ? registration.pushManager : null;
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+/**
+ * PushManager para leer / dar de baja: usa `getRegistration()`, que resuelve
+ * de inmediato (undefined sin SW registrado => no puede haber suscripción).
+ */
+const getRegisteredPushManager = async (): Promise<PushManager | null> => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration ? registration.pushManager : null;
 };
 
 /** Suscripción push actual de este navegador, o null (también si no hay soporte o falla). */
 export async function getCurrentPushSubscription(): Promise<PushSubscription | null> {
     if (!isPushSupported()) return null;
     try {
-        const manager = await getPushManager();
+        const manager = await getRegisteredPushManager();
+        if (!manager) return null;
         return await manager.getSubscription();
     } catch (err) {
         console.error('[Push] Error leyendo la suscripción:', err);
@@ -54,10 +78,20 @@ let inflight: Promise<boolean> | null = null;
 const doEnsure = async (config: PushConfig): Promise<boolean> => {
     try {
         const key = urlBase64ToUint8Array(config.publicKey);
-        const manager = await getPushManager();
+        const manager = await getReadyPushManager();
+        if (!manager) {
+            console.warn('[Push] El Service Worker no está listo: no se puede suscribir');
+            return false;
+        }
         let subscription = await manager.getSubscription();
         if (subscription && !sameKey(subscription.options.applicationServerKey, key)) {
             // Clave VAPID rotada en el servidor: la suscripción vieja ya no sirve.
+            // Se borra también su fila en el servidor (errores ignorados) para no dejarla huérfana.
+            try {
+                await unsubscribePush(subscription.endpoint);
+            } catch (err) {
+                console.warn('[Push] No se pudo eliminar la suscripción antigua en el servidor:', err);
+            }
             await subscription.unsubscribe();
             subscription = null;
         }
@@ -103,12 +137,48 @@ export async function removePushSubscription(): Promise<void> {
 }
 
 /**
- * Re-sincroniza la suscripción tras el login / al conceder permiso: pide la
- * configuración y, si push está habilitado y hay permiso, llama a
- * `ensurePushSubscription`. Nunca lanza.
+ * Baja solo en el navegador, para cuando la sesión termina sin `logout()`
+ * (sesión caducada / rechazada): el DELETE del servidor devolvería 401, así que
+ * no se intenta. Nunca lanza.
  */
-export async function syncPushSubscription(): Promise<boolean> {
-    if (!isPushSupported() || !isPermissionGranted()) return false;
+export async function clearLocalPushSubscription(): Promise<void> {
+    const subscription = await getCurrentPushSubscription();
+    if (!subscription) return;
+    try {
+        await subscription.unsubscribe();
+    } catch (err) {
+        console.error('[Push] Error cancelando la suscripción del navegador:', err);
+    }
+}
+
+const optOutKey = (userKey: string): string => `push-opt-out:${userKey}`;
+
+/** El usuario desactivó push explícitamente en este navegador (no se re-suscribe solo). */
+export function isPushOptedOut(userKey: string): boolean {
+    try {
+        return localStorage.getItem(optOutKey(userKey)) !== null;
+    } catch {
+        return false;
+    }
+}
+
+/** Marca (true) o borra (false) la baja voluntaria de push de este usuario en este navegador. */
+export function setPushOptedOut(userKey: string, optedOut: boolean): void {
+    try {
+        if (optedOut) localStorage.setItem(optOutKey(userKey), '1');
+        else localStorage.removeItem(optOutKey(userKey));
+    } catch (err) {
+        console.warn('[Push] No se pudo guardar la preferencia push:', err);
+    }
+}
+
+/**
+ * Re-sincroniza la suscripción tras el login / al conceder permiso: pide la
+ * configuración y, si push está habilitado, hay permiso y el usuario no se dio
+ * de baja voluntariamente, llama a `ensurePushSubscription`. Nunca lanza.
+ */
+export async function syncPushSubscription(userKey: string): Promise<boolean> {
+    if (!isPushSupported() || !isPermissionGranted() || isPushOptedOut(userKey)) return false;
     try {
         const config = await getPushConfig();
         if (!config?.enabled) return false;

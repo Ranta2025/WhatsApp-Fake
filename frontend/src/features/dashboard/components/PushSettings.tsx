@@ -3,6 +3,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { getPushConfig, setPushPreview } from '../../../api/pushApi';
 import {
     ensurePushSubscription, getCurrentPushSubscription, isPushSupported, removePushSubscription,
+    setPushOptedOut,
 } from '../../../utils/push';
 import type { PushConfig } from '../../../types/api';
 
@@ -40,7 +41,8 @@ const Switch = ({ label, description, checked, disabled, onToggle }: SwitchProps
 );
 
 const PushSettings = () => {
-    const { requestNotificationPermission } = useDashboard();
+    const { requestNotificationPermission, user } = useDashboard();
+    const userKey = user?.telephon || null;
     const [config, setConfig] = useState<PushConfig | null>(null);
     const [subscribed, setSubscribed] = useState(false);
     const [preview, setPreview] = useState(true);
@@ -69,6 +71,8 @@ const PushSettings = () => {
     if (!config) return null;
 
     const enablePush = async (): Promise<void> => {
+        // Activación explícita: deja de valer la baja voluntaria de este usuario.
+        if (userKey) setPushOptedOut(userKey, false);
         if (Notification.permission !== 'granted') {
             let permission: NotificationPermission = 'default';
             try {
@@ -87,6 +91,9 @@ const PushSettings = () => {
     };
 
     const disablePush = async (): Promise<void> => {
+        // Baja voluntaria: sin esta marca usePushSync re-suscribiría en el próximo arranque
+        // (el permiso del navegador sigue concedido).
+        if (userKey) setPushOptedOut(userKey, true);
         await removePushSubscription();
         setSubscribed((await getCurrentPushSubscription()) !== null);
     };

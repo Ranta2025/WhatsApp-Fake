@@ -1,8 +1,9 @@
 import { useDashboard } from '../context/DashboardContext';
 import { BellIcon } from '../../../components/ui/icons';
+import { setPushOptedOut } from '../../../utils/push';
 
 const NotificationBanner = () => {
-    const { notifPermission, setNotifPermission, requestNotificationPermission } = useDashboard();
+    const { notifPermission, setNotifPermission, requestNotificationPermission, user } = useDashboard();
 
     if (notifPermission !== 'default') return null;
 
@@ -15,6 +16,9 @@ const NotificationBanner = () => {
             </div>
             <button
                 onClick={async () => {
+                    // Activación explícita: anula una baja voluntaria anterior de este usuario
+                    // (antes de pedir permiso: al concederse, usePushSync suscribe enseguida).
+                    if (user?.telephon) setPushOptedOut(user.telephon, false);
                     const perm = await requestNotificationPermission();
                     setNotifPermission(perm);
                 }}

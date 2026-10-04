@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { AuthProvider, useAuth, type AuthContextValue } from './AuthContext';
+import { PUSH_CLEANUP_TIMEOUT_MS } from './settleWithin';
 
 // R3-toUser-null-body-guard-removed: covers the AuthProvider-level effect of
 // a null response body (see `authUser.test.ts` for the `toUser` unit tests
@@ -21,7 +22,11 @@ vi.mock('../api/axios', () => ({
 }));
 
 const mockRemovePush = vi.fn();
-vi.mock('../utils/push', () => ({ removePushSubscription: (...args: unknown[]) => mockRemovePush(...args) }));
+const mockClearLocalPush = vi.fn();
+vi.mock('../utils/push', () => ({
+    removePushSubscription: (...args: unknown[]) => mockRemovePush(...args),
+    clearLocalPushSubscription: (...args: unknown[]) => mockClearLocalPush(...args),
+}));
 
 function Harness({ onReady }: { onReady: (value: AuthContextValue) => void }) {
     const auth = useAuth();
@@ -94,6 +99,7 @@ describe('AuthProvider offline session cache', () => {
         vi.clearAllMocks();
         localStorage.clear();
         ctx = undefined;
+        mockClearLocalPush.mockResolvedValue(undefined);
         mockPost.mockResolvedValue({ data: null });
         container = document.createElement('div');
         document.body.appendChild(container);
@@ -150,6 +156,25 @@ describe('AuthProvider offline session cache', () => {
         expect(localStorage.getItem(KEY)).toBeNull();
     });
 
+    it('re-validation rejected by the server drops the browser push subscription', async () => {
+        localStorage.setItem(KEY, JSON.stringify(PROFILE));
+        mockGet.mockRejectedValueOnce(networkError());
+        await mount();
+        expect(mockClearLocalPush).not.toHaveBeenCalled();
+
+        mockGet.mockRejectedValueOnce(httpError(401));
+        await act(async () => { window.dispatchEvent(new Event('online')); });
+        expect(mockClearLocalPush).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-validation that is still offline keeps the push subscription', async () => {
+        localStorage.setItem(KEY, JSON.stringify(PROFILE));
+        mockGet.mockRejectedValue(networkError());
+        await mount();
+        await act(async () => { window.dispatchEvent(new Event('online')); });
+        expect(mockClearLocalPush).not.toHaveBeenCalled();
+    });
+
     it('re-validates on online: success refreshes the profile', async () => {
         localStorage.setItem(KEY, JSON.stringify(PROFILE));
         mockGet.mockRejectedValueOnce(networkError());
@@ -202,12 +227,14 @@ describe('AuthProvider logout and Web Push', () => {
         mockGet.mockResolvedValue({ data: null });
         mockPost.mockResolvedValue({ data: null });
         mockRemovePush.mockResolvedValue(undefined);
+        mockClearLocalPush.mockResolvedValue(undefined);
         container = document.createElement('div');
         document.body.appendChild(container);
         root = createRoot(container);
     });
 
     afterEach(() => {
+        vi.useRealTimers();
         act(() => { root.unmount(); });
         container.remove();
     });
@@ -239,5 +266,43 @@ describe('AuthProvider logout and Web Push', () => {
         await act(async () => { await latest!.logout(); });
         expect(mockPost).toHaveBeenCalledWith('/api/v1/auth/logout');
         expect(latest?.user).toBeNull();
+    });
+
+    it('push cleanup that never settles cannot block logout (bounded wait)', async () => {
+        mockRemovePush.mockImplementation(() => new Promise<void>(() => undefined));
+        vi.useFakeTimers();
+        let latest: AuthContextValue | undefined;
+        await act(async () => {
+            root.render(<AuthProvider><Harness onReady={(v) => { latest = v; }} /></AuthProvider>);
+        });
+        let done = false;
+        await act(async () => {
+            void latest!.logout().then(() => { done = true; });
+            await vi.advanceTimersByTimeAsync(PUSH_CLEANUP_TIMEOUT_MS);
+        });
+        expect(PUSH_CLEANUP_TIMEOUT_MS).toBeLessThanOrEqual(3000);
+        expect(mockPost).toHaveBeenCalledWith('/api/v1/auth/logout');
+        expect(done).toBe(true);
+        expect(latest?.user).toBeNull();
+    });
+
+    it('session expiry (no logout call) drops the browser push subscription only', async () => {
+        const ctx = await mount();
+        expect(ctx.user).not.toBeNull();
+        await act(async () => { window.dispatchEvent(new Event('auth:session-expired')); });
+        expect(mockClearLocalPush).toHaveBeenCalledTimes(1);
+        expect(mockRemovePush).not.toHaveBeenCalled();
+    });
+
+    it('a failing browser cleanup on expiry is swallowed', async () => {
+        mockClearLocalPush.mockRejectedValue(new Error('boom'));
+        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        let latest: AuthContextValue | undefined;
+        await act(async () => {
+            root.render(<AuthProvider><Harness onReady={(v) => { latest = v; }} /></AuthProvider>);
+        });
+        await act(async () => { window.dispatchEvent(new Event('auth:session-expired')); });
+        expect(latest?.user).toBeNull();
+        errSpy.mockRestore();
     });
 });

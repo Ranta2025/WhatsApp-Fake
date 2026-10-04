@@ -7,11 +7,12 @@ import type { NotificationPermissionState } from '../../../utils/notifications';
  * push subscription on boot (login / reload) and right after the user grants
  * notification permission (the banner updates `permission`). Endpoints can
  * rotate, so the subscription is always re-POSTed; the server is idempotent.
- * `userKey` identifies the logged-in user (null = no session).
+ * `userKey` identifies the logged-in user (null = no session); a user who
+ * turned push off in settings (per-user opt-out) is not re-subscribed.
  */
 export function usePushSync(userKey: string | null, permission: NotificationPermissionState): void {
     useEffect(() => {
         if (!userKey || permission !== 'granted') return;
-        void syncPushSubscription();
+        void syncPushSubscription(userKey);
     }, [userKey, permission]);
 }
