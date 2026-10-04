@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"errors"
 	"gorm/backend/models"
 	"gorm/backend/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 // maxUsernameLen es el tamaño de la columna username (size:30).
@@ -29,6 +31,36 @@ func validarPassword(password string) (string, bool) {
 	return "", true
 }
 
+// registerBindMessage traduce un error de binding del registro a un mensaje que
+// dice qué falla: campo ausente ("required") frente a formato inválido (email,
+// e164). Los errores que no son de validación (JSON malformado) y cualquier otro
+// caso mantienen el mensaje genérico.
+func registerBindMessage(err error) string {
+	const generic = "Complete todos los campos"
+	var verrs validator.ValidationErrors
+	if !errors.As(err, &verrs) {
+		return generic
+	}
+	var invalidEmail, invalidPhone bool
+	for _, fe := range verrs {
+		switch {
+		case fe.Tag() == "required":
+			return generic
+		case fe.Field() == "Gmail" && fe.Tag() == "email":
+			invalidEmail = true
+		case fe.Field() == "Telephon" && fe.Tag() == "e164":
+			invalidPhone = true
+		}
+	}
+	switch {
+	case invalidEmail:
+		return "El email no es válido"
+	case invalidPhone:
+		return "El número de teléfono no es válido (formato internacional, ej: +5355123456)"
+	}
+	return generic
+}
+
 // MiddlewareLogOut valida el JSON de registro de usuario: longitud de username,
 // formato del teléfono y reglas de contraseña.
 // (Nombre histórico; en realidad es MiddlewareRegister.)
@@ -37,7 +69,7 @@ func MiddlewareLogOut() gin.HandlerFunc {
 		var user models.UserDataBase
 		if err := c.ShouldBindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Complete todos los campos",
+				"error": registerBindMessage(err),
 			})
 			c.Abort()
 			return

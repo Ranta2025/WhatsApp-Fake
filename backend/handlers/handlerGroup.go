@@ -87,13 +87,13 @@ func (h *HandlerGroup) respondGroupMutationError(ctx *gin.Context, err error) {
 		errors.Is(err, services.ErrGroupSendRestricted),
 		errors.Is(err, services.ErrGroupEditRestricted),
 		errors.Is(err, services.ErrGroupAddRestricted):
-		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusForbidden, err)
 	case errors.Is(err, services.ErrGroupTargetNotMember):
-		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusNotFound, err)
 	case errors.Is(err, services.ErrInvalidRoleChange):
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusBadRequest, err)
 	default:
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusBadRequest, err)
 	}
 }
 
@@ -114,7 +114,7 @@ func (h *HandlerGroup) HandleCreateGroup() gin.HandlerFunc {
 
 		detail, err := h.service.CreateGroup(telephon.(string), data.(models.GroupCreate), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			return
 		}
 
@@ -150,7 +150,7 @@ func (h *HandlerGroup) HandleGetUserGroups() gin.HandlerFunc {
 
 		groups, err := h.service.GetUserGroups(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			respondInternal(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"groups": groups})
@@ -174,7 +174,7 @@ func (h *HandlerGroup) HandleGetGroupDetail() gin.HandlerFunc {
 
 		detail, err := h.service.GetGroupDetail(telephon.(string), groupID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusForbidden, err)
 			return
 		}
 		// Auto-unir al usuario a la room del WS (mecanismo de auto-recuperación).
@@ -355,7 +355,7 @@ func (h *HandlerGroup) HandleGetGroupMessages() gin.HandlerFunc {
 
 		messages, hasMore, err := h.service.GetGroupMessagesPage(telephon.(string), groupID.(uint), before, limit, offset, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusForbidden, err)
 			return
 		}
 		// Auto-unir al usuario a la room del WS al cargar mensajes (auto-recuperación).
@@ -409,9 +409,9 @@ func (h *HandlerGroup) HandleGetMessageReceipts() gin.HandlerFunc {
 		case err == nil:
 			ctx.JSON(http.StatusOK, receipts)
 		case errors.Is(err, services.ErrNotMessageSender), errors.Is(err, services.ErrNotGroupMember):
-			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusForbidden, err)
 		case errors.Is(err, services.ErrGroupMessageNotFound):
-			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusNotFound, err)
 		default:
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener los acuses"})
 		}
@@ -461,7 +461,7 @@ func (h *HandlerGroup) HandleDeleteGroupMessage() gin.HandlerFunc {
 
 		err := h.service.DeleteGroupMessage(telephon.(string), groupID.(uint), data.(models.GroupMessageDelete), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": "mensaje eliminado correctamente"})
@@ -747,7 +747,7 @@ func (h *HandlerGroup) HandleLeaveGroup() gin.HandlerFunc {
 
 		systemMsg, err := h.service.LeaveGroup(telephon.(string), groupID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			return
 		}
 
