@@ -36,7 +36,7 @@ interface Setup {
 const queues: OutboxQueue[] = [];
 const stores: OutboxStore[] = [];
 
-function setup(over: { dbName?: string; owner?: string; ids?: string[]; ackTimeoutMs?: number; maxErrorAttempts?: number; transport?: FakeTransport } = {}): Setup {
+function setup(over: { dbName?: string; owner?: string; ids?: string[]; ackTimeoutMs?: number; maxErrorAttempts?: number; retryBaseMs?: number; retryMaxMs?: number; transport?: FakeTransport } = {}): Setup {
     const dbName = over.dbName ?? freshName();
     const store = createOutboxStore(dbName);
     const transport = over.transport ?? new FakeTransport();
@@ -56,6 +56,8 @@ function setup(over: { dbName?: string; owner?: string; ids?: string[]; ackTimeo
         now: () => clock++,
         ackTimeoutMs: over.ackTimeoutMs ?? 5000,
         maxErrorAttempts: over.maxErrorAttempts,
+        retryBaseMs: over.retryBaseMs,
+        retryMaxMs: over.retryMaxMs,
     });
     queues.push(queue);
     stores.push(store);
@@ -297,6 +299,85 @@ describe('OutboxQueue.flush', () => {
         const { queue } = setup();
         await queue.ready;
         expect(queue.ack(ID(9))).toBe('unknown');
+    });
+});
+
+describe('OutboxQueue retry while connected', () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    // In-memory store: fake-indexeddb needs real macrotasks, which fake timers would starve.
+    const memoryStore = (): OutboxStore => {
+        const rows = new Map<string, OutboxEntry>();
+        return {
+            list: () => Promise.resolve([...rows.values()]),
+            put: (_owner, entry) => { rows.set(entry.clientID, entry); return Promise.resolve(); },
+            remove: (_owner, id) => { rows.delete(id); return Promise.resolve(); },
+            clear: () => { rows.clear(); return Promise.resolve(); },
+            close: () => {},
+        };
+    };
+
+    // Queues one entry while offline, then goes online with fake timers installed.
+    async function queuedEntry(over: { ackTimeoutMs: number; retryBaseMs: number; retryMaxMs?: number; maxErrorAttempts?: number }) {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const transport = new FakeTransport();
+        const online = { value: false };
+        let n = 0;
+        const queue = new OutboxQueue({
+            store: memoryStore(), owner: '111', transport, isOnline: () => online.value,
+            newClientID: () => ID(++n), now: () => n, ...over,
+        });
+        queues.push(queue);
+        await queue.sendText(text('uno'));
+        online.value = true;
+        return { queue, transport, online };
+    }
+
+    it('re-sends a timed-out entry after the backoff without a connect event, then delivers later entries FIFO', async () => {
+        const { queue, transport } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000, retryMaxMs: 8000 });
+        void queue.flush();
+        await vi.advanceTimersByTimeAsync(100); // ack timeout
+        expect(transport.sent.map(e => [e.text, e.attempts])).toEqual([['uno', 1]]);
+
+        await queue.sendText(text('dos')); // queued behind the stuck entry
+        await vi.advanceTimersByTimeAsync(500);
+        expect(transport.sent).toHaveLength(1); // enqueueing does not bypass the backoff
+        await vi.advanceTimersByTimeAsync(500); // backoff elapsed
+        expect(transport.sent.map(e => [e.text, e.attempts])).toEqual([['uno', 1], ['uno', 2]]);
+
+        expect(queue.ack(ID(1))).toBe('replayed');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(transport.sent.at(-1)).toEqual(expect.objectContaining({ text: 'dos' }));
+    });
+
+    it('repeated timeouts while open end in failed after maxErrorAttempts', async () => {
+        const { queue, transport } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000, retryMaxMs: 8000, maxErrorAttempts: 3 });
+        void queue.flush();
+        await vi.advanceTimersByTimeAsync(100_000);
+        expect(transport.sent).toHaveLength(3);
+        expect(queue.getItems()[0]?.state).toBe('failed');
+    });
+
+    it('dispose cancels a scheduled retry', async () => {
+        const { queue, transport } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000 });
+        void queue.flush();
+        await vi.advanceTimersByTimeAsync(100);
+        expect(transport.sent).toHaveLength(1);
+        queue.dispose();
+        await vi.advanceTimersByTimeAsync(100_000);
+        expect(transport.sent).toHaveLength(1);
+    });
+
+    it('a disconnect does not schedule a retry (waits for the reconnect)', async () => {
+        const { queue, transport } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000 });
+        const flushing = queue.flush();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(transport.sent).toHaveLength(1);
+        transport.open = false;
+        queue.handleDisconnect();
+        await flushing;
+        await vi.advanceTimersByTimeAsync(100_000);
+        expect(transport.sent).toHaveLength(1);
     });
 });
 

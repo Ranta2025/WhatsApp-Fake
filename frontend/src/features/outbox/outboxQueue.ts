@@ -38,8 +38,12 @@ export interface OutboxQueueOptions {
     now: () => number;
     /** How long a flushed entry waits for its ack before it stays pending for the next open. */
     ackTimeoutMs?: number;
-    /** Non-permanent send errors tolerated before the entry is marked failed. */
+    /** Non-permanent send errors or ack timeouts tolerated before the entry is marked failed. */
     maxErrorAttempts?: number;
+    /** First retry delay after a timeout/transient error while the socket stays open; doubles per attempt. */
+    retryBaseMs?: number;
+    /** Cap of the retry delay. */
+    retryMaxMs?: number;
 }
 
 /** `sent`: sent immediately (not queued). `queued`: in the outbox, shown as pending. */
@@ -63,6 +67,8 @@ const SEND_ERROR_PREFIX = 'Error al enviar mensaje';
 const PERMANENT_ERROR_MARKER = /clientID/i;
 const DEFAULT_ACK_TIMEOUT_MS = 15000;
 const DEFAULT_MAX_ERROR_ATTEMPTS = 5;
+const DEFAULT_RETRY_BASE_MS = 2000;
+const DEFAULT_RETRY_MAX_MS = 30000;
 
 export class OutboxQueue {
     /** Resolves once the stored entries were loaded (rehydrated). */
@@ -78,10 +84,15 @@ export class OutboxQueue {
     private warned = false;
     private readonly ackTimeoutMs: number;
     private readonly maxErrorAttempts: number;
+    private readonly retryBaseMs: number;
+    private readonly retryMaxMs: number;
+    private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(private readonly options: OutboxQueueOptions) {
         this.ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
         this.maxErrorAttempts = options.maxErrorAttempts ?? DEFAULT_MAX_ERROR_ATTEMPTS;
+        this.retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
+        this.retryMaxMs = options.retryMaxMs ?? DEFAULT_RETRY_MAX_MS;
         this.ready = this.load();
     }
 
@@ -108,13 +119,15 @@ export class OutboxQueue {
         }
         this.setItems([...this.items, { state: 'pending', entry }]);
         await this.persist(entry);
-        if (this.options.isOnline() && this.options.transport.isOpen()) void this.flush();
+        // A scheduled retry owns the next resend: enqueueing must not bypass its backoff.
+        if (this.retryTimer === null && this.options.isOnline() && this.options.transport.isOpen()) void this.flush();
         return 'queued';
     }
 
     /** Sends the queued entries in order; safe to call repeatedly (one flush at a time). */
     async flush(): Promise<void> {
         await this.ready;
+        this.cancelRetry();
         if (this.flushing) {
             this.flushAgain = true;
             return;
@@ -124,7 +137,7 @@ export class OutboxQueue {
             do {
                 this.flushAgain = false;
                 await this.drain();
-            } while (this.flushAgain && !this.disposed && this.options.transport.isOpen());
+            } while (this.flushAgain && this.retryTimer === null && !this.disposed && this.options.transport.isOpen());
         } finally {
             this.flushing = false;
         }
@@ -169,6 +182,7 @@ export class OutboxQueue {
 
     dispose(): void {
         this.disposed = true;
+        this.cancelRetry();
         this.inFlight?.settle({ kind: 'disconnect' });
         this.listeners.clear();
     }
@@ -205,12 +219,33 @@ export class OutboxQueue {
             const outcome = await result;
 
             if (outcome.kind === 'ack') continue;
-            if (outcome.kind === 'error' && (outcome.permanent || entry.attempts >= this.maxErrorAttempts)) {
+            const permanent = outcome.kind === 'error' && outcome.permanent;
+            const transient = outcome.kind === 'error' || outcome.kind === 'timeout';
+            if (permanent || (transient && entry.attempts >= this.maxErrorAttempts)) {
                 await this.markFailed(entry.clientID);
                 continue;
             }
-            return; // disconnect, timeout or a transient error: retry on the next flush
+            // Timeout or transient error with the socket still open: no reconnect will
+            // trigger a flush, so retry after a backoff. A disconnect waits for the reconnect.
+            if (transient) this.scheduleRetry(entry.attempts);
+            return;
         }
+    }
+
+    private scheduleRetry(attempts: number): void {
+        if (this.disposed || !this.options.transport.isOpen()) return;
+        this.cancelRetry();
+        const delay = Math.min(this.retryBaseMs * 2 ** Math.max(0, attempts - 1), this.retryMaxMs);
+        this.retryTimer = setTimeout(() => {
+            this.retryTimer = null;
+            void this.flush();
+        }, delay);
+    }
+
+    private cancelRetry(): void {
+        if (this.retryTimer === null) return;
+        clearTimeout(this.retryTimer);
+        this.retryTimer = null;
     }
 
     private waitForResult(clientID: string): Promise<FlightResult> {

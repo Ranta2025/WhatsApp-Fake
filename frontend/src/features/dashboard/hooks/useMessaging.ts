@@ -198,7 +198,10 @@ const useMessagingInternal = (): UseMessagingResult => {
             : forwardingMessage.Message;
         targetNumbers.forEach(number => {
             if (mediaType) sendMessage(number, content, null, mediaType);
-            else void sendText({ kind: 'direct', target: number, text: content, replyTo: null });
+            else {
+                sendText({ kind: 'direct', target: number, text: content, replyTo: null })
+                    .catch((err: unknown) => { console.error('Error forwarding message:', err); });
+            }
         });
         const label = targetNumbers.length === 1
             ? 'Mensaje reenviado'
