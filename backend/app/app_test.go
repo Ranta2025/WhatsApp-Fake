@@ -355,3 +355,49 @@ func TestRunShutsDownMainServerWhenMetricsListenerFails(t *testing.T) {
 		t.Fatal("el server principal siguió escuchando tras el fallo del listener")
 	}
 }
+
+// En el apagado, el despacho de Web Push se cierra (drena los envíos
+// encolados) después de apagar el server HTTP, que ya no encola más.
+func TestRunClosesPushNotifierAfterServerShutdown(t *testing.T) {
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	mainAddr := free.Addr().String()
+	free.Close()
+
+	closed := make(chan bool, 1)
+	a := &App{
+		server: &http.Server{Addr: mainAddr, Handler: http.NewServeMux()},
+		closePush: func() {
+			conn, dialErr := net.DialTimeout("tcp", mainAddr, 300*time.Millisecond)
+			if dialErr == nil {
+				conn.Close()
+			}
+			closed <- dialErr != nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runErr := make(chan error, 1)
+	go func() { runErr <- a.Run(ctx) }()
+	require.Eventually(t, func() bool {
+		conn, err := net.DialTimeout("tcp", mainAddr, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+		}
+		return err == nil
+	}, 3*time.Second, 20*time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-runErr:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run no retornó tras cancelar el contexto")
+	}
+	select {
+	case serverDown := <-closed:
+		assert.True(t, serverDown, "el despacho se cierra después de apagar el server")
+	default:
+		t.Fatal("no se cerró el despacho de push en el apagado")
+	}
+}

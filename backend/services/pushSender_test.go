@@ -25,10 +25,12 @@ func TestPushStatusError_Mapping(t *testing.T) {
 	for _, code := range []int{200, 201, 202, 204} {
 		assert.NoError(t, pushStatusError(code), code)
 	}
-	for _, code := range []int{404, 410} {
+	// 401/403: la suscripción ya no es válida para nuestras claves VAPID
+	// (p. ej. se rotaron); reintentar no sirve, se borra como un 404/410.
+	for _, code := range []int{401, 403, 404, 410} {
 		assert.ErrorIs(t, pushStatusError(code), ErrPushGone, code)
 	}
-	for _, code := range []int{302, 400, 401, 403, 413, 429, 500, 503} {
+	for _, code := range []int{302, 400, 413, 429, 500, 503} {
 		err := pushStatusError(code)
 		require.Error(t, err, code)
 		assert.NotErrorIs(t, err, ErrPushGone, code)
@@ -143,6 +145,24 @@ func TestWebPushSender_MapsStatus(t *testing.T) {
 		assert.Equal(t, tc.gone, errors.Is(err, ErrPushGone), tc.status)
 		assert.True(t, rt.bodies[0].closed)
 	}
+}
+
+// errPushTransport falla siempre como un error de red.
+type errPushTransport struct{}
+
+func (errPushTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("dial tcp: connection refused")
+}
+
+func TestWebPushSender_TransportErrorDoesNotLeakEndpoint(t *testing.T) {
+	endpoint := "https://fcm.googleapis.com/fcm/send/secreto-capacidad"
+	s := newWebPushSender(testPushConfig(t, "mailto:a@b.c"), errPushTransport{}, allowAll)
+
+	err := s.Send(context.Background(), testPushSubscription(t, endpoint), []byte(`{}`))
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), endpoint)
+	assert.NotContains(t, err.Error(), "secreto-capacidad")
+	assert.Contains(t, err.Error(), "connection refused")
 }
 
 func TestWebPushSender_DoesNotFollowRedirects(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"gorm/backend/config"
 	"gorm/backend/models"
@@ -102,6 +103,7 @@ func TestPushSubscribeNewCreates(t *testing.T) {
 	repo := new(MockPushRepo)
 	in := validPushInput("https://fcm.googleapis.com/fcm/send/new")
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(nil, nil)
 	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, 3), nil)
 	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
 		return s.UserID == 7 && s.Endpoint == in.Endpoint && s.P256dh == in.Keys.P256dh && s.Auth == in.Keys.Auth && s.UserAgent == "Firefox"
@@ -116,6 +118,7 @@ func TestPushSubscribeNewCreates(t *testing.T) {
 func TestPushSubscribeTruncatesUserAgent(t *testing.T) {
 	repo := new(MockPushRepo)
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", mock.Anything, mock.Anything).Return(nil, nil)
 	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return([]models.PushSubscription{}, nil)
 	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
 		return len([]rune(s.UserAgent)) == 300
@@ -126,26 +129,98 @@ func TestPushSubscribeTruncatesUserAgent(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-func TestPushSubscribeLimitReached(t *testing.T) {
+// Con el límite alcanzado, un endpoint nuevo desplaza a la suscripción más
+// antigua por COALESCE(last_success_at, created_at) en vez de bloquear al usuario.
+func TestPushSubscribeAtLimitEvictsOldest(t *testing.T) {
 	repo := new(MockPushRepo)
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	existing := subsFor(7, MaxPushSubscriptionsPerUser)
+	for i := range existing {
+		existing[i].CreatedAt = base.Add(time.Duration(i) * time.Hour)
+		used := base.Add(time.Duration(100+i) * time.Hour)
+		existing[i].LastSuccessAt = &used
+	}
+	// La fila 4 se creó después de la 0 pero nunca recibió un envío: es la
+	// de menor COALESCE(last_success_at, created_at).
+	existing[4].LastSuccessAt = nil
+	in := validPushInput("https://fcm.googleapis.com/fcm/send/eleventh")
+	var calls []string
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(nil, nil)
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(existing, nil)
+	repo.On("DeleteSubscriptionByID", existing[4].ID, mock.Anything).Return(nil).Once().
+		Run(func(mock.Arguments) { calls = append(calls, "delete") })
+	repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(nil).Once().
+		Run(func(mock.Arguments) { calls = append(calls, "upsert") })
+
+	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
+	require.NoError(t, err)
+	assert.True(t, created)
+	assert.Equal(t, []string{"delete", "upsert"}, calls)
+	repo.AssertExpectations(t)
+}
+
+func TestPushSubscribeEvictErrorPropagates(t *testing.T) {
+	repo := new(MockPushRepo)
+	boom := errors.New("db caída")
+	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", mock.Anything, mock.Anything).Return(nil, nil)
 	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, MaxPushSubscriptionsPerUser), nil)
+	repo.On("DeleteSubscriptionByID", mock.Anything, mock.Anything).Return(boom)
 
 	_, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, validPushInput("https://fcm.googleapis.com/fcm/send/eleventh"), "ua", context.Background())
-	assert.ErrorIs(t, err, ErrPushLimit)
+	assert.ErrorIs(t, err, boom)
 	repo.AssertNotCalled(t, "UpsertSubscription", mock.Anything, mock.Anything)
+}
+
+// Un endpoint de otro usuario solo se reasigna si las claves coinciden (mismo
+// navegador compartido); si no, es un intento de quedarse con el endpoint.
+func TestPushSubscribeOtherUsersEndpointWithDifferentKeysConflicts(t *testing.T) {
+	repo := new(MockPushRepo)
+	in := validPushInput("https://fcm.googleapis.com/fcm/send/ajeno")
+	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(&models.PushSubscription{ID: 3, UserID: 99, Endpoint: in.Endpoint, P256dh: "otra", Auth: in.Keys.Auth}, nil)
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return([]models.PushSubscription{}, nil).Maybe()
+
+	_, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
+	assert.ErrorIs(t, err, ErrPushConflict)
+	repo.AssertNotCalled(t, "UpsertSubscription", mock.Anything, mock.Anything)
+}
+
+func TestPushSubscribeOtherUsersEndpointWithSameKeysIsReassigned(t *testing.T) {
+	repo := new(MockPushRepo)
+	in := validPushInput("https://fcm.googleapis.com/fcm/send/compartido")
+	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(&models.PushSubscription{ID: 3, UserID: 99, Endpoint: in.Endpoint, P256dh: in.Keys.P256dh, Auth: in.Keys.Auth}, nil)
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, 2), nil)
+	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
+		return s.UserID == 7 && s.Endpoint == in.Endpoint
+	}), mock.Anything).Return(nil)
+
+	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
+	require.NoError(t, err)
+	assert.True(t, created, "es nueva para este usuario")
+	repo.AssertExpectations(t)
 }
 
 func TestPushSubscribeOwnEndpointAtLimitIsUpdate(t *testing.T) {
 	repo := new(MockPushRepo)
 	existing := subsFor(7, MaxPushSubscriptionsPerUser)
+	in := validPushInput(existing[4].Endpoint)
+	// La fila guardada tiene claves viejas: el mismo usuario puede rotarlas.
+	stored := existing[4]
+	stored.P256dh, stored.Auth = "vieja", "vieja"
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
-	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(existing, nil)
-	repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(nil)
+	repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(&stored, nil)
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(existing, nil).Maybe()
+	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
+		return s.UserID == 7 && s.P256dh == in.Keys.P256dh && s.Auth == in.Keys.Auth
+	}), mock.Anything).Return(nil)
 
-	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, validPushInput(existing[4].Endpoint), "ua", context.Background())
+	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
 	require.NoError(t, err)
 	assert.False(t, created, "re-suscribir el propio endpoint no cuenta como nueva")
+	repo.AssertNotCalled(t, "DeleteSubscriptionByID", mock.Anything, mock.Anything)
 	repo.AssertExpectations(t)
 }
 
@@ -153,11 +228,20 @@ func TestPushSubscribeRepoErrorPropagates(t *testing.T) {
 	repo := new(MockPushRepo)
 	boom := errors.New("db caída")
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return([]models.PushSubscription(nil), boom)
 
 	_, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, validPushInput("https://fcm.googleapis.com/x"), "ua", context.Background())
 	assert.ErrorIs(t, err, boom)
-	assert.NotErrorIs(t, err, ErrPushLimit)
+
+	repo = new(MockPushRepo)
+	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", mock.Anything, mock.Anything).Return(nil, boom)
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return([]models.PushSubscription{}, nil).Maybe()
+
+	_, err = InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, validPushInput("https://fcm.googleapis.com/x"), "ua", context.Background())
+	assert.ErrorIs(t, err, boom)
+	assert.NotErrorIs(t, err, ErrPushConflict)
 }
 
 func TestPushUnsubscribeIsIdempotentAndWorksWhenDisabled(t *testing.T) {

@@ -45,6 +45,20 @@ func TestPushRepoUpsertReassignsByEndpoint(t *testing.T) {
 		assert.Contains(t, s, col)
 	}
 	assert.NotContains(t, s, `"created_at"="excluded"`, "created_at se conserva")
+	// Solo se reasigna si es del mismo usuario o con las mismas claves (aunque
+	// el servicio lo compruebe antes, una carrera no permite robar el endpoint).
+	assert.Contains(t, s, `WHERE push_subscriptions.user_id = excluded.user_id OR (push_subscriptions.p256dh = excluded.p256dh AND push_subscriptions.auth = excluded.auth)`)
+}
+
+func TestPushRepoGetSubscriptionByEndpoint(t *testing.T) {
+	db, rec := dryRunDB(t)
+	r := InitRepoPush(db, nil)
+	sub, err := r.GetSubscriptionByEndpoint("https://fcm.googleapis.com/x", context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, sub, "sin fila devuelve nil sin error")
+	s := pushStmt(t, rec)
+	assert.Contains(t, s, `FROM "push_subscriptions" WHERE endpoint = 'https://fcm.googleapis.com/x'`)
+	assert.Contains(t, s, "LIMIT 1")
 }
 
 func TestPushRepoListAndCountByUser(t *testing.T) {

@@ -35,6 +35,8 @@ type App struct {
 	db                  *gorm.DB
 	redis               *redis.Client
 	cancelStatusCleanup context.CancelFunc
+	// closePush cierra el despacho de Web Push (espera los envíos encolados).
+	closePush func()
 }
 
 // New conecta con las dependencias externas y construye la aplicación.
@@ -52,7 +54,7 @@ func New() (*App, error) {
 		return nil, err
 	}
 	engine.GET("/healthz", healthHandler(db, rd))
-	deps, cancelStatusCleanup := buildDeps(db, rd, mc, backendMetrics)
+	deps, cancelStatusCleanup, closePush := buildDeps(db, rd, mc, backendMetrics)
 	routers.Router(engine, deps)
 
 	return &App{
@@ -71,6 +73,7 @@ func New() (*App, error) {
 		db:                  db,
 		redis:               rd,
 		cancelStatusCleanup: cancelStatusCleanup,
+		closePush:           closePush,
 	}, nil
 }
 
@@ -197,8 +200,9 @@ const statusCleanupInterval = 10 * time.Minute
 
 // buildDeps construye el grafo de dependencias: repositorios → servicios → handlers.
 // También arranca el job periódico de limpieza de estados expirados y devuelve
-// su función de cancelación, para poder detenerlo en un apagado ordenado.
-func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metrics) (routers.Deps, context.CancelFunc) {
+// su función de cancelación, para poder detenerlo en un apagado ordenado, y la
+// función que cierra el despacho de Web Push.
+func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metrics) (routers.Deps, context.CancelFunc, func()) {
 	// Repositorios
 	repoUser := repos.GetRespositorieUser(db)
 	repoContact := repos.InitRepoContact(db, rd)
@@ -263,7 +267,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 		ContactService:   serviceContact,
 		CallService:      serviceCall,
 		GroupService:     serviceGroup,
-	}, cancelCleanup
+	}, cancelCleanup, pushNotifierCloser(pushNotifier)
 }
 
 // statusCleanupLoop borra periódicamente los estados expirados (y sus vistas).
@@ -385,6 +389,11 @@ func (a *App) Run(ctx context.Context) error {
 		if metricsErr := a.metricsServer.Shutdown(shutdownCtx); metricsErr != nil && err == nil {
 			err = metricsErr
 		}
+	}
+	// Con el server apagado ya no se encolan notificaciones: se drenan las
+	// pendientes antes de cerrar la BD que usan.
+	if a.closePush != nil {
+		a.closePush()
 	}
 
 	if a.db != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -28,8 +29,9 @@ const (
 )
 
 var (
-	// ErrPushGone: el servicio de push respondió 404/410, la suscripción ya no
-	// existe y debe borrarse.
+	// ErrPushGone: el servicio de push respondió 404/410 (la suscripción ya
+	// no existe) o 401/403 (ya no es válida para nuestras claves VAPID): se
+	// borra porque reintentar nunca va a funcionar.
 	ErrPushGone = errors.New("suscripción push expirada")
 	// ErrPushEndpointNotAllowed: el endpoint guardado no pasa la allowlist
 	// (defensa en profundidad contra SSRF; el alta ya lo validó).
@@ -91,6 +93,13 @@ func (s *WebPushSender) Send(ctx context.Context, sub models.PushSubscription, p
 		Urgency:         webpush.UrgencyNormal,
 	})
 	if err != nil {
+		// http.Client.Do devuelve *url.Error, cuyo mensaje incluye la URL
+		// completa: el endpoint es una URL con capacidad de envío y no debe
+		// acabar en los logs, así que solo se conserva la causa.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
 		return fmt.Errorf("enviar push: %w", err)
 	}
 	defer resp.Body.Close()
@@ -99,12 +108,13 @@ func (s *WebPushSender) Send(ctx context.Context, sub models.PushSubscription, p
 }
 
 // pushStatusError traduce la respuesta del servicio de push: 2xx = éxito,
-// 404/410 = ErrPushGone (borrar la suscripción), resto = error con el status.
+// 401/403/404/410 = ErrPushGone (borrar la suscripción), resto = error con el status.
 func pushStatusError(code int) error {
 	switch {
 	case code >= 200 && code < 300:
 		return nil
-	case code == http.StatusNotFound || code == http.StatusGone:
+	case code == http.StatusNotFound || code == http.StatusGone,
+		code == http.StatusUnauthorized || code == http.StatusForbidden:
 		return fmt.Errorf("%w (%d)", ErrPushGone, code)
 	default:
 		return fmt.Errorf("servicio de push respondió %d %s", code, http.StatusText(code))

@@ -29,3 +29,12 @@ func buildPushNotifier(cfg config.PushConfig, repoPush *repos.RepoPush, repoCont
 		Sender: services.NewWebPushSender(cfg),
 	})
 }
+
+// pushNotifierCloser devuelve la función que cierra el despacho (espera los
+// envíos encolados); con el no-op no hace nada.
+func pushNotifierCloser(n services.PushNotifier) func() {
+	if d, ok := n.(interface{ Close() }); ok {
+		return d.Close
+	}
+	return func() {}
+}

@@ -223,6 +223,19 @@ func (m *MockPushRepo) DeleteSubscriptionByEndpoint(userID uint, endpoint string
 	return args.Error(0)
 }
 
+func (m *MockPushRepo) GetSubscriptionByEndpoint(endpoint string, ctx context.Context) (*models.PushSubscription, error) {
+	args := m.Called(endpoint, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.PushSubscription), args.Error(1)
+}
+
+func (m *MockPushRepo) DeleteSubscriptionByID(id uint, ctx context.Context) error {
+	args := m.Called(id, ctx)
+	return args.Error(0)
+}
+
 func (m *MockPushRepo) GetPushPreviewDisabled(userID uint, ctx context.Context) (bool, error) {
 	args := m.Called(userID, ctx)
 	return args.Bool(0), args.Error(1)

@@ -37,8 +37,12 @@ func (r *RepoPush) GetIdByTelephon(telephon string, ctx context.Context) (int, e
 }
 
 // UpsertSubscription inserta la suscripción o, si el endpoint ya existe
-// (índice único idx_push_subscriptions_endpoint), la reasigna al usuario y
-// actualiza sus claves y user agent. created_at y last_success_at se conservan.
+// (índice único idx_push_subscriptions_endpoint), actualiza usuario, claves y
+// user agent. created_at y last_success_at se conservan. Solo actualiza si la
+// fila es del mismo usuario o tiene las mismas claves (mismo navegador): el
+// servicio ya lo comprobó con GetSubscriptionByEndpoint y esta condición
+// cierra la carrera entre esa lectura y el upsert (si no se cumple, no se
+// toca la fila).
 func (r *RepoPush) UpsertSubscription(sub *models.PushSubscription, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, pushTimeout)
 	defer cancel()
@@ -46,8 +50,26 @@ func (r *RepoPush) UpsertSubscription(sub *models.PushSubscription, ctx context.
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "endpoint"}},
 			DoUpdates: clause.AssignmentColumns([]string{"user_id", "p256dh", "auth", "user_agent"}),
+			Where: clause.Where{Exprs: []clause.Expression{clause.Expr{
+				SQL: "push_subscriptions.user_id = excluded.user_id OR (push_subscriptions.p256dh = excluded.p256dh AND push_subscriptions.auth = excluded.auth)",
+			}}},
 		}).
 		Create(sub).Error
+}
+
+// GetSubscriptionByEndpoint devuelve la suscripción con ese endpoint (de
+// cualquier usuario), o nil sin error si no existe.
+func (r *RepoPush) GetSubscriptionByEndpoint(endpoint string, ctx context.Context) (*models.PushSubscription, error) {
+	c, cancel := context.WithTimeout(ctx, pushTimeout)
+	defer cancel()
+	var subs []models.PushSubscription
+	if err := r.data.WithContext(c).Where("endpoint = ?", endpoint).Limit(1).Find(&subs).Error; err != nil {
+		return nil, err
+	}
+	if len(subs) == 0 {
+		return nil, nil
+	}
+	return &subs[0], nil
 }
 
 // ListSubscriptionsByUser devuelve las suscripciones del usuario (orden de alta).

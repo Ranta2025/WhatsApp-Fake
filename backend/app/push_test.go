@@ -5,6 +5,7 @@ import (
 
 	"gorm/backend/config"
 	"gorm/backend/repos"
+	"gorm/backend/schemas"
 	"gorm/backend/services"
 
 	"github.com/stretchr/testify/assert"
@@ -29,4 +30,13 @@ func TestBuildPushNotifier(t *testing.T) {
 	d, ok := on.(*services.PushDispatcher)
 	assert.True(t, ok)
 	d.Close()
+}
+
+func TestPushNotifierCloser(t *testing.T) {
+	assert.NotPanics(t, pushNotifierCloser(services.NoopPushNotifier{}))
+
+	on := buildPushNotifier(config.PushConfig{Enabled: true, PublicKey: "p", PrivateKey: "k", Subject: "mailto:a@b.c"}, &repos.RepoPush{}, &repos.ApiContact{}, &repos.RepoGroup{})
+	pushNotifierCloser(on)()
+	// Tras cerrar, notificar no encola nada ni entra en pánico.
+	assert.NotPanics(t, func() { on.NotifyDirect("+2", "+1", schemas.Message{Message: "hola"}) })
 }

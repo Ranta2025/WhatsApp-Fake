@@ -19,7 +19,8 @@ const (
 	// pushQueueSize es el máximo de trabajos pendientes; con la cola llena el
 	// trabajo se descarta (se loggea) para no bloquear nunca al llamador.
 	pushQueueSize = 256
-	// pushJobTimeout acota cada trabajo completo (consultas + envíos).
+	// pushJobTimeout acota las consultas de cada trabajo (destinatarios,
+	// nombres, suscripciones); cada envío tiene su propio pushSendTimeout.
 	pushJobTimeout = 10 * time.Second
 )
 
@@ -92,6 +93,10 @@ type PushDispatcher struct {
 	closed  bool
 	dropped atomic.Int64
 	now     func() time.Time
+	// jobTimeout acota las consultas del trabajo y sendTimeout cada envío;
+	// son campos para poder acortarlos en los tests.
+	jobTimeout  time.Duration
+	sendTimeout time.Duration
 }
 
 // NewPushDispatcher arranca el pool con pushWorkers workers.
@@ -105,6 +110,9 @@ func newPushDispatcher(cfg config.PushConfig, deps PushDispatcherDeps, workers, 
 		deps: deps,
 		jobs: make(chan func(context.Context), queueSize),
 		now:  time.Now,
+
+		jobTimeout:  pushJobTimeout,
+		sendTimeout: pushSendTimeout,
 	}
 	for i := 0; i < workers; i++ {
 		d.wg.Add(1)
@@ -122,7 +130,7 @@ func (d *PushDispatcher) worker() {
 
 // run ejecuta un trabajo con su propio timeout; un panic no tumba el worker.
 func (d *PushDispatcher) run(job func(context.Context)) {
-	ctx, cancel := context.WithTimeout(context.Background(), pushJobTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), d.jobTimeout)
 	defer cancel()
 	defer func() {
 		if r := recover(); r != nil {
@@ -215,8 +223,9 @@ func (d *PushDispatcher) NotifyGroup(groupID uint, senderTelephon string, msg sc
 
 // deliver envía el payload a cada suscripción de los destinatarios. La
 // preview efectiva es la global (PUSH_PREVIEW) y la del destinatario. Un
-// 404/410 borra la suscripción; un éxito actualiza last_success_at; el resto
-// de errores se loggea sin reintento.
+// error permanente (401/403/404/410 o endpoint fuera de la allowlist) borra
+// la suscripción; un éxito actualiza last_success_at; el resto de errores se
+// loggea sin reintento.
 func (d *PushDispatcher) deliver(ctx context.Context, kind string, recipients []string, build func(preview bool) ([]byte, error)) {
 	targets, err := d.deps.Repo.ListPushTargetsByTelephons(recipients, ctx)
 	if err != nil {
@@ -234,18 +243,29 @@ func (d *PushDispatcher) deliver(ctx context.Context, kind string, recipients []
 			}
 			payloads[preview] = payload
 		}
-		// Nunca se loggea el endpoint: es una URL con capacidad de envío.
-		switch err := d.deps.Sender.Send(ctx, t.PushSubscription, payload); {
-		case err == nil:
-			if err := d.deps.Repo.MarkSubscriptionSuccess(t.ID, d.now(), ctx); err != nil {
-				slog.Warn("push: error registrando el envío", "subscription_id", t.ID, "err", err)
-			}
-		case errors.Is(err, ErrPushGone):
-			if err := d.deps.Repo.DeleteSubscriptionByID(t.ID, ctx); err != nil {
-				slog.Warn("push: error borrando suscripción expirada", "subscription_id", t.ID, "err", err)
-			}
-		default:
-			slog.Warn("push: envío fallido", "kind", kind, "subscription_id", t.ID, "err", err)
+		d.sendOne(kind, t.PushSubscription, payload)
+	}
+}
+
+// sendOne envía a una suscripción con su propio plazo (sendTimeout), derivado
+// de context.Background() y no del trabajo: un servicio de push lento no
+// agota el plazo de los demás envíos. El borrado / last_success_at posterior
+// usa el mismo contexto. Nunca se loggea el endpoint: es una URL con
+// capacidad de envío.
+func (d *PushDispatcher) sendOne(kind string, sub models.PushSubscription, payload []byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), d.sendTimeout)
+	defer cancel()
+	switch err := d.deps.Sender.Send(ctx, sub, payload); {
+	case err == nil:
+		if err := d.deps.Repo.MarkSubscriptionSuccess(sub.ID, d.now(), ctx); err != nil {
+			slog.Warn("push: error registrando el envío", "subscription_id", sub.ID, "err", err)
 		}
+	case errors.Is(err, ErrPushGone), errors.Is(err, ErrPushEndpointNotAllowed):
+		// Errores permanentes: reintentar nunca va a funcionar.
+		if err := d.deps.Repo.DeleteSubscriptionByID(sub.ID, ctx); err != nil {
+			slog.Warn("push: error borrando suscripción inválida", "subscription_id", sub.ID, "err", err)
+		}
+	default:
+		slog.Warn("push: envío fallido", "kind", kind, "subscription_id", sub.ID, "err", err)
 	}
 }

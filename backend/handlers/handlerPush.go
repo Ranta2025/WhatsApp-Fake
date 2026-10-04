@@ -23,13 +23,13 @@ func InitHandlerPush(service services.PushServicer) *HandlerPush {
 
 // respondPushError traduce un error del servicio de push a HTTP: 404 si el
 // push está deshabilitado en el servidor (no hay claves VAPID: el recurso
-// "no existe"), 409 si se alcanzó el límite de suscripciones, 400 si la
-// suscripción es inválida y 500 genérico para el resto.
+// "no existe"), 409 si el endpoint es de otro usuario con otras claves, 400
+// si la suscripción es inválida y 500 genérico para el resto.
 func respondPushError(ctx *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrPushDisabled):
 		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-	case errors.Is(err, services.ErrPushLimit):
+	case errors.Is(err, services.ErrPushConflict):
 		ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrPushInvalid):
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

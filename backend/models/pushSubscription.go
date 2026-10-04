@@ -4,13 +4,13 @@ import "time"
 
 // PushSubscription es una suscripción Web Push de un navegador/dispositivo de
 // un usuario. El endpoint es único en toda la tabla (índice
-// idx_push_subscriptions_endpoint): si otro usuario inicia sesión en el mismo
-// navegador, la fila se reasigna a él. No usa soft delete: una suscripción
+// idx_push_subscriptions_endpoint, creado por AutoMigrate): si otro usuario
+// inicia sesión en el mismo navegador (mismas claves), la fila se reasigna a él. No usa soft delete: una suscripción
 // dada de baja o expirada (404/410 del servicio de push) se borra de verdad.
 type PushSubscription struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
 	UserID        uint       `gorm:"index;not null" json:"userId"`
-	Endpoint      string     `gorm:"type:text;not null" json:"endpoint"`
+	Endpoint      string     `gorm:"type:text;not null;uniqueIndex:idx_push_subscriptions_endpoint" json:"endpoint"`
 	P256dh        string     `gorm:"column:p256dh" json:"-"`
 	Auth          string     `gorm:"column:auth" json:"-"`
 	UserAgent     string     `gorm:"size:300" json:"userAgent"`

@@ -88,7 +88,7 @@ func TestHandlerPushSubscribeStatuses(t *testing.T) {
 		{"nueva", true, nil, http.StatusCreated},
 		{"existente", false, nil, http.StatusOK},
 		{"deshabilitado", false, services.ErrPushDisabled, http.StatusNotFound},
-		{"límite", false, services.ErrPushLimit, http.StatusConflict},
+		{"endpoint de otro usuario", false, services.ErrPushConflict, http.StatusConflict},
 		{"inválida", false, services.ErrPushInvalid, http.StatusBadRequest},
 		{"interno", false, errors.New("boom"), http.StatusInternalServerError},
 	}

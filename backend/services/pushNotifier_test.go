@@ -198,6 +198,17 @@ func TestPushNotifier_GoneDeletesSubscription(t *testing.T) {
 	assert.Equal(t, []uint{11}, h.repo.marked)
 }
 
+func TestPushNotifier_EndpointNotAllowedDeletesSubscription(t *testing.T) {
+	h := newPushHarness(t, dispatchPushCfg, pushTarget(10, "+2", false))
+	h.sender.errOf[10] = ErrPushEndpointNotAllowed
+
+	h.d.NotifyDirect("+2", "+1", directMsg("hola"))
+	h.d.Close()
+
+	assert.Equal(t, []uint{10}, h.repo.deleted, "un endpoint fuera de la allowlist nunca va a funcionar")
+	assert.Empty(t, h.repo.marked)
+}
+
 func TestPushNotifier_OtherErrorsAreNotRetriedNorDeleted(t *testing.T) {
 	h := newPushHarness(t, dispatchPushCfg, pushTarget(10, "+2", false))
 	h.sender.errOf[10] = errors.New("servicio de push respondió 500")
@@ -397,7 +408,40 @@ func TestPushDispatcher_JobHasDeadline(t *testing.T) {
 	d.Close()
 
 	require.True(t, ok)
-	assert.WithinDuration(t, start.Add(pushJobTimeout), deadline, 2*time.Second)
+	assert.WithinDuration(t, start.Add(pushSendTimeout), deadline, 2*time.Second)
+}
+
+// Un servicio de push lento no debe agotar el plazo del resto de envíos del
+// mismo trabajo: cada suscripción tiene su propio contexto.
+func TestPushDispatcher_SlowSendDoesNotStarveOthers(t *testing.T) {
+	var mu sync.Mutex
+	liveAtSend := map[uint]bool{}
+	sender := subSenderFunc(func(ctx context.Context, sub models.PushSubscription) error {
+		mu.Lock()
+		liveAtSend[sub.ID] = ctx.Err() == nil
+		mu.Unlock()
+		if sub.ID == 10 {
+			<-ctx.Done() // el primer servicio no responde nunca
+			return ctx.Err()
+		}
+		return nil
+	})
+	repo := &fakePushDispatchRepo{targets: []models.PushTarget{pushTarget(10, "+2", false), pushTarget(11, "+2", false)}}
+	d := newPushDispatcher(dispatchPushCfg, PushDispatcherDeps{Repo: repo, Users: &fakePushDirectory{}, Groups: &fakePushDirectory{}, Sender: sender}, 1, 1)
+	d.jobTimeout = 50 * time.Millisecond
+	d.sendTimeout = 50 * time.Millisecond
+
+	d.NotifyDirect("+2", "+1", directMsg("hola"))
+	d.Close()
+
+	assert.Equal(t, map[uint]bool{10: true, 11: true}, liveAtSend)
+	assert.Equal(t, []uint{11}, repo.marked)
+}
+
+type subSenderFunc func(ctx context.Context, sub models.PushSubscription) error
+
+func (f subSenderFunc) Send(ctx context.Context, sub models.PushSubscription, _ []byte) error {
+	return f(ctx, sub)
 }
 
 type senderFunc func(ctx context.Context)

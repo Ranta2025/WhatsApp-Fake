@@ -192,9 +192,9 @@ func Conection() (*gorm.DB, error) {
 	// Búsqueda de llamadas por sala (actualizar estado al aceptar/rechazar/colgar)
 	execMigration(data, `CREATE INDEX IF NOT EXISTS idx_call_logs_room_id ON call_logs (room_id)`)
 
-	// Web Push: un endpoint pertenece a una sola fila (el upsert de
-	// suscripción usa ON CONFLICT (endpoint) para reasignarlo de usuario).
-	execMigration(data, "CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions (endpoint)")
+	// Web Push: el índice único idx_push_subscriptions_endpoint (lo usa el
+	// upsert ON CONFLICT (endpoint)) lo crea AutoMigrate desde el tag del
+	// modelo, con el mismo nombre que el antiguo CREATE UNIQUE INDEX.
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// MIGRACIÓN DE DATOS: normalizar valores de status legacy
