@@ -52,7 +52,7 @@ describe('Sidebar global message search', () => {
             lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { Telephon: '111' },
             messagesByChat: {}, allChatGroups: {}, logout: vi.fn(),
             groups: [groupEquipo], selectedGroup: null, setSelectedGroup,
-            openMessageAt, addToast,
+            openMessageAt, addToast, isMuted: () => false,
             ...over,
         } as unknown as DashboardContextValue);
         act(() => { root.render(<Sidebar onOpenProfile={vi.fn()} onAddContact={vi.fn()} onCreateGroup={vi.fn()} />); });

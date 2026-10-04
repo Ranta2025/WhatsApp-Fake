@@ -79,9 +79,11 @@ interface ListItemProps {
     subtitle?: ReactNode;
     meta?: ReactNode;
     unread?: number;
+    /** Notifications muted for this chat/group: shows 🔇 (unread still counts). */
+    muted?: boolean;
 }
 
-const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unread = 0 }: ListItemProps) => (
+const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unread = 0, muted = false }: ListItemProps) => (
     <button
         onClick={onClick}
         className={`group w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
@@ -103,8 +105,11 @@ const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unrea
             </div>
             <div className="flex items-center justify-between gap-2 mt-0.5">
                 <span className="text-[13px] text-slate-400 truncate">{subtitle}</span>
+                {muted && (
+                    <span role="img" aria-label="Silenciado" title="Silenciado" className="text-[13px] leading-none flex-shrink-0 opacity-70">🔇</span>
+                )}
                 {unread > 0 && (
-                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-indigo-500 text-slate-950 text-[11px] font-bold flex items-center justify-center flex-shrink-0">
+                    <span aria-label={unread === 1 ? '1 mensaje no leído' : `${unread} mensajes no leídos`} className="min-w-[20px] h-5 px-1.5 rounded-full bg-indigo-500 text-slate-950 text-[11px] font-bold flex items-center justify-center flex-shrink-0">
                         {unread > 99 ? '99+' : unread}
                     </span>
                 )}
@@ -136,7 +141,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
         lastSeenMap, avatarMap, isConnected, myAvatar, profile,
         messagesByChat, allChatGroups, logout,
         groups, selectedGroup, setSelectedGroup,
-        openMessageAt, addToast,
+        openMessageAt, addToast, isMuted,
     } = useDashboard();
     const { user } = useAuth();
     const { hasUnseen: hasUnseenStatuses } = useStatus();
@@ -350,6 +355,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                                         subtitle={chat.last ? previewMessage(chat.last) : 'Toca para empezar a chatear'}
                                         meta={chat.last ? formatChatTimestamp(chat.last.Time) : ''}
                                         unread={chat.unread}
+                                        muted={isMuted({ kind: 'direct', key: chat.number })}
                                     />
                                 ))}
                             </div>
@@ -430,6 +436,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                                             <span className="text-[10px] font-medium bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded-md">admin</span>
                                         )}
                                         subtitle={`${g.MemberCount} miembro${g.MemberCount !== 1 ? 's' : ''}${g.Description ? ` · ${g.Description}` : ''}`}
+                                        muted={isMuted({ kind: 'group', id: g.ID })}
                                     />
                                 ))}
                             </div>

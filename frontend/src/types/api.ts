@@ -78,6 +78,10 @@ export interface ContactChat {
   last_seen: string | null;
   avatar_url: string;
   wallpaper_url: string;
+  /** Silencio por chat (omitempty): ausente = no silenciado; true sin MutedUntil = "Siempre". */
+  Muted?: boolean;
+  /** RFC 3339 UTC; el cliente trata `MutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
+  MutedUntil?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -147,6 +151,10 @@ export interface ChatGroup {
   Messages: Message[];
   /** Temporizador del chat en segundos (omitempty: ausente = 0). */
   DisappearSeconds?: number;
+  /** Silencio por chat (omitempty): ausente = no silenciado; true sin MutedUntil = "Siempre". */
+  Muted?: boolean;
+  /** RFC 3339 UTC; el cliente trata `MutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
+  MutedUntil?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -168,6 +176,10 @@ export interface GroupResponse {
   OnlyAdminsCanAddMembers: boolean;
   /** Temporizador de mensajes temporales en segundos (omitempty: ausente = 0). */
   DisappearSeconds?: number;
+  /** Silencio por chat (omitempty): ausente = no silenciado; true sin MutedUntil = "Siempre". */
+  Muted?: boolean;
+  /** RFC 3339 UTC; el cliente trata `MutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
+  MutedUntil?: string;
 }
 
 export interface GroupMemberResponse {
@@ -507,6 +519,23 @@ export interface PushUnsubscribeRequest {
 /** PUT /api/v1/push/preview body. */
 export interface PushPreviewRequest {
   preview: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Silenciar chats (camelCase, PUT/DELETE /api/v1/chat/:contact/mute y /api/v1/group/:groupID/mute)
+// ─────────────────────────────────────────────────────────────────────────
+
+export type MuteDuration = '8h' | '1w' | 'always';
+
+/** PUT .../mute body. */
+export interface MuteRequest {
+  duration: MuteDuration;
+}
+
+/** PUT .../mute response; `mutedUntil` is null for "always". */
+export interface MuteResponse {
+  muted: true;
+  mutedUntil: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

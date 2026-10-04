@@ -5,6 +5,10 @@ import {
 import { isAxiosError } from 'axios';
 import api from '../../../api/axios';
 import { getUserGroups, getGroupMessages, getGroupDetail } from '../../../api/groupApi';
+import {
+    setChatMute as apiSetChatMute, clearChatMute as apiClearChatMute,
+    setGroupMute as apiSetGroupMute, clearGroupMute as apiClearGroupMute,
+} from '../../../api/muteApi';
 import { setChatDisappearing as apiSetChatDisappearing, getChatDisappearing, setGroupDisappearing as apiSetGroupDisappearing } from '../../../api/disappearingApi';
 import { useAuth, type AuthContextValue } from '../../../context/AuthContext';
 import { useWebSocket } from '../../../hooks/useWebSocket';
@@ -14,7 +18,11 @@ import {
 import wsManager, { type WsHandlerMap } from '../../../api/websocket';
 import type {
     UserGet, ContactChat, Message, ChatGroup, GroupResponse, GroupRole, GroupDetail, GroupMessageResponse, CallType,
+    MuteDuration,
 } from '../../../types/api';
+import {
+    isChatMuted, parseMuteFields, muteFieldsFromResponse, earliestMuteExpiry, type MuteFields,
+} from '../lib/mute';
 import {
     resolveChatTarget, type DashboardChatGroupEntry, type SelectedChatTarget,
 } from '../lib/chatSelection';
@@ -70,6 +78,9 @@ export type { PagingState, FocusedWindow };
 
 /** Chat 1:1 (`key` = telephon) o grupo (`id`) sobre el que se abre una ventana desprendida. */
 export type FocusTarget = { kind: 'chat'; key: string } | { kind: 'group'; id: number };
+
+/** Chat whose notifications can be muted: 1:1 (`key` = telephon) or group (`id`). */
+export type MuteTarget = { kind: 'direct'; key: string } | { kind: 'group'; id: number };
 
 export type SidebarView = 'chats' | 'groups' | 'contacts' | 'estados' | 'calls';
 
@@ -179,6 +190,12 @@ export interface DashboardContextValue {
     setChatDisappearing: (contact: string, seconds: number) => Promise<boolean>;
     /** Group counterpart of `setChatDisappearing` (same permission as editing the group info). */
     setGroupDisappearing: (groupID: number, seconds: number) => Promise<boolean>;
+    /** True while that chat/group is muted (a `MutedUntil` in the past counts as not muted). */
+    isMuted: (target: MuteTarget) => boolean;
+    /** Mutes through the REST API and applies its answer; false (+ error toast) on failure. */
+    setMute: (target: MuteTarget, duration: MuteDuration) => Promise<boolean>;
+    /** Unmutes (DELETE, idempotent); false (+ error toast) on failure. */
+    clearMute: (target: MuteTarget) => Promise<boolean>;
     groups: LocalGroup[];
     setGroups: Dispatch<SetStateAction<LocalGroup[]>>;
     groupMessages: Record<number, GroupMessageEntry[]>;
@@ -266,6 +283,27 @@ const focusKey = (target: FocusTarget): string => (
     target.kind === 'chat' ? `chat:${target.key}` : `group:${target.id}`
 );
 
+/**
+ * Applies the mute fields a list reported for each of its chats: muted entries are set, the
+ * rest removed. Chats the list did not mention keep their value (/contact and /chats overlap).
+ */
+const mergeMutes = (
+    prev: Record<string, MuteFields>, entries: ReadonlyArray<readonly [string, MuteFields]>,
+): Record<string, MuteFields> => {
+    let out = prev;
+    for (const [key, fields] of entries) {
+        if (fields.Muted === true) {
+            if (prev[key]?.Muted === fields.Muted && prev[key]?.MutedUntil === fields.MutedUntil) continue;
+            if (out === prev) out = { ...prev };
+            out[key] = fields;
+        } else if (key in out) {
+            if (out === prev) out = { ...prev };
+            delete out[key];
+        }
+    }
+    return out;
+};
+
 /** `X-Has-More: true|false` (backend 1:1 history); undefined when absent (e.g. not exposed). */
 const readHasMoreHeader = (headers: unknown): boolean | undefined => {
     if (!headers || typeof headers !== 'object') return undefined;
@@ -311,6 +349,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const [drafts, setDrafts] = useState<Record<string, string>>({});
     const [chatPaging, setChatPaging] = useState<Record<string, PagingState>>({});
     const [chatDisappear, setChatDisappear] = useState<Record<string, number>>({});
+    // Per-chat mute: only muted entries are kept (telephon -> fields / group id -> fields).
+    const [chatMutes, setChatMutes] = useState<Record<string, MuteFields>>({});
+    const [groupMutes, setGroupMutes] = useState<Record<number, MuteFields>>({});
 
     // Groups
     const [groups, setGroups] = useState<LocalGroup[]>([]);
@@ -472,6 +513,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const { data } = await api.get<ContactChat[]>('/api/v1/contact');
             const list = Array.isArray(data) ? data : [];
             setContacts(list);
+            setChatMutes(prev => mergeMutes(prev, list.map(c => [c.Number, parseMuteFields(c)])));
 
             const seenMap: Record<string, string> = {};
             const avMap: Record<string, string> = {};
@@ -540,6 +582,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             });
             setAllChatGroups(groupMap);
             setChatDisappear(prev => ({ ...prev, ...timers }));
+            setChatMutes(prev => mergeMutes(prev, chatGroups
+                .filter(group => group.ContactTelephon)
+                .map(group => [group.ContactTelephon, parseMuteFields(group)])));
             // Merge avatares de chats al avatarMap (contactos tienen prioridad, no sobreescribir)
             setAvatarMap(prev => ({ ...chatAvatarMap, ...prev }));
         } catch (err) {
@@ -594,7 +639,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const fetchUserGroups = useCallback(async () => {
         try {
             const { data } = await getUserGroups();
-            setGroups(normalizeGroupsResponse(data));
+            const list = normalizeGroupsResponse(data);
+            setGroups(list);
+            setGroupMutes(Object.fromEntries(list
+                .map((g): [number, MuteFields] => [g.ID, parseMuteFields(g)])
+                .filter(([, fields]) => fields.Muted === true)));
         } catch (err) {
             console.error('Error fetching groups:', err);
         }
@@ -812,6 +861,72 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             return false;
         }
     }, [applyDisappearingChanged, reportDisappearingFailure]);
+
+    // ── Silenciar chats ─────────────────────────────────────────────────────────
+    // `muteNow` is the clock the render reads (never Date.now() during render); one timer bumps
+    // it when the earliest MutedUntil passes, so an expiring mute disappears without a reload.
+    const [muteNow, setMuteNow] = useState(() => Date.now());
+    const earliestMuteEnd = useMemo(
+        () => earliestMuteExpiry([...Object.values(chatMutes), ...Object.values(groupMutes)], muteNow),
+        [chatMutes, groupMutes, muteNow],
+    );
+    useExpiryTimer({ earliest: earliestMuteEnd, onExpire: setMuteNow });
+
+    const isMuted = useCallback((target: MuteTarget): boolean => (
+        target.kind === 'direct'
+            ? isChatMuted(chatMutes[target.key], muteNow)
+            : isChatMuted(groupMutes[target.id], muteNow)
+    ), [chatMutes, groupMutes, muteNow]);
+
+    // WS handlers read the latest mutes with the real clock (a list can be stale).
+    const chatMutesRef = useRef<Record<string, MuteFields>>({});
+    const groupMutesRef = useRef<Record<number, MuteFields>>({});
+    useEffect(() => { chatMutesRef.current = chatMutes; }, [chatMutes]);
+    useEffect(() => { groupMutesRef.current = groupMutes; }, [groupMutes]);
+
+    const applyMute = useCallback((target: MuteTarget, fields: MuteFields | null) => {
+        // A fresh change: move the render clock too, so an older muteNow never hides it.
+        setMuteNow(Date.now());
+        if (target.kind === 'direct') {
+            setChatMutes(prev => mergeMutes(prev, [[target.key, fields ?? {}]]));
+            return;
+        }
+        setGroupMutes(prev => {
+            if (fields) return { ...prev, [target.id]: fields };
+            if (!(target.id in prev)) return prev;
+            const next = { ...prev };
+            delete next[target.id];
+            return next;
+        });
+    }, []);
+
+    const setMute = useCallback(async (target: MuteTarget, duration: MuteDuration): Promise<boolean> => {
+        try {
+            const res = target.kind === 'direct'
+                ? await apiSetChatMute(target.key, duration)
+                : await apiSetGroupMute(target.id, duration);
+            if (!res) throw new Error('unexpected mute response');
+            applyMute(target, muteFieldsFromResponse(res));
+            return true;
+        } catch (err) {
+            console.error('Error muting chat:', err);
+            addToast({ type: 'error', message: 'No se pudo silenciar el chat' });
+            return false;
+        }
+    }, [addToast, applyMute]);
+
+    const clearMute = useCallback(async (target: MuteTarget): Promise<boolean> => {
+        try {
+            if (target.kind === 'direct') await apiClearChatMute(target.key);
+            else await apiClearGroupMute(target.id);
+            applyMute(target, null);
+            return true;
+        } catch (err) {
+            console.error('Error unmuting chat:', err);
+            addToast({ type: 'error', message: 'No se pudieron activar las notificaciones' });
+            return false;
+        }
+    }, [addToast, applyMute]);
 
     // Timer of a chat that has no value yet (e.g. a chat without messages in /chats): ask once on open.
     const selectedChatNumber = selected?.Number;
@@ -1134,7 +1249,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Un mensaje de sistema (p. ej. cambio de temporizador) nunca notifica ni cuenta como no leído.
             if (isSystemDirectMessage(messageData)) return;
 
-            if (SenderTelephon !== myTelephon && currentSelected?.Number !== contactNumber) {
+            // Silenciado: sin notificación nativa (que es también el sonido), pero el mensaje ya
+            // está en messagesByChat, así que el contador de no leídos sube igual.
+            const muted = isChatMuted(chatMutesRef.current[contactNumber], Date.now());
+            if (SenderTelephon !== myTelephon && currentSelected?.Number !== contactNumber && !muted) {
                 // buscar nombre para mostrar
                 const contact = contactsRef.current.find(c => c.Number === contactNumber);
                 const group = allChatGroupsRef.current[contactNumber];
@@ -1316,11 +1434,14 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Author notification: only for a new/changed emoji from somebody else, in a chat that is not open.
             if (event.emoji === '' || !me || event.authorTelephon !== me || event.telephon === me) return;
             let name: string | undefined;
+            const now = Date.now();
             if (event.kind === 'group') {
                 if (selectedGroupRef.current?.ID === event.groupID) return;
+                if (event.groupID !== undefined && isChatMuted(groupMutesRef.current[event.groupID], now)) return;
                 name = event.groupID === undefined ? undefined : groupMemberNamesRef.current[event.groupID]?.[event.telephon];
             } else {
                 if (selectedRef.current?.Number === event.telephon) return;
+                if (isChatMuted(chatMutesRef.current[event.telephon], now)) return;
                 const known = contactsRef.current.find(c => c.Number === event.telephon);
                 name = known?.ContactName || known?.Username || undefined;
             }
@@ -1729,6 +1850,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         selectedDisappearSeconds,
         setChatDisappearing,
         setGroupDisappearing,
+        isMuted,
+        setMute,
+        clearMute,
         // Groups
         groups, setGroups,
         groupMessages, setGroupMessages,

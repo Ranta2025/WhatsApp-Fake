@@ -37,7 +37,7 @@ describe('Sidebar system messages', () => {
             lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { Telephon: '111' },
             messagesByChat: { '222': messages }, allChatGroups: {}, logout: vi.fn(),
             groups: [], selectedGroup: null, setSelectedGroup: vi.fn(),
-            openMessageAt: vi.fn(), addToast: vi.fn(),
+            openMessageAt: vi.fn(), addToast: vi.fn(), isMuted: () => false,
         } as unknown as DashboardContextValue);
         act(() => { root.render(<Sidebar onOpenProfile={vi.fn()} onAddContact={vi.fn()} onCreateGroup={vi.fn()} />); });
     };

@@ -6,6 +6,7 @@ import HighlightedText from './HighlightedText';
 import api from '../../../api/axios';
 import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
+import MuteMenuItems from './MuteMenu';
 import MediaContent from '../../../components/MediaContent';
 import GroupMessageInput from './GroupMessageInput';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
@@ -849,13 +850,19 @@ const GroupChatWindowInner = () => {
                     <div className="relative" ref={optionsRef}>
                         <button onClick={() => setShowOptions(v => !v)}
                                 className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
-                                title="Más opciones">
+                                title="Más opciones" aria-label="Más opciones" aria-haspopup="menu" aria-expanded={showOptions}>
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                             </svg>
                         </button>
                         {showOptions && (
-                            <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[185px] z-dropdown">
+                            <div role="menu" className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[220px] z-dropdown">
+                                {selectedGroup.UserRole !== 'left' && (
+                                    <>
+                                        <MuteMenuItems key={selectedGroup.ID} target={{ kind: 'group', id: selectedGroup.ID }} onDone={() => setShowOptions(false)} />
+                                        <div className="border-t border-white/5" />
+                                    </>
+                                )}
                                 {selectedGroup?.UserRole !== 'left' && (
                                     <button onClick={() => { setConfirmLeave(true); setShowOptions(false); }}
                                             className="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2">

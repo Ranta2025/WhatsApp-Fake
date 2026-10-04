@@ -14,6 +14,8 @@ import { ChatIcon, PhoneIcon as PhoneEmojiIcon, GroupIcon } from '../../../compo
 import { formatLastSeen } from '../../../utils/format';
 import { hasUnreadFrom } from '../lib/disappearing';
 import { DisappearingChip } from './DisappearingControls';
+import MuteMenuItems from './MuteMenu';
+import Popover from '../../../components/ui/Popover';
 import type { CallType, SearchPage } from '../../../types/api';
 import type { SearchPageOptions } from '../api/searchApi';
 import type { FocusTarget } from '../context/DashboardContext';
@@ -37,6 +39,7 @@ const PhoneIcon = 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.
 const VideoIcon = 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z';
 const SearchGlyph = 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z';
 const ArrowDownGlyph = 'M19 9l-7 7-7-7';
+const KebabGlyph = 'M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z';
 const TrashIcon = 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16';
 
 const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) => (
@@ -97,6 +100,9 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
         focusedChat, openMessageAt, returnToLatest, selectedDisappearSeconds,
     } = useDashboard();
     const [showAddContactModal, setShowAddContactModal] = useState(false);
+    const [optionsOpen, setOptionsOpen] = useState(false);
+    const optionsTriggerRef = useRef<HTMLButtonElement>(null);
+    const closeOptions = useCallback(() => setOptionsOpen(false), []);
 
     // Búsqueda dentro del chat (barra bajo la cabecera; salta a cada coincidencia)
     const selectedNumber = selected?.Number;
@@ -209,6 +215,21 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                     <button onClick={handleClearChat} className="icon-btn hover:!text-rose-400 hover:!bg-rose-500/10" title="Vaciar chat" aria-label="Vaciar chat">
                         <Svg d={TrashIcon} />
                     </button>
+                    <button ref={optionsTriggerRef} onClick={() => setOptionsOpen(v => !v)} className="icon-btn"
+                            title="Más opciones" aria-label="Más opciones" aria-haspopup="menu" aria-expanded={optionsOpen}>
+                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path d={KebabGlyph} />
+                        </svg>
+                    </button>
+                    <Popover
+                        open={optionsOpen}
+                        onClose={closeOptions}
+                        anchorRef={optionsTriggerRef}
+                        align="right"
+                        className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[220px]"
+                    >
+                        <MuteMenuItems key={selected.Number} target={{ kind: 'direct', key: selected.Number }} onDone={closeOptions} />
+                    </Popover>
                 </div>
             </header>
 
