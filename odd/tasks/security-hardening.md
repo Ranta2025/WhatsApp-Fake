@@ -24,7 +24,7 @@ Authorized 2026-10-04 (user: "if it is a necessary implementation that improves 
 
 ## Tasks
 - [x] SH1 Atomic refresh consume: consume the refresh token with a single atomic `GETDEL` that returns the owner; a missing key (already consumed / expired) fails the refresh. Keep the per-user set cleanup. Concurrent test: N parallel refreshes with one token -> exactly one succeeds. Route: delegated.
-- [ ] SH2 nginx security headers: `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'` (conservative: no `script-src` so ZegoCloud/Google Fonts keep working), `X-Content-Type-Options: nosniff`, `Referrer-Policy` on every response including locations with their own `add_header` (shared include or repeated). HSTS out of scope here (TLS terminates at Cloudflare; HSTS over plain HTTP is ignored). Check via Go e2e or Playwright. Route: delegated.
+- [x] SH2 nginx security headers: `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'` (conservative: no `script-src` so ZegoCloud/Google Fonts keep working), `X-Content-Type-Options: nosniff`, `Referrer-Policy` on every response including locations with their own `add_header` (shared include or repeated). HSTS out of scope here (TLS terminates at Cloudflare; HSTS over plain HTTP is ignored). Check via Go e2e or Playwright. Route: delegated.
 - [ ] SH3 Error sanitization: 500/default paths log the raw error with the request id and return a generic message; hand-written 4xx messages unchanged; WS `sendError` likewise for internal errors. Register flow: log the real cause of `CreateUser` failures, map unique violations to "Username/Email/Telefono ya existe", and replace the bind-failure "Complete todos los campos" with the specific invalid field (email / phone format). Tests pin that DB error text is not returned. Route: delegated.
 
 ## Acceptance criteria
@@ -39,12 +39,15 @@ Authorized 2026-10-04 (user: "if it is a necessary implementation that improves 
 ## Progress / Evidence
 | Task | Route | Commit | RDD |
 |------|-------|--------|-----|
-| SH1 | delegated (opus: auth/concurrency) | (this commit) | pending |
+| SH1 | delegated (opus: auth/concurrency) | 489a40a | e82d270..489a40a high/high_risk: granted -> 4-lens approved, acknowledged (review-242d5c81b3ec6a58; WARNINGs: GETDEL needs Redis >= 6.2 -> stack runs redis 7.4; Redis error maps to "expired" as before). Boundary -> 489a40a |
+| SH2 | delegated (writer: nginx + Dockerfile + e2e) | (this commit) | pending |
 
 Last reviewed boundary at start: branch point `e82d270`.
 
 SH1 evidence: `cache.ConsumeRefreshToken` = single `GETDEL` (missing -> `ErrRefreshTokenNotFound`), best-effort `SREM` from the per-user set; `RefreshSession` consumes once; `GetRefreshTokenOwner` dropped from `UserCacheInterface`. RED: 10 parallel HTTP refreshes with one cookie against the old app gave 6x 200. GREEN: miniredis (`github.com/alicebob/miniredis/v2` v2.39.0, test-only) 10 goroutines -> exactly 1 wins (`-race -count=3` ok); `TestE2E` 3 parallel refreshes -> one 200 + two 401, reuse 401; `go vet`/`go test ./...` ok; `make test-integration` ok (82s).
 Note: a user registration attempt during the writer's stack rebuild failed with the generic 400 "error al crear usuario" (INSERT during Postgres restart; cause not logged) -> SH3 adds cause logging, unique-violation mapping and field-specific format errors on register.
 
+SH2 evidence: `docker/nginx/security-headers.conf` (nosniff, Referrer-Policy, `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`, all `always`) copied by `docker/frontend.Dockerfile` and included at server level and in `/storage/`, `/assets/`, `/sw.js`, `/manifest.webmanifest`, `/`. Go app sets none of them (no duplicates). Permissions-Policy skipped (getUserMedia for calls/voice notes). `TestE2E_SecurityHeaders`: RED 7 subtests -> GREEN on `/`, `/login`, assets, `/sw.js`, manifest, `/healthz`, `/api/v1/user`; Playwright `pwa` + `chat` 6/6.
+
 ## Next step
-SH2.
+SH3.

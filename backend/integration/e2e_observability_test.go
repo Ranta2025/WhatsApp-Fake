@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -89,6 +90,33 @@ func TestE2E_MetricsNotExposedOnPublicPorts(t *testing.T) {
 			assert.NotContains(t, body, "http_requests_total")
 			assert.NotContains(t, body, `id="root"`, "no debe caer en el fallback de la SPA")
 			assert.NotContains(t, body, "<script", "no debe caer en el fallback de la SPA")
+		})
+	}
+}
+
+// Toda respuesta de nginx (SPA, assets, sw, manifest, API, healthz) lleva las
+// cabeceras de seguridad, una sola vez cada una: los location con add_header
+// propio descartan los heredados si no incluyen el snippet.
+func TestE2E_SecurityHeaders(t *testing.T) {
+	base := os.Getenv("E2E_BASE_URL")
+	require.NotEmpty(t, base, "E2E_BASE_URL requerido")
+
+	_, _, html := getRaw(t, base+"/", nil)
+	m := regexp.MustCompile(`/assets/[^"']+\.js`).FindString(html)
+	require.NotEmpty(t, m, "no se encontró un /assets/*.js en el HTML")
+
+	want := map[string]string{
+		"X-Content-Type-Options":  "nosniff",
+		"Referrer-Policy":         "strict-origin-when-cross-origin",
+		"X-Frame-Options":         "DENY",
+		"Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+	}
+	for _, path := range []string{"/", "/login", m, "/sw.js", "/manifest.webmanifest", "/healthz", "/api/v1/user"} {
+		t.Run(path, func(t *testing.T) {
+			_, h, _ := getRaw(t, base+path, nil)
+			for k, v := range want {
+				assert.Equal(t, []string{v}, h.Values(k), k)
+			}
 		})
 	}
 }
