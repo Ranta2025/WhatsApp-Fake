@@ -20,7 +20,12 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-require github.com/rivo/uniseg v0.4.7
+require (
+	github.com/alicebob/miniredis/v2 v2.39.0
+	github.com/rivo/uniseg v0.4.7
+)
+
+require github.com/yuin/gopher-lua v1.1.1 // indirect
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -36,7 +41,7 @@ require (
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-playground/validator/v10 v10.27.0 // indirect
+	github.com/go-playground/validator/v10 v10.27.0
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

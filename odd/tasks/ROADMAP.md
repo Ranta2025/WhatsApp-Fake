@@ -2,10 +2,10 @@
 
 Index of every feature in this repo, its branch, status, and feature document. Each document is self-contained: an agent (Claude, opencode, another model) can implement a pending feature from its document without re-exploring the codebase.
 
-## Branch chain (all local, NOT pushed)
+## Branch chain
 Branches are chained: each is created from the previous one. Push, PR and merge are the user's decisions.
 
-`main` -> `feat/status-stories` -> `feat/typescript-migration` -> `feat/group-media` -> `feat/message-pagination` -> `feat/e2e-ci` -> `feat/group-read-receipts` -> `feat/message-search` -> `feat/observability` -> `feat/group-admin-permissions` -> `feat/reactions` -> (pending features, in the recommended order below)
+Everything through `feat/pwa` was merged into `main` and pushed on 2026-10-04 (`e82d270`). New chain: `main` -> `feat/security-hardening` (local, NOT pushed) -> (pending features, in the recommended order below)
 
 Before creating a branch: `git branch --show-current`, `git status`, and branch from the LATEST feature branch in the chain (never from `main` while earlier branches are unmerged).
 
@@ -23,8 +23,11 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | group-admin-permissions | `feat/group-admin-permissions` | done | [group-admin-permissions.md](group-admin-permissions.md) |
 | reactions | `feat/reactions` | done | [reactions.md](reactions.md) |
 | disappearing-messages | `feat/disappearing-messages` | done | [disappearing-messages.md](disappearing-messages.md) |
-| pwa | `feat/pwa` | pending | [pwa.md](pwa.md) |
+| pwa | `feat/pwa` | done (merged to main) | [pwa.md](pwa.md) |
+| security-hardening | `feat/security-hardening` | done (local, not pushed) | [security-hardening.md](security-hardening.md) |
 | web-push | `feat/web-push` | pending | [web-push.md](web-push.md) |
+| stickers-basic | `feat/stickers-basic` | pending (plan) | [stickers-basic.md](stickers-basic.md) |
+| stickers-full | `feat/stickers-full` | pending (plan) | [stickers-full.md](stickers-full.md) |
 | api-casing | `feat/api-casing` | pending | [api-casing.md](api-casing.md) |
 
 ## Recommended order for the pending features
@@ -34,14 +37,16 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 4. **disappearing-messages** - builds on the search and reactions changes (read-path filtering, reaction cleanup); introduces the first hard-delete and MinIO cleanup.
 5. **pwa** - decides how the single service worker is built; must precede web-push.
 6. **web-push** - adds the `push` handler and click routing to the worker that `pwa` produced (iOS support also needs the installable PWA).
-7. **api-casing** - LAST: it renames the contract across backend, frontend and tests, so doing it before the others would force rebases of every branch and rewrite new features twice; the negotiated compatibility window also covers cached PWA bundles.
+7. **stickers-basic** - user-approved minimum: built-in sticker pack, picker, send and render (backend already accepts `sticker`).
+8. **stickers-full** - after stickers-basic: custom stickers from images, my stickers/recents/favorites (server-side), animated stickers, packs and search.
+9. **api-casing** - LAST: it renames the contract across backend, frontend and tests, so doing it before the others would force rebases of every branch and rewrite new features twice; the negotiated compatibility window also covers cached PWA bundles.
 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 
-## Handoff state (2026-10-03)
-- **Current tip:** `feat/disappearing-messages` (DE1-DE8 done; full matrix green, see its Progress). Start the next feature with `git switch -c feat/pwa` from `feat/disappearing-messages`.
-- **Done and reviewed:** everything up to and including observability was reviewed per commit and acknowledged. group-admin-permissions and reactions commits are recorded in their documents. disappearing-messages slices are acknowledged through `aaec4d8`; the final slice `aaec4d8..d50bd72` (DE7 advisory fix `475e196` + DE8 docs) was `under_budget` and is NOT reviewed: the first review slice of the next feature must use `--base-ref aaec4d8`.
-- **Next:** `pwa.md`. Environment note carried from the disappearing-messages sessions: if subagent profiles in `~/.gentle-shell/agent/subagents.json` point at `anthropic/*` and fail instantly with 0 tool calls, swap them to the native opencode mapping (see disappearing-messages.md DE8 session note); leave `~/.pi/gentle-ai/models.json` (native RDD relay) untouched.
+## Handoff state (2026-10-04)
+- **Current tip:** `feat/security-hardening` (SH1-SH3 done, all slices reviewed and acknowledged through `ef1925f` + close commit). Start the next feature with `git switch -c feat/web-push` from `feat/security-hardening`.
+- **Done and reviewed:** pwa (PW1-PW10) merged to `main` and pushed (`e82d270`); every slice acknowledged (see pwa.md Progress). security-hardening slices acknowledged (see its Progress). Last reviewed boundary for the next feature: `171f69d` (roadmap/stickers docs commit, reviewed and acknowledged); later doc-only commits are passive.
+- **Next:** `web-push.md`, then `stickers-basic.md`, `stickers-full.md`, `api-casing.md`.
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)

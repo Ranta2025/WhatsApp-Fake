@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"gorm/backend/logging"
 	"gorm/backend/models"
 	"gorm/backend/utils"
 	"log"
+	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -53,7 +56,7 @@ type UserRepoInterface interface {
 
 type UserCacheInterface interface {
 	SaveRefreshToken(telephon string, refreshToken string, ctx context.Context) error
-	GetRefreshTokenOwner(refreshToken string, ctx context.Context) (string, error)
+	ConsumeRefreshToken(refreshToken string, ctx context.Context) (string, error)
 	DeleteRefreshToken(refreshToken string, ctx context.Context) error
 	RevokeAllRefreshTokens(telephon string, ctx context.Context) error
 	SetCodigo(tipoCodigo string, key string, codigo string, ctx context.Context) error
@@ -111,6 +114,26 @@ func (s *ServicesUser) consumirCodigo(tipo, key string, ctx context.Context) {
 	}
 }
 
+// duplicateUserError traduce una violación de unicidad de Postgres (SQLSTATE
+// 23505) sobre las columnas de user_data_bases al mismo mensaje que los
+// pre-chequeos de CreateUser. Devuelve nil si err no es una de esas violaciones.
+func duplicateUserError(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+		return nil
+	}
+	name := strings.ToLower(pgErr.ConstraintName)
+	switch {
+	case strings.Contains(name, "username"):
+		return errors.New("Username ya existe")
+	case strings.Contains(name, "gmail"):
+		return errors.New("Email ya existe")
+	case strings.Contains(name, "telephon"):
+		return errors.New("Telefono ya existe")
+	}
+	return nil
+}
+
 // CreateUser registra un nuevo usuario: valida unicidad, hashea la contraseña,
 // crea el registro en BD dentro de una transacción y envía el código de activación por email.
 func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context) error {
@@ -125,6 +148,7 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 	}
 	hash_password, err := utils.Hash(user.Password)
 	if err != nil {
+		logging.FromContext(ctx).Error("crear usuario: error al hashear la contraseña", "err", err)
 		return errors.New("Error al crear usuario")
 	}
 	user.Password = hash_password
@@ -134,6 +158,7 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 	// Inicia transacción
 	tx := s.repo.BeginTx()
 	if tx.Error != nil {
+		logging.FromContext(ctx).Error("crear usuario: error al iniciar la transacción", "err", tx.Error)
 		return errors.New("error al crear usuario")
 	}
 	defer func() {
@@ -147,6 +172,12 @@ func (s *ServicesUser) CreateUser(user models.UserDataBase, ctx context.Context)
 	err = s.repo.CreateUserTx(tx, user, ctx)
 	if err != nil {
 		tx.Rollback()
+		// Carrera entre el pre-chequeo de unicidad y el INSERT: otra petición
+		// ganó el username/email/teléfono. Se informa igual que el pre-chequeo.
+		if dupErr := duplicateUserError(err); dupErr != nil {
+			return dupErr
+		}
+		logging.FromContext(ctx).Error("crear usuario: error al insertar el usuario", "err", err)
 		return errors.New("error al crear usuario")
 	}
 
@@ -416,13 +447,11 @@ func (s *ServicesUser) SaveRefreshToken(telephon string, refreshToken string, ct
 // cambiado) y el teléfono del usuario, verificando que la cuenta siga activa
 // y no bloqueada.
 func (s *ServicesUser) RefreshSession(refreshToken string, ctx context.Context) (string, string, error) {
-	telephon, err := s.cache.GetRefreshTokenOwner(refreshToken, ctx)
+	// Rotación: el token se consume de forma atómica (un solo uso), así dos
+	// refresh concurrentes con el mismo token no pueden obtener ambos sesión.
+	telephon, err := s.cache.ConsumeRefreshToken(refreshToken, ctx)
 	if err != nil || telephon == "" {
 		return "", "", errors.New("refresh token expirado o inexistente")
-	}
-	// Rotación: el token usado deja de ser válido
-	if err := s.cache.DeleteRefreshToken(refreshToken, ctx); err != nil {
-		return "", "", errors.New("error al renovar la sesion")
 	}
 
 	auth, err := s.repo.GetAuthByTelephon(telephon, ctx)

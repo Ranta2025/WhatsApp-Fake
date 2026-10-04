@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -242,10 +243,40 @@ func TestE2E(t *testing.T) {
 		}
 	}
 	require.NotNil(t, refreshCookie)
-	onlyRefresh := newClient(t, base)
-	onlyRefresh.http.Jar.SetCookies(aliceURL, []*http.Cookie{{Name: "refresh_token", Value: refreshCookie.Value}})
-	code, _ = onlyRefresh.do("POST", "/api/v1/auth/refresh", nil)
-	assert.Equal(t, 200, code)
+	// Varios refresh en paralelo con la misma cookie: el consumo es atómico, así
+	// que exactamente uno obtiene sesión y el resto recibe 401 (sin bifurcar un
+	// token robado). Se reutiliza el login de alice: /auth/login ya roza su
+	// límite de 20/min por IP con el resto de la suite.
+	const nRefresh = 3
+	refreshCodes := make([]int, nRefresh)
+	refreshClients := make([]*e2eClient, nRefresh)
+	for i := range refreshClients {
+		refreshClients[i] = newClient(t, base)
+		refreshClients[i].http.Jar.SetCookies(aliceURL, []*http.Cookie{{Name: "refresh_token", Value: refreshCookie.Value}})
+	}
+	var refreshWG sync.WaitGroup
+	refreshStart := make(chan struct{})
+	for i := range refreshClients {
+		refreshWG.Add(1)
+		go func(i int) {
+			defer refreshWG.Done()
+			<-refreshStart
+			refreshCodes[i], _ = refreshClients[i].do("POST", "/api/v1/auth/refresh", nil)
+		}(i)
+	}
+	close(refreshStart)
+	refreshWG.Wait()
+	ok200, unauth := 0, 0
+	for _, rc := range refreshCodes {
+		switch rc {
+		case 200:
+			ok200++
+		case 401:
+			unauth++
+		}
+	}
+	assert.Equal(t, 1, ok200, "solo un refresh concurrente puede ganar: %v", refreshCodes)
+	assert.Equal(t, nRefresh-1, unauth, "un refresh token usado no debe volver a servir: %v", refreshCodes)
 	reuse := newClient(t, base)
 	reuse.http.Jar.SetCookies(aliceURL, []*http.Cookie{{Name: "refresh_token", Value: refreshCookie.Value}})
 	code, _ = reuse.do("POST", "/api/v1/auth/refresh", nil)

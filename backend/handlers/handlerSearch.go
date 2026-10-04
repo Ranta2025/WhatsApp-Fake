@@ -46,11 +46,11 @@ func parsePositiveID(raw string) (uint, bool) {
 func respondWindowError(ctx *gin.Context, err error) {
 	switch {
 	case errors.Is(err, models.ErrMessageNotFound), errors.Is(err, models.ErrGroupMessageNotFound):
-		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusNotFound, err)
 	case errors.Is(err, services.ErrNotGroupMember):
-		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusForbidden, err)
 	default:
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternal(ctx, err)
 	}
 }
 
@@ -58,13 +58,13 @@ func respondWindowError(ctx *gin.Context, err error) {
 func respondSearchError(ctx *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrInvalidSearchQuery):
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusBadRequest, err)
 	case errors.Is(err, services.ErrNotGroupMember):
-		ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusForbidden, err)
 	case errors.Is(err, models.ErrUserNotFound):
-		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondFailure(ctx, http.StatusNotFound, err)
 	default:
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternal(ctx, err)
 	}
 }
 

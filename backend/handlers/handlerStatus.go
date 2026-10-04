@@ -98,7 +98,7 @@ func (hd *HandlerStatus) HandlerGetStatusFeed() gin.HandlerFunc {
 
 		feed, err := hd.service.GetFeed(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			respondInternal(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, feed)

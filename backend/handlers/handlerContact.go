@@ -38,9 +38,7 @@ func (hd *HandlerContact) HandlerGetUser() gin.HandlerFunc {
 		}
 		user, err := hd.service.ServicesGetUserByTelephon(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(ctx, http.StatusNotFound, err)
 			ctx.Abort()
 			return
 		}
@@ -67,9 +65,7 @@ func (hd *HandlerContact) HandlerPutUser() gin.HandlerFunc {
 
 		user, oldUsername, err := hd.service.ServicePutUserByTelephon(userTelephon, newUsername, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
 		}
@@ -112,9 +108,7 @@ func (hd *HandlerContact) HandlerAddContact() gin.HandlerFunc {
 
 		contact, err := hd.service.AddContactByTelephon(telephon.(string), contactAdd.(models.ContactAdd), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
 		}
@@ -142,9 +136,7 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 
 		contacts, err := hd.service.ServiceGetContactsByTelephon(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
 		}
@@ -171,9 +163,7 @@ func (hd *HandlerContact) HandlerPutContact() gin.HandlerFunc {
 
 		contact, err := hd.service.ServicePutContactByTelephon(putContact, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
 		}
@@ -197,7 +187,7 @@ func (hd *HandlerContact) HandlerUpdateAvatar() gin.HandlerFunc {
 
 		url := avatarUrl.(string)
 		if err := hd.service.ServiceUpdateAvatar(telephon.(string), url, ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
 		}
@@ -230,7 +220,7 @@ func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 		}
 
 		if err := hd.service.ServiceUpdateWallpaper(telephon.(string), body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
 		}
@@ -260,7 +250,7 @@ func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
 		}
 
 		if err := hd.service.ServiceUpdateContactWallpaper(telephon.(string), body.ContactTelephon, body.WallpaperUrl, ctx); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
 		}

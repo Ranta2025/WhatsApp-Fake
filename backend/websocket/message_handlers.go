@@ -3,10 +3,12 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"gorm/backend/metrics"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"gorm/backend/services"
+	"gorm/backend/utils"
 	"log/slog"
 	"net/http"
 	"time"
@@ -80,7 +82,7 @@ func (mh *MessageHandler) HandleChatMessage() {
 	if err != nil {
 		mh.Client.log().Error("ws error al guardar mensaje", "type", "chat", "err", err)
 		mh.Hub.messageFailed(metrics.KindDirect)
-		mh.sendError("Error al enviar mensaje: " + err.Error())
+		mh.sendChatFailure("Error al enviar mensaje", err)
 		return
 	}
 
@@ -150,7 +152,7 @@ func (mh *MessageHandler) HandleEditMessage() {
 	updatedMsg, err := mh.Client.ServiceChat.ServiceEditMessage(mh.Client.Telephon, msgEdit.MessageID, msgEdit.Message, ctx)
 	if err != nil {
 		mh.Client.log().Error("ws error al editar mensaje", "type", "edit_message", "err", err)
-		mh.sendError("Error al editar mensaje: " + err.Error())
+		mh.sendChatFailure("Error al editar mensaje", err)
 		return
 	}
 
@@ -180,7 +182,7 @@ func (mh *MessageHandler) HandleDeleteMessage() {
 	deletedMsg, err := mh.Client.ServiceChat.ServiceDeleteMessage(mh.Client.Telephon, msgDel.MessageID, ctx)
 	if err != nil {
 		mh.Client.log().Error("ws error al eliminar mensaje", "type", "delete_message", "err", err)
-		mh.sendError("Error al eliminar mensaje: " + err.Error())
+		mh.sendChatFailure("Error al eliminar mensaje", err)
 		return
 	}
 
@@ -213,7 +215,7 @@ func (mh *MessageHandler) HandleCallOffer() {
 		cancel()
 		if err != nil {
 			mh.Client.log().Error("ws error registrando llamada", "type", "call_offer", "err", err)
-			mh.sendError("No se pudo iniciar la llamada: " + err.Error())
+			mh.sendFailure("No se pudo iniciar la llamada", err)
 			return
 		}
 	}
@@ -328,7 +330,7 @@ func (mh *MessageHandler) HandleGroupChatMessage() {
 	if err != nil {
 		mh.Client.log().Error("ws error al guardar mensaje de grupo", "type", "group_chat", "err", err)
 		mh.Hub.messageFailed(metrics.KindGroup)
-		mh.sendError("Error al enviar mensaje al grupo: " + err.Error())
+		mh.sendFailure("Error al enviar mensaje al grupo", err)
 		return
 	}
 
@@ -401,7 +403,7 @@ func (mh *MessageHandler) HandleGroupEditMessage() {
 	updatedMsg, err := mh.Client.ServiceGroup.EditGroupMessage(mh.Client.Telephon, payload.GroupID, payload.GroupMessageEdit, ctx)
 	if err != nil {
 		mh.Client.log().Error("ws error al editar mensaje de grupo", "type", "group_edit_message", "err", err)
-		mh.sendError("Error al editar mensaje: " + err.Error())
+		mh.sendFailure("Error al editar mensaje", err)
 		return
 	}
 
@@ -433,7 +435,7 @@ func (mh *MessageHandler) HandleGroupDeleteMessage() {
 	defer cancel()
 	if err := mh.Client.ServiceGroup.DeleteGroupMessage(mh.Client.Telephon, payload.GroupID, payload.GroupMessageDelete, ctx); err != nil {
 		mh.Client.log().Error("ws error al eliminar mensaje de grupo", "type", "group_delete_message", "err", err)
-		mh.sendError("Error al eliminar mensaje: " + err.Error())
+		mh.sendFailure("Error al eliminar mensaje", err)
 		return
 	}
 
@@ -643,6 +645,38 @@ func (mh *MessageHandler) sendReactionError(msg string, status int, kind string,
 		"context": ctxInfo,
 	})
 	mh.reply(errorMsg)
+}
+
+// internalErrorSuffix es lo único que ve el cliente de un fallo interno; la
+// causa real queda en el log del servidor (los llamadores ya la registran).
+const internalErrorSuffix = "error interno, inténtalo de nuevo"
+
+// sendFailure envía el error "prefix: causa" al emisor, salvo que la causa sea
+// un fallo de infraestructura (db, conexión, timeout): entonces solo se envía
+// el prefijo con un texto genérico. El prefijo se conserva porque el outbox del
+// frontend atribuye el error a un envío por él.
+func (mh *MessageHandler) sendFailure(prefix string, err error) {
+	if utils.IsInternalError(err) {
+		mh.sendError(prefix + ": " + internalErrorSuffix)
+		return
+	}
+	mh.sendError(prefix + ": " + err.Error())
+}
+
+// sendChatFailure es como sendFailure para los flujos 1:1, donde el texto de la
+// causa solo se expone para los sentinels conocidos (clientID inválido o en
+// conflicto, mensaje inexistente), igual que el mapeo HTTP de chatErrorStatus.
+// Los errores de clientID mantienen su texto: el outbox del frontend los trata
+// como permanentes al ver "clientID" en él.
+func (mh *MessageHandler) sendChatFailure(prefix string, err error) {
+	switch {
+	case errors.Is(err, services.ErrInvalidClientID),
+		errors.Is(err, services.ErrClientIDConflict),
+		errors.Is(err, models.ErrMessageNotFound):
+		mh.sendError(prefix + ": " + err.Error())
+	default:
+		mh.sendError(prefix + ": " + internalErrorSuffix)
+	}
 }
 
 // sendError es un helper para enviar mensajes de error al cliente WebSocket.

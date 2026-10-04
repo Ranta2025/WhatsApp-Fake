@@ -68,9 +68,7 @@ func (hd *HandlerChat) HandlerPostChat() gin.HandlerFunc {
 
 		message, err := hd.service.ServiceCreatMessage(messageExtract, ctx)
 		if err != nil {
-			ctx.JSON(chatErrorStatus(err), gin.H{
-				"error": err.Error(),
-			})
+			respondChatError(ctx, err)
 			ctx.Abort()
 			return
 		}
@@ -139,9 +137,7 @@ func (hd *HandlerChat) HandlerGetChats() gin.HandlerFunc {
 
 		message, hasMore, err := hd.service.ServiceGetMessagesPage(telephon.(string), contact.(string), before, limit, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			respondInternal(ctx, err)
 			ctx.Abort()
 			return
 		}
@@ -187,9 +183,7 @@ func (hd *HandlerChat) HandlerPutChat() gin.HandlerFunc {
 
 		err := hd.service.ServicePutMessageStatusDelivered(telephon.(string), contact.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			respondInternal(ctx, err)
 			return
 		}
 
@@ -213,9 +207,7 @@ func (hd *HandlerChat) HandlerGetAllChats() gin.HandlerFunc {
 		}
 		chats, err := hd.service.ServiceGetAllChats(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			respondInternal(ctx, err)
 			ctx.Abort()
 			return
 		}
@@ -236,9 +228,7 @@ func (hd *HandlerChat) HandlerPutAllChat() gin.HandlerFunc {
 		// Obtener remitentes con mensajes pendientes ANTES de actualizar
 		senders, err := hd.service.ServiceGetSendersAndMarkDelivered(telephon.(string), ctx)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+			respondInternal(ctx, err)
 			return
 		}
 
@@ -277,9 +267,7 @@ func (hd *HandlerChat) HandlerEditMessage() gin.HandlerFunc {
 
 		updatedMsg, err := hd.service.ServiceEditMessage(telephon.(string), msgEdit.MessageID, msgEdit.Message, ctx)
 		if err != nil {
-			ctx.JSON(chatErrorStatus(err), gin.H{
-				"error": err.Error(),
-			})
+			respondChatError(ctx, err)
 			return
 		}
 
@@ -299,7 +287,7 @@ func (hd *HandlerChat) HandlerClearChat() gin.HandlerFunc {
 		}
 
 		if err := hd.service.ServiceClearChat(telephonUser.(string), telephonContact.(string), ctx); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			respondInternal(ctx, err)
 			return
 		}
 
@@ -320,7 +308,7 @@ func (hd *HandlerChat) HandlerDeleteMessageForMe() gin.HandlerFunc {
 
 		deletedMsg, err := hd.service.ServiceDeleteMessageForMe(telephonUser.(string), messageID.(uint), ctx)
 		if err != nil {
-			ctx.JSON(chatErrorStatus(err), gin.H{"error": err.Error()})
+			respondChatError(ctx, err)
 			return
 		}
 
@@ -356,11 +344,11 @@ func (hd *HandlerChat) HandlerSetDisappearing() gin.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, services.ErrChatContactNotFound), errors.Is(err, models.ErrUserNotFound):
-				ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				respondFailure(ctx, http.StatusNotFound, err)
 			case errors.Is(err, models.ErrInvalidDisappearDuration):
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				respondFailure(ctx, http.StatusBadRequest, err)
 			default:
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				respondInternal(ctx, err)
 			}
 			return
 		}
@@ -401,10 +389,10 @@ func (hd *HandlerChat) HandlerGetChatSettings() gin.HandlerFunc {
 		seconds, err := hd.service.GetChatDisappearing(telephon.(string), contact.(string), ctx)
 		if err != nil {
 			if errors.Is(err, services.ErrChatContactNotFound) || errors.Is(err, models.ErrUserNotFound) {
-				ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				respondFailure(ctx, http.StatusNotFound, err)
 				return
 			}
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			respondInternal(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"disappearSeconds": seconds})

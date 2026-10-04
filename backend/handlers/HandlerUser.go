@@ -75,9 +75,7 @@ func (s *HandlerUser) HandlerLogOut() gin.HandlerFunc {
 		}
 		err := s.service.CreateUser(user.(models.UserDataBase), ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 		c.JSON(201, gin.H{
@@ -106,9 +104,7 @@ func (s *HandlerUser) HandlerLogIn() gin.HandlerFunc {
 		token, err := s.service.LogIn(user, ctx)
 		if err != nil {
 			log.Println("[HANDLER] Error en LogIn:", err.Error())
-			c.JSON(401, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusUnauthorized, err)
 			return
 		}
 		// Decodificar el token para obtener datos y generar refresh
@@ -171,9 +167,7 @@ func (s *HandlerUser) HandlerActivateAccount() gin.HandlerFunc {
 		}
 		err := s.service.ActivateAccount(userActivate.(models.UserActivate), ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 
@@ -214,9 +208,7 @@ func (s *HandlerUser) HandlerRecoverAccount() gin.HandlerFunc {
 		}
 		username, err := s.service.RecoverAccount(username.(string), ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 		c.JSON(200, gin.H{
@@ -238,9 +230,7 @@ func (s *HandlerUser) HandlerResendCode() gin.HandlerFunc {
 		}
 		err := s.service.ResendCode(userActivate.(string), ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 		c.JSON(200, gin.H{
@@ -261,9 +251,7 @@ func (s *HandlerUser) HandlerRecoverCuenta() gin.HandlerFunc {
 		}
 		err := s.service.RecoverCuenta(userRecover.(models.UserRecover), ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 		c.JSON(200, gin.H{
@@ -285,9 +273,7 @@ func (s *HandlerUser) HandlerRecoverAndChangePassword() gin.HandlerFunc {
 		data := userRecover.(models.UserRecoverAndChange)
 		err := s.service.RecoverAndChangePassword(data.Email, data.Code, data.Password, ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 		c.JSON(200, gin.H{
@@ -308,9 +294,7 @@ func (s *HandlerUser) HandlerSendForgotPasswordCode() gin.HandlerFunc {
 		}
 		err := s.service.SendForgotPasswordCode(email.(string), ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 		c.JSON(200, gin.H{
@@ -332,9 +316,7 @@ func (s *HandlerUser) HandlerForgotPasswordChange() gin.HandlerFunc {
 		data := userForgot.(models.UserForgotPassword)
 		err := s.service.ForgotPasswordChange(data.Email, data.Code, data.Password, ctx)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(c, http.StatusBadRequest, err)
 			return
 		}
 		c.JSON(200, gin.H{

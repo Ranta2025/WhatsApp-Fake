@@ -45,9 +45,7 @@ func (hm *HandlerMedia) HandlerUploadMedia() gin.HandlerFunc {
 
 		result, err := hm.service.UploadMedia(file, header, ctx.Request.Context())
 		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+			respondFailure(ctx, http.StatusBadRequest, err)
 			return
 		}
 
