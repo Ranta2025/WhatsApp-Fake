@@ -68,6 +68,14 @@ type GroupMessageResponse struct {
 
 	// Instante de expiración (mensajes temporales); nil si no expira.
 	ExpiresAt *time.Time `json:"ExpiresAt,omitempty"`
+
+	// ClientID echoes the sender's idempotency key so the client can reconcile
+	// its optimistic copy; receivers may see it too (it is an opaque UUID).
+	ClientID *string `json:"ClientID,omitempty"`
+
+	// Duplicate marks a replayed send that returned the stored message. It is a
+	// transport hint for handlers (skip re-broadcast) and is never serialized.
+	Duplicate bool `json:"-"`
 }
 
 // GroupDetail combina la info completa del grupo: metadatos, miembros y mensajes.

@@ -70,6 +70,10 @@ type GroupRepoInterface interface {
 	GetMemberRole(groupID, userID uint, ctx context.Context) (string, error)
 	GetMemberTelephons(groupID uint, ctx context.Context) ([]string, error)
 	CreateGroupMessage(msg *models.GroupMessage, ctx context.Context) error
+	// CreateGroupMessageIdempotent inserts msg unless a row with the same
+	// (sender_id, client_id) exists; then msg is overwritten with the stored row
+	// and duplicate is true. msg.ClientID must be non-nil.
+	CreateGroupMessageIdempotent(msg *models.GroupMessage, ctx context.Context) (duplicate bool, err error)
 	GetGroupMessages(groupID uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, error)
 	GetGroupMessagesPage(groupID, before uint, limit, offset int, ctx context.Context) ([]models.GroupMessage, bool, error)
 	GetGroupMessageByID(messageID uint, ctx context.Context) (*models.GroupMessage, error)
@@ -340,6 +344,10 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		return nil, err
 	}
 	data.ReplyToMessage = content.ReplyToMessage
+	clientID, err := normalizeClientID(data.ClientID)
+	if err != nil {
+		return nil, err
+	}
 
 	senderID, err := s.contactRepo.GetIdByTelephon(telephonSender, ctx)
 	if err != nil {
@@ -367,7 +375,9 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 	}
 
 	// Temporizador vigente (leído con la matriz de permisos): ExpiresAt = now + segundos.
-	now := s.clock()
+	// Postgres keeps microseconds: rounding here makes the live echo identical
+	// to the stored row (and to a replayed clientID ack).
+	now := s.clock().Round(time.Microsecond)
 	var expiresAt *time.Time
 	if state.disappearSeconds > 0 {
 		t := now.Add(time.Duration(state.disappearSeconds) * time.Second)
@@ -385,10 +395,24 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		ReplyToMessageID: data.ReplyToMessageID,
 		ReplyToTelephon:  data.ReplyToTelephon,
 		ReplyToMessage:   data.ReplyToMessage,
+		ClientID:         clientID,
 	}
 
-	if err := s.repo.CreateGroupMessage(msg, ctx); err != nil {
-		return nil, errors.New("error al guardar el mensaje")
+	// Authorization (membership + send matrix) already ran above, so a removed
+	// member replaying a queued send never reaches the idempotency lookup.
+	duplicate := false
+	if clientID == nil {
+		if err := s.repo.CreateGroupMessage(msg, ctx); err != nil {
+			return nil, errors.New("error al guardar el mensaje")
+		}
+	} else {
+		duplicate, err = s.repo.CreateGroupMessageIdempotent(msg, ctx)
+		if err != nil {
+			return nil, errors.New("error al guardar el mensaje")
+		}
+		if duplicate && msg.GroupID != data.GroupID {
+			return nil, ErrClientIDConflict
+		}
 	}
 
 	senderUsername, _ := s.contactRepo.GetUsernameByTelephon(telephonSender, ctx)
@@ -400,13 +424,15 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		SenderUsername:   senderUsername,
 		Message:          msg.Message,
 		Time:             msg.Time,
-		Edited:           false,
+		Edited:           msg.Edited,
 		MediaUrl:         msg.MediaUrl,
 		MediaType:        msg.MediaType,
 		ReplyToMessageID: msg.ReplyToMessageID,
 		ReplyToTelephon:  msg.ReplyToTelephon,
 		ReplyToMessage:   msg.ReplyToMessage,
 		ExpiresAt:        msg.ExpiresAt,
+		ClientID:         msg.ClientID,
+		Duplicate:        duplicate,
 	}, nil
 }
 
@@ -588,6 +614,7 @@ func groupMessageToSchema(m *models.GroupMessage, senderTelephon, senderUsername
 		Kind:          m.Kind,
 		SystemEvent:   m.SystemEvent,
 		SystemTargets: m.SystemTargets,
+		ClientID:      m.ClientID,
 	}
 }
 

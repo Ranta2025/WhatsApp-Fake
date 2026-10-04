@@ -30,6 +30,14 @@ type Message struct {
 	ExpiresAt   *time.Time `json:"ExpiresAt,omitempty"`
 	Kind        string     `json:"Kind,omitempty"`
 	SystemEvent string     `json:"SystemEvent,omitempty"`
+
+	// ClientID echoes the sender's idempotency key so the client can reconcile
+	// its optimistic copy; receivers may see it too (it is an opaque UUID).
+	ClientID *string `json:"ClientID,omitempty"`
+
+	// Duplicate marks a replayed send that returned the stored message. It is a
+	// transport hint for handlers (skip re-broadcast) and is never serialized.
+	Duplicate bool `json:"-"`
 }
 
 // ChatGroup agrupa todos los mensajes de una conversación con un contacto.

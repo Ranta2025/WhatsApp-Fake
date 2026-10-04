@@ -80,6 +80,8 @@ func (h *HandlerGroup) notifyAllGroupMembers(telephons []string, wsType string, 
 // editar info, agregar).
 func (h *HandlerGroup) respondGroupMutationError(ctx *gin.Context, err error) {
 	switch {
+	case errors.Is(err, services.ErrClientIDConflict):
+		ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, services.ErrNotGroupAdmin),
 		errors.Is(err, services.ErrNotGroupMember),
 		errors.Is(err, services.ErrGroupSendRestricted),
@@ -269,6 +271,12 @@ func (h *HandlerGroup) HandleSendGroupMessage() gin.HandlerFunc {
 				h.metrics.MessageFailed(metrics.KindGroup)
 			}
 			h.respondGroupMutationError(ctx, err)
+			return
+		}
+		// A replayed clientID returns the stored message with 200 and is not
+		// broadcast or counted again.
+		if msg.Duplicate {
+			ctx.JSON(http.StatusOK, gin.H{"message": msg})
 			return
 		}
 		if h.metrics != nil {

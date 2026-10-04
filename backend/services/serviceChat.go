@@ -39,6 +39,10 @@ type ChatServicer interface {
 type ChatRepoInterface interface {
 	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
 	CreateMessage(msg *models.Message, ctx context.Context) error
+	// CreateMessageIdempotent inserts msg unless a row with the same
+	// (id_user, client_id) exists; then msg is overwritten with the stored row
+	// and duplicate is true. msg.ClientID must be non-nil.
+	CreateMessageIdempotent(msg *models.Message, ctx context.Context) (duplicate bool, err error)
 	GetMessages(id1, id2 uint, ctx context.Context) ([]models.Message, error)
 	GetMessagesPage(id1, id2, before uint, limit int, ctx context.Context) ([]models.Message, bool, error)
 	GetTelephonByID(id uint, ctx context.Context) (string, error)
@@ -105,6 +109,10 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	if err := validateMessageContent(&content); err != nil {
 		return schemas.Message{}, err
 	}
+	clientID, err := normalizeClientID(message.MessageGet.ClientID)
+	if err != nil {
+		return schemas.Message{}, err
+	}
 
 	// message.Telephon contiene el telephon del remitente
 	// message.MessageGet.Receptor contiene el telephon del receptor
@@ -133,7 +141,9 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	if err != nil {
 		return schemas.Message{}, err
 	}
-	now := rp.clock()
+	// Postgres keeps microseconds: rounding here makes the live echo identical
+	// to the stored row (and to a replayed clientID ack).
+	now := rp.clock().Round(time.Microsecond)
 	var expiresAt *time.Time
 	if disappear > 0 {
 		t := now.Add(time.Duration(disappear) * time.Second)
@@ -155,14 +165,29 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 		ReplyToMessageID: message.MessageGet.ReplyToMessageID,
 		ReplyToTelephon:  content.ReplyToTelephon,
 		ReplyToMessage:   content.ReplyToMessage,
+
+		ClientID: clientID,
 	}
 
-	if err := rp.repo.CreateMessage(&messageDB, ctx); err != nil {
+	// Without a clientID the send is not idempotent (legacy path). With one, a
+	// replay returns the stored row (same ID, timestamps and status) flagged as
+	// Duplicate so the transport skips re-delivery and side effects.
+	if clientID == nil {
+		if err := rp.repo.CreateMessage(&messageDB, ctx); err != nil {
+			return schemas.Message{}, err
+		}
+		return messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor), nil
+	}
+	duplicate, err := rp.repo.CreateMessageIdempotent(&messageDB, ctx)
+	if err != nil {
 		return schemas.Message{}, err
 	}
-
-	// Devolver el schema con telephons
-	return messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor), nil
+	if duplicate && messageDB.IdReceptor != uint(id_receptor) {
+		return schemas.Message{}, ErrClientIDConflict
+	}
+	out := messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor)
+	out.Duplicate = duplicate
+	return out, nil
 }
 
 // messageToSchema mapea un Message de BD al schema de la API con los telephons ya resueltos.
@@ -183,6 +208,7 @@ func messageToSchema(msg *models.Message, senderTelephon, receptorTelephon strin
 		ExpiresAt:        msg.ExpiresAt,
 		Kind:             msg.Kind,
 		SystemEvent:      msg.SystemEvent,
+		ClientID:         msg.ClientID,
 	}
 }
 

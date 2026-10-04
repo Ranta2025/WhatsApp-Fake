@@ -84,11 +84,18 @@ func (mh *MessageHandler) HandleChatMessage() {
 		return
 	}
 
-	mh.Hub.messageSent(metrics.KindDirect)
 	responseBytes, _ := json.Marshal(map[string]interface{}{
 		"type":    "chat",
 		"payload": messageSaved,
 	})
+
+	// A replayed clientID only re-acks the sender with the stored message: no
+	// second delivery to the receiver and no metrics/side effects.
+	if messageSaved.Duplicate {
+		mh.reply(responseBytes)
+		return
+	}
+	mh.Hub.messageSent(metrics.KindDirect)
 
 	// Confirmación al remitente y entrega al receptor (si está conectado)
 	mh.reply(responseBytes)
@@ -325,7 +332,6 @@ func (mh *MessageHandler) HandleGroupChatMessage() {
 		return
 	}
 
-	mh.Hub.messageSent(metrics.KindGroup)
 	responseBytes, _ := json.Marshal(map[string]interface{}{
 		"type":    "group_chat",
 		"payload": savedMsg,
@@ -335,6 +341,11 @@ func (mh *MessageHandler) HandleGroupChatMessage() {
 	mh.Hub.JoinRoom(msgSend.GroupID, mh.Client)
 
 	mh.reply(responseBytes)
+	// A replayed clientID only re-acks the sender: no second broadcast/metrics.
+	if savedMsg.Duplicate {
+		return
+	}
+	mh.Hub.messageSent(metrics.KindGroup)
 	mh.Hub.SendToGroup(msgSend.GroupID, mh.Client.Telephon, responseBytes)
 }
 

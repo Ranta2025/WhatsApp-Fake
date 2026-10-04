@@ -46,6 +46,10 @@ type Message struct {
 	// ExpiresAt es el instante de expiración (nil = no expira). Se fija al crear.
 	ExpiresAt *time.Time
 
+	// ClientID is the sender-generated idempotency key (lowercase UUID, nil when
+	// absent). Unique per sender through a partial index (see database/postgres.go).
+	ClientID *string `gorm:"size:36"`
+
 	User        UserDataBase `gorm:"foreignKey:IdUser;references:ID"`
 	UserContact UserDataBase `gorm:"foreignKey:IdReceptor;references:ID"`
 }

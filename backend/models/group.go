@@ -106,6 +106,10 @@ type GroupMessage struct {
 	ExpiresAt     *time.Time
 	SystemTargets []string `gorm:"type:jsonb;serializer:json"`
 
+	// ClientID is the sender-generated idempotency key (lowercase UUID, nil when
+	// absent). Unique per sender through a partial index (see database/postgres.go).
+	ClientID *string `gorm:"size:36"`
+
 	Group  Group        `gorm:"foreignKey:GroupID;references:ID"`
 	Sender UserDataBase `gorm:"foreignKey:SenderID;references:ID"`
 }

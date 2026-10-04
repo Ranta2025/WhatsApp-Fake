@@ -26,6 +26,10 @@ type MessageGet struct {
 	ReplyToMessageID *uint   `json:"replyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"replyToTelephon,omitempty"` // Número de teléfono del autor del mensaje original
 	ReplyToMessage   *string `json:"replyToMessage,omitempty"`
+
+	// ClientID is an optional client-generated UUID that makes the send
+	// idempotent per sender (offline queue replays never duplicate).
+	ClientID string `json:"clientID,omitempty"`
 }
 
 type MessageEdit struct {
@@ -139,6 +143,10 @@ type GroupMessageSend struct {
 	ReplyToMessageID *uint   `json:"replyToMessageID,omitempty"`
 	ReplyToTelephon  *string `json:"replyToTelephon,omitempty"`
 	ReplyToMessage   *string `json:"replyToMessage,omitempty"`
+
+	// ClientID is an optional client-generated UUID that makes the send
+	// idempotent per sender (offline queue replays never duplicate).
+	ClientID string `json:"clientID,omitempty"`
 }
 
 // GroupMessageEdit solicita editar el contenido de un mensaje de grupo.

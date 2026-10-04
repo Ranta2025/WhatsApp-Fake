@@ -33,11 +33,17 @@ func InitHandlerChat(service services.ChatServicer, hub *websocket.Hub) *Handler
 	return h
 }
 
-// chatErrorStatus mapea un mensaje inexistente, expirado o ajeno (1:1) a 404;
-// cualquier otro error sigue siendo 500.
+// chatErrorStatus mapea un mensaje inexistente, expirado o ajeno (1:1) a 404,
+// un clientID inválido a 400 y uno reutilizado en otro chat a 409; cualquier
+// otro error sigue siendo 500.
 func chatErrorStatus(err error) int {
-	if errors.Is(err, models.ErrMessageNotFound) {
+	switch {
+	case errors.Is(err, models.ErrMessageNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, services.ErrInvalidClientID):
+		return http.StatusBadRequest
+	case errors.Is(err, services.ErrClientIDConflict):
+		return http.StatusConflict
 	}
 	return http.StatusInternalServerError
 }

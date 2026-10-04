@@ -326,6 +326,13 @@ func Conection() (*gorm.DB, error) {
 		ON group_messages (expires_at)
 		WHERE expires_at IS NOT NULL`)
 
+	// Idempotent sends (PW8): client_id is nullable (AutoMigrate adds it without
+	// backfill); a replay with the same (sender, client_id) never duplicates.
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_sender_client_id
+		ON messages (id_user, client_id) WHERE client_id IS NOT NULL`)
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_group_messages_sender_client_id
+		ON group_messages (sender_id, client_id) WHERE client_id IS NOT NULL`)
+
 	execMigration(data, `DO $$ BEGIN
 		-- messages.kind ("" normal | "system" evento persistido)
 		IF NOT EXISTS (
