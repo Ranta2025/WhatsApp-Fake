@@ -210,6 +210,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	repoGroup := repos.InitRepoGroup(db, rd)
 	repoReaction := repos.InitRepoReaction(db)
 	repoPush := repos.InitRepoPush(db, repoContact)
+	repoMute := repos.InitRepoMute(db, repoContact)
 	cacheUser := cache.InitChacheUser(rd)
 
 	// Hub de WebSocket (presencia y mensajería en tiempo real)
@@ -235,10 +236,18 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	servicePush := services.InitServicePush(pushCfg, repoPush)
 	// Web Push a destinatarios desconectados: lo usan el WS (1:1 y grupo) y
 	// el envío REST a grupos. Asíncrono (pool acotado), nunca bloquea.
-	pushNotifier := buildPushNotifier(pushCfg, repoPush, repoContact, repoGroup)
+	pushNotifier := buildPushNotifier(pushCfg, repoPush, repoContact, repoGroup, repoMute)
 	hub.SetPushNotifier(pushNotifier)
+	// Silencio por chat: endpoints propios y estado en los listados del
+	// sidebar (chats, contactos y grupos).
+	serviceMute := services.InitServiceMute(repoMute, repoGroup)
 	handlerGroup := handlers.InitHandlerGroup(serviceGroup, hub, m)
 	handlerGroup.SetPushNotifier(pushNotifier)
+	handlerGroup.SetMuteService(serviceMute)
+	handlerContact := handlers.InitHandlerApiMessage(serviceContact, hub)
+	handlerContact.SetMuteService(serviceMute)
+	handlerChat := handlers.InitHandlerChat(serviceChat, hub)
+	handlerChat.SetMuteService(serviceMute)
 
 	cleanupCtx, cancelCleanup := context.WithCancel(context.Background())
 	go statusCleanupLoop(cleanupCtx, serviceStatus, statusCleanupInterval)
@@ -253,8 +262,8 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 
 	return routers.Deps{
 		HandlerUser:      handlers.GetHandlerUser(serviceUser, hub),
-		HandlerContact:   handlers.InitHandlerApiMessage(serviceContact, hub),
-		HandlerChat:      handlers.InitHandlerChat(serviceChat, hub),
+		HandlerContact:   handlerContact,
+		HandlerChat:      handlerChat,
 		HandlerCall:      handlers.InitHandlerCall(serviceCall),
 		HandlerMedia:     handlers.InitHandlerMedia(serviceMedia),
 		HandlerGroup:     handlerGroup,
@@ -262,6 +271,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 		HandlerSearch:    handlers.InitHandlerSearch(serviceSearch),
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),
 		HandlerPush:      handlers.InitHandlerPush(servicePush),
+		HandlerMute:      handlers.InitHandlerMute(serviceMute),
 		Hub:              hub,
 		WSTickets:        cache.NewWSTicketStore(rd),
 		ChatService:      serviceChat,

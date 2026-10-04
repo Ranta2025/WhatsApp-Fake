@@ -85,3 +85,49 @@ func TestApiPushWithoutHandlerRegistersNothing(t *testing.T) {
 	assert.NotPanics(t, func() { rout.ApiPush() })
 	assert.Empty(t, engine.Routes())
 }
+
+// TestApiMuteRegistersRoutes comprueba los endpoints de silencio junto con el
+// resto de rutas de chat y grupo (sin colisiones en el árbol de gin) y que
+// quedan detrás del middleware de token.
+func TestApiMuteRegistersRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	rout := InitRouterApiMessage(engine.Group("/api/v1"), nil, &handlers.HandlerChat{}, nil, nil, &handlers.HandlerGroup{}, nil, nil, nil, nil, nil, nil, nil)
+	rout.SetHandlerMute(handlers.InitHandlerMute(nil))
+
+	assert.NotPanics(t, func() {
+		rout.ApiChat()
+		rout.ApiGroup()
+		rout.ApiMute()
+	})
+
+	got := map[string]bool{}
+	for _, r := range engine.Routes() {
+		got[r.Method+" "+r.Path] = true
+	}
+	for _, route := range []string{
+		"PUT /api/v1/chat/:contact/mute",
+		"DELETE /api/v1/chat/:contact/mute",
+		"PUT /api/v1/group/:groupID/mute",
+		"DELETE /api/v1/group/:groupID/mute",
+	} {
+		assert.True(t, got[route], "ruta registrada: %s", route)
+	}
+
+	for _, r := range []struct{ method, path string }{
+		{"PUT", "/api/v1/chat/+51999/mute"},
+		{"DELETE", "/api/v1/group/7/mute"},
+	} {
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, httptest.NewRequest(r.method, r.path, nil))
+		assert.Equal(t, http.StatusUnauthorized, w.Code, r.path)
+	}
+}
+
+func TestApiMuteWithoutHandlerRegistersNothing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	rout := &RouterApiMessage{app: engine.Group("/api/v1")}
+	assert.NotPanics(t, func() { rout.ApiMute() })
+	assert.Empty(t, engine.Routes())
+}

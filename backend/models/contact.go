@@ -6,6 +6,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// Valores de ContactDataBase.Status (CHECK chk_contacts_status). No existe un
+// estado "blocked": la fila del receptor hacia el remitente en "rejected" es
+// la forma de bloquearlo (queda fuera de sus listados).
+const (
+	ContactStatusPending  = "pending"
+	ContactStatusAccepted = "accepted"
+	ContactStatusRejected = "rejected"
+)
+
 type ContactDataBase struct {
 	gorm.Model
 	IdUser       uint   `gorm:"not null" json:"id_user" binding:"required"`
@@ -26,6 +35,12 @@ type ContactChat struct {
 	LastSeen     *time.Time `json:"last_seen"`     // Última vez que el contacto estuvo en línea
 	AvatarUrl    string     `json:"avatar_url"`    // URL de la foto de perfil
 	WallpaperUrl string     `json:"wallpaper_url"` // URL del fondo de pantalla específico
+
+	// Silencio del chat para el usuario que consulta (lo rellena el listado
+	// GET /contact; no son columnas). Muted se omite si es false; MutedUntil
+	// se omite si no hay silencio o si es "para siempre".
+	Muted      bool       `json:"Muted,omitempty" gorm:"-"`
+	MutedUntil *time.Time `json:"MutedUntil,omitempty" gorm:"-"`
 }
 
 type ContactPut struct {

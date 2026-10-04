@@ -28,7 +28,12 @@ type HandlerGroup struct {
 	notifier GroupHubNotifier      // puede ser nil si el Hub no está disponible
 	metrics  *metrics.Metrics      // puede ser nil: no se contabiliza nada
 	push     services.PushNotifier // nil = sin Web Push (SetPushNotifier)
+	mutes    services.MuteServicer // nil = el listado sale sin estado de silencio
 }
+
+// SetMuteService inyecta el servicio de silencios que rellena Muted/MutedUntil
+// del listado de grupos.
+func (h *HandlerGroup) SetMuteService(m services.MuteServicer) { h.mutes = m }
 
 // presenceChecker lo implementa el Hub: indica si un usuario está conectado.
 type presenceChecker interface {
@@ -174,6 +179,11 @@ func (h *HandlerGroup) HandleGetUserGroups() gin.HandlerFunc {
 		if err != nil {
 			respondInternal(ctx, err)
 			return
+		}
+		if h.mutes != nil {
+			if err := h.mutes.DecorateGroups(telephon.(string), groups, ctx); err != nil {
+				logMuteDecorateError(ctx, "groups", err)
+			}
 		}
 		ctx.JSON(http.StatusOK, gin.H{"groups": groups})
 	}

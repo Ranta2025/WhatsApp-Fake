@@ -60,16 +60,31 @@ type PushGroupLookup interface {
 	GetGroupByID(groupID uint, ctx context.Context) (*models.Group, error)
 }
 
-// PushDispatcherDeps agrupa las dependencias del despacho.
+// PushPolicyLookup decide a quién NO notificar (silencios por chat y
+// remitentes bloqueados). Ambas consultas son una sola sentencia por trabajo,
+// nunca una por destinatario.
+type PushPolicyLookup interface {
+	// DirectPushState: silencio vigente en now del receptor sobre el 1:1 con
+	// el remitente y estado de la fila de contacto del receptor hacia él.
+	DirectPushState(receiverTelephon, senderTelephon string, now time.Time, ctx context.Context) (models.DirectPushState, error)
+	// MutedTelephonsInGroup: de entre telephons, los que tienen el grupo
+	// silenciado en now.
+	MutedTelephonsInGroup(groupID uint, telephons []string, now time.Time, ctx context.Context) ([]string, error)
+}
+
+// PushDispatcherDeps agrupa las dependencias del despacho. NewPushNotifier
+// exige todas, Policy incluida (repos.RepoMute); NewPushDispatcher acepta
+// Policy nil (sin filtrar silencios ni bloqueos) para los tests.
 type PushDispatcherDeps struct {
 	Repo   PushDispatchRepo
 	Users  PushUserLookup
 	Groups PushGroupLookup
 	Sender PushSender
+	Policy PushPolicyLookup
 }
 
 func (d PushDispatcherDeps) complete() bool {
-	return d.Repo != nil && d.Users != nil && d.Groups != nil && d.Sender != nil
+	return d.Repo != nil && d.Users != nil && d.Groups != nil && d.Sender != nil && d.Policy != nil
 }
 
 // NewPushNotifier devuelve el despacho real, o un no-op si el push está
@@ -219,6 +234,28 @@ func (d *PushDispatcher) NotifyDirect(receiverTelephon string, senderTelephon st
 		return
 	}
 	d.enqueue(PushKindDirect, func(ctx context.Context) {
+		trusted := true
+		if d.deps.Policy != nil {
+			state, err := d.deps.Policy.DirectPushState(receiverTelephon, senderTelephon, d.now(), ctx)
+			if err != nil {
+				// Sin poder comprobar silencio/bloqueo no se notifica.
+				slog.Error("push: error comprobando silencio/bloqueo", "kind", PushKindDirect, "err", err)
+				return
+			}
+			if state.Muted || state.ContactStatus == models.ContactStatusRejected {
+				return // chat silenciado o remitente bloqueado por el receptor
+			}
+			trusted = state.ContactStatus == models.ContactStatusAccepted
+		}
+		if !trusted {
+			// Anti spam/phishing: un remitente que el receptor no tiene como
+			// contacto aceptado se notifica con el cuerpo genérico y su
+			// teléfono como título (nunca el texto ni el username que él eligió).
+			d.deliver(ctx, PushKindDirect, []string{receiverTelephon}, func(bool) ([]byte, error) {
+				return BuildDirectPushPayload(msg, "", false)
+			})
+			return
+		}
 		username, err := d.deps.Users.GetUsernameByTelephon(senderTelephon, ctx)
 		if err != nil {
 			username = "" // el payload usa el teléfono como título
@@ -246,7 +283,7 @@ func (d *PushDispatcher) NotifyGroup(groupID uint, senderTelephon string, msg sc
 			}
 			recipients = append(recipients, tel)
 		}
-		if len(recipients) == 0 {
+		if recipients = d.withoutGroupMuted(ctx, groupID, recipients); len(recipients) == 0 {
 			return
 		}
 		groupName := ""
@@ -261,6 +298,34 @@ func (d *PushDispatcher) NotifyGroup(groupID uint, senderTelephon string, msg sc
 			return BuildGroupPushPayload(msg, groupName, username, preview)
 		})
 	})
+}
+
+// withoutGroupMuted quita de recipients a los que tienen el grupo silenciado
+// (una sola consulta). Si la consulta falla no notifica a nadie. El bloqueo
+// de contactos no aplica a los grupos.
+func (d *PushDispatcher) withoutGroupMuted(ctx context.Context, groupID uint, recipients []string) []string {
+	if d.deps.Policy == nil || len(recipients) == 0 {
+		return recipients
+	}
+	muted, err := d.deps.Policy.MutedTelephonsInGroup(groupID, recipients, d.now(), ctx)
+	if err != nil {
+		slog.Error("push: error comprobando silencios del grupo", "group_id", groupID, "err", err)
+		return nil
+	}
+	if len(muted) == 0 {
+		return recipients
+	}
+	skip := make(map[string]bool, len(muted))
+	for _, tel := range muted {
+		skip[tel] = true
+	}
+	out := recipients[:0]
+	for _, tel := range recipients {
+		if !skip[tel] {
+			out = append(out, tel)
+		}
+	}
+	return out
 }
 
 // deliver envía el payload a cada suscripción de los destinatarios. La

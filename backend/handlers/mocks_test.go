@@ -475,3 +475,34 @@ func (m *MockPushService) SetPreview(telephon string, preview bool, ctx context.
 	args := m.Called(telephon, preview, ctx)
 	return args.Error(0)
 }
+
+// MockMuteService implementa services.MuteServicer para los tests del
+// silencio por chat y de los listados que muestran el estado de silencio.
+type MockMuteService struct {
+	mock.Mock
+}
+
+func (m *MockMuteService) SetMute(telephon string, target services.MuteTarget, duration string, ctx context.Context) (schemas.MuteResponse, error) {
+	args := m.Called(telephon, target, duration, ctx)
+	return args.Get(0).(schemas.MuteResponse), args.Error(1)
+}
+
+func (m *MockMuteService) ClearMute(telephon string, target services.MuteTarget, ctx context.Context) error {
+	args := m.Called(telephon, target, ctx)
+	return args.Error(0)
+}
+
+func (m *MockMuteService) DecorateChats(telephon string, chats []schemas.ChatGroup, ctx context.Context) error {
+	args := m.Called(telephon, chats, ctx)
+	return args.Error(0)
+}
+
+func (m *MockMuteService) DecorateContacts(telephon string, contacts []models.ContactChat, ctx context.Context) error {
+	args := m.Called(telephon, contacts, ctx)
+	return args.Error(0)
+}
+
+func (m *MockMuteService) DecorateGroups(telephon string, groups []schemas.GroupResponse, ctx context.Context) error {
+	args := m.Called(telephon, groups, ctx)
+	return args.Error(0)
+}

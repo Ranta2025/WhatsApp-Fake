@@ -21,6 +21,12 @@ type GroupResponse struct {
 
 	// Temporizador de mensajes temporales en segundos (0 = off, se omite).
 	DisappearSeconds int `json:"DisappearSeconds,omitempty"`
+
+	// Silencio del grupo para el usuario que consulta (solo lo rellena el
+	// listado GET /group). Muted se omite si es false; MutedUntil se omite si
+	// no hay silencio o si es "para siempre" (Muted=true sin MutedUntil).
+	Muted      bool       `json:"Muted,omitempty"`
+	MutedUntil *time.Time `json:"MutedUntil,omitempty"`
 }
 
 // GroupMemberResponse son los datos de un miembro dentro de un grupo,

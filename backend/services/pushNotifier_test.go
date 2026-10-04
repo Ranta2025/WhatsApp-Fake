@@ -367,10 +367,17 @@ func TestNewPushNotifier_MissingDepsIsNoop(t *testing.T) {
 }
 
 func TestNewPushNotifier_EnabledReturnsDispatcher(t *testing.T) {
-	n := NewPushNotifier(dispatchPushCfg, PushDispatcherDeps{Repo: &fakePushDispatchRepo{}, Users: &fakePushDirectory{}, Groups: &fakePushDirectory{}, Sender: &fakePushSender{}})
+	n := NewPushNotifier(dispatchPushCfg, PushDispatcherDeps{Repo: &fakePushDispatchRepo{}, Users: &fakePushDirectory{}, Groups: &fakePushDirectory{}, Sender: &fakePushSender{}, Policy: newFakePushPolicy()})
 	d, ok := n.(*PushDispatcher)
 	require.True(t, ok)
 	d.Close()
+}
+
+// Sin la política de silencios/bloqueos el despacho real no arranca: se
+// notificaría a chats silenciados y a remitentes bloqueados.
+func TestNewPushNotifier_MissingPolicyIsNoop(t *testing.T) {
+	n := NewPushNotifier(dispatchPushCfg, PushDispatcherDeps{Repo: &fakePushDispatchRepo{}, Users: &fakePushDirectory{}, Groups: &fakePushDirectory{}, Sender: &fakePushSender{}})
+	assert.IsType(t, NoopPushNotifier{}, n)
 }
 
 func TestPushDispatcher_DropsWhenQueueFull(t *testing.T) {

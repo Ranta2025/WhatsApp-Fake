@@ -125,6 +125,10 @@ func Conection() (*gorm.DB, error) {
 		&models.MediaGC{},
 		// ── Web Push ───────────────────────────────────────────────────────
 		&models.PushSubscription{},
+		// ── Silencio por chat ──────────────────────────────────────────────
+		// Índices idx_chat_mutes_user_chat (único) e idx_chat_mutes_target y
+		// el CHECK chk_chat_mutes_kind salen de los tags del modelo.
+		&models.ChatMute{},
 	); err != nil {
 		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}

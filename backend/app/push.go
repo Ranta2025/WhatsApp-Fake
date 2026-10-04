@@ -19,7 +19,8 @@ func pushStartupMessage(cfg config.PushConfig) string {
 
 // buildPushNotifier construye el despacho de Web Push (pool de workers con el
 // emisor webpush-go real), o un no-op si el push está deshabilitado.
-func buildPushNotifier(cfg config.PushConfig, repoPush *repos.RepoPush, repoContact *repos.ApiContact, repoGroup *repos.RepoGroup) services.PushNotifier {
+// repoMute filtra los chats silenciados y los remitentes bloqueados.
+func buildPushNotifier(cfg config.PushConfig, repoPush *repos.RepoPush, repoContact *repos.ApiContact, repoGroup *repos.RepoGroup, repoMute *repos.RepoMute) services.PushNotifier {
 	if !cfg.Enabled {
 		return services.NoopPushNotifier{}
 	}
@@ -28,6 +29,7 @@ func buildPushNotifier(cfg config.PushConfig, repoPush *repos.RepoPush, repoCont
 		Users:  repoContact,
 		Groups: repoGroup,
 		Sender: services.NewWebPushSender(cfg),
+		Policy: repoMute,
 	})
 }
 

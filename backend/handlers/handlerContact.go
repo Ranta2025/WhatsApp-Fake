@@ -14,7 +14,12 @@ import (
 type HandlerContact struct {
 	service services.ContactServicer
 	hub     *websocket.Hub
+	mutes   services.MuteServicer // nil = el listado sale sin estado de silencio
 }
+
+// SetMuteService inyecta el servicio de silencios que rellena Muted/MutedUntil
+// del listado de contactos.
+func (hd *HandlerContact) SetMuteService(m services.MuteServicer) { hd.mutes = m }
 
 // InitHandlerApiMessage crea el handler de contactos/perfil con su servicio y Hub WebSocket.
 func InitHandlerApiMessage(services services.ContactServicer, hub *websocket.Hub) *HandlerContact {
@@ -139,6 +144,11 @@ func (hd *HandlerContact) HandlerContacts() gin.HandlerFunc {
 			respondFailure(ctx, http.StatusBadRequest, err)
 			ctx.Abort()
 			return
+		}
+		if hd.mutes != nil && contacts != nil {
+			if err := hd.mutes.DecorateContacts(telephon.(string), *contacts, ctx); err != nil {
+				logMuteDecorateError(ctx, "contacts", err)
+			}
 		}
 
 		ctx.IndentedJSON(200, contacts)

@@ -20,6 +20,7 @@ type RouterApiMessage struct {
 	handlerStatus  *handlers.HandlerStatus
 	handlerSearch  *handlers.HandlerSearch
 	handlerPush    *handlers.HandlerPush
+	handlerMute    *handlers.HandlerMute
 	hub            *websocket.Hub
 	chatService    services.ChatServicer
 	contactService services.ContactServicer
@@ -66,6 +67,31 @@ func (rt *RouterApiMessage) ApiPush() {
 	rt.app.POST("push/subscribe", middleware.MiddlewarePushSubscribe(), rt.handlerPush.HandlerSubscribe())
 	rt.app.DELETE("push/subscribe", middleware.MiddlewarePushUnsubscribe(), rt.handlerPush.HandlerUnsubscribe())
 	rt.app.PUT("push/preview", middleware.MiddlewarePushPreview(), rt.handlerPush.HandlerSetPreview())
+}
+
+// SetHandlerMute asigna el handler de silencio por chat (se inyecta aparte,
+// como el de push, para no alargar la firma de InitRouterApiMessage).
+func (rt *RouterApiMessage) SetHandlerMute(h *handlers.HandlerMute) {
+	rt.handlerMute = h
+}
+
+// ApiMute registra el silencio por chat (protegido por el token del grupo):
+//
+//	PUT    /api/v1/chat/:contact/mute   {"duration":"8h"|"1w"|"always"} → 200 {"muted":true,"mutedUntil":RFC3339|null}
+//	DELETE /api/v1/chat/:contact/mute   → 204 (idempotente)
+//	PUT    /api/v1/group/:groupID/mute  (mismo cuerpo y respuesta)
+//	DELETE /api/v1/group/:groupID/mute  → 204
+//
+// Sin handler no registra nada.
+func (rt *RouterApiMessage) ApiMute() {
+	if rt.handlerMute == nil {
+		return
+	}
+	direct, group := models.ChatKindDirect, models.ChatKindGroup
+	rt.app.PUT("chat/:contact/mute", middleware.MiddlewateGetChat(), middleware.MiddlewareMuteDuration(), rt.handlerMute.HandlerSetMute(direct))
+	rt.app.DELETE("chat/:contact/mute", middleware.MiddlewateGetChat(), rt.handlerMute.HandlerClearMute(direct))
+	rt.app.PUT("group/:groupID/mute", middleware.MiddlewareGroupID(), middleware.MiddlewareMuteDuration(), rt.handlerMute.HandlerSetMute(group))
+	rt.app.DELETE("group/:groupID/mute", middleware.MiddlewareGroupID(), rt.handlerMute.HandlerClearMute(group))
 }
 
 // ApiUser registra las rutas de gestión de perfil del usuario autenticado.

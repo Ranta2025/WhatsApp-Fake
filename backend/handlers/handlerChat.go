@@ -21,8 +21,13 @@ type DirectNotifier interface {
 type HandlerChat struct {
 	service  services.ChatServicer
 	hub      *websocket.Hub
-	notifier DirectNotifier // nil si no hay Hub
+	notifier DirectNotifier        // nil si no hay Hub
+	mutes    services.MuteServicer // nil = los listados salen sin estado de silencio
 }
+
+// SetMuteService inyecta el servicio de silencios que rellena Muted/MutedUntil
+// del listado de chats.
+func (hd *HandlerChat) SetMuteService(m services.MuteServicer) { hd.mutes = m }
 
 // InitHandlerChat crea el handler de chat con su servicio y referencia al Hub WebSocket.
 func InitHandlerChat(service services.ChatServicer, hub *websocket.Hub) *HandlerChat {
@@ -210,6 +215,11 @@ func (hd *HandlerChat) HandlerGetAllChats() gin.HandlerFunc {
 			respondInternal(ctx, err)
 			ctx.Abort()
 			return
+		}
+		if hd.mutes != nil {
+			if err := hd.mutes.DecorateChats(telephon.(string), chats, ctx); err != nil {
+				logMuteDecorateError(ctx, "chats", err)
+			}
 		}
 		ctx.IndentedJSON(http.StatusOK, chats)
 	}

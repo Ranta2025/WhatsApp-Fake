@@ -4,6 +4,7 @@ import (
 	"context"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
@@ -244,4 +245,32 @@ func (m *MockPushRepo) GetPushPreviewDisabled(userID uint, ctx context.Context) 
 func (m *MockPushRepo) SetPushPreviewDisabled(userID uint, disabled bool, ctx context.Context) error {
 	args := m.Called(userID, disabled, ctx)
 	return args.Error(0)
+}
+
+// MockMuteRepo implementa MuteRepoInterface para los tests del servicio de silencios.
+type MockMuteRepo struct {
+	mock.Mock
+}
+
+func (m *MockMuteRepo) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	args := m.Called(telephon, ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockMuteRepo) UpsertMute(mute *models.ChatMute, ctx context.Context) error {
+	args := m.Called(mute, ctx)
+	return args.Error(0)
+}
+
+func (m *MockMuteRepo) DeleteMute(userID uint, kind string, targetID uint, ctx context.Context) error {
+	args := m.Called(userID, kind, targetID, ctx)
+	return args.Error(0)
+}
+
+func (m *MockMuteRepo) ListActiveMutes(userID uint, now time.Time, ctx context.Context) ([]models.ActiveMute, error) {
+	args := m.Called(userID, now, ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.ActiveMute), args.Error(1)
 }

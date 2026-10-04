@@ -51,4 +51,11 @@ type ChatGroup struct {
 	IsContact        bool      `json:"IsContact"`        // true = está en la lista de contactos
 	Messages         []Message `json:"Messages"`
 	DisappearSeconds int       `json:"DisappearSeconds,omitempty"` // temporizador del chat (0 = off)
+
+	// Silencio del chat para el usuario que consulta (PascalCase por la regla
+	// cross-feature). Muted se omite si es false; MutedUntil se omite si no
+	// hay silencio o si es "para siempre" (Muted=true sin MutedUntil). Los
+	// silencios vencidos salen como no silenciados.
+	Muted      bool       `json:"Muted,omitempty"`
+	MutedUntil *time.Time `json:"MutedUntil,omitempty"`
 }
