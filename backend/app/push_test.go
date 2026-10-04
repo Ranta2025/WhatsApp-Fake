@@ -42,7 +42,7 @@ func TestPushNotifierCloser(t *testing.T) {
 	assert.NotPanics(t, func() { on.NotifyDirect("+2", "+1", schemas.Message{Message: "hola"}) })
 }
 
-func TestPushNotifierCloserHonorsContext(t *testing.T) {
+func TestPushNotifierCloserNoopAndIdleDispatcher(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	assert.NoError(t, pushNotifierCloser(services.NoopPushNotifier{})(ctx))

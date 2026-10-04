@@ -532,3 +532,15 @@ func TestPushDispatcher_CloseContextDrainsQueuedJobs(t *testing.T) {
 	assert.Equal(t, []uint{10, 11, 12}, sent)
 	assert.ElementsMatch(t, []uint{10, 11, 12}, repo.marked, "envíos completados con contexto vivo")
 }
+
+// Con el plazo ya vencido pero los workers ya terminados, el cierre no debe
+// informar un timeout (select elige al azar entre canales listos).
+func TestPushDispatcher_CloseContextIdleWithExpiredCtxReturnsNil(t *testing.T) {
+	expired, cancel := context.WithCancel(context.Background())
+	cancel()
+	for i := 0; i < 50; i++ {
+		d := newPushDispatcher(dispatchPushCfg, PushDispatcherDeps{Repo: &fakePushDispatchRepo{}, Users: &fakePushDirectory{}, Groups: &fakePushDirectory{}, Sender: &fakePushSender{}}, 1, 1)
+		d.Close()
+		require.NoError(t, d.CloseContext(expired))
+	}
+}

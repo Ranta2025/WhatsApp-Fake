@@ -115,9 +115,38 @@ func TestServiceMuteGroupRequiresMembership(t *testing.T) {
 
 	_, err := s.SetMute(muteMe, MuteTarget{Kind: models.ChatKindGroup, GroupID: 7}, "always", context.Background())
 	assert.ErrorIs(t, err, ErrNotGroupMember)
-	assert.ErrorIs(t, s.ClearMute(muteMe, MuteTarget{Kind: models.ChatKindGroup, GroupID: 7}, context.Background()), ErrNotGroupMember)
 	repo.AssertNotCalled(t, "UpsertMute", mock.Anything, mock.Anything)
-	repo.AssertNotCalled(t, "DeleteMute", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// Quien salió de un grupo puede quitar su propio silencio (solo borra su fila):
+// si no, al volver a ser añadido seguiría silenciado sin poder evitarlo.
+func TestServiceMuteClearGroupDoesNotRequireMembership(t *testing.T) {
+	repo := muteRepoWithUsers()
+	groups := new(MockGroupRepo)
+	repo.On("DeleteMute", uint(muteMeID), models.ChatKindGroup, uint(7), mock.Anything).Return(nil)
+	s := newMuteService(repo, groups)
+
+	require.NoError(t, s.ClearMute(muteMe, MuteTarget{Kind: models.ChatKindGroup, GroupID: 7}, context.Background()))
+	groups.AssertNotCalled(t, "IsMember", mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertExpectations(t)
+}
+
+// El listado devuelve MutedUntil en UTC aunque el driver lo entregue en la
+// zona local, igual que la respuesta del PUT.
+func TestServiceMuteActiveMutesAreUTC(t *testing.T) {
+	repo := muteRepoWithUsers()
+	local := time.FixedZone("PET", -5*3600)
+	until := muteClock.Add(time.Hour).In(local)
+	repo.On("ListActiveMutes", uint(muteMeID), mock.Anything, mock.Anything).Return([]models.ActiveMute{
+		{ChatKind: models.ChatKindDirect, TargetID: uint(mutePeerI), PeerTelephon: mutePeer, MutedUntil: &until},
+		{ChatKind: models.ChatKindGroup, TargetID: 7, MutedUntil: &until},
+	}, nil)
+	idx, err := newMuteService(repo, nil).activeMutes(muteMe, context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, idx.direct[mutePeer])
+	assert.Equal(t, time.UTC, idx.direct[mutePeer].Location())
+	assert.Equal(t, time.UTC, idx.group[7].Location())
+	assert.True(t, idx.direct[mutePeer].Equal(until))
 }
 
 func TestServiceMuteGroupMember(t *testing.T) {

@@ -143,7 +143,19 @@ func (s *ServiceMute) SetMute(telephon string, target MuteTarget, duration strin
 	return schemas.MuteResponse{Muted: true, MutedUntil: until}, nil
 }
 
+// ClearMute borra el silencio propio. En grupos no exige ser miembro: borrar
+// la fila propia no expone nada y quien salió del grupo debe poder quitarlo.
 func (s *ServiceMute) ClearMute(telephon string, target MuteTarget, ctx context.Context) error {
+	if target.Kind == models.ChatKindGroup {
+		if target.GroupID == 0 {
+			return ErrMuteChatNotFound
+		}
+		userID, err := s.repo.GetIdByTelephon(telephon, ctx)
+		if err != nil {
+			return fmt.Errorf("resolver usuario: %w", err)
+		}
+		return s.repo.DeleteMute(uint(userID), target.Kind, target.GroupID, ctx)
+	}
 	userID, targetID, err := s.resolve(telephon, target, ctx)
 	if err != nil {
 		return err
@@ -169,6 +181,11 @@ func (s *ServiceMute) activeMutes(telephon string, ctx context.Context) (muteInd
 		return idx, err
 	}
 	for _, r := range rows {
+		// En UTC como la respuesta del PUT: el driver devuelve la zona local.
+		if r.MutedUntil != nil {
+			t := r.MutedUntil.UTC()
+			r.MutedUntil = &t
+		}
 		switch r.ChatKind {
 		case models.ChatKindDirect:
 			if r.PeerTelephon != "" {

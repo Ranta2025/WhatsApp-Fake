@@ -189,6 +189,14 @@ func (d *PushDispatcher) CloseContext(ctx context.Context) error {
 		d.cancelBase()
 		return nil
 	case <-ctx.Done():
+		// select elige al azar si ambos están listos: si los workers ya
+		// terminaron no es un timeout.
+		select {
+		case <-d.done:
+			d.cancelBase()
+			return nil
+		default:
+		}
 		d.cancelBase()
 		return ctx.Err()
 	}
