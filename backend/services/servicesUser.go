@@ -53,7 +53,7 @@ type UserRepoInterface interface {
 
 type UserCacheInterface interface {
 	SaveRefreshToken(telephon string, refreshToken string, ctx context.Context) error
-	GetRefreshTokenOwner(refreshToken string, ctx context.Context) (string, error)
+	ConsumeRefreshToken(refreshToken string, ctx context.Context) (string, error)
 	DeleteRefreshToken(refreshToken string, ctx context.Context) error
 	RevokeAllRefreshTokens(telephon string, ctx context.Context) error
 	SetCodigo(tipoCodigo string, key string, codigo string, ctx context.Context) error
@@ -416,13 +416,11 @@ func (s *ServicesUser) SaveRefreshToken(telephon string, refreshToken string, ct
 // cambiado) y el teléfono del usuario, verificando que la cuenta siga activa
 // y no bloqueada.
 func (s *ServicesUser) RefreshSession(refreshToken string, ctx context.Context) (string, string, error) {
-	telephon, err := s.cache.GetRefreshTokenOwner(refreshToken, ctx)
+	// Rotación: el token se consume de forma atómica (un solo uso), así dos
+	// refresh concurrentes con el mismo token no pueden obtener ambos sesión.
+	telephon, err := s.cache.ConsumeRefreshToken(refreshToken, ctx)
 	if err != nil || telephon == "" {
 		return "", "", errors.New("refresh token expirado o inexistente")
-	}
-	// Rotación: el token usado deja de ser válido
-	if err := s.cache.DeleteRefreshToken(refreshToken, ctx); err != nil {
-		return "", "", errors.New("error al renovar la sesion")
 	}
 
 	auth, err := s.repo.GetAuthByTelephon(telephon, ctx)

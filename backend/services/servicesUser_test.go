@@ -141,8 +141,7 @@ func TestServicesUser_RefreshSession_RotatesAndUsesCurrentUsername(t *testing.T)
 	service := InitServices(mockRepo, mockCache)
 	ctx := context.Background()
 
-	mockCache.On("GetRefreshTokenOwner", "refresh-token", ctx).Return("+50212345678", nil)
-	mockCache.On("DeleteRefreshToken", "refresh-token", ctx).Return(nil)
+	mockCache.On("ConsumeRefreshToken", "refresh-token", ctx).Return("+50212345678", nil).Once()
 	mockRepo.On("GetAuthByTelephon", "+50212345678", ctx).Return(&models.UserAuth{
 		Username: "nuevo_nombre", Telephon: "+50212345678", Activo: true,
 	}, nil)
@@ -161,8 +160,7 @@ func TestServicesUser_RefreshSession_RejectsBlockedUser(t *testing.T) {
 	service := InitServices(mockRepo, mockCache)
 	ctx := context.Background()
 
-	mockCache.On("GetRefreshTokenOwner", "refresh-token", ctx).Return("+50212345678", nil)
-	mockCache.On("DeleteRefreshToken", "refresh-token", ctx).Return(nil)
+	mockCache.On("ConsumeRefreshToken", "refresh-token", ctx).Return("+50212345678", nil).Once()
 	mockRepo.On("GetAuthByTelephon", "+50212345678", ctx).Return(&models.UserAuth{
 		Username: "testuser", Telephon: "+50212345678", Activo: true, Bloqueado: true,
 	}, nil)
@@ -180,11 +178,31 @@ func TestServicesUser_RefreshSession_UnknownToken(t *testing.T) {
 	service := InitServices(mockRepo, mockCache)
 	ctx := context.Background()
 
-	mockCache.On("GetRefreshTokenOwner", "forged", ctx).Return("", errors.New("redis: nil"))
+	mockCache.On("ConsumeRefreshToken", "forged", ctx).Return("", errors.New("refresh token not found"))
 
 	_, _, err := service.RefreshSession("forged", ctx)
 
-	assert.Error(t, err)
+	assert.EqualError(t, err, "refresh token expirado o inexistente")
+	mockRepo.AssertNotCalled(t, "GetAuthByTelephon", mock.Anything, mock.Anything)
+}
+
+// El refresh se resuelve con un único consumo atómico: sin GET previo ni
+// borrado aparte que permitan a dos peticiones concurrentes usar el mismo token.
+func TestServicesUser_RefreshSession_ConsumesTokenExactlyOnce(t *testing.T) {
+	mockRepo := new(MockUserRepo)
+	mockCache := new(MockUserCache)
+	service := InitServices(mockRepo, mockCache)
+	ctx := context.Background()
+
+	mockCache.On("ConsumeRefreshToken", "refresh-token", ctx).Return("+50212345678", nil).Once()
+	mockRepo.On("GetAuthByTelephon", "+50212345678", ctx).Return(&models.UserAuth{
+		Username: "testuser", Telephon: "+50212345678", Activo: true,
+	}, nil)
+
+	_, _, err := service.RefreshSession("refresh-token", ctx)
+
+	assert.NoError(t, err)
+	mockCache.AssertNumberOfCalls(t, "ConsumeRefreshToken", 1)
 	mockCache.AssertNotCalled(t, "DeleteRefreshToken", mock.Anything, mock.Anything)
 }
 

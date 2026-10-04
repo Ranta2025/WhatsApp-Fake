@@ -16,6 +16,9 @@ const (
 	intentosFallidosTTL = 30 * time.Minute
 )
 
+// ErrRefreshTokenNotFound indica que el refresh token no existe, expiró o ya fue consumido.
+var ErrRefreshTokenNotFound = errors.New("refresh token not found")
+
 type CacheUser struct {
 	rd *redis.Client
 }
@@ -63,7 +66,27 @@ func (ch *CacheUser) GetRefreshTokenOwner(refreshToken string, ctx context.Conte
 	return ch.rd.Get(c, refreshTokenKey(refreshToken)).Result()
 }
 
-// DeleteRefreshToken invalida un refresh token concreto (logout / rotación).
+// ConsumeRefreshToken obtiene y borra el refresh token en una sola operación
+// atómica (GETDEL): de varias peticiones concurrentes con el mismo token solo
+// una recibe el dueño; el resto obtiene ErrRefreshTokenNotFound. Así un token
+// robado no puede bifurcarse en dos sesiones durante la rotación.
+func (ch *CacheUser) ConsumeRefreshToken(refreshToken string, ctx context.Context) (string, error) {
+	c, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	tokenKey := refreshTokenKey(refreshToken)
+	telephon, err := ch.rd.GetDel(c, tokenKey).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", ErrRefreshTokenNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	// Best effort: el set por usuario solo sirve para revocar todas las sesiones
+	_ = ch.rd.SRem(c, refreshUserKey(telephon), tokenKey).Err()
+	return telephon, nil
+}
+
+// DeleteRefreshToken invalida un refresh token concreto (logout). Es idempotente.
 func (ch *CacheUser) DeleteRefreshToken(refreshToken string, ctx context.Context) error {
 	c, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

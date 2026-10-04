@@ -95,7 +95,7 @@ func (m *MockUserCache) SaveRefreshToken(telephon string, refreshToken string, c
 	return m.Called(telephon, refreshToken, ctx).Error(0)
 }
 
-func (m *MockUserCache) GetRefreshTokenOwner(refreshToken string, ctx context.Context) (string, error) {
+func (m *MockUserCache) ConsumeRefreshToken(refreshToken string, ctx context.Context) (string, error) {
 	args := m.Called(refreshToken, ctx)
 	return args.String(0), args.Error(1)
 }

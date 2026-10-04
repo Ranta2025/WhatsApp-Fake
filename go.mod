@@ -20,7 +20,12 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-require github.com/rivo/uniseg v0.4.7
+require (
+	github.com/alicebob/miniredis/v2 v2.39.0
+	github.com/rivo/uniseg v0.4.7
+)
+
+require github.com/yuin/gopher-lua v1.1.1 // indirect
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
