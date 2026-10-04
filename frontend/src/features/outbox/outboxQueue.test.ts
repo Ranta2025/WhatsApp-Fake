@@ -368,6 +368,38 @@ describe('OutboxQueue retry while connected', () => {
         expect(transport.sent).toHaveLength(1);
     });
 
+    it('handleOnline flushes entries queued while the browser was offline and the socket stayed open', async () => {
+        const { queue, transport } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000 });
+        expect(transport.sent).toHaveLength(0);
+        queue.handleOnline();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(transport.sent.map(e => e.text)).toEqual(['uno']);
+    });
+
+    it('handleOnline does not bypass a scheduled retry backoff', async () => {
+        const { queue, transport } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000 });
+        void queue.flush();
+        await vi.advanceTimersByTimeAsync(100); // ack timeout -> retry scheduled
+        expect(transport.sent).toHaveLength(1);
+        queue.handleOnline();
+        await vi.advanceTimersByTimeAsync(500);
+        expect(transport.sent).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(500);
+        expect(transport.sent).toHaveLength(2);
+    });
+
+    it('handleOnline does nothing while the browser still reports offline or the socket is closed', async () => {
+        const { queue, transport, online } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000 });
+        online.value = false;
+        queue.handleOnline();
+        await vi.advanceTimersByTimeAsync(0);
+        online.value = true;
+        transport.open = false;
+        queue.handleOnline();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(transport.sent).toHaveLength(0);
+    });
+
     it('a disconnect does not schedule a retry (waits for the reconnect)', async () => {
         const { queue, transport } = await queuedEntry({ ackTimeoutMs: 100, retryBaseMs: 1000 });
         const flushing = queue.flush();

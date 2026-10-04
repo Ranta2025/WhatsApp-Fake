@@ -143,6 +143,15 @@ export class OutboxQueue {
         }
     }
 
+    /**
+     * The browser came back online. With the socket still open no connect event
+     * will follow, so flush here; a scheduled retry keeps owning its backoff.
+     */
+    handleOnline(): void {
+        if (this.disposed || this.retryTimer !== null) return;
+        if (this.options.isOnline() && this.options.transport.isOpen()) void this.flush();
+    }
+
     /** Server ack/echo of one of our messages carrying `clientID`. */
     ack(clientID: string): AckOutcome {
         const item = this.items.find(i => i.entry.clientID === clientID);

@@ -88,6 +88,16 @@ export function useOutbox({ owner, connected, store, transport }: UseOutboxOptio
         else queue.handleDisconnect();
     }, [connected, owner]);
 
+    // Text queued while `navigator.onLine` was false is not flushed by a connect
+    // event when the socket never closed: flush when the browser is back online.
+    // A closed socket reconnects on `online` (wsManager) and flushes on connect.
+    useEffect(() => {
+        if (!owner) return;
+        const onOnline = () => { queueRef.current?.handleOnline(); };
+        window.addEventListener('online', onOnline);
+        return () => window.removeEventListener('online', onOnline);
+    }, [owner]);
+
     const sendText = useCallback(async (input: OutboxSendInput): Promise<OutboxSendResult> => {
         const queue = queueRef.current;
         return queue ? queue.sendText(input) : 'unavailable';
