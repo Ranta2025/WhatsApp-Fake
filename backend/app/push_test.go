@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"testing"
 
 	"gorm/backend/config"
@@ -33,10 +34,20 @@ func TestBuildPushNotifier(t *testing.T) {
 }
 
 func TestPushNotifierCloser(t *testing.T) {
-	assert.NotPanics(t, pushNotifierCloser(services.NoopPushNotifier{}))
+	assert.NotPanics(t, func() { _ = pushNotifierCloser(services.NoopPushNotifier{})(context.Background()) })
 
 	on := buildPushNotifier(config.PushConfig{Enabled: true, PublicKey: "p", PrivateKey: "k", Subject: "mailto:a@b.c"}, &repos.RepoPush{}, &repos.ApiContact{}, &repos.RepoGroup{})
-	pushNotifierCloser(on)()
+	assert.NoError(t, pushNotifierCloser(on)(context.Background()))
 	// Tras cerrar, notificar no encola nada ni entra en pánico.
 	assert.NotPanics(t, func() { on.NotifyDirect("+2", "+1", schemas.Message{Message: "hola"}) })
+}
+
+func TestPushNotifierCloserHonorsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assert.NoError(t, pushNotifierCloser(services.NoopPushNotifier{})(ctx))
+
+	on := buildPushNotifier(config.PushConfig{Enabled: true, PublicKey: "p", PrivateKey: "k", Subject: "mailto:a@b.c"}, &repos.RepoPush{}, &repos.ApiContact{}, &repos.RepoGroup{})
+	// Sin trabajos pendientes el cierre termina enseguida.
+	assert.NoError(t, pushNotifierCloser(on)(context.Background()))
 }

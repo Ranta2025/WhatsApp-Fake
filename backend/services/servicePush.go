@@ -9,6 +9,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"gorm/backend/utils"
+	"log/slog"
 	"sort"
 	"time"
 )
@@ -52,7 +53,9 @@ type PushServicer interface {
 // PushRepoInterface es el subconjunto del repositorio que necesita ServicePush.
 type PushRepoInterface interface {
 	GetIdByTelephon(telephon string, ctx context.Context) (int, error)
-	UpsertSubscription(sub *models.PushSubscription, ctx context.Context) error
+	// UpsertSubscription devuelve applied=false (sin error) si el upsert no
+	// tocó ninguna fila: el endpoint es de otro usuario con otras claves.
+	UpsertSubscription(sub *models.PushSubscription, ctx context.Context) (applied bool, err error)
 	GetSubscriptionByEndpoint(endpoint string, ctx context.Context) (*models.PushSubscription, error)
 	ListSubscriptionsByUser(userID uint, ctx context.Context) ([]models.PushSubscription, error)
 	DeleteSubscriptionByEndpoint(userID uint, endpoint string, ctx context.Context) error
@@ -100,13 +103,16 @@ func (s *ServicePush) Config(telephon string, ctx context.Context) (schemas.Push
 }
 
 // Subscribe valida la suscripción (defensa en profundidad, el middleware ya lo
-// hizo), comprueba de quién es el endpoint, aplica el límite por usuario y
-// hace el upsert por endpoint. Un endpoint de otro usuario solo se reasigna
+// hizo), comprueba de quién es el endpoint, hace el upsert por endpoint y
+// aplica el límite por usuario. Un endpoint de otro usuario solo se reasigna
 // si las claves coinciden (mismo navegador compartido): conocer el endpoint
-// no basta para quedarse con las notificaciones de otro. Con el límite
-// alcanzado, un endpoint nuevo borra la suscripción más antigua por
-// COALESCE(last_success_at, created_at). El límite se comprueba sin bloqueo:
-// dos altas simultáneas pueden dejar al usuario con una de más (inocuo).
+// no basta para quedarse con las notificaciones de otro. Si el upsert no
+// aplica (carrera entre la lectura y el upsert) es ErrPushConflict. Solo
+// después de guardar un endpoint nuevo, si el usuario supera el límite, se
+// borran las suscripciones más antiguas por COALESCE(last_success_at,
+// created_at), nunca la recién guardada: un upsert fallido o bloqueado no
+// borra nada. El límite se aplica sin bloqueo: dos altas simultáneas pueden
+// dejar al usuario con una de más (inocuo).
 func (s *ServicePush) Subscribe(telephon string, input models.PushSubscriptionInput, userAgent string, ctx context.Context) (bool, error) {
 	if !s.cfg.Enabled {
 		return false, ErrPushDisabled
@@ -126,17 +132,6 @@ func (s *ServicePush) Subscribe(telephon string, input models.PushSubscriptionIn
 		return false, ErrPushConflict
 	}
 	created := current == nil || current.UserID != id
-	if created {
-		existing, err := s.repo.ListSubscriptionsByUser(id, ctx)
-		if err != nil {
-			return false, fmt.Errorf("listar suscripciones push: %w", err)
-		}
-		for _, old := range oldestPushSubscriptions(existing, len(existing)-MaxPushSubscriptionsPerUser+1) {
-			if err := s.repo.DeleteSubscriptionByID(old.ID, ctx); err != nil {
-				return false, fmt.Errorf("borrar suscripción push antigua: %w", err)
-			}
-		}
-	}
 	sub := &models.PushSubscription{
 		UserID:    id,
 		Endpoint:  input.Endpoint,
@@ -144,10 +139,44 @@ func (s *ServicePush) Subscribe(telephon string, input models.PushSubscriptionIn
 		Auth:      input.Keys.Auth,
 		UserAgent: truncateRunes(userAgent, maxPushUserAgentLen),
 	}
-	if err := s.repo.UpsertSubscription(sub, ctx); err != nil {
+	applied, err := s.repo.UpsertSubscription(sub, ctx)
+	if err != nil {
 		return false, fmt.Errorf("guardar suscripción push: %w", err)
 	}
+	if !applied {
+		return false, ErrPushConflict
+	}
+	if created {
+		// La suscripción ya está guardada: si el desplazamiento falla el alta
+		// sigue siendo válida y el usuario queda con una de más hasta la
+		// próxima alta.
+		if err := s.evictOverLimit(id, input.Endpoint, ctx); err != nil {
+			slog.Warn("push: error aplicando el límite de suscripciones", "user_id", id, "err", err)
+		}
+	}
 	return created, nil
+}
+
+// evictOverLimit borra las suscripciones más antiguas del usuario que
+// excedan MaxPushSubscriptionsPerUser, sin tocar la del endpoint keep (la
+// recién guardada).
+func (s *ServicePush) evictOverLimit(userID uint, keep string, ctx context.Context) error {
+	all, err := s.repo.ListSubscriptionsByUser(userID, ctx)
+	if err != nil {
+		return fmt.Errorf("listar suscripciones push: %w", err)
+	}
+	others := make([]models.PushSubscription, 0, len(all))
+	for _, sub := range all {
+		if sub.Endpoint != keep {
+			others = append(others, sub)
+		}
+	}
+	for _, old := range oldestPushSubscriptions(others, len(all)-MaxPushSubscriptionsPerUser) {
+		if err := s.repo.DeleteSubscriptionByID(old.ID, ctx); err != nil {
+			return fmt.Errorf("borrar suscripción push antigua: %w", err)
+		}
+	}
+	return nil
 }
 
 // samePushKeys compara las claves guardadas con las recibidas en tiempo

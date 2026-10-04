@@ -450,3 +450,78 @@ func (f senderFunc) Send(ctx context.Context, _ models.PushSubscription, _ []byt
 	f(ctx)
 	return nil
 }
+
+// Un servicio de push que no responde no puede colgar el apagado: CloseContext
+// vuelve al vencer su plazo, cancela el envío en curso y descarta los
+// trabajos encolados.
+func TestPushDispatcher_CloseContextAbortsBlockedSendAtDeadline(t *testing.T) {
+	started := make(chan struct{})
+	sendErr := make(chan error, 1)
+	var calls sync.Map
+	sender := subSenderFunc(func(ctx context.Context, sub models.PushSubscription) error {
+		calls.Store(sub.ID, true)
+		if sub.ID == 10 {
+			close(started)
+			<-ctx.Done()
+			sendErr <- ctx.Err()
+			return ctx.Err()
+		}
+		return nil
+	})
+	repo := &fakePushDispatchRepo{targets: []models.PushTarget{pushTarget(10, "+2", false), pushTarget(11, "+3", false)}}
+	d := newPushDispatcher(dispatchPushCfg, PushDispatcherDeps{Repo: repo, Users: &fakePushDirectory{}, Groups: &fakePushDirectory{}, Sender: sender}, 1, 4)
+	d.sendTimeout = time.Hour // solo el cierre puede cortar el envío
+
+	d.NotifyDirect("+2", "+1", directMsg("bloqueado"))
+	<-started
+	d.NotifyDirect("+3", "+1", directMsg("encolado"))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	begin := time.Now()
+	err := d.CloseContext(ctx)
+	elapsed := time.Since(begin)
+
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 2*time.Second, "CloseContext respeta el plazo")
+	select {
+	case e := <-sendErr:
+		assert.ErrorIs(t, e, context.Canceled, "el envío en curso se cancela")
+	case <-time.After(2 * time.Second):
+		t.Fatal("el envío bloqueado no vio cancelado su contexto")
+	}
+	// Tras cancelar, el worker descarta el trabajo encolado sin enviarlo.
+	require.Eventually(t, func() bool { return d.workersDone() }, 2*time.Second, 5*time.Millisecond)
+	_, sentQueued := calls.Load(uint(11))
+	assert.False(t, sentQueued, "los trabajos encolados se descartan")
+	assert.NoError(t, d.CloseContext(context.Background()), "idempotente")
+}
+
+// Con plazo suficiente, CloseContext drena los trabajos encolados.
+func TestPushDispatcher_CloseContextDrainsQueuedJobs(t *testing.T) {
+	release := make(chan struct{})
+	var mu sync.Mutex
+	var sent []uint
+	sender := subSenderFunc(func(ctx context.Context, sub models.PushSubscription) error {
+		<-release
+		mu.Lock()
+		sent = append(sent, sub.ID)
+		mu.Unlock()
+		return ctx.Err()
+	})
+	repo := &fakePushDispatchRepo{targets: []models.PushTarget{pushTarget(10, "+2", false), pushTarget(11, "+3", false), pushTarget(12, "+4", false)}}
+	d := newPushDispatcher(dispatchPushCfg, PushDispatcherDeps{Repo: repo, Users: &fakePushDirectory{}, Groups: &fakePushDirectory{}, Sender: sender}, 1, 4)
+	for _, tel := range []string{"+2", "+3", "+4"} {
+		d.NotifyDirect(tel, "+1", directMsg("hola"))
+	}
+	go func() { time.Sleep(20 * time.Millisecond); close(release) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, d.CloseContext(ctx))
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []uint{10, 11, 12}, sent)
+	assert.ElementsMatch(t, []uint{10, 11, 12}, repo.marked, "envíos completados con contexto vivo")
+}

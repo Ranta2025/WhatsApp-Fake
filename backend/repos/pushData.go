@@ -43,10 +43,14 @@ func (r *RepoPush) GetIdByTelephon(telephon string, ctx context.Context) (int, e
 // servicio ya lo comprobó con GetSubscriptionByEndpoint y esta condición
 // cierra la carrera entre esa lectura y el upsert (si no se cumple, no se
 // toca la fila).
-func (r *RepoPush) UpsertSubscription(sub *models.PushSubscription, ctx context.Context) error {
+//
+// applied indica si la sentencia insertó o actualizó la fila: con la
+// condición falsa Postgres no afecta ninguna fila y no devuelve error, así
+// que applied=false significa que el endpoint es de otra suscripción.
+func (r *RepoPush) UpsertSubscription(sub *models.PushSubscription, ctx context.Context) (applied bool, err error) {
 	c, cancel := context.WithTimeout(ctx, pushTimeout)
 	defer cancel()
-	return r.data.WithContext(c).
+	res := r.data.WithContext(c).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "endpoint"}},
 			DoUpdates: clause.AssignmentColumns([]string{"user_id", "p256dh", "auth", "user_agent"}),
@@ -54,7 +58,11 @@ func (r *RepoPush) UpsertSubscription(sub *models.PushSubscription, ctx context.
 				SQL: "push_subscriptions.user_id = excluded.user_id OR (push_subscriptions.p256dh = excluded.p256dh AND push_subscriptions.auth = excluded.auth)",
 			}}},
 		}).
-		Create(sub).Error
+		Create(sub)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
 }
 
 // GetSubscriptionByEndpoint devuelve la suscripción con ese endpoint (de

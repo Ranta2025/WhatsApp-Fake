@@ -104,14 +104,15 @@ func TestPushSubscribeNewCreates(t *testing.T) {
 	in := validPushInput("https://fcm.googleapis.com/fcm/send/new")
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
 	repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(nil, nil)
-	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, 3), nil)
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(append(subsFor(7, 3), models.PushSubscription{ID: 50, UserID: 7, Endpoint: in.Endpoint}), nil)
 	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
 		return s.UserID == 7 && s.Endpoint == in.Endpoint && s.P256dh == in.Keys.P256dh && s.Auth == in.Keys.Auth && s.UserAgent == "Firefox"
-	}), mock.Anything).Return(nil)
+	}), mock.Anything).Return(true, nil)
 
 	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "Firefox", context.Background())
 	require.NoError(t, err)
 	assert.True(t, created)
+	repo.AssertNotCalled(t, "DeleteSubscriptionByID", mock.Anything, mock.Anything)
 	repo.AssertExpectations(t)
 }
 
@@ -122,7 +123,7 @@ func TestPushSubscribeTruncatesUserAgent(t *testing.T) {
 	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return([]models.PushSubscription{}, nil)
 	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
 		return len([]rune(s.UserAgent)) == 300
-	}), mock.Anything).Return(nil)
+	}), mock.Anything).Return(true, nil)
 
 	_, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, validPushInput("https://fcm.googleapis.com/x"), strings.Repeat("ñ", 400), context.Background())
 	require.NoError(t, err)
@@ -130,7 +131,9 @@ func TestPushSubscribeTruncatesUserAgent(t *testing.T) {
 }
 
 // Con el límite alcanzado, un endpoint nuevo desplaza a la suscripción más
-// antigua por COALESCE(last_success_at, created_at) en vez de bloquear al usuario.
+// antigua por COALESCE(last_success_at, created_at) en vez de bloquear al
+// usuario. El desplazamiento ocurre después del upsert (un upsert fallido o
+// bloqueado nunca borra nada) y nunca alcanza a la recién guardada.
 func TestPushSubscribeAtLimitEvictsOldest(t *testing.T) {
 	repo := new(MockPushRepo)
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -144,33 +147,81 @@ func TestPushSubscribeAtLimitEvictsOldest(t *testing.T) {
 	// de menor COALESCE(last_success_at, created_at).
 	existing[4].LastSuccessAt = nil
 	in := validPushInput("https://fcm.googleapis.com/fcm/send/eleventh")
+	// La recién guardada es la más "antigua" por created_at (reloj de la BD
+	// atrasado, por ejemplo): aun así no se borra.
+	justSaved := models.PushSubscription{ID: 99, UserID: 7, Endpoint: in.Endpoint, CreatedAt: base.Add(-time.Hour)}
 	var calls []string
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
 	repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(nil, nil)
-	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(existing, nil)
+	repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(true, nil).Once().
+		Run(func(mock.Arguments) { calls = append(calls, "upsert") })
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(append(existing, justSaved), nil).Once().
+		Run(func(mock.Arguments) { calls = append(calls, "list") })
 	repo.On("DeleteSubscriptionByID", existing[4].ID, mock.Anything).Return(nil).Once().
 		Run(func(mock.Arguments) { calls = append(calls, "delete") })
-	repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(nil).Once().
-		Run(func(mock.Arguments) { calls = append(calls, "upsert") })
 
 	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
 	require.NoError(t, err)
 	assert.True(t, created)
-	assert.Equal(t, []string{"delete", "upsert"}, calls)
+	assert.Equal(t, []string{"upsert", "list", "delete"}, calls)
+	repo.AssertNotCalled(t, "DeleteSubscriptionByID", justSaved.ID, mock.Anything)
 	repo.AssertExpectations(t)
 }
 
-func TestPushSubscribeEvictErrorPropagates(t *testing.T) {
+// Si el upsert no aplica (ON CONFLICT ... WHERE falso por una carrera: el
+// endpoint pasó a otro usuario con otras claves) es un conflicto, no un alta,
+// y no se ha borrado ninguna suscripción.
+func TestPushSubscribeBlockedUpsertConflictsWithoutEvicting(t *testing.T) {
+	for _, current := range []*models.PushSubscription{nil, {ID: 5, UserID: 7}} {
+		repo := new(MockPushRepo)
+		in := validPushInput("https://fcm.googleapis.com/fcm/send/eleventh")
+		if current != nil {
+			current.Endpoint, current.P256dh, current.Auth = in.Endpoint, in.Keys.P256dh, in.Keys.Auth
+		}
+		repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+		repo.On("GetSubscriptionByEndpoint", in.Endpoint, mock.Anything).Return(current, nil)
+		repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, MaxPushSubscriptionsPerUser), nil).Maybe()
+		repo.On("DeleteSubscriptionByID", mock.Anything, mock.Anything).Return(nil).Maybe()
+		repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(false, nil).Once()
+
+		created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
+		assert.ErrorIs(t, err, ErrPushConflict)
+		assert.False(t, created)
+		repo.AssertNotCalled(t, "DeleteSubscriptionByID", mock.Anything, mock.Anything)
+	}
+}
+
+// Un upsert que falla tampoco borra nada.
+func TestPushSubscribeUpsertErrorDoesNotEvict(t *testing.T) {
 	repo := new(MockPushRepo)
 	boom := errors.New("db caída")
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
 	repo.On("GetSubscriptionByEndpoint", mock.Anything, mock.Anything).Return(nil, nil)
-	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, MaxPushSubscriptionsPerUser), nil)
-	repo.On("DeleteSubscriptionByID", mock.Anything, mock.Anything).Return(boom)
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, MaxPushSubscriptionsPerUser), nil).Maybe()
+	repo.On("DeleteSubscriptionByID", mock.Anything, mock.Anything).Return(nil).Maybe()
+	repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(false, boom).Once()
 
 	_, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, validPushInput("https://fcm.googleapis.com/fcm/send/eleventh"), "ua", context.Background())
 	assert.ErrorIs(t, err, boom)
-	repo.AssertNotCalled(t, "UpsertSubscription", mock.Anything, mock.Anything)
+	assert.NotErrorIs(t, err, ErrPushConflict)
+	repo.AssertNotCalled(t, "DeleteSubscriptionByID", mock.Anything, mock.Anything)
+}
+
+// Si el desplazamiento falla tras guardar, la suscripción ya está guardada: el
+// alta se da por buena (el usuario queda temporalmente con una de más, inocuo).
+func TestPushSubscribeEvictErrorAfterUpsertStillCreates(t *testing.T) {
+	repo := new(MockPushRepo)
+	boom := errors.New("db caída")
+	in := validPushInput("https://fcm.googleapis.com/fcm/send/eleventh")
+	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
+	repo.On("GetSubscriptionByEndpoint", mock.Anything, mock.Anything).Return(nil, nil)
+	repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(true, nil).Once()
+	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(append(subsFor(7, MaxPushSubscriptionsPerUser), models.PushSubscription{ID: 99, UserID: 7, Endpoint: in.Endpoint}), nil)
+	repo.On("DeleteSubscriptionByID", mock.Anything, mock.Anything).Return(boom)
+
+	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
+	require.NoError(t, err)
+	assert.True(t, created)
 }
 
 // Un endpoint de otro usuario solo se reasigna si las claves coinciden (mismo
@@ -195,7 +246,7 @@ func TestPushSubscribeOtherUsersEndpointWithSameKeysIsReassigned(t *testing.T) {
 	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(subsFor(7, 2), nil)
 	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
 		return s.UserID == 7 && s.Endpoint == in.Endpoint
-	}), mock.Anything).Return(nil)
+	}), mock.Anything).Return(true, nil)
 
 	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
 	require.NoError(t, err)
@@ -215,7 +266,7 @@ func TestPushSubscribeOwnEndpointAtLimitIsUpdate(t *testing.T) {
 	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return(existing, nil).Maybe()
 	repo.On("UpsertSubscription", mock.MatchedBy(func(s *models.PushSubscription) bool {
 		return s.UserID == 7 && s.P256dh == in.Keys.P256dh && s.Auth == in.Keys.Auth
-	}), mock.Anything).Return(nil)
+	}), mock.Anything).Return(true, nil)
 
 	created, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, in, "ua", context.Background())
 	require.NoError(t, err)
@@ -229,7 +280,7 @@ func TestPushSubscribeRepoErrorPropagates(t *testing.T) {
 	boom := errors.New("db caída")
 	repo.On("GetIdByTelephon", pushTel, mock.Anything).Return(7, nil)
 	repo.On("GetSubscriptionByEndpoint", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
-	repo.On("ListSubscriptionsByUser", uint(7), mock.Anything).Return([]models.PushSubscription(nil), boom)
+	repo.On("UpsertSubscription", mock.Anything, mock.Anything).Return(false, boom)
 
 	_, err := InitServicePush(enabledPushCfg, repo).Subscribe(pushTel, validPushInput("https://fcm.googleapis.com/x"), "ua", context.Background())
 	assert.ErrorIs(t, err, boom)

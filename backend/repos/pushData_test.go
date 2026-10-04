@@ -8,6 +8,8 @@ import (
 
 	"gorm/backend/models"
 
+	"gorm.io/gorm"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,7 +38,8 @@ func TestPushRepoUpsertReassignsByEndpoint(t *testing.T) {
 	db, rec := dryRunDB(t)
 	r := InitRepoPush(db, nil)
 	sub := &models.PushSubscription{UserID: 3, Endpoint: "https://fcm.googleapis.com/x", P256dh: "p", Auth: "a", UserAgent: "ua"}
-	require.NoError(t, r.UpsertSubscription(sub, context.Background()))
+	_, err := r.UpsertSubscription(sub, context.Background())
+	require.NoError(t, err)
 
 	s := pushStmt(t, rec)
 	assert.Contains(t, s, `INSERT INTO "push_subscriptions"`)
@@ -48,6 +51,26 @@ func TestPushRepoUpsertReassignsByEndpoint(t *testing.T) {
 	// Solo se reasigna si es del mismo usuario o con las mismas claves (aunque
 	// el servicio lo compruebe antes, una carrera no permite robar el endpoint).
 	assert.Contains(t, s, `WHERE push_subscriptions.user_id = excluded.user_id OR (push_subscriptions.p256dh = excluded.p256dh AND push_subscriptions.auth = excluded.auth)`)
+}
+
+// Con ON CONFLICT ... DO UPDATE ... WHERE falso, Postgres no inserta ni
+// actualiza: 0 filas y sin error. El repositorio lo reporta como no aplicado
+// para que el servicio no devuelva éxito.
+func TestPushRepoUpsertReportsRowsAffected(t *testing.T) {
+	for _, tc := range []struct {
+		rows    int64
+		applied bool
+	}{{0, false}, {1, true}} {
+		db, _ := dryRunDB(t)
+		rows := tc.rows
+		require.NoError(t, db.Callback().Create().After("gorm:create").Register("test:rows_affected", func(tx *gorm.DB) {
+			tx.RowsAffected = rows
+		}))
+		r := InitRepoPush(db, nil)
+		applied, err := r.UpsertSubscription(&models.PushSubscription{UserID: 3, Endpoint: "https://fcm.googleapis.com/x", P256dh: "p", Auth: "a"}, context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, tc.applied, applied, "rows=%d", tc.rows)
+	}
 }
 
 func TestPushRepoGetSubscriptionByEndpoint(t *testing.T) {

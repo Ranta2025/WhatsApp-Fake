@@ -365,14 +365,18 @@ func TestRunClosesPushNotifierAfterServerShutdown(t *testing.T) {
 	free.Close()
 
 	closed := make(chan bool, 1)
+	hadDeadline := make(chan bool, 1)
 	a := &App{
 		server: &http.Server{Addr: mainAddr, Handler: http.NewServeMux()},
-		closePush: func() {
+		closePush: func(ctx context.Context) error {
+			_, ok := ctx.Deadline()
+			hadDeadline <- ok
 			conn, dialErr := net.DialTimeout("tcp", mainAddr, 300*time.Millisecond)
 			if dialErr == nil {
 				conn.Close()
 			}
 			closed <- dialErr != nil
+			return nil
 		},
 	}
 
@@ -400,4 +404,5 @@ func TestRunClosesPushNotifierAfterServerShutdown(t *testing.T) {
 	default:
 		t.Fatal("no se cerró el despacho de push en el apagado")
 	}
+	assert.True(t, <-hadDeadline, "el cierre del despacho usa el plazo del apagado")
 }

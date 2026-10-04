@@ -208,9 +208,9 @@ func (m *MockPushRepo) GetIdByTelephon(telephon string, ctx context.Context) (in
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockPushRepo) UpsertSubscription(sub *models.PushSubscription, ctx context.Context) error {
+func (m *MockPushRepo) UpsertSubscription(sub *models.PushSubscription, ctx context.Context) (bool, error) {
 	args := m.Called(sub, ctx)
-	return args.Error(0)
+	return args.Bool(0), args.Error(1)
 }
 
 func (m *MockPushRepo) ListSubscriptionsByUser(userID uint, ctx context.Context) ([]models.PushSubscription, error) {

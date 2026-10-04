@@ -35,8 +35,9 @@ type App struct {
 	db                  *gorm.DB
 	redis               *redis.Client
 	cancelStatusCleanup context.CancelFunc
-	// closePush cierra el despacho de Web Push (espera los envíos encolados).
-	closePush func()
+	// closePush cierra el despacho de Web Push: espera los envíos encolados
+	// hasta que vence el contexto y entonces aborta los que queden.
+	closePush func(context.Context) error
 }
 
 // New conecta con las dependencias externas y construye la aplicación.
@@ -202,7 +203,7 @@ const statusCleanupInterval = 10 * time.Minute
 // También arranca el job periódico de limpieza de estados expirados y devuelve
 // su función de cancelación, para poder detenerlo en un apagado ordenado, y la
 // función que cierra el despacho de Web Push.
-func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metrics) (routers.Deps, context.CancelFunc, func()) {
+func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metrics) (routers.Deps, context.CancelFunc, func(context.Context) error) {
 	// Repositorios
 	repoUser := repos.GetRespositorieUser(db)
 	repoContact := repos.InitRepoContact(db, rd)
@@ -391,9 +392,12 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 	// Con el server apagado ya no se encolan notificaciones: se drenan las
-	// pendientes antes de cerrar la BD que usan.
+	// pendientes antes de cerrar la BD que usan, dentro del mismo plazo de
+	// apagado (al vencer se abortan los envíos en curso).
 	if a.closePush != nil {
-		a.closePush()
+		if pushErr := a.closePush(shutdownCtx); pushErr != nil {
+			log.Printf("[APP] Web Push: envíos pendientes abortados en el apagado: %v", pushErr)
+		}
 	}
 
 	if a.db != nil {

@@ -85,14 +85,20 @@ func NewPushNotifier(cfg config.PushConfig, deps PushDispatcherDeps) PushNotifie
 // goroutines) que procesa los trabajos de notificación. Nunca bloquea al
 // llamador: si la cola está llena el trabajo se descarta.
 type PushDispatcher struct {
-	cfg     config.PushConfig
-	deps    PushDispatcherDeps
-	jobs    chan func(context.Context)
-	wg      sync.WaitGroup
-	mu      sync.RWMutex // protege closed frente al envío a jobs
-	closed  bool
-	dropped atomic.Int64
-	now     func() time.Time
+	cfg    config.PushConfig
+	deps   PushDispatcherDeps
+	jobs   chan func(context.Context)
+	wg     sync.WaitGroup
+	done   chan struct{} // se cierra cuando todos los workers terminaron
+	mu     sync.RWMutex  // protege closed frente al envío a jobs
+	closed bool
+	// base es el contexto del que derivan todos los trabajos y envíos; se
+	// cancela al cerrar para abortar los envíos en curso y descartar los
+	// trabajos encolados que no dio tiempo a procesar.
+	base       context.Context
+	cancelBase context.CancelFunc
+	dropped    atomic.Int64
+	now        func() time.Time
 	// jobTimeout acota las consultas del trabajo y sendTimeout cada envío;
 	// son campos para poder acortarlos en los tests.
 	jobTimeout  time.Duration
@@ -105,11 +111,15 @@ func NewPushDispatcher(cfg config.PushConfig, deps PushDispatcherDeps) *PushDisp
 }
 
 func newPushDispatcher(cfg config.PushConfig, deps PushDispatcherDeps, workers, queueSize int) *PushDispatcher {
+	base, cancelBase := context.WithCancel(context.Background())
 	d := &PushDispatcher{
-		cfg:  cfg,
-		deps: deps,
-		jobs: make(chan func(context.Context), queueSize),
-		now:  time.Now,
+		cfg:        cfg,
+		deps:       deps,
+		jobs:       make(chan func(context.Context), queueSize),
+		done:       make(chan struct{}),
+		base:       base,
+		cancelBase: cancelBase,
+		now:        time.Now,
 
 		jobTimeout:  pushJobTimeout,
 		sendTimeout: pushSendTimeout,
@@ -118,19 +128,27 @@ func newPushDispatcher(cfg config.PushConfig, deps PushDispatcherDeps, workers, 
 		d.wg.Add(1)
 		go d.worker()
 	}
+	go func() {
+		d.wg.Wait()
+		close(d.done)
+	}()
 	return d
 }
 
 func (d *PushDispatcher) worker() {
 	defer d.wg.Done()
 	for job := range d.jobs {
+		if d.base.Err() != nil {
+			continue // cierre vencido: se descartan los trabajos encolados
+		}
 		d.run(job)
 	}
 }
 
-// run ejecuta un trabajo con su propio timeout; un panic no tumba el worker.
+// run ejecuta un trabajo con su propio timeout (derivado del contexto base);
+// un panic no tumba el worker.
 func (d *PushDispatcher) run(job func(context.Context)) {
-	ctx, cancel := context.WithTimeout(context.Background(), d.jobTimeout)
+	ctx, cancel := context.WithTimeout(d.base, d.jobTimeout)
 	defer cancel()
 	defer func() {
 		if r := recover(); r != nil {
@@ -140,18 +158,42 @@ func (d *PushDispatcher) run(job func(context.Context)) {
 	job(ctx)
 }
 
-// Close deja de aceptar trabajos y espera a que los workers terminen los
-// encolados. Es idempotente. Los tests lo usan para esperar sin sleeps.
-func (d *PushDispatcher) Close() {
+// CloseContext deja de aceptar trabajos y espera a que los workers terminen
+// los encolados hasta que venza ctx. Si vence, cancela el contexto base (los
+// envíos en curso se abortan y los trabajos aún encolados se descartan) y
+// devuelve ctx.Err() sin esperar más. Es idempotente.
+func (d *PushDispatcher) CloseContext(ctx context.Context) error {
 	d.mu.Lock()
-	if d.closed {
-		d.mu.Unlock()
-		return
+	if !d.closed {
+		d.closed = true
+		close(d.jobs)
 	}
-	d.closed = true
-	close(d.jobs)
 	d.mu.Unlock()
-	d.wg.Wait()
+	select {
+	case <-d.done:
+		d.cancelBase()
+		return nil
+	case <-ctx.Done():
+		d.cancelBase()
+		return ctx.Err()
+	}
+}
+
+// Close es CloseContext sin plazo: espera a drenar todos los trabajos
+// encolados (cada envío sigue acotado por sendTimeout). Los tests lo usan
+// para esperar sin sleeps; el apagado de la app usa CloseContext.
+func (d *PushDispatcher) Close() {
+	_ = d.CloseContext(context.Background())
+}
+
+// workersDone indica si todos los workers terminaron (para los tests).
+func (d *PushDispatcher) workersDone() bool {
+	select {
+	case <-d.done:
+		return true
+	default:
+		return false
+	}
 }
 
 // Dropped devuelve cuántos trabajos se descartaron por cola llena.
@@ -248,12 +290,13 @@ func (d *PushDispatcher) deliver(ctx context.Context, kind string, recipients []
 }
 
 // sendOne envía a una suscripción con su propio plazo (sendTimeout), derivado
-// de context.Background() y no del trabajo: un servicio de push lento no
-// agota el plazo de los demás envíos. El borrado / last_success_at posterior
+// del contexto base del despacho y no del trabajo: un servicio de push lento
+// no agota el plazo de los demás envíos, y el cierre (CloseContext) aborta el
+// envío en curso. El borrado / last_success_at posterior
 // usa el mismo contexto. Nunca se loggea el endpoint: es una URL con
 // capacidad de envío.
 func (d *PushDispatcher) sendOne(kind string, sub models.PushSubscription, payload []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), d.sendTimeout)
+	ctx, cancel := context.WithTimeout(d.base, d.sendTimeout)
 	defer cancel()
 	switch err := d.deps.Sender.Send(ctx, sub, payload); {
 	case err == nil:

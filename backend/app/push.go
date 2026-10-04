@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"gorm/backend/config"
 	"gorm/backend/repos"
@@ -30,11 +31,12 @@ func buildPushNotifier(cfg config.PushConfig, repoPush *repos.RepoPush, repoCont
 	})
 }
 
-// pushNotifierCloser devuelve la función que cierra el despacho (espera los
-// envíos encolados); con el no-op no hace nada.
-func pushNotifierCloser(n services.PushNotifier) func() {
-	if d, ok := n.(interface{ Close() }); ok {
-		return d.Close
+// pushNotifierCloser devuelve la función que cierra el despacho: drena los
+// envíos encolados hasta que vence el contexto y entonces aborta los que
+// queden. Con el no-op no hace nada.
+func pushNotifierCloser(n services.PushNotifier) func(context.Context) error {
+	if d, ok := n.(interface{ CloseContext(context.Context) error }); ok {
+		return d.CloseContext
 	}
-	return func() {}
+	return func(context.Context) error { return nil }
 }
