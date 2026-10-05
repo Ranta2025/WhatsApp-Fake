@@ -128,6 +128,13 @@ Slice reviewed from Claude Code (lineage review-009d64e379f82d23, medium, reliab
 - [x] RF15 (SUGGESTION) `stickers.e2e.ts:37-39`: `expectBareSticker` is negative-only on `img.parentElement`; locate the bubble via its `[data-message-id]` ancestor and add a positive control. → Done: walks ancestors up to `[data-message-id]`, plus positive control `expectTextBubbleHasBackground`; size check via `expect.poll` (slide-up animation flake).
 - [x] RF16 (SUGGESTION) `GroupMessageInput.test.tsx:311-321`: no change needed; `setup()` re-renders on the same `root`, so the RF11 test exercises the same mounted instance.
 
+## Review follow-ups 4 (advisory, slice c94dbe8..8965944) — deferred
+Slice reviewed from Claude Code (lineage review-ee04736fedc10fd1, medium, reliability): approved/acknowledged, burned. **Boundary now 8965944.** Not fixed in this feature (no review loop on test-only flake risks); pick up if `stickers.e2e.ts` flakes.
+- [ ] RF17 (WARNING) `stickers.e2e.ts:182-185`: forward-test baselines (`anaMartaBefore`, `martaBefore`) use a non-retrying `count()` right after `openChat`; wait for a history anchor first.
+- [ ] RF18 (WARNING) `stickers.e2e.ts:118` (and group test): `luisBefore` is read before Luis's page confirms history rendered; wait for `bubbleWithText(controlText)` on Luis's page first.
+- [ ] RF19 (SUGGESTION) `stickers.e2e.ts:122-123`: `before + 1` counts assume an unvirtualized, unpaginated list; pinning `data-message-id` or anchoring after a unique text is more robust.
+- [ ] RF20 (SUGGESTION) `stickers.e2e.ts:55-57`: `expectTextBubbleHasBackground` checks descendants only; include the element itself.
+
 ## Assumptions
 - Pack/file charset is `[a-z0-9-]` lowercase with `.webp` extension (documented default; PNG fallback not taken; sharp 0.35.5 works).
 - No `mem_context` used this session per user instruction; only one `mem_search "odd/pending-features/decisions"` plus per-task `mem_save` mirrors.
@@ -135,4 +142,4 @@ Slice reviewed from Claude Code (lineage review-009d64e379f82d23, medium, reliab
 - Reply Source carries no MediaType, so sticker reply quotes use URL detection via manifest.
 
 ## Next step
-stickers-basic complete (SB1→SB5 committed, verified, SB4 slice reviewed/burned, SB5 slice pending under_budget). Next: stickers-full in a fresh session (see prompt below in chat).
+stickers-basic complete: SB1→SB5 + RF1–RF16 committed and verified; every slice reviewed (last boundary 8965944). RF17–RF20 deferred (advisory e2e flake risks). Next feature: stickers-full in a fresh session.
