@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, JSX, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
+import { useMenuNavigation } from '../../hooks/useMenuNavigation';
 
 const VIEWPORT_MARGIN = 8;
 
@@ -13,6 +14,11 @@ export interface PopoverProps {
     children: ReactNode;
     align?: 'left' | 'right';
     className?: string;
+    /**
+     * Opt-in menu keyboard model: once positioned, focus moves to the first `[role=menuitem]`
+     * and ArrowUp/ArrowDown/Home/End rove between them (see useMenuNavigation). Off by default.
+     */
+    menuNavigation?: boolean;
 }
 
 /**
@@ -27,6 +33,8 @@ export interface PopoverProps {
  * - Se cierra con click/tap fuera o con Escape (vía useEscapeToClose, que
  *   coordina con modales anidados para que Escape cierre solo el popover).
  * - Devuelve el foco al disparador al cerrarse.
+ * - Con `menuNavigation`, enfoca el primer menuitem al abrirse (ya posicionado)
+ *   y navega entre ellos con las flechas / Inicio / Fin.
  *
  * `anchorRef` se recibe como objeto ref (no como el elemento ya resuelto):
  * su `.current` solo se lee dentro de efectos, nunca durante el render (ver
@@ -35,7 +43,9 @@ export interface PopoverProps {
  * Uso: <Popover open={isOpen} onClose={close} anchorRef={triggerRef}
  *        align="right">...</Popover>
  */
-export default function Popover({ open, onClose, anchorRef, children, align = 'left', className = '' }: PopoverProps): JSX.Element | null {
+export default function Popover({
+    open, onClose, anchorRef, children, align = 'left', className = '', menuNavigation = false,
+}: PopoverProps): JSX.Element | null {
     const popoverRef = useRef<HTMLDivElement | null>(null);
     const [style, setStyle] = useState<CSSProperties | null>(null);
     // "Ref siempre al día" para leer la última `onClose` desde los listeners
@@ -45,6 +55,9 @@ export default function Popover({ open, onClose, anchorRef, children, align = 'l
     useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
     useEscapeToClose(onClose, open);
+
+    // Focus only once positioned: before that the popover is visibility:hidden (not focusable).
+    const onMenuKeyDown = useMenuNavigation(popoverRef, menuNavigation && open && style !== null);
 
     // Posicionamiento inicial + realineado en scroll/resize.
     useLayoutEffect(() => {
@@ -124,6 +137,7 @@ export default function Popover({ open, onClose, anchorRef, children, align = 'l
             style={style || { position: 'fixed', top: -9999, left: -9999, visibility: 'hidden' }}
             className={`z-dropdown ${className}`}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={menuNavigation ? onMenuKeyDown : undefined}
         >
             {children}
         </div>,

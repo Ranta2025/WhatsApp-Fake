@@ -94,6 +94,11 @@ async function clearChatMute(request: APIRequestContext, contact: string): Promi
   expect(res.status(), `DELETE chat ${contact} mute`).toBe(204);
 }
 
+async function clearGroupMute(request: APIRequestContext, groupID: number): Promise<void> {
+  const res = await request.delete(`/api/v1/group/${groupID}/mute`);
+  expect(res.status(), `DELETE group ${groupID} mute`).toBe(204);
+}
+
 test.describe('silenciar chats', () => {
   test('1:1: silenciado 8 h no notifica pero cuenta no leídos; al activar vuelve a notificar', async ({ browser }) => {
     test.setTimeout(120_000);
@@ -118,6 +123,8 @@ test.describe('silenciar chats', () => {
       await sendChatText(luis.page, silent);
       await expect(row).toContainText(silent);
       await expect(row.locator('[aria-label="1 mensaje no leído"]')).toHaveText('1');
+      // Silenciado: durante un rato razonable no aparece ninguna notificación con ese texto.
+      await expect.poll(() => notificationBodies(ana.page), { timeout: 3000 }).not.toContain(silent);
 
       // Activar notificaciones: el icono desaparece.
       await openChat(ana.page, 'Luis');
@@ -149,10 +156,11 @@ test.describe('silenciar chats', () => {
     test.setTimeout(90_000);
     const ana = await openSession(browser, 'ana');
     const marta = await openSession(browser, 'marta');
+    let groupID: number | null = null;
     try {
       const martaPhone = await phoneOf(marta.context.request);
       const name = uniqueText('silencio grupo');
-      await createGroup(ana.context.request, name, [martaPhone]);
+      groupID = await createGroup(ana.context.request, name, [martaPhone]);
       await ana.page.reload();
       await openGroup(ana.page, name);
 
@@ -172,8 +180,15 @@ test.describe('silenciar chats', () => {
       await openGroup(ana.page, name);
       await expect(mutedIcon(row)).toHaveCount(0);
     } finally {
-      await ana.context.close();
-      await marta.context.close();
+      try {
+        if (groupID !== null) await clearGroupMute(ana.context.request, groupID);
+      } catch (err) {
+        // Do not let a cleanup failure replace the original test failure.
+        console.warn('group mute cleanup failed:', err);
+      } finally {
+        await ana.context.close();
+        await marta.context.close();
+      }
     }
   });
 });

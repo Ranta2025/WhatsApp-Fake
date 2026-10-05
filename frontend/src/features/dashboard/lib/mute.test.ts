@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
     isChatMuted, parseMuteFields, muteFieldsFromResponse, earliestMuteExpiry, MUTE_OPTIONS,
 } from './mute';
@@ -20,6 +20,10 @@ describe('isChatMuted', () => {
         expect(isChatMuted({ Muted: true, MutedUntil: at(0) }, NOW)).toBe(false);
     });
 
+    it('an unparseable MutedUntil is not muted (never "always")', () => {
+        expect(isChatMuted({ Muted: true, MutedUntil: 'garbage' }, NOW)).toBe(false);
+    });
+
     it('absent / false / undefined fields are not muted', () => {
         expect(isChatMuted({}, NOW)).toBe(false);
         expect(isChatMuted({ Muted: false }, NOW)).toBe(false);
@@ -29,6 +33,8 @@ describe('isChatMuted', () => {
 });
 
 describe('parseMuteFields', () => {
+    afterEach(() => { vi.restoreAllMocks(); });
+
     it('keeps a valid mute, drops everything else', () => {
         expect(parseMuteFields({ Muted: true, MutedUntil: at(1000) })).toEqual({ Muted: true, MutedUntil: at(1000) });
         expect(parseMuteFields({ Muted: true })).toEqual({ Muted: true });
@@ -38,9 +44,18 @@ describe('parseMuteFields', () => {
         expect(parseMuteFields('x')).toEqual({});
     });
 
-    it('an unparseable MutedUntil degrades to "always" (the server said Muted)', () => {
-        expect(parseMuteFields({ Muted: true, MutedUntil: 'garbage' })).toEqual({ Muted: true });
-        expect(parseMuteFields({ Muted: true, MutedUntil: 42 })).toEqual({ Muted: true });
+    it('a malformed MutedUntil with Muted:true is NOT muted and warns (never silently "always")', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(parseMuteFields({ Muted: true, MutedUntil: 'garbage' })).toEqual({});
+        expect(parseMuteFields({ Muted: true, MutedUntil: 42 })).toEqual({});
+        expect(parseMuteFields({ Muted: true, MutedUntil: '' })).toEqual({});
+        expect(parseMuteFields({ Muted: true, MutedUntil: null })).toEqual({});
+        expect(warn).toHaveBeenCalledTimes(4);
+        warn.mockClear();
+        parseMuteFields({ Muted: true });
+        parseMuteFields({ Muted: true, MutedUntil: at(1000) });
+        parseMuteFields({ Muted: false, MutedUntil: 'garbage' });
+        expect(warn).not.toHaveBeenCalled();
     });
 });
 
@@ -48,6 +63,21 @@ describe('muteFieldsFromResponse', () => {
     it('maps the camelCase PUT response to the list fields', () => {
         expect(muteFieldsFromResponse({ muted: true, mutedUntil: at(5) })).toEqual({ Muted: true, MutedUntil: at(5) });
         expect(muteFieldsFromResponse({ muted: true, mutedUntil: null })).toEqual({ Muted: true });
+    });
+
+    it('re-bases MutedUntil on the client clock using the server Date (clock skew)', () => {
+        const serverNow = NOW + 3_600_000; // server clock one hour ahead of the client
+        const res = { muted: true as const, mutedUntil: new Date(serverNow + 8 * 3_600_000).toISOString() };
+        expect(muteFieldsFromResponse(res, serverNow, NOW)).toEqual({ Muted: true, MutedUntil: at(8 * 3_600_000) });
+        // Client ahead of the server.
+        expect(muteFieldsFromResponse({ muted: true, mutedUntil: at(1000) }, NOW - 5000, NOW))
+            .toEqual({ Muted: true, MutedUntil: at(6000) });
+    });
+
+    it('keeps the raw value without a (valid) server Date, and "always" stays "always"', () => {
+        expect(muteFieldsFromResponse({ muted: true, mutedUntil: at(5) }, null, NOW + 999)).toEqual({ Muted: true, MutedUntil: at(5) });
+        expect(muteFieldsFromResponse({ muted: true, mutedUntil: at(5) }, Number.NaN, NOW)).toEqual({ Muted: true, MutedUntil: at(5) });
+        expect(muteFieldsFromResponse({ muted: true, mutedUntil: null }, NOW + 1000, NOW)).toEqual({ Muted: true });
     });
 });
 

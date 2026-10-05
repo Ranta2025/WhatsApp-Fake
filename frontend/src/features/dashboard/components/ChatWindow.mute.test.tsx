@@ -88,4 +88,25 @@ describe('ChatWindow mute menu', () => {
         expect(clearMute).toHaveBeenCalledWith({ kind: 'direct', key: '222' });
         expect(setMute).not.toHaveBeenCalled();
     });
+
+    it('keyboard: focus lands on the first item, arrows rove, Escape closes and returns focus', () => {
+        renderChat(false);
+        openMenu();
+        expect(document.activeElement).toBe(menuItem('Silenciar notificaciones'));
+        act(() => { menuItem('Silenciar notificaciones')?.click(); });
+        const press = (key: string) => {
+            act(() => { document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); });
+        };
+        press('ArrowDown');
+        expect(document.activeElement).toBe(menuItem('8 horas'));
+        press('End');
+        expect(document.activeElement).toBe(menuItem('Siempre'));
+        press('ArrowDown');
+        expect(document.activeElement).toBe(menuItem('Silenciar notificaciones'));
+        press('ArrowUp');
+        expect(document.activeElement).toBe(menuItem('Siempre'));
+        press('Escape');
+        expect(document.body.querySelector('[role="menu"]')).toBeNull();
+        expect(document.activeElement).toBe(byLabel('Más opciones'));
+    });
 });

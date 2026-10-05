@@ -9,7 +9,7 @@ vi.mock('./axios', () => ({
     },
 }));
 
-import { parseMuteResponse, setChatMute, clearChatMute, setGroupMute, clearGroupMute } from './muteApi';
+import { parseMuteResponse, parseServerDate, setChatMute, clearChatMute, setGroupMute, clearGroupMute } from './muteApi';
 
 const UNTIL = '2026-10-04T20:00:00Z';
 
@@ -28,9 +28,22 @@ describe('muteApi', () => {
         expect(parseMuteResponse({ muted: true, mutedUntil: 'not a date' })).toBeNull();
     });
 
-    it('PUT chat/:contact/mute sends the duration and returns the guarded body', async () => {
-        mockPut.mockResolvedValue({ data: { muted: true, mutedUntil: UNTIL } });
-        expect(await setChatMute('+34 600', '8h')).toEqual({ muted: true, mutedUntil: UNTIL });
+    it('parseServerDate reads a valid Date header (epoch ms) and rejects anything else', () => {
+        const date = 'Sun, 04 Oct 2026 12:00:00 GMT';
+        expect(parseServerDate({ date })).toBe(Date.parse(date));
+        expect(parseServerDate({ Date: date })).toBe(Date.parse(date));
+        expect(parseServerDate({ date: 'garbage' })).toBeNull();
+        expect(parseServerDate({ date: 5 })).toBeNull();
+        expect(parseServerDate({})).toBeNull();
+        expect(parseServerDate(undefined)).toBeNull();
+        expect(parseServerDate('date')).toBeNull();
+    });
+
+    it('PUT chat/:contact/mute sends the duration and returns the guarded body with the server Date', async () => {
+        mockPut.mockResolvedValue({ data: { muted: true, mutedUntil: UNTIL }, headers: { date: 'Sun, 04 Oct 2026 12:00:00 GMT' } });
+        expect(await setChatMute('+34 600', '8h')).toEqual({
+            response: { muted: true, mutedUntil: UNTIL }, serverDate: Date.parse('2026-10-04T12:00:00Z'),
+        });
         expect(mockPut).toHaveBeenCalledWith('/api/v1/chat/%2B34%20600/mute', { duration: '8h' });
         mockPut.mockResolvedValue({ data: { nope: 1 } });
         expect(await setChatMute('B', 'always')).toBeNull();
@@ -38,7 +51,7 @@ describe('muteApi', () => {
 
     it('PUT group/:id/mute sends the duration', async () => {
         mockPut.mockResolvedValue({ data: { muted: true, mutedUntil: null } });
-        expect(await setGroupMute(9, 'always')).toEqual({ muted: true, mutedUntil: null });
+        expect(await setGroupMute(9, 'always')).toEqual({ response: { muted: true, mutedUntil: null }, serverDate: null });
         expect(mockPut).toHaveBeenCalledWith('/api/v1/group/9/mute', { duration: 'always' });
     });
 

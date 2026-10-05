@@ -3,7 +3,7 @@ import type { MuteDuration, MuteRequest, MuteResponse } from '../types/api';
 
 /**
  * Per-chat mute REST client (1:1 and groups). The PUT body is validated at runtime:
- * an unexpected body yields `null`, never a throw. Network/HTTP errors propagate so
+ * an unexpected body yields `null`, never a throw; the `Date` header travels along. Network/HTTP errors propagate so
  * the caller decides how to report them.
  */
 
@@ -20,17 +20,34 @@ export const parseMuteResponse = (raw: unknown): MuteResponse | null => {
     return { muted, mutedUntil };
 };
 
+/** A guarded PUT answer plus the server clock when it answered (for clock-skew correction). */
+export interface MuteResult {
+    response: MuteResponse;
+    /** `Date` response header as epoch ms; null when missing or invalid. */
+    serverDate: number | null;
+}
+
+/** Runtime guard for the `Date` response header (axios lower-cases names; plain objects may not). */
+export const parseServerDate = (headers: unknown): number | null => {
+    if (!isRecord(headers)) return null;
+    const raw = headers.date ?? headers.Date;
+    if (typeof raw !== 'string') return null;
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) ? ms : null;
+};
+
 const chatPath = (contact: string) => `/api/v1/chat/${encodeURIComponent(contact)}/mute`;
 const groupPath = (groupID: number) => `/api/v1/group/${groupID}/mute`;
 
-const putMute = async (path: string, duration: MuteDuration): Promise<MuteResponse | null> => {
+const putMute = async (path: string, duration: MuteDuration): Promise<MuteResult | null> => {
     const body: MuteRequest = { duration };
-    const { data } = await api.put<unknown>(path, body);
-    return parseMuteResponse(data);
+    const { data, headers } = await api.put<unknown>(path, body);
+    const response = parseMuteResponse(data);
+    return response ? { response, serverDate: parseServerDate(headers) } : null;
 };
 
 /** PUT /api/v1/chat/:contact/mute. */
-export const setChatMute = (contact: string, duration: MuteDuration): Promise<MuteResponse | null> =>
+export const setChatMute = (contact: string, duration: MuteDuration): Promise<MuteResult | null> =>
     putMute(chatPath(contact), duration);
 
 /** DELETE /api/v1/chat/:contact/mute — idempotent (204). */
@@ -39,7 +56,7 @@ export const clearChatMute = async (contact: string): Promise<void> => {
 };
 
 /** PUT /api/v1/group/:groupID/mute. */
-export const setGroupMute = (groupID: number, duration: MuteDuration): Promise<MuteResponse | null> =>
+export const setGroupMute = (groupID: number, duration: MuteDuration): Promise<MuteResult | null> =>
     putMute(groupPath(groupID), duration);
 
 /** DELETE /api/v1/group/:groupID/mute — idempotent (204). */

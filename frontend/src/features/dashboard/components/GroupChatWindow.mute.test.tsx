@@ -102,4 +102,45 @@ describe('GroupChatWindow mute menu', () => {
         expect(menuItem('Silenciar notificaciones')).toBeUndefined();
         expect(menuItem('Activar notificaciones')).toBeUndefined();
     });
+
+    describe('keyboard / a11y', () => {
+        const trigger = () => document.body.querySelector<HTMLButtonElement>('button[aria-label="Más opciones"]');
+        const press = (key: string) => {
+            act(() => { document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); });
+        };
+
+        it('every action is a menuitem; focus lands on the first and the arrows rove', () => {
+            render(false);
+            openMenu();
+            const names = Array.from(document.body.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]'))
+                .map(el => el.textContent?.trim());
+            expect(names).toEqual(['Silenciar notificaciones', 'Salir del grupo', 'Eliminar de mi lista', 'Vaciar chat']);
+            expect(document.activeElement).toBe(menuItem('Silenciar notificaciones'));
+            press('ArrowDown');
+            expect(document.activeElement).toBe(menuItem('Salir del grupo'));
+            press('End');
+            expect(document.activeElement).toBe(menuItem('Vaciar chat'));
+            press('ArrowDown');
+            expect(document.activeElement).toBe(menuItem('Silenciar notificaciones'));
+            press('ArrowUp');
+            expect(document.activeElement).toBe(menuItem('Vaciar chat'));
+            press('Home');
+            expect(document.activeElement).toBe(menuItem('Silenciar notificaciones'));
+        });
+
+        it('Escape closes the menu and returns focus to "Más opciones"', () => {
+            render(false);
+            openMenu();
+            expect(document.body.querySelector('[role="menu"]')).not.toBeNull();
+            press('Escape');
+            expect(document.body.querySelector('[role="menu"]')).toBeNull();
+            expect(document.activeElement).toBe(trigger());
+        });
+
+        it('after leaving, the first remaining item gets focus', () => {
+            render(false, { UserRole: 'left' });
+            openMenu();
+            expect(document.activeElement).toBe(menuItem('Eliminar de mi lista'));
+        });
+    });
 });

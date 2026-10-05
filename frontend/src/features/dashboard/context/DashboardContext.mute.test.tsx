@@ -81,6 +81,15 @@ const groupRow = (id: number, over: Partial<GroupResponse> = {}): GroupResponse 
     ID: id, Name: `G${id}`, CreatorTelephon: '111', MemberCount: 2, UserRole: 'member', CreatedAt: '2026-01-01T00:00:00Z',
     OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false, ...over,
 });
+const putResult = (mutedUntil: string | null, serverDate: number | null = null) => ({
+    response: { muted: true as const, mutedUntil }, serverDate,
+});
+/** A promise the test resolves by hand (an in-flight list response). */
+const deferred = <T,>() => {
+    let resolve: (value: T) => void = () => {};
+    const promise = new Promise<T>((r) => { resolve = r; });
+    return { promise, resolve };
+};
 const incoming = (id: number, from: string): Message => ({
     MessageID: id, SenderTelephon: from, Receptor: '111', Message: `hola ${id}`, Status: 'entregado',
     Time: new Date().toISOString(), Edited: false,
@@ -162,12 +171,133 @@ describe('DashboardProvider per-chat mute', () => {
             expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(false);
             expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(false);
         });
+
+        it('Muted:true with a malformed MutedUntil is not muted and warns', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            chatsPayload = [{ ...chat('C'), Muted: true, MutedUntil: 'mañana' }];
+            groupsPayload = { groups: [{ ...groupRow(9), Muted: true, MutedUntil: 'mañana' }] };
+            await mount();
+            expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(false);
+            expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(false);
+            expect(warn).toHaveBeenCalled();
+        });
+    });
+
+    describe('expiry', () => {
+        afterEach(() => { vi.useRealTimers(); });
+
+        it('a MutedUntil 1 s ahead flips isMuted to false once it passes, without a reload', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+            chatsPayload = [chat('C', { Muted: true, MutedUntil: new Date(Date.now() + 1000).toISOString() })];
+            groupsPayload = { groups: [groupRow(9, { Muted: true, MutedUntil: new Date(Date.now() + 1000).toISOString() })] };
+            await mount();
+            expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(true);
+            expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(true);
+
+            act(() => { vi.advanceTimersByTime(999); });
+            expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(true);
+            act(() => { vi.advanceTimersByTime(2); });
+            expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(false);
+            expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(false);
+        });
+
+        it('the PUT answer is re-based on the client clock with the server Date (clock skew)', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+            await mount();
+            // Server clock one hour ahead: its MutedUntil (server time) is 1 s after its own now.
+            const serverNow = Date.now() + HOUR;
+            mockSetChatMute.mockResolvedValue(putResult(new Date(serverNow + 1000).toISOString(), serverNow));
+            await act(async () => { await ctx!.setMute({ kind: 'direct', key: 'B' }, '8h'); });
+            expect(ctx!.isMuted({ kind: 'direct', key: 'B' })).toBe(true);
+            act(() => { vi.advanceTimersByTime(1001); });
+            expect(ctx!.isMuted({ kind: 'direct', key: 'B' })).toBe(false);
+        });
+    });
+
+    describe('list refreshes vs. a local change', () => {
+        it('a group_added refresh after setMute keeps the mute the server now reports', async () => {
+            groupsPayload = { groups: [groupRow(9)] };
+            await mount();
+            mockSetGroupMute.mockResolvedValue(putResult(null));
+            await act(async () => { await ctx!.setMute({ kind: 'group', id: 9 }, 'always'); });
+            groupsPayload = { groups: [groupRow(9, { Muted: true }), groupRow(12)] };
+            await act(async () => { handlerFor<GroupResponse>('group_added')(groupRow(12)); });
+            expect(mockGetUserGroups).toHaveBeenCalledTimes(2);
+            expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(true);
+            expect(ctx!.isMuted({ kind: 'group', id: 12 })).toBe(false);
+        });
+
+        it('group patch events (avatar / info) leave the mute intact', async () => {
+            groupsPayload = { groups: [groupRow(9, { Muted: true })] };
+            await mount();
+            act(() => { handlerFor<{ groupID: number; avatarUrl: string }>('group_avatar_update')({ groupID: 9, avatarUrl: '/a.png' }); });
+            act(() => {
+                handlerFor<unknown>('group_info')({
+                    groupID: 9, name: 'Nuevo', description: 'd',
+                    systemMessage: { ID: 50, GroupID: 9, SenderTelephon: '', Message: 'x', Time: new Date().toISOString(), Type: 'system' },
+                });
+            });
+            expect(ctx!.groups.find(g => g.ID === 9)?.AvatarUrl).toBe('/a.png');
+            expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(true);
+        });
+
+        it('a stale in-flight group list (started before the PUT) does not clear the new mute', async () => {
+            groupsPayload = { groups: [groupRow(9), groupRow(10, { Muted: true })] };
+            await mount();
+            const pending = deferred<{ data: unknown }>();
+            mockGetUserGroups.mockImplementationOnce(() => pending.promise);
+            let refresh: Promise<void> | undefined;
+            act(() => { refresh = ctx!.fetchUserGroups(); });
+
+            mockSetGroupMute.mockResolvedValue(putResult(null));
+            await act(async () => { await ctx!.setMute({ kind: 'group', id: 9 }, 'always'); });
+            mockClearGroupMute.mockResolvedValue(undefined);
+            await act(async () => { await ctx!.clearMute({ kind: 'group', id: 10 }); });
+
+            // The list was read before both changes: 9 unmuted, 10 still muted.
+            await act(async () => {
+                pending.resolve({ data: { groups: [groupRow(9), groupRow(10, { Muted: true }), groupRow(11, { Muted: true })] } });
+                await refresh;
+            });
+            expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(true);
+            expect(ctx!.isMuted({ kind: 'group', id: 10 })).toBe(false);
+            // Targets not changed locally still follow the list.
+            expect(ctx!.isMuted({ kind: 'group', id: 11 })).toBe(true);
+
+            // A list that starts after the change is authoritative again.
+            groupsPayload = { groups: [groupRow(9), groupRow(10, { Muted: true })] };
+            await act(async () => { await ctx!.fetchUserGroups(); });
+            expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(false);
+            expect(ctx!.isMuted({ kind: 'group', id: 10 })).toBe(true);
+        });
+
+        it('stale in-flight /contact and /chats responses do not overwrite a newer 1:1 mute/unmute', async () => {
+            const contactsReq = deferred<{ data: unknown }>();
+            const chatsReq = deferred<{ data: unknown }>();
+            mockGet.mockImplementation((url: string) => {
+                if (url === '/api/v1/contact') return contactsReq.promise;
+                if (url === '/api/v1/chats') return chatsReq.promise;
+                if (url.startsWith('/api/v1/chat/')) return Promise.resolve({ data: [], headers: {} });
+                return Promise.resolve({ data: null });
+            });
+            await mount();
+
+            mockSetChatMute.mockResolvedValue(putResult(inFuture()));
+            await act(async () => { await ctx!.setMute({ kind: 'direct', key: 'B' }, '8h'); });
+            await act(async () => {
+                contactsReq.resolve({ data: [contact('B'), contact('E', { Muted: true })] });
+                chatsReq.resolve({ data: [chat('B'), chat('F', { Muted: true })] });
+            });
+            expect(ctx!.isMuted({ kind: 'direct', key: 'B' })).toBe(true);
+            expect(ctx!.isMuted({ kind: 'direct', key: 'E' })).toBe(true);
+            expect(ctx!.isMuted({ kind: 'direct', key: 'F' })).toBe(true);
+        });
     });
 
     describe('setMute / clearMute', () => {
         it('1:1: PUT with the duration, then muted from the response; DELETE unmutes', async () => {
             await mount();
-            mockSetChatMute.mockResolvedValue({ muted: true, mutedUntil: inFuture() });
+            mockSetChatMute.mockResolvedValue(putResult(inFuture()));
             let ok: boolean | undefined;
             await act(async () => { ok = await ctx!.setMute({ kind: 'direct', key: 'B' }, '8h'); });
             expect(ok).toBe(true);
@@ -184,7 +314,7 @@ describe('DashboardProvider per-chat mute', () => {
         it('group: PUT/DELETE on the group endpoints', async () => {
             groupsPayload = { groups: [groupRow(9)] };
             await mount();
-            mockSetGroupMute.mockResolvedValue({ muted: true, mutedUntil: null });
+            mockSetGroupMute.mockResolvedValue(putResult(null));
             await act(async () => { await ctx!.setMute({ kind: 'group', id: 9 }, 'always'); });
             expect(mockSetGroupMute).toHaveBeenCalledWith(9, 'always');
             expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(true);
@@ -240,7 +370,7 @@ describe('DashboardProvider per-chat mute', () => {
         it('notifies again once the chat is unmuted, and a mute set from the menu suppresses at once', async () => {
             contactsPayload = [contact('B')];
             await mount();
-            mockSetChatMute.mockResolvedValue({ muted: true, mutedUntil: null });
+            mockSetChatMute.mockResolvedValue(putResult(null));
             await act(async () => { await ctx!.setMute({ kind: 'direct', key: 'B' }, 'always'); });
             emitMessage(incoming(1, 'B'));
             expect(mockNotify).not.toHaveBeenCalled();

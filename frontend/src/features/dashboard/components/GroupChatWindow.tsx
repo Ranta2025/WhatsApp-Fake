@@ -10,6 +10,7 @@ import MuteMenuItems from './MuteMenu';
 import MediaContent from '../../../components/MediaContent';
 import GroupMessageInput from './GroupMessageInput';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { useMenuNavigation } from '../../../hooks/useMenuNavigation';
 import { useRefMap } from '../../../hooks/useRefMap';
 import { getResponseError } from '../../../lib/errors';
 import { groupReplySenderLabel } from '../lib/groupReply';
@@ -528,6 +529,8 @@ const GroupChatWindowInner = () => {
     const [infoDescription, setInfoDescription]   = useState('');
     const [savingInfo, setSavingInfo]             = useState(false);
     const optionsRef                               = useRef<HTMLDivElement>(null);
+    const optionsTriggerRef                        = useRef<HTMLButtonElement>(null);
+    const optionsMenuRef                           = useRef<HTMLDivElement>(null);
     const avatarInputRef                           = useRef<HTMLInputElement>(null);
     const avatarTriggerRef                         = useRef<HTMLButtonElement>(null); // disparador del menú de avatar (Popover)
     const getMemberTriggerRef                      = useRefMap<HTMLDivElement>();  // disparador del menú de cada miembro, por telephon (Popover)
@@ -722,6 +725,13 @@ const GroupChatWindowInner = () => {
     useEscapeToClose(() => setViewAvatarOpen(false), viewAvatarOpen);
     useEscapeToClose(() => setConfirmRemoveMember(null), confirmRemoveMember !== null);
     useEscapeToClose(() => setEditingInfo(false), editingInfo);
+    // Menú "Más opciones": Escape lo cierra y devuelve el foco al disparador; al abrirse se
+    // enfoca el primer menuitem y las flechas / Inicio / Fin navegan entre ellos.
+    useEscapeToClose(() => {
+        setShowOptions(false);
+        optionsTriggerRef.current?.focus({ preventScroll: true });
+    }, showOptions);
+    const onOptionsKeyDown = useMenuNavigation(optionsMenuRef, showOptions);
 
     if (!selectedGroup) return null;
 
@@ -848,7 +858,7 @@ const GroupChatWindowInner = () => {
                     )}
                     {/* More options kebab */}
                     <div className="relative" ref={optionsRef}>
-                        <button onClick={() => setShowOptions(v => !v)}
+                        <button ref={optionsTriggerRef} type="button" onClick={() => setShowOptions(v => !v)}
                                 className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
                                 title="Más opciones" aria-label="Más opciones" aria-haspopup="menu" aria-expanded={showOptions}>
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -856,7 +866,7 @@ const GroupChatWindowInner = () => {
                             </svg>
                         </button>
                         {showOptions && (
-                            <div role="menu" className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[220px] z-dropdown">
+                            <div role="menu" ref={optionsMenuRef} onKeyDown={onOptionsKeyDown} className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[220px] z-dropdown">
                                 {selectedGroup.UserRole !== 'left' && (
                                     <>
                                         <MuteMenuItems key={selectedGroup.ID} target={{ kind: 'group', id: selectedGroup.ID }} onDone={() => setShowOptions(false)} />
@@ -864,7 +874,7 @@ const GroupChatWindowInner = () => {
                                     </>
                                 )}
                                 {selectedGroup?.UserRole !== 'left' && (
-                                    <button onClick={() => { setConfirmLeave(true); setShowOptions(false); }}
+                                    <button type="button" role="menuitem" onClick={() => { setConfirmLeave(true); setShowOptions(false); }}
                                             className="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2">
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -872,7 +882,7 @@ const GroupChatWindowInner = () => {
                                         Salir del grupo
                                     </button>
                                 )}
-                                <button onClick={() => { setConfirmDelete(true); setShowOptions(false); }}
+                                <button type="button" role="menuitem" onClick={() => { setConfirmDelete(true); setShowOptions(false); }}
                                         className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
@@ -880,7 +890,7 @@ const GroupChatWindowInner = () => {
                                     Eliminar de mi lista
                                 </button>
                                 <div className="border-t border-white/5" />
-                                <button onClick={() => { setConfirmClear(true); setShowOptions(false); }}
+                                <button type="button" role="menuitem" onClick={() => { setConfirmClear(true); setShowOptions(false); }}
                                         className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-white/5 flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

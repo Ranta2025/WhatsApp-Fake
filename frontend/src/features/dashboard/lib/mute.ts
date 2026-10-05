@@ -35,23 +35,43 @@ const parseTime = (value: unknown): number | null => {
 /** True while muted at `now` (epoch ms). A `MutedUntil <= now` is expired even if `Muted` is still true. */
 export function isChatMuted(fields: MuteFields | undefined, now: number): boolean {
     if (fields?.Muted !== true) return false;
+    // No end at all is "always"; an end that does not parse is not a mute (never a silent "always").
+    if (fields.MutedUntil === undefined) return true;
     const until = parseTime(fields.MutedUntil);
-    // No (or unparseable) end: the server said muted, so it is "always".
-    return until === null || until > now;
+    return until !== null && until > now;
 }
 
-/** Validates the mute fields of one list entry; anything that is not a mute becomes `{}`. */
+/**
+ * Validates the mute fields of one list entry; anything that is not a mute becomes `{}`.
+ * `Muted:true` with a present but malformed `MutedUntil` is treated as NOT muted (and
+ * warned about): degrading it to "always" would silence a chat forever on a bad value.
+ */
 export function parseMuteFields(raw: unknown): MuteFields {
     if (!isRecord(raw)) return {};
     const { Muted, MutedUntil } = raw;
     if (Muted !== true) return {};
-    return typeof MutedUntil === 'string' && parseTime(MutedUntil) !== null ? { Muted: true, MutedUntil } : { Muted: true };
+    if (MutedUntil === undefined) return { Muted: true };
+    if (typeof MutedUntil === 'string' && parseTime(MutedUntil) !== null) return { Muted: true, MutedUntil };
+    console.warn('Ignoring mute with a malformed MutedUntil:', MutedUntil);
+    return {};
 }
 
-/** PUT response -> list fields, so both sources share one representation. */
-export const muteFieldsFromResponse = (res: MuteResponse): MuteFields => (
-    res.mutedUntil === null ? { Muted: true } : { Muted: true, MutedUntil: res.mutedUntil }
-);
+/**
+ * PUT response -> list fields, so both sources share one representation. With the server's
+ * clock at answer time (`serverDate`, epoch ms from the `Date` header) the end is re-based on
+ * the client clock (`now + (mutedUntil - serverDate)`), so a skewed device still unmutes when
+ * the server does; without a valid one the raw value is kept.
+ */
+export const muteFieldsFromResponse = (
+    res: MuteResponse, serverDate: number | null = null, now: number = Date.now(),
+): MuteFields => {
+    if (res.mutedUntil === null) return { Muted: true };
+    const until = parseTime(res.mutedUntil);
+    if (until === null || serverDate === null || !Number.isFinite(serverDate)) {
+        return { Muted: true, MutedUntil: res.mutedUntil };
+    }
+    return { Muted: true, MutedUntil: new Date(now + (until - serverDate)).toISOString() };
+};
 
 /** Earliest `MutedUntil` (epoch ms) still in the future, or null (drives one re-render when a mute ends). */
 export function earliestMuteExpiry(entries: Iterable<MuteFields>, now: number): number | null {

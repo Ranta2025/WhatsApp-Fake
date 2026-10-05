@@ -352,6 +352,17 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     // Per-chat mute: only muted entries are kept (telephon -> fields / group id -> fields).
     const [chatMutes, setChatMutes] = useState<Record<string, MuteFields>>({});
     const [groupMutes, setGroupMutes] = useState<Record<number, MuteFields>>({});
+    // A list response can be older than a local PUT/DELETE (it started before it). Every local
+    // change bumps a sequence and stamps its target; a list records the sequence when it starts
+    // and skips the targets stamped after that, so a stale list never undoes a fresh change.
+    const muteSeqRef = useRef(0);
+    const chatMuteChangedAtRef = useRef<Map<string, number>>(new Map());
+    const groupMuteChangedAtRef = useRef<Map<number, number>>(new Map());
+    const muteChangedSince = useCallback((target: MuteTarget, startSeq: number): boolean => (
+        (target.kind === 'direct'
+            ? chatMuteChangedAtRef.current.get(target.key)
+            : groupMuteChangedAtRef.current.get(target.id)) ?? 0
+    ) > startSeq, []);
 
     // Groups
     const [groups, setGroups] = useState<LocalGroup[]>([]);
@@ -510,10 +521,13 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
     const fetchContacts = useCallback(async () => {
         try {
+            const muteStart = muteSeqRef.current;
             const { data } = await api.get<ContactChat[]>('/api/v1/contact');
             const list = Array.isArray(data) ? data : [];
             setContacts(list);
-            setChatMutes(prev => mergeMutes(prev, list.map(c => [c.Number, parseMuteFields(c)])));
+            setChatMutes(prev => mergeMutes(prev, list
+                .filter(c => !muteChangedSince({ kind: 'direct', key: c.Number }, muteStart))
+                .map(c => [c.Number, parseMuteFields(c)])));
 
             const seenMap: Record<string, string> = {};
             const avMap: Record<string, string> = {};
@@ -526,11 +540,12 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         } catch (err) {
             console.error('Error fetching contacts:', err);
         }
-    }, []);
+    }, [muteChangedSince]);
 
     // Cargar todos los chats (historial de mensajes) desde el backend
     const fetchAllChats = useCallback(async () => {
         try {
+            const muteStart = muteSeqRef.current;
             const { data } = await api.get<ChatGroup[]>('/api/v1/chats');
             const chatGroups = Array.isArray(data) ? data : [];
 
@@ -583,14 +598,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             setAllChatGroups(groupMap);
             setChatDisappear(prev => ({ ...prev, ...timers }));
             setChatMutes(prev => mergeMutes(prev, chatGroups
-                .filter(group => group.ContactTelephon)
+                .filter(group => group.ContactTelephon
+                    && !muteChangedSince({ kind: 'direct', key: group.ContactTelephon }, muteStart))
                 .map(group => [group.ContactTelephon, parseMuteFields(group)])));
             // Merge avatares de chats al avatarMap (contactos tienen prioridad, no sobreescribir)
             setAvatarMap(prev => ({ ...chatAvatarMap, ...prev }));
         } catch (err) {
             console.error('Error fetching all chats:', err);
         }
-    }, []);
+    }, [muteChangedSince]);
 
     // Cargar mensajes de un contacto específico (bajo demanda)
     const fetchChatMessages = useCallback(async (contactNumber: string) => {
@@ -638,12 +654,26 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     // Fetch groups belonging to the current user
     const fetchUserGroups = useCallback(async () => {
         try {
+            const muteStart = muteSeqRef.current;
             const { data } = await getUserGroups();
             const list = normalizeGroupsResponse(data);
             setGroups(list);
-            setGroupMutes(Object.fromEntries(list
-                .map((g): [number, MuteFields] => [g.ID, parseMuteFields(g)])
-                .filter(([, fields]) => fields.Muted === true)));
+            // The groups list is complete: it replaces the mutes, except the groups changed locally
+            // after it started (those keep their newer local value, muted or not).
+            setGroupMutes(prev => {
+                const next: Record<number, MuteFields> = {};
+                for (const g of list) {
+                    const fields = parseMuteFields(g);
+                    if (fields.Muted === true) next[g.ID] = fields;
+                }
+                for (const [id, changedAt] of groupMuteChangedAtRef.current) {
+                    if (changedAt <= muteStart) continue;
+                    const local = prev[id];
+                    if (local) next[id] = local;
+                    else delete next[id];
+                }
+                return next;
+            });
         } catch (err) {
             console.error('Error fetching groups:', err);
         }
@@ -885,6 +915,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => { groupMutesRef.current = groupMutes; }, [groupMutes]);
 
     const applyMute = useCallback((target: MuteTarget, fields: MuteFields | null) => {
+        // Stamp the change so a list response that started before it cannot undo it.
+        muteSeqRef.current += 1;
+        if (target.kind === 'direct') chatMuteChangedAtRef.current.set(target.key, muteSeqRef.current);
+        else groupMuteChangedAtRef.current.set(target.id, muteSeqRef.current);
         // A fresh change: move the render clock too, so an older muteNow never hides it.
         setMuteNow(Date.now());
         if (target.kind === 'direct') {
@@ -906,7 +940,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 ? await apiSetChatMute(target.key, duration)
                 : await apiSetGroupMute(target.id, duration);
             if (!res) throw new Error('unexpected mute response');
-            applyMute(target, muteFieldsFromResponse(res));
+            // Expiry re-based on the client clock with the server `Date` (raw value without it).
+            applyMute(target, muteFieldsFromResponse(res.response, res.serverDate, Date.now()));
             return true;
         } catch (err) {
             console.error('Error muting chat:', err);

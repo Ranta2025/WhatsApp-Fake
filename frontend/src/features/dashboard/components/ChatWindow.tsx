@@ -226,6 +226,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                         onClose={closeOptions}
                         anchorRef={optionsTriggerRef}
                         align="right"
+                        menuNavigation
                         className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[220px]"
                     >
                         <MuteMenuItems key={selected.Number} target={{ kind: 'direct', key: selected.Number }} onDone={closeOptions} />
