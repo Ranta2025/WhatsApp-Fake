@@ -18,7 +18,7 @@ export default defineConfig({
       injectManifest: {
         // Se registra como script clásico (sin type: 'module'): sin import/export de nivel superior
         rollupFormat: 'iife',
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webp,webmanifest}'],
         // CallRoom (SDK de ZegoCloud, ~5 MB, carga perezosa) queda fuera del precache
         globIgnores: ['**/CallRoom-*.js'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
