@@ -2,8 +2,14 @@
 //
 // Sources are 16 original hand-written SVG designs (faces, gestures and words).
 // They are rasterized at 320x320 with @resvg/resvg-js (already used by
-// generate-icons.mjs) and encoded to WebP with sharp (dev-only). The resulting
-// .webp files are committed, so CI never installs sharp nor runs this script.
+// generate-icons.mjs) and encoded to WebP with sharp. The resulting .webp files
+// are committed and no build step runs this script. sharp is still a
+// devDependency, so `npm ci` (CI and the Docker build stage) installs it.
+//
+// Output is not byte-reproducible across machines: the word stickers render
+// text through FONT, and resvg resolves it from the host's system fonts.
+// Shipped files are never renamed, deleted or regenerated in place (old
+// messages reference them by URL); add new stickers as new files instead.
 //
 // Run with: npm run stickers  (from frontend/)
 import { mkdirSync, writeFileSync } from 'node:fs'
