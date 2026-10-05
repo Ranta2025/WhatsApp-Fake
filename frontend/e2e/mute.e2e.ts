@@ -58,9 +58,16 @@ async function notificationBodies(page: Page): Promise<string[]> {
   return page.evaluate(() => (window.__e2eNotifications ?? []).map((n) => n.body));
 }
 
-// Fila de la barra lateral (la cabecera del chat también contiene el nombre).
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Fila de la barra lateral (la cabecera del chat también contiene el nombre). El título de la
+// fila de un grupo incluye la insignia "admin" en el mismo elemento, así que un texto exacto
+// (`exact: true` compara el texto completo del elemento) no lo encontraría: se admite la insignia.
 function sidebarRow(page: Page, name: string): Locator {
-  return page.locator('aside').getByRole('button').filter({ has: page.getByText(name, { exact: true }) });
+  const title = new RegExp(`^\\s*${escapeRegExp(name)}\\s*(?:admin)?\\s*$`);
+  return page.locator('aside').getByRole('button').filter({ has: page.getByText(title) });
 }
 
 // 🔇 de la fila (role="img" dentro de un <button>: se busca por atributo, no por rol).
@@ -113,6 +120,8 @@ test.describe('silenciar chats', () => {
       // Ana silencia el chat con Luis durante 8 horas: aparece el 🔇 en su barra lateral.
       await openChat(ana.page, 'Luis');
       const row = sidebarRow(ana.page, 'Luis');
+      // The row must exist, or the "no icon" assertions below would pass vacuously.
+      await expect(row).toHaveCount(1);
       await expect(mutedIcon(row)).toHaveCount(0);
       await muteFromMenu(ana.page, '8 horas');
       await expect(mutedIcon(row)).toBeVisible();
@@ -165,6 +174,8 @@ test.describe('silenciar chats', () => {
       await openGroup(ana.page, name);
 
       const row = sidebarRow(ana.page, name);
+      // The row must exist, or the "no icon" assertions below would pass vacuously.
+      await expect(row).toHaveCount(1);
       await expect(mutedIcon(row)).toHaveCount(0);
       await muteFromMenu(ana.page, 'Siempre');
       await expect(mutedIcon(row)).toBeVisible();
