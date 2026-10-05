@@ -12,8 +12,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"gorm/backend/database"
-	"gorm/backend/models"
-	"gorm/backend/utils"
 	"os"
 	"testing"
 	"time"
@@ -28,19 +26,12 @@ func TestE2EPushREST(t *testing.T) {
 	db, err := database.Conection()
 	require.NoError(t, err)
 
-	suffix := time.Now().UnixNano() % 1000000
-	hash, err := utils.Hash("Passw0rd!")
-	require.NoError(t, err)
-	user := models.UserDataBase{User: models.User{
-		Username: fmt.Sprintf("push%d", suffix),
-		Gmail:    fmt.Sprintf("push%d@gmail.com", suffix),
-		Telephon: fmt.Sprintf("+514%07d", suffix),
-	}, Password: hash, Activo: true}
-	require.NoError(t, db.Create(&user).Error)
+	// Shared session: /auth/login has no budget left for another login (see sharedE2ESession).
+	c, user := sharedLogin(t)
 	t.Cleanup(func() {
 		db.Exec(`DELETE FROM push_subscriptions WHERE user_id = ?`, user.ID)
-		db.Exec(`DELETE FROM user_data_bases WHERE id = ?`, user.ID)
 	})
+	suffix := time.Now().UnixNano() % 1000000
 
 	p256 := make([]byte, 65)
 	p256[0] = 4
@@ -59,10 +50,6 @@ func TestE2EPushREST(t *testing.T) {
 	assert.Equal(t, 401, code)
 	code, _ = anon.do("POST", "/api/v1/push/subscribe", sub)
 	assert.Equal(t, 401, code)
-
-	c := newClient(t, base)
-	code, _ = c.do("POST", "/api/v1/auth/login", map[string]string{"username": user.Username, "password": "Passw0rd!"})
-	require.Equal(t, 200, code)
 
 	code, cfg := c.do("GET", "/api/v1/push/config", nil)
 	require.Equal(t, 200, code, cfg)

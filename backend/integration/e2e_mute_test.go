@@ -86,10 +86,14 @@ func TestE2EChatMute(t *testing.T) {
 		require.NoError(t, db.Create(&u).Error)
 		return u
 	}
-	ana, luis, eve := mk("ana", 1), mk("luis", 2), mk("eve", 3)
-	var groupID uint
+	// ana is the shared session's user: /auth/login has no budget left for
+	// another login (see sharedE2ESession). Only the users created here are
+	// deleted; TestMain removes the shared one.
+	ca, ana := sharedLogin(t)
+	luis := mk("luis", 2)
+	var groupID, foreignGroupID uint
 	t.Cleanup(func() {
-		ids := []uint{ana.ID, luis.ID, eve.ID}
+		ids := []uint{ana.ID, luis.ID}
 		db.Exec(`DELETE FROM chat_mutes WHERE user_id IN ?`, ids)
 		db.Exec(`DELETE FROM messages WHERE id_user IN ? OR id_receptor IN ?`, ids, ids)
 		db.Exec(`DELETE FROM contact_data_bases WHERE id_user IN ? OR id_contact IN ?`, ids, ids)
@@ -98,7 +102,11 @@ func TestE2EChatMute(t *testing.T) {
 			db.Exec(`DELETE FROM group_members WHERE group_id = ?`, groupID)
 			db.Exec(`DELETE FROM groups WHERE id = ?`, groupID)
 		}
-		db.Exec(`DELETE FROM user_data_bases WHERE id IN ?`, ids)
+		if foreignGroupID != 0 {
+			db.Exec(`DELETE FROM group_members WHERE group_id = ?`, foreignGroupID)
+			db.Exec(`DELETE FROM groups WHERE id = ?`, foreignGroupID)
+		}
+		db.Exec(`DELETE FROM user_data_bases WHERE id = ?`, luis.ID)
 	})
 
 	chatMute := "/api/v1/chat/" + luis.Telephon + "/mute"
@@ -113,7 +121,6 @@ func TestE2EChatMute(t *testing.T) {
 		assert.Equal(t, 401, code, r.method+" "+r.path)
 	}
 
-	ca := e2eLogin(t, base, ana)
 	code, body := ca.do("POST", "/api/v1/contact", map[string]string{"number": luis.Telephon, "contact_name": "Luis"})
 	require.Equal(t, 201, code, body)
 	// Un mensaje para que el 1:1 aparezca también en GET chats.
@@ -196,8 +203,12 @@ func TestE2EChatMute(t *testing.T) {
 		assert.Equal(t, true, g["Muted"])
 		assert.NotContains(t, g, "MutedUntil")
 
-		ce := e2eLogin(t, base, eve)
-		code, _ = ce.do("PUT", groupMute, map[string]string{"duration": "8h"})
+		// A group ana is not a member of (created directly: no extra login).
+		foreign := models.Group{Name: "Grupo ajeno", CreatorID: luis.ID}
+		require.NoError(t, db.Create(&foreign).Error)
+		foreignGroupID = foreign.ID
+		require.NoError(t, db.Create(&models.GroupMember{GroupID: foreign.ID, UserID: luis.ID, Role: "admin", AddedByID: luis.ID}).Error)
+		code, _ = ca.do("PUT", fmt.Sprintf("/api/v1/group/%d/mute", foreign.ID), map[string]string{"duration": "8h"})
 		assert.Equal(t, 403, code, "no miembro")
 
 		assert.Equal(t, 204, ca.raw("DELETE", groupMute).status)
