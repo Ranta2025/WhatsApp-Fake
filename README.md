@@ -318,6 +318,8 @@ peticiones por IP.
 |--------|------|-------------|
 | `POST` | `/api/v1/upload` | Subir archivo a MinIO → devuelve URL pública |
 
+La app incluye un pack de stickers básicos servido como assets estáticos en `/stickers/basic/<id>.webp`; se envían como mensajes con `mediaType=sticker` y no pasan por `/api/v1/upload`.
+
 ### Público
 
 | Método | Ruta | Descripción |

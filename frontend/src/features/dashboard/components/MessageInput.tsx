@@ -103,7 +103,8 @@ const MessageInput = () => {
                     <button
                         ref={stickerButtonRef}
                         onClick={() => setShowStickerPanel(!showStickerPanel)}
-                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] transition-all"
+                        disabled={isRecording}
+                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                         aria-label="Stickers"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">

@@ -41,7 +41,8 @@ describe('MessageInput sticker sending', () => {
     const stopRecording = vi.fn();
     const cancelRecording = vi.fn();
     const cancelReply = vi.fn();
-    const recorderState: Pick<VoiceRecorder, 'isRecording' | 'recordingTime'> = { isRecording: false, recordingTime: 0 };
+    // Mutable so a case can force the recording state before rendering.
+    let recorderState: Pick<VoiceRecorder, 'isRecording' | 'recordingTime'>;
 
     const setup = (opts: {
         isConnected?: boolean;
@@ -74,6 +75,7 @@ describe('MessageInput sticker sending', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        recorderState = { isRecording: false, recordingTime: 0 };
         mockUseVoiceRecorder.mockImplementation(() => {
             return { ...recorderState, startRecording, stopRecording, cancelRecording };
         });
@@ -120,5 +122,24 @@ describe('MessageInput sticker sending', () => {
         setup({ replyingTo: reply });
         expect(container.textContent).toContain('✨ Sticker');
         expect(container.textContent).not.toContain('/stickers/basic/hola.webp');
+    });
+
+    it('RF9: a plain-text reply still shows its text in the banner', () => {
+        const reply: Message = {
+            MessageID: 8, SenderTelephon: '111', Receptor: '999',
+            Message: 'texto plano', Status: 'enviado',
+            Time: '2026-01-01T10:00:00Z', Edited: false,
+        };
+        setup({ replyingTo: reply });
+        expect(container.textContent).toContain('texto plano');
+        expect(container.textContent).not.toContain('✨ Sticker');
+    });
+
+    it('RF8: recording disables the Stickers button and keeps the panel closed', () => {
+        recorderState = { isRecording: true, recordingTime: 5 };
+        setup();
+        expect(byLabel('Stickers')?.disabled).toBe(true);
+        click(byLabel('Stickers'));
+        expect(container.querySelector('[data-testid="sticker-panel"]')).toBeNull();
     });
 });

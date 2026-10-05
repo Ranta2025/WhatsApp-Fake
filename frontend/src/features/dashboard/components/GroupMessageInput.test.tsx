@@ -6,6 +6,7 @@ import GroupMessageInput from './GroupMessageInput';
 import { useDashboard, type DashboardContextValue } from '../context/DashboardContext';
 import { useGroupMessaging, type UseGroupMessagingResult } from '../hooks/useGroupMessaging';
 import { useVoiceRecorder, type UseVoiceRecorderOptions, type VoiceRecorder } from '../../../hooks/useVoiceRecorder';
+import { ESCAPE_HANDLED_FLAG } from '../../../hooks/useEscapeToClose';
 import type { GroupMessageResponse } from '../../../types/api';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -287,5 +288,58 @@ describe('GroupMessageInput media', () => {
         setup({ replyingTo: reply });
         expect(container.textContent).toContain('✨ Sticker');
         expect(container.textContent).not.toContain('/stickers/basic/hola.webp');
+    });
+
+    it('RF9: una respuesta de texto plano conserva su texto en el banner', () => {
+        const reply: GroupMessageResponse = {
+            MessageID: 8, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis',
+            Message: 'texto plano', Time: '2026-01-01T10:00:00Z', Edited: false,
+        };
+        setup({ replyingTo: reply });
+        expect(container.textContent).toContain('texto plano');
+        expect(container.textContent).not.toContain('✨ Sticker');
+    });
+
+    it('RF8: grabando, el botón Stickers queda deshabilitado y no abre el panel', () => {
+        recorderState = { isRecording: true, recordingTime: 5 };
+        setup();
+        expect(byLabel('Stickers')?.disabled).toBe(true);
+        click(byLabel('Stickers'));
+        expect(container.querySelector('[data-testid="sticker-panel"]')).toBeNull();
+    });
+
+    it('RF11: editando se ocultan adjuntar y stickers, y el panel abierto se cierra al entrar', () => {
+        setup();
+        click(byLabel('Stickers'));
+        expect(container.querySelector('[data-testid="sticker-panel"]')).not.toBeNull();
+        setup({ editingMessageId: 9 });
+        expect(byLabel('Adjuntar archivo')).toBeNull();
+        expect(byLabel('Stickers')).toBeNull();
+        expect(container.querySelector('[data-testid="sticker-panel"]')).toBeNull();
+        setup({ editingMessageId: null });
+        expect(container.querySelector('[data-testid="sticker-panel"]')).toBeNull();
+    });
+
+    it('RF10: un Escape ya manejado por el panel (Popover) no cancela la respuesta', () => {
+        const reply: GroupMessageResponse = {
+            MessageID: 7, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis',
+            Message: 'hola', Time: '2026-01-01T10:00:00Z', Edited: false,
+        };
+        setup({ replyingTo: reply });
+        const ta = container.querySelector('textarea') as HTMLTextAreaElement;
+
+        // Positive control: a bare Escape cancels the pending reply.
+        act(() => {
+            ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        });
+        expect(cancelReply).toHaveBeenCalledTimes(1);
+
+        // Stacked: the sticker panel's Popover already consumed this Escape,
+        // so the composer must not also cancel in the same keypress.
+        cancelReply.mockClear();
+        const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        (handled as unknown as Record<string, unknown>)[ESCAPE_HANDLED_FLAG] = true;
+        act(() => { ta.dispatchEvent(handled); });
+        expect(cancelReply).not.toHaveBeenCalled();
     });
 });
