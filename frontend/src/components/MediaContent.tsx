@@ -1,5 +1,6 @@
 import AudioPlayer from './AudioPlayer';
 import { resolveMedia, type MediaMessageFields } from '../lib/mediaMessage';
+import { findBuiltinSticker } from '../features/stickers/builtinPack';
 
 interface MediaContentProps {
     message: MediaMessageFields;
@@ -53,6 +54,18 @@ export default function MediaContent({ message, isMine }: MediaContentProps) {
                         <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300/60">Clic para descargar</div>
                     </div>
                 </a>
+            );
+        case 'sticker':
+            return (
+                <img
+                    src={mediaUrl}
+                    alt={findBuiltinSticker(mediaUrl)?.alt ?? 'Sticker'}
+                    width={150}
+                    height={150}
+                    loading="lazy"
+                    draggable={false}
+                    className="block w-[150px] h-[150px] object-contain"
+                />
             );
         default:
             return null;

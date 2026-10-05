@@ -1,4 +1,5 @@
 import type { MediaType } from '../types/api';
+import { findBuiltinSticker } from '../features/stickers/builtinPack';
 
 /** Subconjunto de campos de un mensaje (1:1 o de grupo) que definen su media. */
 export interface MediaMessageFields {
@@ -51,4 +52,12 @@ export function isMediaUrl(m: MediaMessageFields): boolean {
     // Detectar si el texto es exactamente una URL y hay media renderizada
     if (m.MediaType && text.trim() === (m.MediaUrl || '').trim()) return true;
     return false;
+}
+
+/**
+ * Texto de la cita de respuesta. El registro de reply solo guarda el string
+ * crudo, así que un sticker del pack se muestra con su etiqueta y no con su URL.
+ */
+export function replyPreviewText(raw: string): string {
+    return findBuiltinSticker(raw) ? '✨ Sticker' : raw;
 }

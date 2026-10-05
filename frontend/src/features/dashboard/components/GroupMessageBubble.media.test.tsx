@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act } from 'react';
+import { act, type ComponentProps } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { GroupMessageBubble } from './GroupChatWindow';
 import type { GroupMessageResponse } from '../../../types/api';
@@ -26,7 +26,11 @@ describe('GroupMessageBubble media rendering', () => {
     let container: HTMLDivElement;
     let root: Root;
 
-    const renderBubble = (msg: GroupMessageResponse, isMine = false) => {
+    const renderBubble = (
+        msg: GroupMessageResponse,
+        isMine = false,
+        extra: Partial<ComponentProps<typeof GroupMessageBubble>> = {},
+    ) => {
         act(() => {
             root.render(
                 <GroupMessageBubble
@@ -39,6 +43,7 @@ describe('GroupMessageBubble media rendering', () => {
                     onDeleteForMe={vi.fn()}
                     menuOpen={null}
                     setMenuOpen={vi.fn()}
+                    {...extra}
                 />,
             );
         });
@@ -102,5 +107,45 @@ describe('GroupMessageBubble media rendering', () => {
         renderBubble(baseMsg({ Message: 'hola grupo' }));
         expect(container.querySelector('img, video, audio, a')).toBeNull();
         expect(container.textContent).toContain('hola grupo');
+    });
+
+    it('sticker: <img> del pack dentro de una burbuja transparente', () => {
+        renderBubble(baseMsg({
+            MediaType: 'sticker',
+            MediaUrl: '/stickers/basic/hola.webp',
+            Message: '/stickers/basic/hola.webp',
+        }));
+        const img = container.querySelector('img');
+        expect(img?.getAttribute('src')).toBe('/stickers/basic/hola.webp');
+        expect(img?.getAttribute('alt')).toBe('Sticker con la palabra Hola');
+        const bubble = img?.parentElement as HTMLElement;
+        expect(bubble.className).not.toMatch(/bg-indigo-/);
+        expect(bubble.className).not.toMatch(/bg-slate-/);
+    });
+
+    it('sticker propio: oculta "Editar" en el menú y conserva eliminar', () => {
+        renderBubble(
+            baseMsg({ MediaType: 'sticker', MediaUrl: '/stickers/basic/hola.webp', Message: '/stickers/basic/hola.webp' }),
+            true,
+            { menuOpen: baseMsg({}).MessageID },
+        );
+        expect(document.body.textContent).not.toContain('Editar');
+        expect(document.body.textContent).toContain('Eliminar para todos');
+    });
+
+    it('sticker: las reacciones siguen disponibles', () => {
+        renderBubble(
+            baseMsg({
+                MediaType: 'sticker',
+                MediaUrl: '/stickers/basic/hola.webp',
+                Message: '/stickers/basic/hola.webp',
+                Reactions: [{ Emoji: '😂', Count: 3, Mine: false }],
+            }),
+            false,
+            { onReact: vi.fn() },
+        );
+        const chip = Array.from(container.querySelectorAll<HTMLElement>('button'))
+            .find(b => b.getAttribute('aria-label') === '😂 3');
+        expect(chip).toBeTruthy();
     });
 });

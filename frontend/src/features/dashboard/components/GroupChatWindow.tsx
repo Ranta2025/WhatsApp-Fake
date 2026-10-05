@@ -8,6 +8,7 @@ import AddContactModal from './AddContactModal';
 import Popover from '../../../components/ui/Popover';
 import MuteMenuItems from './MuteMenu';
 import MediaContent from '../../../components/MediaContent';
+import { replyPreviewText } from '../../../lib/mediaMessage';
 import GroupMessageInput from './GroupMessageInput';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { useMenuNavigation } from '../../../hooks/useMenuNavigation';
@@ -76,6 +77,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
     const myReaction = msg.Reactions?.find(r => r.Mine)?.Emoji;
 
     const isMenuOpen = menuOpen === msg.MessageID;
+    const isSticker = msg.MediaType === 'sticker';
 
     return (
         <div data-message-id={msg.MessageID} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group px-2 py-0.5`}>
@@ -86,15 +88,15 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                         <span className="font-medium text-slate-300 truncate block max-w-[200px]">
                             {replySender}
                         </span>
-                        <span className="text-slate-400 truncate block max-w-[200px]">{msg.ReplyToMessage}</span>
+                        <span className="text-slate-400 truncate block max-w-[200px]">{replyPreviewText(msg.ReplyToMessage)}</span>
                     </div>
                 )}
 
-                {/* Bubble */}
-                <div className={`relative px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed break-words
-                    ${isMine
-                        ? 'bg-indigo-600 text-white rounded-tr-sm'
-                        : 'bg-slate-800 text-slate-100 rounded-tl-sm'}`
+                {/* Bubble — un sticker va sin fondo: la imagen es la burbuja */}
+                <div className={
+                    isSticker
+                        ? 'relative text-sm leading-relaxed break-words'
+                        : `relative px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed break-words ${isMine ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-slate-800 text-slate-100 rounded-tl-sm'}`
                 } {...bindLongPress(msg.MessageID)}>
                     {/* Sender name for non-mine messages */}
                     {!isMine && (
@@ -110,13 +112,24 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                         <span><HighlightedText text={msg.Message} query={searchQuery} /></span>
                     )}
 
-                    {/* Footer: time + edited */}
-                    <div className={`text-[10px] mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-200/70 justify-end' : 'text-slate-500'}`}>
-                        {msg.Edited && <span>editado</span>}
-                        <ExpiryClock expiresAt={msg.ExpiresAt} />
-                        <span>{formatTime(msg.Time)}</span>
-                        {isMine && status && <MessageTicks status={status} />}
-                    </div>
+                    {/* Footer: time + edited — en stickers es una píldora aparte */}
+                    {isSticker ? (
+                        <div className={`mt-1 flex ${isMine ? 'justify-end' : ''}`}>
+                            <div className="flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-[10px] text-slate-200">
+                                {msg.Edited && <span>editado</span>}
+                                <ExpiryClock expiresAt={msg.ExpiresAt} />
+                                <span>{formatTime(msg.Time)}</span>
+                                {isMine && status && <MessageTicks status={status} />}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`text-[10px] mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-200/70 justify-end' : 'text-slate-500'}`}>
+                            {msg.Edited && <span>editado</span>}
+                            <ExpiryClock expiresAt={msg.ExpiresAt} />
+                            <span>{formatTime(msg.Time)}</span>
+                            {isMine && status && <MessageTicks status={status} />}
+                        </div>
+                    )}
 
                     {/* Context menu button (hover; se mantiene visible mientras el menú está abierto o con foco por teclado) */}
                     <button
@@ -194,8 +207,8 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                         </button>
                     )}
 
-                    {/* Edit — only my messages */}
-                    {isMine && (
+                    {/* Edit — only my messages, never stickers */}
+                    {isMine && !isSticker && (
                         <button onClick={() => { onEdit(msg); setMenuOpen(null); }}
                                 className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

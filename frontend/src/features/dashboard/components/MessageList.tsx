@@ -7,7 +7,7 @@ import { isSystemDirectMessage, describeDirectSystemMessage } from '../lib/disap
 import HighlightedText from './HighlightedText';
 import { formatDaySeparator, formatTime } from '../../../utils/format';
 import MediaContent from '../../../components/MediaContent';
-import { isMediaUrl } from '../../../lib/mediaMessage';
+import { isMediaUrl, replyPreviewText } from '../../../lib/mediaMessage';
 import Popover from '../../../components/ui/Popover';
 import { useRefMap } from '../../../hooks/useRefMap';
 import MessageTicks from './MessageTicks';
@@ -221,6 +221,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                 );
                             }
                             const isMine = m.SenderTelephon === profile?.Telephon;
+                            const isSticker = m.MediaType === 'sticker';
                             const isMenuOpen = messageMenuOpen === m.MessageID;
                             const time = formatTime(m.Time || m.Timestamp || '');
                             const reactionTarget: ReactionTarget = { kind: 'direct', messageID: m.MessageID };
@@ -286,17 +287,17 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
                                                 Reenviar
                                             </button>
+                                            {isMine && !isSticker && (
+                                                <button onClick={() => { handleEditMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                    Editar
+                                                </button>
+                                            )}
                                             {isMine && (
-                                                <>
-                                                    <button onClick={() => { handleEditMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                                        Editar
-                                                    </button>
-                                                    <button onClick={() => { handleDeleteMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-2.5">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                        Eliminar para todos
-                                                    </button>
-                                                </>
+                                                <button onClick={() => { handleDeleteMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-2.5">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    Eliminar para todos
+                                                </button>
                                             )}
                                             <button onClick={() => { handleDeleteMessageForMe(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -304,18 +305,17 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                             </button>
                                         </Popover>
 
-                                        {/* Burbuja de mensaje */}
-                                        <div className={`
-                                            px-3.5 py-2 rounded-2xl shadow-md
-                                            ${isMine
-                                                ? 'bg-indigo-700 text-white rounded-br-md'
-                                                : 'bg-slate-800 text-slate-100 rounded-bl-md'}
-                                        `}>
+                                        {/* Burbuja de mensaje — un sticker va sin fondo: la imagen es la burbuja */}
+                                        <div className={
+                                            isSticker
+                                                ? 'relative'
+                                                : `px-3.5 py-2 rounded-2xl shadow-md ${isMine ? 'bg-indigo-700 text-white rounded-br-md' : 'bg-slate-800 text-slate-100 rounded-bl-md'}`
+                                        }>
                                             {/* Respuesta */}
                                             {m.ReplyToMessage && (
                                                 <div className={`mb-1.5 px-2.5 py-1.5 rounded-lg border-l-[3px] ${isMine ? 'bg-black/15 border-white/40' : 'bg-black/20 border-indigo-400'} text-[12px] text-white/80 line-clamp-2`}>
                                                     <div className={`font-semibold text-[11px] mb-0.5 ${isMine ? 'text-white/90' : 'text-indigo-300'}`}>Respuesta</div>
-                                                    {m.ReplyToMessage}
+                                                    {replyPreviewText(m.ReplyToMessage)}
                                                 </div>
                                             )}
 
@@ -343,14 +343,24 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                                 </div>
                                             )}
 
-                                            {/* Info de pie de burbuja */}
-                                            <div className="mt-0.5 -mb-0.5 flex items-center justify-end gap-1">
-                                                <span className={isMine ? 'text-white/60' : 'text-slate-400'}><ExpiryClock expiresAt={m.ExpiresAt} /></span>
-                                                <span className={`text-[11px] ${isMine ? 'text-white/60' : 'text-slate-400'}`}>
-                                                    {m.Edited && 'editado · '}{time}
-                                                </span>
-                                                {isMine && <MessageTicks status={m.Status} />}
-                                            </div>
+                                            {/* Info de pie de burbuja — en stickers es una píldora aparte */}
+                                            {isSticker ? (
+                                                <div className="mt-1 flex justify-end">
+                                                    <div className="flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-[10px] text-slate-200">
+                                                        <ExpiryClock expiresAt={m.ExpiresAt} />
+                                                        <span>{m.Edited && 'editado · '}{time}</span>
+                                                        {isMine && <MessageTicks status={m.Status} />}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-0.5 -mb-0.5 flex items-center justify-end gap-1">
+                                                    <span className={isMine ? 'text-white/60' : 'text-slate-400'}><ExpiryClock expiresAt={m.ExpiresAt} /></span>
+                                                    <span className={`text-[11px] ${isMine ? 'text-white/60' : 'text-slate-400'}`}>
+                                                        {m.Edited && 'editado · '}{time}
+                                                    </span>
+                                                    {isMine && <MessageTicks status={m.Status} />}
+                                                </div>
+                                            )}
                                         </div>
                                         <ReactionChips
                                             reactions={m.Reactions}
