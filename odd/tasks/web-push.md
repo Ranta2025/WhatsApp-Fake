@@ -115,6 +115,20 @@ Playwright cannot receive a real push (headless Chromium has no FCM path; `Notif
 - (c) Shared-browser race between `dropLocalPush` of user A and `usePushSync` of user B (`AuthContext.tsx`): serialize behind `ensurePushSubscription`'s in-flight promise.
 - (d) `ClearMute` for a deleted peer returns 404 instead of an idempotent 204 (`serviceMute.go`).
 - (e) Reaction pushes from the plan are not implemented.
+- (f) Session revalidation drops the local push subscription on any non-network failure, including a transient 5xx (`AuthContext.tsx` ~90); restrict to 401/403.
+- (g) Clock-skew correction for mute expiry is lost when the chat/group lists are refreshed (`DashboardContext.tsx` ~527-529).
+- (h) Test gaps flagged by native review: group branch of `handleNotificationClick` (select group / missing-group toast) untested; `AuthContext.test.tsx` ~297-307 expiry-cleanup assertion is vacuous; `ChatWindow.mute.test.tsx` ~73-75 menu-close assertion is vacuous; `push.e2e.ts` enabled branch only runs with VAPID keys.
+
+## Native RDD reviews
+Full branch (`ef542a5..a35ea9c`, 10.4k lines) exceeded the reviewer context budget (`lens_context_budget_exceeded`), so it was reviewed as chained committed slices, each approved and acknowledged (consent granted per user authorization):
+- `ef542a5..9cd6c6b` (WP1-WP3) review-f40f27232a66a106
+- `9cd6c6b..1896e6c` (WP4 + fixes) review-b8351c5ce09f92df
+- `1896e6c..30a044b` (WP5, WP6, backend fixes) review-cbf55d2926ed1353
+- `30a044b..59659af` (frontend fixes) review-d27fba4625ff7e3c
+- `59659af..caa54c0` (WP8 + fixes) review-96d7d5afcdbf72eb
+- `caa54c0..5d68896` (WP9 + fixes) review-36df56c99bb4beab
+- `5d68896..5ce71c3` (test-only fixes + docs): `under_budget`, no review due.
+All findings were advisory (no correction opened); those not already fixed by later commits are listed in Follow-ups (f)-(h). Last reviewed boundary: `5d68896`.
 
 ## Next step
 Feature complete (all WP tasks done and verified against Docker). Next feature: stickers-basic.
