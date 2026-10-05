@@ -23,6 +23,10 @@ type messageContent struct {
 	ReplyToMessage  *string
 }
 
+// ErrStickerNotEditable rejects editing a sticker message: a sticker renders
+// from its image, never from editable text.
+var ErrStickerNotEditable = errors.New("los stickers no se pueden editar")
+
 // validateMessageContent valida (y normaliza) el contenido de un mensaje antes de
 // persistirlo. Se aplica tanto al flujo HTTP como al WebSocket, de forma que los
 // errores de datos se devuelven como errores de validación claros en vez de
@@ -41,8 +45,16 @@ func validateMessageContent(m *messageContent) error {
 	if m.MediaType != "" && m.MediaUrl == "" {
 		return errors.New("falta la URL del archivo adjunto")
 	}
-	if m.MediaUrl != "" && !utils.IsSafeMediaURL(m.MediaUrl) {
-		return errors.New("URL del archivo adjunto no válida")
+	if m.MediaUrl != "" {
+		// A sticker may point at an app-provided path under /stickers/; every
+		// other media type keeps the stricter IsSafeMediaURL allowlist.
+		if m.MediaType == "sticker" {
+			if !utils.IsBuiltinStickerURL(m.MediaUrl) && !utils.IsSafeMediaURL(m.MediaUrl) {
+				return errors.New("URL del archivo adjunto no válida")
+			}
+		} else if !utils.IsSafeMediaURL(m.MediaUrl) {
+			return errors.New("URL del archivo adjunto no válida")
+		}
 	}
 	if m.ReplyToTelephon != nil && len(*m.ReplyToTelephon) > maxReplyTelephonLen {
 		return errors.New("teléfono de respuesta no válido")

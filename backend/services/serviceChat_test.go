@@ -150,3 +150,60 @@ func TestServiceGetMessagesPage_LimitRules(t *testing.T) {
 		assert.Equal(t, tc.want, repo.gotLimit, "limit=%d", tc.in)
 	}
 }
+
+// ==================== TESTS: sticker editing ====================
+
+// stubEditChatRepo implements only the repository surface ServiceEditMessage
+// needs; the rest of the interface is reached through the embedded nil.
+type stubEditChatRepo struct {
+	ChatRepoInterface
+	msg     *models.Message
+	updated bool
+}
+
+func (r *stubEditChatRepo) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	return 1, nil
+}
+
+func (r *stubEditChatRepo) GetMessageByID(messageID uint, ctx context.Context) (*models.Message, error) {
+	if r.msg == nil {
+		return nil, models.ErrMessageNotFound
+	}
+	return r.msg, nil
+}
+
+func (r *stubEditChatRepo) UpdateMessageContent(messageID uint, senderID uint, newContent string, ctx context.Context) error {
+	r.updated = true
+	return nil
+}
+
+func (r *stubEditChatRepo) GetTelephonByID(id uint, ctx context.Context) (string, error) {
+	return "+b", nil
+}
+
+func TestServiceEditMessage_RejectsSticker(t *testing.T) {
+	repo := &stubEditChatRepo{msg: &models.Message{
+		Model:     gorm.Model{ID: 1},
+		MediaType: "sticker",
+		MediaUrl:  "/stickers/basic/hola.webp",
+	}}
+	svc := &ServiceChat{repo: repo}
+
+	_, err := svc.ServiceEditMessage("+a", 1, "nuevo texto", context.Background())
+
+	assert.ErrorIs(t, err, ErrStickerNotEditable)
+	assert.False(t, repo.updated, "a sticker message must not be updated")
+}
+
+func TestServiceEditMessage_AllowsTextMessage(t *testing.T) {
+	repo := &stubEditChatRepo{msg: &models.Message{
+		Model: gorm.Model{ID: 1}, IdReceptor: 2, Message: "old",
+	}}
+	svc := &ServiceChat{repo: repo}
+
+	out, err := svc.ServiceEditMessage("+a", 1, "new", context.Background())
+
+	assert.NoError(t, err)
+	assert.True(t, repo.updated)
+	assert.Equal(t, uint(1), out.MessageID)
+}

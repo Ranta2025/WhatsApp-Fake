@@ -494,6 +494,16 @@ func (s *ServiceGroup) EditGroupMessage(telephon string, groupID uint, data mode
 		return nil, err
 	}
 
+	// A sticker renders from its image, so there is no text to edit; reject it
+	// before touching the database.
+	existing, err := s.repo.GetGroupMessageByID(data.MessageID, ctx)
+	if err != nil {
+		return nil, err
+	}
+	if existing.MediaType == "sticker" {
+		return nil, ErrStickerNotEditable
+	}
+
 	if err := s.repo.EditGroupMessage(groupID, data.MessageID, uint(senderID), data.Message, ctx); err != nil {
 		return nil, err
 	}

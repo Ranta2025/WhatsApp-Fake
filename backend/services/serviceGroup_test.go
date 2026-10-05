@@ -361,3 +361,25 @@ func TestGetGroupMessagesPage_NonMemberRejected(t *testing.T) {
 	assert.EqualError(t, err, "no tienes acceso a este grupo")
 	repo.AssertNotCalled(t, "GetGroupMessagesPage", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
+
+// ==================== TESTS: sticker editing ====================
+
+func TestEditGroupMessage_RejectsSticker(t *testing.T) {
+	svc, repo, contacts := newGroupServiceForSend()
+	expectSenderContext(repo, contacts, models.GroupRoleMember, &models.Group{})
+	repo.On("GetGroupMessageByID", uint(50), mock.Anything).Return(&models.GroupMessage{
+		Model:     gorm.Model{ID: 50},
+		GroupID:   testGroupID,
+		SenderID:  uint(testSenderID),
+		MediaType: "sticker",
+		MediaUrl:  "/stickers/basic/hola.webp",
+	}, nil)
+
+	resp, err := svc.EditGroupMessage(testSenderTel, testGroupID, models.GroupMessageEdit{
+		MessageID: 50, Message: "nuevo texto",
+	}, context.Background())
+
+	assert.ErrorIs(t, err, ErrStickerNotEditable)
+	assert.Nil(t, resp)
+	repo.AssertNotCalled(t, "EditGroupMessage", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}

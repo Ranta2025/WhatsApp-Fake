@@ -26,7 +26,7 @@ The data model already accepts stickers, but no part of the UI can send or rende
 - Disappearing-message media GC: `RepoExpiry.ExpireBatch` (`backend/repos/expiryData.go:210-230`) enqueues only keys for which `ServiceMedia.ObjectKeyFromURL` (`backend/services/serviceMedia.go:183-197`) returns ok. That function only matches `/storage/<bucket>/` or `MEDIA_PUBLIC_BASE_URL`, so built-in sticker URLs are never garbage-collected. This is correct and needs no change.
 
 ## Scope / Authorized
-Approved roadmap item, plan only (not yet authorized to implement).
+Authorized implementation from `feat/web-push` (HEAD a7e9e2a) on branch `feat/stickers-basic`. User authorized SB1→SB5 with TDD, one commit per task, RDD per slice, and consent grant for reviews.
 Scope: built-in pack assets plus a generator script, a typed manifest, a minimal backend URL rule for `sticker`, nginx `/stickers/` location, SW precache of the pack, sticker panel in both composers, sticker rendering, reply/forward/reaction/disappearing compatibility, tests.
 Out of scope (see `stickers-full`): custom stickers, uploads, favorites/recents, animated stickers, multiple packs, search, offline queueing of stickers.
 
@@ -64,7 +64,7 @@ RED examples:
 - Playwright: Ana sends a sticker to Luis and Luis sees the `img[alt=...]` at 150px without the bubble background.
 
 ## Tasks
-- [ ] SB1 Backend URL rule: `IsBuiltinStickerURL` in `backend/utils/validationMedia.go` and the `sticker` branch in `validateMessageContent` (`backend/services/validation.go:44`). Table tests first (utils + services; 1:1 path via `serviceChat` and group via `serviceGroup` use the same validator, so add one service-level test each if cheap). Check whether editing a media message is rejected server-side (`ServiceEditMessage` `backend/services/serviceChat.go:398`, `EditGroupMessage` `serviceGroup.go:482`). If not, add a guard that rejects editing `sticker` messages, with tests (to verify). Route: inline if 2 files plus tests, else delegated.
+- [x] SB1 Backend URL rule: `IsBuiltinStickerURL` in `backend/utils/validationMedia.go` and the `sticker` branch in `validateMessageContent` (`backend/services/validation.go:44`). Table tests first (utils + services; 1:1 path via `serviceChat` and group via `serviceGroup` use the same validator, so add one service-level test each if cheap). Check whether editing a media message is rejected server-side (`ServiceEditMessage` `backend/services/serviceChat.go:398`, `EditGroupMessage` `serviceGroup.go:482`). If not, add a guard that rejects editing `sticker` messages, with tests (to verify). Route: inline if 2 files plus tests, else delegated. → Done delegated direct (8 files, +162/-3). RED observed (undefined IsBuiltinStickerURL / ErrStickerNotEditable), GREEN `go test ./backend/utils/ ./backend/services/` ok, `go vet` clean.
 - [ ] SB2 Assets + manifest: `frontend/scripts/generate-stickers.mjs` (original SVG sources, resvg -> WebP; add `sharp` dev dep after a version check, or use the PNG fallback per the open question), `npm run stickers`, committed `frontend/public/stickers/basic/*.webp`, `frontend/src/features/stickers/builtinPack.ts` + test (URLs match the regex, files exist, ids unique, alt non-empty). `vite.config.ts` `globPatterns` += `webp`. nginx `location /stickers/` (`docker/nginx.conf`, before `location /`). Route: delegated (writer: script + assets + config, 2+ files).
 - [ ] SB3 Rendering: `MediaContent` `case 'sticker'` (alt from manifest, fallback "Sticker"), transparent bubble for stickers in `MessageList.tsx` and `GroupMessageBubble` (`GroupChatWindow.tsx`), hide "Editar" for stickers, reply quote/banner uses `previewMessage` for media. Reactions UI (chips/trigger) still work on sticker messages. Vitest: `MediaContent`, `MessageList` (extend `MessageList.reactions.test.tsx` or a new `MessageList.sticker.test.tsx`), `GroupMessageBubble.media.test.tsx`. Route: delegated.
 - [ ] SB4 Panel + send: `frontend/src/features/stickers/StickerPanel.tsx` (Popover grid, keyboard accessible, closes on select/Escape/outside), a sticker button in `MessageInput.tsx` and `GroupMessageInput.tsx`, send via `handleMediaUploadSuccess(url, 'sticker')` (1:1 and group) honoring `replyingTo`. Offline/WS-closed shows the existing toast (pinned by test). Vitest component tests for both composers (extend `GroupMessageInput.test.tsx`). Route: delegated.
@@ -92,7 +92,11 @@ RED examples:
 - **Edit on media:** recommended default = hide "Editar" for stickers only (minimal). Alternative: hide it for all media messages, a broader behavior change.
 
 ## Progress / Evidence
-(not started)
+- SB1 done (uncommitted at doc-write time): `IsBuiltinStickerURL` + sticker branch + edit guards for 1:1/group. Writer RED→GREEN, `go vet` clean. Assumptions: asset charset `[a-z0-9-]` + `.webp` only (PNG fallback would require regex change); group guard stays after `requireCanSend`; edit path does 2 reads (pre-guard + post-update) kept to minimize behavior change.
+
+## Assumptions
+- Pack/file charset is `[a-z0-9-]` lowercase with `.webp` extension (documented default; PNG fallback not taken).
+- No `mem_context` used this session per user instruction; only one `mem_search "odd/pending-features/decisions"`.
 
 ## Next step
-On authorization: create `feat/stickers-basic` from the latest chain branch, then implement SB1 (RED: `TestValidateMessageContent` sticker case).
+Commit SB1 (code + doc), RDD assess the slice from last boundary 5d68896 `--committed-only`, then implement SB2.

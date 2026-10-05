@@ -406,6 +406,16 @@ func (rp *ServiceChat) ServiceEditMessage(telephonSender string, messageID uint,
 		return schemas.Message{}, err
 	}
 
+	// A sticker renders from its image, so there is no text to edit; reject it
+	// before touching the database.
+	existing, err := rp.repo.GetMessageByID(messageID, ctx)
+	if err != nil {
+		return schemas.Message{}, err
+	}
+	if existing.MediaType == "sticker" {
+		return schemas.Message{}, ErrStickerNotEditable
+	}
+
 	// Actualizar en BD (solo si el mensaje es del remitente)
 	if err := rp.repo.UpdateMessageContent(messageID, uint(idSender), newContent, ctx); err != nil {
 		return schemas.Message{}, err
