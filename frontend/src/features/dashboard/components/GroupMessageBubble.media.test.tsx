@@ -22,6 +22,24 @@ const baseMsg = (over: Partial<GroupMessageResponse>): GroupMessageResponse => (
     ...over,
 });
 
+/**
+ * Locates the message bubble structurally: the closest ancestor of the image
+ * that also carries the footer (a direct child div holding the timestamp).
+ * The image's immediate parent is not enough: MediaContent wraps the <img> for
+ * image/video media, so that parent is the wrapper, not the bubble.
+ */
+const findBubble = (img: HTMLElement): HTMLElement | null => {
+    let node: HTMLElement | null = img.parentElement;
+    while (node) {
+        const holdsFooter = Array.from(node.children).some(
+            (child) => child.tagName === 'DIV' && !child.contains(img) && /\d{1,2}:\d{2}/.test(child.textContent ?? ''),
+        );
+        if (holdsFooter) return node;
+        node = node.parentElement;
+    }
+    return null;
+};
+
 describe('GroupMessageBubble media rendering', () => {
     let container: HTMLDivElement;
     let root: Root;
@@ -115,12 +133,37 @@ describe('GroupMessageBubble media rendering', () => {
             MediaUrl: '/stickers/basic/hola.webp',
             Message: '/stickers/basic/hola.webp',
         }));
-        const img = container.querySelector('img');
-        expect(img?.getAttribute('src')).toBe('/stickers/basic/hola.webp');
-        expect(img?.getAttribute('alt')).toBe('Sticker con la palabra Hola');
-        const bubble = img?.parentElement as HTMLElement;
-        expect(bubble.className).not.toMatch(/bg-indigo-/);
-        expect(bubble.className).not.toMatch(/bg-slate-/);
+        const img = container.querySelector('img') as HTMLImageElement;
+        expect(img.getAttribute('src')).toBe('/stickers/basic/hola.webp');
+        expect(img.getAttribute('alt')).toBe('Sticker con la palabra Hola');
+        const bubble = findBubble(img);
+        expect(bubble).not.toBeNull();
+        expect(bubble!.className).not.toMatch(/bg-indigo-/);
+        expect(bubble!.className).not.toMatch(/bg-slate-/);
+    });
+
+    it('control positivo: una burbuja no-sticker sí lleva fondo', () => {
+        renderBubble(
+            baseMsg({ MediaType: 'image', MediaUrl: '/storage/a.png', Message: '/storage/a.png' }),
+            true,
+        );
+        const img = container.querySelector('img') as HTMLImageElement;
+        const bubble = findBubble(img);
+        expect(bubble).not.toBeNull();
+        expect(bubble!.className).toMatch(/bg-indigo-/);
+    });
+
+    it('cita de respuesta a un sticker: muestra ✨ Sticker y no la URL cruda', () => {
+        renderBubble(baseMsg({
+            MediaType: 'sticker',
+            MediaUrl: '/stickers/basic/hola.webp',
+            Message: '/stickers/basic/hola.webp',
+            ReplyToMessageID: 0,
+            ReplyToTelephon: '222',
+            ReplyToMessage: '/stickers/basic/hola.webp',
+        }));
+        expect(container.textContent).toContain('✨ Sticker');
+        expect(container.textContent).not.toContain('/stickers/basic/hola.webp');
     });
 
     it('sticker propio: oculta "Editar" en el menú y conserva eliminar', () => {

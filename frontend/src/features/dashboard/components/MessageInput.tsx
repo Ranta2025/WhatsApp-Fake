@@ -2,8 +2,10 @@ import { useState, useRef, type ChangeEvent, type KeyboardEvent } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { useMessaging } from '../hooks/useMessaging';
 import MediaUploadMenu from '../../../components/MediaUploadMenu';
+import StickerPanel from '../../stickers/StickerPanel';
 import { useVoiceRecorder, formatRecordingTime } from '../../../hooks/useVoiceRecorder';
 import { replySenderLabel } from '../lib/replyLabel';
+import { previewMessage } from '../../../utils/format';
 
 const MessageInput = () => {
     const { 
@@ -18,6 +20,8 @@ const MessageInput = () => {
 
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const attachButtonRef = useRef<HTMLButtonElement>(null);
+    const [showStickerPanel, setShowStickerPanel] = useState(false);
+    const stickerButtonRef = useRef<HTMLButtonElement>(null);
 
     const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useVoiceRecorder({
         onRecorded: (url) => handleMediaUploadSuccess(url, 'audio'),
@@ -42,6 +46,16 @@ const MessageInput = () => {
         messagingHandleSend(currentDraft);
     };
 
+    const handleStickerSelect = (url: string) => {
+        // Media stays online-only; the panel is usable offline, but sending
+        // surfaces the same toast the media path would show and queues nothing.
+        if (!isConnected) {
+            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            return;
+        }
+        handleMediaUploadSuccess(url, 'sticker');
+    };
+
     if (!selected) return null;
 
     return (
@@ -53,7 +67,7 @@ const MessageInput = () => {
                         <div className="text-xs font-semibold text-indigo-400">
                             Respondiendo a {replySenderLabel(replyingTo, profile?.Telephon, selected)}
                         </div>
-                        <div className="text-xs text-slate-400 truncate">{replyingTo.Message}</div>
+                        <div className="text-xs text-slate-400 truncate">{previewMessage(replyingTo)}</div>
                     </div>
                     <button onClick={cancelReply} className="p-1.5 text-slate-400 hover:text-slate-200">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -81,6 +95,26 @@ const MessageInput = () => {
                             onUploadSuccess={(url, type) => { handleMediaUploadSuccess(url, type); setShowAttachMenu(false); }}
                             onUploadError={(err) => { addToast({ type: 'error', message: String(err) }); setShowAttachMenu(false); }}
                             onClose={() => setShowAttachMenu(false)}
+                        />
+                    )}
+                </div>
+
+                <div className="relative">
+                    <button
+                        ref={stickerButtonRef}
+                        onClick={() => setShowStickerPanel(!showStickerPanel)}
+                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] transition-all"
+                        aria-label="Stickers"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
+                        </svg>
+                    </button>
+                    {showStickerPanel && (
+                        <StickerPanel
+                            anchorRef={stickerButtonRef}
+                            onSelect={handleStickerSelect}
+                            onClose={() => setShowStickerPanel(false)}
                         />
                     )}
                 </div>

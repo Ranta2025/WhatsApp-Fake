@@ -37,6 +37,24 @@ const stickerMsg = (over: Partial<Message> = {}): Message => ({
     ...over,
 });
 
+/**
+ * Locates the message bubble structurally: the closest ancestor of the image
+ * that also carries the footer (a direct child div holding the timestamp).
+ * The image's immediate parent is not enough: MediaContent already wraps the
+ * <img> for image/video media, so that parent is the wrapper, not the bubble.
+ */
+const findBubble = (img: HTMLElement): HTMLElement | null => {
+    let node: HTMLElement | null = img.parentElement;
+    while (node) {
+        const holdsFooter = Array.from(node.children).some(
+            (child) => child.tagName === 'DIV' && !child.contains(img) && /\d{1,2}:\d{2}/.test(child.textContent ?? ''),
+        );
+        if (holdsFooter) return node;
+        node = node.parentElement;
+    }
+    return null;
+};
+
 describe('MessageList sticker rendering (1:1)', () => {
     let container: HTMLDivElement;
     let root: Root;
@@ -72,11 +90,20 @@ describe('MessageList sticker rendering (1:1)', () => {
 
     it('renderiza el sticker y la burbuja queda transparente (sin fondo)', () => {
         render(stickerMsg());
-        const img = container.querySelector('img');
-        expect(img?.getAttribute('src')).toBe('/stickers/basic/hola.webp');
-        const bubble = img?.parentElement as HTMLElement;
-        expect(bubble.className).not.toMatch(/bg-indigo-/);
-        expect(bubble.className).not.toMatch(/bg-slate-/);
+        const img = container.querySelector('img') as HTMLImageElement;
+        expect(img.getAttribute('src')).toBe('/stickers/basic/hola.webp');
+        const bubble = findBubble(img);
+        expect(bubble).not.toBeNull();
+        expect(bubble!.className).not.toMatch(/bg-indigo-/);
+        expect(bubble!.className).not.toMatch(/bg-slate-/);
+    });
+
+    it('control positivo: una burbuja no-sticker sí lleva fondo', () => {
+        render(stickerMsg({ MediaType: 'image', MediaUrl: '/storage/a.png', Message: '/storage/a.png' }));
+        const img = container.querySelector('img') as HTMLImageElement;
+        const bubble = findBubble(img);
+        expect(bubble).not.toBeNull();
+        expect(bubble!.className).toMatch(/bg-indigo-/);
     });
 
     it('oculta "Editar" en stickers propios y conserva el resto del menú', () => {

@@ -28,6 +28,16 @@ vi.mock('../../../components/MediaUploadMenu', () => ({
         </div>
     ),
 }));
+// El panel real se cubre en StickerPanel.test.tsx; aquí solo el cableado del
+// composer (abrir, enviar como 'sticker', cerrar, offline, banner).
+vi.mock('../../stickers/StickerPanel', () => ({
+    default: ({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) => (
+        <div data-testid="sticker-panel">
+            <button onClick={() => { onSelect('/stickers/basic/hola.webp'); onClose(); }}>fake-sticker</button>
+            <button onClick={onClose}>fake-sticker-close</button>
+        </div>
+    ),
+}));
 
 const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseGroupMessaging = vi.mocked(useGroupMessaging);
@@ -241,5 +251,41 @@ describe('GroupMessageInput media', () => {
         expect(cancelRecording).toHaveBeenCalledTimes(1);
         expect(handleEditMessageCancel).toHaveBeenCalledTimes(1);
         expect(cancelReply).toHaveBeenCalledTimes(1);
+    });
+
+    it('abre el panel de stickers desde el botón Stickers', () => {
+        setup();
+        expect(container.querySelector('[data-testid="sticker-panel"]')).toBeNull();
+        click(byLabel('Stickers'));
+        expect(container.querySelector('[data-testid="sticker-panel"]')).not.toBeNull();
+    });
+
+    it('seleccionar un sticker lo envía como sticker y cierra el panel', () => {
+        setup();
+        click(byLabel('Stickers'));
+        clickText('fake-sticker');
+        expect(handleMediaUploadSuccess).toHaveBeenCalledWith('/stickers/basic/hola.webp', 'sticker');
+        expect(container.querySelector('[data-testid="sticker-panel"]')).toBeNull();
+    });
+
+    it('sin conexión: el panel sigue disponible, pero envía nada y muestra el toast', () => {
+        setup({ isConnected: false });
+        expect(byLabel('Stickers')?.disabled).toBe(false);
+        click(byLabel('Stickers'));
+        expect(container.querySelector('[data-testid="sticker-panel"]')).not.toBeNull();
+        clickText('fake-sticker');
+        expect(addToast).toHaveBeenCalledWith({ type: 'error', message: 'No hay conexión con el servidor' });
+        expect(handleMediaUploadSuccess).not.toHaveBeenCalled();
+    });
+
+    it('el banner de respuesta muestra ✨ Sticker, no la URL', () => {
+        const reply: GroupMessageResponse = {
+            MessageID: 7, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis',
+            Message: '/stickers/basic/hola.webp', Time: '2026-01-01T10:00:00Z', Edited: false,
+            MediaType: 'sticker', MediaUrl: '/stickers/basic/hola.webp',
+        };
+        setup({ replyingTo: reply });
+        expect(container.textContent).toContain('✨ Sticker');
+        expect(container.textContent).not.toContain('/stickers/basic/hola.webp');
     });
 });

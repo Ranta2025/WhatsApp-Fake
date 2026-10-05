@@ -5,6 +5,8 @@ import { isEscapeHandled } from '../../../hooks/useEscapeToClose';
 import { useVoiceRecorder, formatRecordingTime } from '../../../hooks/useVoiceRecorder';
 import { canSend } from '../lib/groupPermissions';
 import MediaUploadMenu from '../../../components/MediaUploadMenu';
+import StickerPanel from '../../stickers/StickerPanel';
+import { previewMessage } from '../../../utils/format';
 
 const GroupMessageInput = () => {
     const [text, setText] = useState('');
@@ -20,6 +22,8 @@ const GroupMessageInput = () => {
 
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const attachButtonRef = useRef<HTMLButtonElement>(null);
+    const [showStickerPanel, setShowStickerPanel] = useState(false);
+    const stickerButtonRef = useRef<HTMLButtonElement>(null);
     // Los hooks van antes del return del rol 'left' (reglas de hooks).
     const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useVoiceRecorder({
         onRecorded: (url) => handleMediaUploadSuccess(url, 'audio'),
@@ -47,9 +51,11 @@ const GroupMessageInput = () => {
         if (replyingTo) cancelReply();
     }, [restrictedSend, isRecording, cancelRecording, editingMessageId, handleEditMessageCancel, replyingTo, cancelReply]);
 
-    // Entrar en modo edición desmonta el adjuntar: cerrar el menú para que no reaparezca.
+    // Entrar en modo edición desmonta el adjuntar y los stickers: cerrar los
+    // paneles para que no reaparezcan.
     // Ajuste de estado durante el render (patrón de React), sin efecto.
     if (isEditing && showAttachMenu) setShowAttachMenu(false);
+    if (isEditing && showStickerPanel) setShowStickerPanel(false);
 
     // If the user has left the group, show a read-only banner. Wording differs
     // when the cause is an admin removal vs. a voluntary leave (`RemovedByAdmin`).
@@ -83,6 +89,16 @@ const GroupMessageInput = () => {
         if (!text.trim()) return;
         handleSend(text.trim());
         setText('');
+    };
+
+    const handleStickerSelect = (url: string) => {
+        // Media stays online-only; the panel is usable offline, but sending
+        // surfaces the same toast the media path would show and queues nothing.
+        if (!isConnected) {
+            addToast({ type: 'error', message: 'No hay conexión con el servidor' });
+            return;
+        }
+        handleMediaUploadSuccess(url, 'sticker');
     };
 
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -123,7 +139,7 @@ const GroupMessageInput = () => {
                         <div className="text-xs font-semibold text-indigo-400">
                             Respondiendo a {replyingTo.SenderUsername || replyingTo.SenderTelephon}
                         </div>
-                        <div className="text-xs text-slate-400 truncate">{replyingTo.Message}</div>
+                        <div className="text-xs text-slate-400 truncate">{previewMessage(replyingTo)}</div>
                     </div>
                     <button onClick={cancelReply} className="text-slate-500 hover:text-white transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -169,6 +185,28 @@ const GroupMessageInput = () => {
                                 onUploadSuccess={(url, type) => { handleMediaUploadSuccess(url, type); setShowAttachMenu(false); }}
                                 onUploadError={(err) => { addToast({ type: 'error', message: String(err) }); setShowAttachMenu(false); }}
                                 onClose={() => setShowAttachMenu(false)}
+                            />
+                        )}
+                    </div>
+                )}
+                {!editingMessageId && (
+                    <div className="relative">
+                        <button
+                            ref={stickerButtonRef}
+                            onClick={() => setShowStickerPanel(!showStickerPanel)}
+                            disabled={isRecording}
+                            className="p-2.5 text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed rounded-full transition-all flex-shrink-0"
+                            aria-label="Stickers"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
+                            </svg>
+                        </button>
+                        {showStickerPanel && (
+                            <StickerPanel
+                                anchorRef={stickerButtonRef}
+                                onSelect={handleStickerSelect}
+                                onClose={() => setShowStickerPanel(false)}
                             />
                         )}
                     </div>
