@@ -1,7 +1,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { openSession } from './support/session';
 import { createGroup, phoneOf } from './support/api';
-import { bubbleWithText, openChat, openGroup, sendChatText, uniqueText } from './support/chat';
+import { bubbleWithText, openChat, openGroup, sendChatText, sendGroupText, uniqueText } from './support/chat';
 import { setExpiry } from './support/db';
 
 // SB5: built-in stickers end to end. A sticker is a bare 150x150 image (no
@@ -31,12 +31,35 @@ async function expectBareSticker(img: Locator): Promise<void> {
   await expect(img).toBeVisible();
   await expect(img).toHaveAttribute('width', '150');
   await expect(img).toHaveAttribute('height', '150');
-  const box = await img.boundingBox();
-  expect(box?.width).toBe(150);
-  expect(box?.height).toBe(150);
-  const parentClass = await img.evaluate((el) => el.parentElement?.className ?? '');
-  expect(parentClass).not.toContain('bg-slate');
-  expect(parentClass).not.toContain('bg-indigo');
+  // Polled: the bubble plays a slide-up animation on arrival, which scales the box.
+  await expect.poll(async () => (await img.boundingBox())?.width).toBe(150);
+  await expect.poll(async () => (await img.boundingBox())?.height).toBe(150);
+  // Every ancestor from the image up to its message wrapper ([data-message-id],
+  // inclusive) must be free of the bubble backgrounds.
+  const ancestorClasses = await img.evaluate((el) => {
+    const root = el.closest('[data-message-id]');
+    if (!root) return null;
+    const classes: string[] = [];
+    for (let n: Element | null = el.parentElement; n; n = n.parentElement) {
+      classes.push(n.getAttribute('class') ?? '');
+      if (n === root) break;
+    }
+    return classes.join(' ');
+  });
+  expect(ancestorClasses, 'sticker image must live inside a [data-message-id] message').not.toBeNull();
+  expect(ancestorClasses).not.toMatch(/bg-(indigo|slate)-/);
+}
+
+/** Positive control: a plain text bubble in the same chat DOES carry a bubble background. */
+async function expectTextBubbleHasBackground(page: Page, text: string): Promise<void> {
+  const bubble = bubbleWithText(page, text);
+  await expect(bubble).toBeVisible();
+  await expect(bubble.locator('[class*="bg-indigo-"], [class*="bg-slate-"]').first()).toBeVisible();
+}
+
+/** Sidebar row (a button) of a contact whose title and last-message preview match. */
+function sidebarRow(page: Page, contact: string, preview: string | RegExp): Locator {
+  return page.getByRole('button').filter({ hasText: contact }).filter({ hasText: preview });
 }
 
 async function react(page: Page, bubble: Locator, emoji: string): Promise<void> {
@@ -84,14 +107,26 @@ test.describe('stickers', () => {
       await openChat(ana.page, 'Luis');
       await openChat(luis.page, 'Ana');
 
+      // Positive control + known sidebar preview: a unique text message first, so the
+      // sticker label can only come from the sticker sent below (older stickers exist).
+      const controlText = uniqueText('control burbuja');
+      await sendChatText(ana.page, controlText);
+      await expectTextBubbleHasBackground(ana.page, controlText);
+      await expect(sidebarRow(ana.page, 'Luis', controlText)).toBeVisible();
+
+      const anaBefore = await stickerImage(ana.page, HOLA).count();
+      const luisBefore = await stickerImage(luis.page, HOLA).count();
       await sendSticker(ana.page, HOLA);
 
-      // Live on both sides.
+      // Live on both sides: the count grows by exactly one new sticker.
+      await expect(stickerImage(ana.page, HOLA)).toHaveCount(anaBefore + 1);
+      await expect(stickerImage(luis.page, HOLA)).toHaveCount(luisBefore + 1);
       await expectBareSticker(stickerImage(ana.page, HOLA).last());
       await expectBareSticker(stickerImage(luis.page, HOLA).last());
 
-      // Sidebar preview of the last message is the sticker label.
-      await expect(ana.page.getByText('✨ Sticker').first()).toBeVisible();
+      // Sidebar preview of Luis' row switched from the text to the sticker label.
+      await expect(sidebarRow(ana.page, 'Luis', '✨ Sticker')).toBeVisible();
+      await expect(sidebarRow(ana.page, 'Luis', controlText)).toHaveCount(0);
 
       // Still there after a reload (server history), same 150px/no-bg contract.
       await luis.page.reload();
@@ -122,7 +157,10 @@ test.describe('stickers', () => {
       await luisBubble.hover();
       await luisBubble.getByRole('button', { name: 'Opciones', exact: true }).click();
       await luis.page.getByRole('button', { name: 'Responder', exact: true }).click();
-      await expect(luis.page.getByText('✨ Sticker').first()).toBeVisible();
+      // Scoped to the composer banner (the node next to the "Respondiendo a" label).
+      const banner = luis.page.getByText(/^Respondiendo a/).locator('xpath=..');
+      await expect(banner).toBeVisible();
+      await expect(banner).toContainText('✨ Sticker');
 
       const replyText = uniqueText('respuesta sticker');
       await sendChatText(luis.page, replyText);
@@ -140,6 +178,12 @@ test.describe('stickers', () => {
     const luis = await openSession(browser, 'luis');
     const marta = await openSession(browser, 'marta');
     try {
+      // Baseline counts of HOLA stickers in the Ana<->Marta chat (older runs left some).
+      await openChat(ana.page, 'Marta');
+      await openChat(marta.page, 'Ana');
+      const anaMartaBefore = await stickerImage(ana.page, HOLA).count();
+      const martaBefore = await stickerImage(marta.page, HOLA).count();
+
       await openChat(ana.page, 'Luis');
       await openChat(luis.page, 'Ana');
       await sendSticker(ana.page, HOLA);
@@ -157,9 +201,10 @@ test.describe('stickers', () => {
 
       // Ana's chat with Marta now holds the forwarded sticker.
       await openChat(ana.page, 'Marta');
+      await expect(stickerImage(ana.page, HOLA)).toHaveCount(anaMartaBefore + 1);
       await expectBareSticker(stickerImage(ana.page, HOLA).last());
-      // Marta receives it live.
-      await openChat(marta.page, 'Ana');
+      // Marta receives it live (her chat with Ana has been open since the baseline).
+      await expect(stickerImage(marta.page, HOLA)).toHaveCount(martaBefore + 1);
       await expectBareSticker(stickerImage(marta.page, HOLA).last());
     } finally {
       await ana.context.close();
@@ -179,7 +224,16 @@ test.describe('stickers', () => {
       await openGroup(ana.page, name);
       await openGroup(luis.page, name);
 
+      // Positive control: a text bubble in this group carries a background.
+      const controlText = uniqueText('control grupo');
+      await sendGroupText(ana.page, controlText);
+      await expectTextBubbleHasBackground(ana.page, controlText);
+
+      const anaBefore = await stickerImage(ana.page, HOLA).count();
+      const luisBefore = await stickerImage(luis.page, HOLA).count();
       await sendSticker(ana.page, HOLA);
+      await expect(stickerImage(ana.page, HOLA)).toHaveCount(anaBefore + 1);
+      await expect(stickerImage(luis.page, HOLA)).toHaveCount(luisBefore + 1);
       await expectBareSticker(stickerImage(ana.page, HOLA).last());
       await expectBareSticker(stickerImage(luis.page, HOLA).last());
     } finally {
