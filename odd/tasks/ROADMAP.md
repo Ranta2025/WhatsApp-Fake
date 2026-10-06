@@ -5,9 +5,9 @@ Index of every feature in this repo, its branch, status, and feature document. E
 ## Branch chain
 Branches are chained: each is created from the previous one. Push, PR and merge are the user's decisions.
 
-Everything through `feat/pwa` was merged into `main` and pushed on 2026-10-04 (`e82d270`). New chain: `main` -> `feat/security-hardening` (local, NOT pushed) -> (pending features, in the recommended order below)
+Everything through `feat/api-casing` AC0 was merged into `main` and pushed on 2026-10-06 (`62997fc`), and `feat/ui-themes` was merged on top. Remaining work branches from `main`.
 
-Before creating a branch: `git branch --show-current`, `git status`, and branch from the LATEST feature branch in the chain (never from `main` while earlier branches are unmerged).
+Before creating a branch: `git branch --show-current`, `git status`, and branch from `main` (all earlier branches are merged).
 
 ## Features
 | Feature | Branch | Status | Document |
@@ -24,11 +24,12 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | reactions | `feat/reactions` | done | [reactions.md](reactions.md) |
 | disappearing-messages | `feat/disappearing-messages` | done | [disappearing-messages.md](disappearing-messages.md) |
 | pwa | `feat/pwa` | done (merged to main) | [pwa.md](pwa.md) |
-| security-hardening | `feat/security-hardening` | done (local, not pushed) | [security-hardening.md](security-hardening.md) |
-| web-push | `feat/web-push` | pending | [web-push.md](web-push.md) |
-| stickers-basic | `feat/stickers-basic` | pending (plan) | [stickers-basic.md](stickers-basic.md) |
-| stickers-full | `feat/stickers-full` | pending (plan) | [stickers-full.md](stickers-full.md) |
-| api-casing | `feat/api-casing` | pending | [api-casing.md](api-casing.md) |
+| security-hardening | `feat/security-hardening` | done (merged to main) | [security-hardening.md](security-hardening.md) |
+| web-push | `feat/web-push` | done (merged to main) | [web-push.md](web-push.md) |
+| stickers-basic | `feat/stickers-basic` | done (merged to main) | [stickers-basic.md](stickers-basic.md) |
+| stickers-full | `feat/stickers-full` | done (merged to main) | [stickers-full.md](stickers-full.md) |
+| api-casing | `feat/api-casing` | in progress (AC0 done and merged; AC3-AC7, AC10 pending) |
+| ui-themes | `feat/ui-themes` | done (merged to main) | [api-casing.md](api-casing.md) |
 
 ## Recommended order for the pending features
 1. **observability** - backend-only, independent, low blast radius, and gives metrics/request ids to debug everything after it.
@@ -43,10 +44,10 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 
-## Handoff state (2026-10-04)
-- **Current tip:** `feat/security-hardening` (SH1-SH3 done, all slices reviewed and acknowledged through `ef1925f` + close commit). Start the next feature with `git switch -c feat/web-push` from `feat/security-hardening`.
-- **Done and reviewed:** pwa (PW1-PW10) merged to `main` and pushed (`e82d270`); every slice acknowledged (see pwa.md Progress). security-hardening slices acknowledged (see its Progress). Last reviewed boundary for the next feature: `171f69d` (roadmap/stickers docs commit, reviewed and acknowledged); later doc-only commits are passive.
-- **Next:** `web-push.md`, then `stickers-basic.md`, `stickers-full.md`, `api-casing.md`.
+## Handoff state (2026-10-06)
+- **Current tip:** `main` (roadmap features plus ui-themes merged and pushed). The only unfinished feature is **api-casing**: continue it on a branch from `main` (`git switch -c feat/api-casing-2 main`, or recreate `feat/api-casing` from `main`).
+- **Last reviewed boundary:** `94d03d3` (ui-themes final slice, acknowledged); later commits on `main` are doc-only.
+- **Next:** `api-casing.md` AC3 -> AC7, AC10.
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
