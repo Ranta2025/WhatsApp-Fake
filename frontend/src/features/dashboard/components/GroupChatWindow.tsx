@@ -415,7 +415,7 @@ export const GroupMessageList = ({
                         onReact={(m, emoji) => reactTo(m.MessageID, emoji)}
                         onMoreReactions={(m) => setFullPicker({ groupID, messageID: m.MessageID })}
                         onShowReactions={(m) => setWho({ groupID, messageID: m.MessageID })}
-                        onStickerFeedback={(message, type) => addToast({ type, message })}
+                        onStickerFeedback={(message, type) => addToast?.({ type, message })}
                     />
                 );
             })}

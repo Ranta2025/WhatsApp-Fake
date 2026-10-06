@@ -313,3 +313,27 @@ func TestServiceCreatMessage_WithoutRecorder(t *testing.T) {
 	}, context.Background())
 	require.NoError(t, err)
 }
+
+// RF10: un replay idempotente (mismo clientID) NO vuelve a registrar el
+// reciente, para que reenviar un queued send no reordene "Recientes".
+func TestServiceCreatMessage_ReplayDoesNotRecordStickerRecent(t *testing.T) {
+	rec := &fakeRecentRecorder{}
+	svc := InitServiceMessageWithRecents(newStubIdemChatRepo(), rec)
+
+	send := func() {
+		_, err := svc.ServiceCreatMessageWithStatus(models.MessageCreat{
+			Telephon: "+ana",
+			MessageGet: models.MessageGet{
+				Receptor:  "+luis",
+				MediaUrl:  "/stickers/basic/hola.webp",
+				MediaType: "sticker",
+				ClientID:  testClientID,
+			},
+		}, "enviado", context.Background())
+		require.NoError(t, err)
+	}
+	send()
+	send()
+
+	require.Len(t, rec.calls, 1, "solo el primer envío registra el reciente")
+}

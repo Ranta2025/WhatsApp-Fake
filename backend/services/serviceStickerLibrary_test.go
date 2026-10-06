@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"gorm/backend/models"
+	"gorm/backend/utils"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
@@ -34,6 +36,12 @@ type fakeStickerRepo struct {
 	referenced map[string]bool
 	enqueued   []string
 
+	// RF11: inyección de fallos en las ramas de "registrar y continuar" del
+	// borrado (reconciliación de favorito, comprobación de referencia y encolado).
+	favDeleteErr  error
+	referencedErr error
+	enqueueErr    error
+
 	lastMineLimit   int
 	lastFavLimit    int
 	lastRecentLimit int
@@ -50,12 +58,15 @@ func (f *fakeStickerRepo) GetStickerByID(ownerID, id uint, _ context.Context) (*
 }
 
 func (f *fakeStickerRepo) MediaKeyReferenced(_ context.Context, key string) (bool, error) {
+	if f.referencedErr != nil {
+		return false, f.referencedErr
+	}
 	return f.referenced[key], nil
 }
 
 func (f *fakeStickerRepo) EnqueueMediaGC(_ context.Context, key string) error {
 	f.enqueued = append(f.enqueued, key)
-	return nil
+	return f.enqueueErr
 }
 
 func (f *fakeStickerRepo) GetIdByTelephon(string, context.Context) (int, error) {
@@ -148,6 +159,9 @@ func (f *fakeStickerRepo) UpsertFavorite(fav *models.StickerFavorite, _ context.
 }
 
 func (f *fakeStickerRepo) DeleteFavorite(ownerID uint, url string, _ context.Context) error {
+	if f.favDeleteErr != nil {
+		return f.favDeleteErr
+	}
 	out := make([]models.StickerFavorite, 0, len(f.favorites))
 	for _, fav := range f.favorites {
 		if !(fav.IdUser == ownerID && fav.URL == url) {
@@ -554,4 +568,118 @@ func TestStickerLibraryDeleteSkipsEnqueueWhenStillReferenced(t *testing.T) {
 
 	require.NoError(t, svc.DeleteSticker("+51999", 4, context.Background()))
 	assert.Empty(t, repo.enqueued, "un mensaje vivo que usa el sticker impide encolarlo")
+}
+
+// RF3: un archivo que SF1 rechaza (formato/dimensiones/tamaño) se degrada a
+// ErrStickerInvalid (400), nunca a un error interno.
+func TestStickerLibraryUploadInvalidFileWrapsInvalid(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	repo := &fakeStickerRepo{userID: 7}
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
+
+	_, _, err := svc.UploadSticker("+51999", "", memStickerFileOf([]byte("no soy un sticker")), &multipart.FileHeader{}, context.Background())
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrStickerInvalid, "un rechazo de validación es 400")
+	assert.False(t, utils.IsInternalError(err), "un rechazo de validación no es un fallo interno")
+	assert.Empty(t, repo.stickers, "un archivo inválido no se persiste")
+}
+
+// RF3: un fallo de infraestructura al subir NO se degrada a validación: se
+// propaga tal cual para que el handler responda 500 sin filtrar detalles.
+func TestStickerLibraryUploadInternalErrorPassesThrough(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	data, _ := stickerFixtureSHA(t)
+	store := &fakeStickerStore{statErr: context.DeadlineExceeded}
+	svc := NewServiceStickerLibrary(store, &fakeStickerRepo{userID: 7})
+
+	_, _, err := svc.UploadSticker("+51999", "", memStickerFileOf(data), &multipart.FileHeader{Size: int64(len(data))}, context.Background())
+
+	require.Error(t, err)
+	assert.False(t, errors.Is(err, ErrStickerInvalid), "un fallo interno no se confunde con validación")
+	assert.True(t, utils.IsInternalError(err), "el fallo interno conserva su cadena")
+}
+
+// RF11: si la reconciliación del favorito falla, el borrado del sticker sigue
+// (registrar y continuar): el usuario no ve un error por un favorito huérfano.
+func TestStickerLibraryDeleteContinuesWhenFavoriteReconcileFails(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	sha := strings.Repeat("3", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	repo := &fakeStickerRepo{
+		userID:       7,
+		stickers:     []models.UserSticker{{ID: 5, IdUser: 7, URL: url, SHA256: sha}},
+		favorites:    []models.StickerFavorite{{ID: 1, IdUser: 7, URL: url}},
+		favDeleteErr: assert.AnError,
+	}
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
+
+	require.NoError(t, svc.DeleteSticker("+51999", 5, context.Background()), "un fallo de favorito no rompe el borrado")
+	assert.True(t, repo.stickers[0].DeletedAt.Valid, "el sticker queda borrado igualmente")
+}
+
+// RF11: si no se puede comprobar la referencia, no se encola (ni se rompe).
+func TestStickerLibraryDeleteSkipsEnqueueWhenReferenceCheckFails(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	sha := strings.Repeat("4", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	repo := &fakeStickerRepo{
+		userID:        7,
+		stickers:      []models.UserSticker{{ID: 6, IdUser: 7, URL: url, SHA256: sha}},
+		referencedErr: assert.AnError,
+	}
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
+
+	require.NoError(t, svc.DeleteSticker("+51999", 6, context.Background()))
+	assert.Empty(t, repo.enqueued, "sin poder comprobar la referencia no se encola a ciegas")
+}
+
+// RF11: si el encolado falla, el borrado igualmente termina bien.
+func TestStickerLibraryDeleteContinuesWhenEnqueueFails(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	sha := strings.Repeat("5", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	key := "stickers/" + sha + ".webp"
+	repo := &fakeStickerRepo{
+		userID:     7,
+		stickers:   []models.UserSticker{{ID: 7, IdUser: 7, URL: url, SHA256: sha}},
+		referenced: map[string]bool{},
+		enqueueErr: assert.AnError,
+	}
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
+
+	require.NoError(t, svc.DeleteSticker("+51999", 7, context.Background()), "un fallo del GC no rompe el borrado")
+	assert.Equal(t, []string{key}, repo.enqueued, "se intentó encolar antes de fallar")
+}
+
+// RF14: el adaptador de producción envuelve *minio.Client para poder leer los
+// bytes (RF1) sin cambiar StatObject/PutObject.
+func TestInitServiceStickerLibraryWrapsMinioClient(t *testing.T) {
+	client, err := minio.New("127.0.0.1:9000", &minio.Options{Secure: false})
+	require.NoError(t, err)
+
+	svc := InitServiceStickerLibrary(client, &fakeStickerRepo{userID: 7})
+
+	concrete, ok := svc.(*ServiceStickerLibrary)
+	require.True(t, ok)
+	wrapped, ok := concrete.store.(MinioStickerStore)
+	require.True(t, ok, "el cliente MinIO se envuelve para poder leer bytes")
+	assert.Same(t, client, wrapped.Client, "el cliente original se conserva")
+	assert.NotNil(t, stickerObjectGetter(concrete.store), "el store envuelto sabe leer objetos")
+}
+
+// RF14: un store que ya sabe leer (los dobles de test) se usa tal cual.
+func TestInitServiceStickerLibraryKeepsReaderStoreAsIs(t *testing.T) {
+	store := &fakeStickerStoreWithObject{fakeStickerStore: &fakeStickerStore{}}
+
+	svc := InitServiceStickerLibrary(store, &fakeStickerRepo{userID: 7})
+
+	concrete, ok := svc.(*ServiceStickerLibrary)
+	require.True(t, ok)
+	assert.Same(t, store, concrete.store, "un store que ya sabe leer no se reenvuelve")
 }

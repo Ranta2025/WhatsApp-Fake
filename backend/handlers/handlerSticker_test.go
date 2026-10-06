@@ -103,6 +103,42 @@ func TestHandlerStickerUploadStatusAndOwner(t *testing.T) {
 	}
 }
 
+// RF2: el mapeo de errores de la subida en el borde HTTP. El tope es 409, los
+// rechazos de validación 400, un sticker ajeno/inexistente 404 y un fallo interno
+// 500 genérico (sin filtrar el texto).
+func TestHandlerStickerUploadErrorMapping(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"tope alcanzado", services.ErrStickerLimit, http.StatusConflict},
+		{"archivo inválido", services.ErrStickerInvalid, http.StatusBadRequest},
+		{"url a favoritos", services.ErrStickerBuiltinFavorite, http.StatusBadRequest},
+		{"url inválida", services.ErrStickerSaveURLInvalid, http.StatusBadRequest},
+		{"favorito inválido", services.ErrStickerFavoriteInvalid, http.StatusBadRequest},
+		{"no encontrado", models.ErrStickerNotFound, http.StatusNotFound},
+		{"interno", errors.New("boom"), http.StatusInternalServerError},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := new(MockStickerService)
+			w, c := stickerCtx("POST", "", map[string]any{"telephon": stickerTestTel})
+			c.Request = stickerUploadRequest(t, []byte("bytes"), "")
+			svc.On("UploadSticker", stickerTestTel, "", mock.Anything, mock.Anything, mock.Anything).
+				Return(models.StickerResponse{}, false, tc.err)
+
+			InitHandlerSticker(svc).HandlerUploadSticker()(c)
+
+			assert.Equal(t, tc.want, w.Code, w.Body.String())
+			if tc.want == http.StatusInternalServerError {
+				assert.NotContains(t, w.Body.String(), "boom", "el detalle interno no se filtra")
+			}
+			svc.AssertExpectations(t)
+		})
+	}
+}
+
 func TestHandlerStickerUploadMissingFile(t *testing.T) {
 	svc := new(MockStickerService)
 	w, c := stickerCtx("POST", "", map[string]any{"telephon": stickerTestTel})

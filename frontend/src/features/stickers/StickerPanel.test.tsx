@@ -224,6 +224,31 @@ describe('StickerPanel v2', () => {
         expect(apiMock.setStickerFavorite).toHaveBeenCalledWith(ownedSticker().url, true);
     });
 
+    // SF7: the tile menu is a sibling layer of the scrollable grid, so a
+    // left-column tile's menu is neither clipped nor pointer-intercepted: its
+    // items stay clickable with a plain click.
+    it('renders the left-column tile menu outside the scroll container with clickable items', async () => {
+        render();
+        await flush();
+        await clickTab('Básicos');
+
+        // The first built-in tile sits in the grid's left column.
+        const wrapper = tileButton(basic[0]!.url)!.parentElement!;
+        await act(async () => {
+            wrapper.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        });
+
+        const menu = document.querySelector<HTMLElement>('[role="menu"][aria-label^="Opciones de"]');
+        expect(menu).not.toBeNull();
+        expect(wrapper.contains(menu)).toBe(false);
+        expect(menu!.closest('.overflow-y-auto')).toBeNull();
+
+        const favorite = Array.from(menu!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+            .find((item) => item.textContent?.includes('Favorito'))!;
+        await act(async () => { favorite.click(); await Promise.resolve(); });
+        expect(apiMock.setStickerFavorite).toHaveBeenCalledWith(basic[0]!.url, true);
+    });
+
     it('offers Eliminar only for owned stickers and confirms before deleting', async () => {
         apiMock.getStickerLibrary.mockResolvedValue(library({ mine: [ownedSticker()] }));
         render();
@@ -264,10 +289,132 @@ describe('StickerPanel v2', () => {
 
         const hint = document.querySelector('[role="status"]');
         expect(hint?.textContent).toContain('Sin conexión');
+        // RF24: sin conexión NO se muestra además el estado vacío engañoso.
+        expect(document.body.textContent).not.toContain('Todavía no usaste ningún sticker.');
 
         await clickTab('Básicos');
         expect(document.querySelector('[role="status"]')).toBeNull();
         expect(tileButton(basic[0]!.url)).not.toBeNull();
+    });
+
+    // RF21: si el toggle de favorito falla, el panel lo dice (no lo ignora).
+    it('shows failure feedback when toggling a favorite fails', async () => {
+        apiMock.getStickerLibrary.mockResolvedValue(library({ mine: [ownedSticker()] }));
+        apiMock.setStickerFavorite.mockRejectedValue(new Error('boom'));
+        render();
+        await flush();
+        await clickTab('Mis stickers');
+
+        const wrapper = tileButton(ownedSticker().url)!.parentElement!;
+        await act(async () => {
+            wrapper.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        });
+        const favorite = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+            .find((item) => item.textContent?.includes('Favorito'))!;
+        await act(async () => { favorite.click(); await Promise.resolve(); });
+
+        const alert = document.querySelector('[role="alert"]');
+        expect(alert?.textContent).toContain('No se pudo actualizar el favorito');
+    });
+
+    // RF21: si el borrado falla, el panel lo dice y el sticker sigue listado.
+    it('shows failure feedback when deleting fails and keeps the tile', async () => {
+        apiMock.getStickerLibrary.mockResolvedValue(library({ mine: [ownedSticker()] }));
+        apiMock.deleteSticker.mockRejectedValue(new Error('boom'));
+        render();
+        await flush();
+        await clickTab('Mis stickers');
+
+        const wrapper = tileButton(ownedSticker().url)!.parentElement!;
+        await act(async () => {
+            wrapper.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        });
+        const remove = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+            .find((item) => item.textContent?.includes('Eliminar'))!;
+        await act(async () => { remove.click(); });
+        const confirm = Array.from(
+            document.querySelector('[role="dialog"][aria-label="Eliminar sticker"]')!.querySelectorAll<HTMLButtonElement>('button'),
+        ).find((item) => item.textContent?.includes('Eliminar'))!;
+        await act(async () => { confirm.click(); await Promise.resolve(); });
+
+        expect(document.querySelector('[role="alert"]')?.textContent).toContain('No se pudo eliminar el sticker');
+        expect(tileButton(ownedSticker().url)).not.toBeNull();
+    });
+
+    // RF22: el contrato de cierre sigue vivo con las capas nuevas (búsqueda,
+    // tabs, pointerdown de captura del menú de tiles).
+    it('closes on Escape even with focus in the search box', async () => {
+        render();
+        await flush();
+
+        const search = document.querySelector<HTMLInputElement>('input[aria-label="Buscar stickers"]')!;
+        search.focus();
+        expect(document.activeElement).toBe(search);
+
+        await act(async () => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        });
+        expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes on a pointerdown outside the panel but not inside it', async () => {
+        render();
+        await flush();
+
+        const search = document.querySelector<HTMLInputElement>('input[aria-label="Buscar stickers"]')!;
+        await act(async () => {
+            search.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        });
+        expect(onClose, 'un click dentro del panel no lo cierra').not.toHaveBeenCalled();
+
+        await act(async () => {
+            document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        });
+        expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the search box and tabs focusable', async () => {
+        render();
+        await flush();
+
+        const search = document.querySelector<HTMLInputElement>('input[aria-label="Buscar stickers"]')!;
+        search.focus();
+        expect(document.activeElement).toBe(search);
+
+        const packTab = tab('Básicos')!;
+        packTab.focus();
+        expect(document.activeElement).toBe(packTab);
+    });
+
+    // RF23: el guardado tras crear se espera y un fallo se muestra.
+    it('surfaces a failure when saving a just-created sticker fails', async () => {
+        const created = ownedSticker({ id: 9, url: '/storage/bucket/stickers/new.webp' });
+        uploadMock.mockResolvedValue(created);
+        apiMock.saveSticker.mockRejectedValue(new Error('offline'));
+        render();
+        await flush();
+        await clickTab('Mis stickers');
+        await act(async () => { createTile()!.click(); });
+
+        const bytes = new Uint8Array([
+            0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+            0x56, 0x50, 0x38, 0x58, 10, 0, 0, 0, 0x02, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        ]);
+        const file = new File([bytes], 'animado.webp', { type: 'image/webp' });
+        const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+        await act(async () => {
+            Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        const createButton = Array.from(document.querySelectorAll('button'))
+            .find((item) => item.textContent?.includes('Crear sticker'))!;
+        await act(async () => {
+            createButton.click();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        expect(document.querySelector('[role="alert"]')?.textContent).toContain('No se pudo guardar el sticker');
     });
 
     it('renders a static canvas thumbnail for animated stickers under reduced motion', async () => {

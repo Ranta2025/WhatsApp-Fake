@@ -366,6 +366,34 @@ func TestSendGroupMessage_RecentFailureDoesNotFailSend(t *testing.T) {
 	require.NoError(t, err, "un fallo de recientes no debe romper el envío")
 }
 
+// RF10: un replay idempotente de grupo (mismo clientID) no vuelve a registrar
+// el reciente.
+func TestSendGroupMessage_ReplayDoesNotRecordStickerRecent(t *testing.T) {
+	repo := &MockGroupRepo{}
+	contacts := &MockGroupContactRepo{}
+	expectMemberSend(repo, contacts)
+	cid := testClientIDLower
+	stored := &models.GroupMessage{
+		Model:     gorm.Model{ID: 55},
+		GroupID:   testGroupID,
+		SenderID:  testSenderID,
+		MediaUrl:  "/stickers/basic/hola.webp",
+		MediaType: "sticker",
+		ClientID:  &cid,
+	}
+	repo.On("CreateGroupMessageIdempotent", mock.Anything, mock.Anything).Return(stored, nil)
+	rec := &fakeRecentRecorder{}
+	svc := InitServiceGroupWithRecents(repo, contacts, rec)
+
+	resp, err := svc.SendGroupMessage(testSenderTel, models.GroupMessageSend{
+		GroupID: testGroupID, MediaUrl: "/stickers/basic/hola.webp", MediaType: "sticker", ClientID: testClientID,
+	}, context.Background())
+
+	require.NoError(t, err)
+	require.True(t, resp.Duplicate)
+	assert.Empty(t, rec.calls, "un replay no reordena los recientes")
+}
+
 // ==================== TESTS: paginación por cursor ====================
 
 func TestGetGroupMessagesPage_PassesCursorAndHasMore(t *testing.T) {

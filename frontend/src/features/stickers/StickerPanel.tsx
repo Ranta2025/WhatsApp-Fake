@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode, RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
 import Popover from '../../components/ui/Popover';
 import { BUILTIN_PACKS, findBuiltinSticker } from './builtinPack';
 import type { BuiltinSticker } from './builtinPack';
@@ -139,8 +139,10 @@ export default function StickerPanel({
     const [activeTab, setActiveTab] = useState('recents');
     const [query, setQuery] = useState('');
     const [menuFor, setMenuFor] = useState<string | null>(null);
+    const [menuPosition, setMenuPosition] = useState<{ url: string; left: number; top: number } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<Sticker | null>(null);
     const [creatorOpen, setCreatorOpen] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement | null>(null);
     const getTileRef = useRefMap();
     const bindLongPress = useLongPress<string>(setMenuFor);
@@ -159,6 +161,46 @@ export default function StickerPanel({
         };
         document.addEventListener('pointerdown', onPointerDown, true);
         return () => document.removeEventListener('pointerdown', onPointerDown, true);
+    }, [menuFor]);
+
+    // SF7: the tile menu is a sibling of the scrollable grid (not a child of the
+    // tile), so the grid's `overflow-y-auto` cannot clip it and intercept the
+    // pointer on its items. It stays inside the shared Popover DOM — a separate
+    // portaled layer would count as "outside" the Popover and close the whole
+    // panel — and is positioned absolutely from the tile's rect inside the
+    // Popover's containing block, then re-anchored while the grid scrolls.
+    useLayoutEffect(() => {
+        if (!menuFor) return undefined;
+        const reposition = (): void => {
+            const tileEl = getTileRef(menuFor).current;
+            const menuEl = menuRef.current;
+            if (!tileEl || !menuEl) return;
+            const tileRect = tileEl.getBoundingClientRect();
+            // The menu is absolutely positioned inside the Popover (the nearest
+            // positioned ancestor); offsets are relative to its padding box.
+            const block = menuEl.offsetParent instanceof HTMLElement ? menuEl.offsetParent : null;
+            const blockRect = block?.getBoundingClientRect();
+            const baseLeft = (blockRect?.left ?? 0) + (block?.clientLeft ?? 0);
+            const baseTop = (blockRect?.top ?? 0) + (block?.clientTop ?? 0);
+            setMenuPosition({
+                url: menuFor,
+                left: tileRect.right - baseLeft - menuEl.offsetWidth,
+                top: tileRect.bottom - baseTop + 4,
+            });
+        };
+        reposition();
+        window.addEventListener('resize', reposition);
+        window.addEventListener('scroll', reposition, true);
+        return () => {
+            window.removeEventListener('resize', reposition);
+            window.removeEventListener('scroll', reposition, true);
+        };
+    }, [menuFor, getTileRef]);
+
+    // Drop the measured anchor as soon as the menu closes so a later menu can
+    // never inherit a stale left/top before its own layout effect runs.
+    useEffect(() => {
+        if (!menuFor) setMenuPosition(null);
     }, [menuFor]);
 
     const isFavorite = (tile: StickerTile): boolean =>
@@ -207,14 +249,18 @@ export default function StickerPanel({
     const handleToggleFavorite = async (tile: StickerTile): Promise<void> => {
         const next = !isFavorite(tile);
         setMenuFor(null);
-        await library.toggleFavorite(tile.url, next);
+        setActionError(null);
+        const ok = await library.toggleFavorite(tile.url, next);
+        if (!ok) setActionError('No se pudo actualizar el favorito. Intentá de nuevo.');
     };
 
     const handleDelete = async (): Promise<void> => {
         if (!confirmDelete) return;
         const { id } = confirmDelete;
         setConfirmDelete(null);
-        await library.remove(id);
+        setActionError(null);
+        const ok = await library.remove(id);
+        if (!ok) setActionError('No se pudo eliminar el sticker. Intentá de nuevo.');
     };
 
     const renderTile = (tile: StickerTile) => (
@@ -240,39 +286,16 @@ export default function StickerPanel({
             >
                 <StickerThumbnail tile={tile} reducedMotion={reducedMotion} />
             </button>
-
-            {menuFor === tile.url && (
-                <div
-                    ref={menuRef}
-                    role="menu"
-                    aria-label={`Opciones de ${tile.alt}`}
-                    className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl border border-white/10 bg-slate-800 p-1 shadow-2xl"
-                >
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { void handleToggleFavorite(tile); }}
-                        className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors"
-                    >
-                        {isFavorite(tile) ? 'Quitar de favoritos' : 'Favorito'}
-                    </button>
-                    {tile.ownedId !== undefined && (
-                        <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                                setConfirmDelete(library.mine.find((item) => item.id === tile.ownedId) ?? null);
-                                setMenuFor(null);
-                            }}
-                            className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors"
-                        >
-                            Eliminar
-                        </button>
-                    )}
-                </div>
-            )}
         </div>
     );
+
+    // The open tile menu is a sibling layer of the scrollable grid (see the
+    // layout effect above): resolve the tile from the menu's URL and place it
+    // with the measured position; while unmeasured it stays off-screen.
+    const menuTile = menuFor ? resolveUrl(menuFor) : null;
+    const menuStyle: CSSProperties = menuPosition && menuPosition.url === menuFor
+        ? { left: menuPosition.left, top: menuPosition.top }
+        : { left: -9999, top: -9999, visibility: 'hidden' };
 
     const tabs: { id: string; label: string; icon: ReactNode }[] = [
         { id: 'recents', label: 'Recientes', icon: CLOCK_ICON },
@@ -338,11 +361,49 @@ export default function StickerPanel({
                 {(searchResults ?? activeTiles).map(renderTile)}
             </div>
 
-            {!searching && isServerTab && (searchResults ?? activeTiles).length === 0 && library.status !== 'loading' && (
+            {menuTile && (
+                <div
+                    ref={menuRef}
+                    role="menu"
+                    aria-label={`Opciones de ${menuTile.alt}`}
+                    style={menuStyle}
+                    className="absolute z-20 w-44 rounded-xl border border-white/10 bg-slate-800 p-1 shadow-2xl"
+                >
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { void handleToggleFavorite(menuTile); }}
+                        className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors"
+                    >
+                        {isFavorite(menuTile) ? 'Quitar de favoritos' : 'Favorito'}
+                    </button>
+                    {menuTile.ownedId !== undefined && (
+                        <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                                setConfirmDelete(library.mine.find((item) => item.id === menuTile.ownedId) ?? null);
+                                setMenuFor(null);
+                            }}
+                            className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors"
+                        >
+                            Eliminar
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {!searching && isServerTab && (searchResults ?? activeTiles).length === 0 && library.status !== 'loading' && library.status !== 'error' && (
                 <p className="mt-2 text-center text-[12px] text-slate-500">{emptyMessage}</p>
             )}
             {searching && searchResults?.length === 0 && (
                 <p className="mt-2 text-center text-[12px] text-slate-500">No se encontraron stickers con esa etiqueta.</p>
+            )}
+
+            {actionError && (
+                <p role="alert" className="mt-2 rounded-lg bg-rose-500/10 px-3 py-1.5 text-center text-[12px] text-rose-300">
+                    {actionError}
+                </p>
             )}
 
             {confirmDelete && (
@@ -377,9 +438,17 @@ export default function StickerPanel({
                 <div className="absolute inset-0 z-30 overflow-y-auto rounded-2xl bg-slate-900/95">
                     <StickerCreator
                         onCreated={(created) => {
-                            void library.saveFromMessage(created.url);
-                            setActiveTab('mine');
-                            setCreatorOpen(false);
+                            // RF23: el guardado se espera y un fallo se muestra; la
+                            // navegación a "Mis stickers" no se pierde.
+                            void (async () => {
+                                setActionError(null);
+                                const saved = await library.saveFromMessage(created.url);
+                                if (!saved) {
+                                    setActionError('No se pudo guardar el sticker en Mis stickers. Intentá de nuevo.');
+                                }
+                                setActiveTab('mine');
+                                setCreatorOpen(false);
+                            })();
                         }}
                         onSend={(url) => handleSelect(url)}
                         onClose={() => setCreatorOpen(false)}

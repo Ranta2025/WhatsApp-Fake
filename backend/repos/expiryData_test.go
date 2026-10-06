@@ -214,6 +214,25 @@ func TestMediaKeyReferencedChecksEveryLiveMediaColumn(t *testing.T) {
 	assert.NotContains(t, all, "LIKE", "sin comodines")
 }
 
+// RF12: las tres cláusulas de la biblioteca de stickers van OR-encadenadas
+// dentro del mismo SELECT, así que CUALQUIER fila viva (propia, favorito o
+// reciente) hace verdadera la comprobación. El unit es dryRun y no ejecuta SQL:
+// pina la forma que garantiza la rama verdadera; las ramas reales se prueban en
+// integration/sticker_race_test.go (TestE2EStickerLibraryReferencesProtectObject).
+func TestMediaKeyReferencedStickerClausesAreOrEd(t *testing.T) {
+	db, rec := dryRunDB(t)
+	_, _ = (&RepoExpiry{data: db}).MediaKeyReferenced(context.Background(), "stickers/abc.webp")
+	all := strings.Join(rec.all(), "\n")
+	for _, clause := range []string{
+		"OR EXISTS (SELECT 1 FROM user_stickers WHERE deleted_at IS NULL AND right(url",
+		"OR EXISTS (SELECT 1 FROM sticker_favorites WHERE right(url",
+		"OR EXISTS (SELECT 1 FROM sticker_recents WHERE right(url",
+	} {
+		assert.Contains(t, all, clause, "las referencias de stickers van OR-encadenadas")
+	}
+	assert.NotContains(t, all, "AND EXISTS (SELECT 1 FROM sticker_favorites", "no deben exigirse todas a la vez")
+}
+
 // EnqueueMediaGC expuesto para la biblioteca de stickers: idempotente y con
 // clave vacía como no-op.
 func TestEnqueueMediaGCExported(t *testing.T) {

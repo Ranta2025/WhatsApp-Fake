@@ -12,9 +12,10 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const dash = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 const messaging = vi.hoisted(() => ({ menuOpen: null as number | null, setMenuOpen: vi.fn() }));
+const toast = vi.hoisted(() => ({ addToast: vi.fn() }));
 const lib = vi.hoisted(() => ({
     toggleFavorite: vi.fn(async () => true),
-    saveFromMessage: vi.fn(async () => null),
+    saveFromMessage: vi.fn(async (): Promise<{ id: number } | null> => null),
 }));
 
 vi.mock('../context/DashboardContext', () => ({ useDashboard: () => dash.value }));
@@ -50,6 +51,8 @@ const message = (over: Partial<Message> = {}): Message => ({
 });
 
 const menuText = () => document.body.textContent ?? '';
+const menuItem = (text: string) => Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+    .find((button) => button.textContent?.includes(text))!;
 
 describe('MessageList received-sticker menu (1:1)', () => {
     let container: HTMLDivElement;
@@ -66,6 +69,7 @@ describe('MessageList received-sticker menu (1:1)', () => {
             profile: { Telephon: '111' },
             globalWallpaper: null,
             reactToMessage: vi.fn(),
+            addToast: toast.addToast,
         };
         act(() => { root.render(<MessageList />); });
     };
@@ -115,5 +119,32 @@ describe('MessageList received-sticker menu (1:1)', () => {
         render(message());
         expect(menuText()).toContain('Añadir a favoritos');
         expect(menuText()).not.toContain('Añadir a mis stickers');
+    });
+
+    // RF19: los textos del toast, éxito y fallo, en el menú 1:1.
+    it('emits the success toast for favoriting and saving a sticker', async () => {
+        lib.toggleFavorite.mockResolvedValue(true);
+        render(message());
+        await act(async () => { menuItem('Añadir a favoritos').click(); await Promise.resolve(); });
+        expect(toast.addToast).toHaveBeenCalledWith({ type: 'success', message: 'Añadido a favoritos' });
+
+        toast.addToast.mockClear();
+        lib.saveFromMessage.mockResolvedValue({ id: 1 });
+        render(message({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        await act(async () => { menuItem('Añadir a mis stickers').click(); await Promise.resolve(); });
+        expect(toast.addToast).toHaveBeenCalledWith({ type: 'success', message: 'Añadido a Mis stickers' });
+    });
+
+    it('emits the failure toast for favoriting and saving a sticker', async () => {
+        lib.toggleFavorite.mockResolvedValue(false);
+        render(message());
+        await act(async () => { menuItem('Añadir a favoritos').click(); await Promise.resolve(); });
+        expect(toast.addToast).toHaveBeenCalledWith({ type: 'error', message: 'No se pudo añadir a favoritos' });
+
+        toast.addToast.mockClear();
+        lib.saveFromMessage.mockResolvedValue(null);
+        render(message({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        await act(async () => { menuItem('Añadir a mis stickers').click(); await Promise.resolve(); });
+        expect(toast.addToast).toHaveBeenCalledWith({ type: 'error', message: 'No se pudo añadir el sticker' });
     });
 });
