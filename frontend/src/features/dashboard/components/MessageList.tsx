@@ -20,6 +20,8 @@ import ReactionTrigger from './reactions/ReactionTrigger';
 import ReactionsModal from './reactions/ReactionsModal';
 import FullEmojiPicker from './reactions/FullEmojiPicker';
 import { useLongPress } from '../hooks/useLongPress';
+import { useStickerLibrary } from '../../stickers/useStickerLibrary';
+import { findBuiltinSticker } from '../../stickers/builtinPack';
 import type { Message } from '../../../types/api';
 
 /**
@@ -54,6 +56,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
         selected, messagesByChat, profile, globalWallpaper,
         chatPaging, loadOlderMessages,
         focusedChat, loadOlderFocused, loadNewerFocused, reactToMessage, outboxItems,
+        addToast,
     } = useDashboard();
 
     // Per-chat wallpapers from localStorage (set via ContactDetails)
@@ -96,6 +99,19 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
     // Disparadores del menú de cada mensaje, para el Popover portado (ver T4:
     // R2 — el menú ya no depende del hover del padre para mantenerse visible).
     const getMenuTriggerRef = useRefMap();
+
+    // Received stickers (SF6): the message menu can favorite a built-in sticker
+    // or save a custom one into "Mis stickers". The hook is inert until a menu
+    // item is used (it does not fetch the library).
+    const stickerLibrary = useStickerLibrary();
+    const addStickerFavorite = async (url: string): Promise<void> => {
+        const ok = await stickerLibrary.toggleFavorite(url, true);
+        addToast?.({ type: ok ? 'success' : 'error', message: ok ? 'Añadido a favoritos' : 'No se pudo añadir a favoritos' });
+    };
+    const saveStickerToLibrary = async (url: string): Promise<void> => {
+        const saved = await stickerLibrary.saveFromMessage(url);
+        addToast?.({ type: saved ? 'success' : 'error', message: saved ? 'Añadido a Mis stickers' : 'No se pudo añadir el sticker' });
+    };
 
     // Scroll: al fondo al abrir un chat o cuando llega un mensaje nuevo al final de
     // ESTE chat; al llegar arriba se cargan mensajes anteriores sin saltar la vista.
@@ -222,6 +238,9 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                             }
                             const isMine = m.SenderTelephon === profile?.Telephon;
                             const isSticker = m.MediaType === 'sticker';
+                            const stickerUrl = isSticker ? (m.MediaUrl || m.Message || '').trim() : '';
+                            const builtinSticker = stickerUrl ? findBuiltinSticker(stickerUrl) : undefined;
+                            const isCustomSticker = isSticker && !builtinSticker && stickerUrl.startsWith('/storage/');
                             const isMenuOpen = messageMenuOpen === m.MessageID;
                             const time = formatTime(m.Time || m.Timestamp || '');
                             const reactionTarget: ReactionTarget = { kind: 'direct', messageID: m.MessageID };
@@ -287,6 +306,18 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
                                                 Reenviar
                                             </button>
+                                            {builtinSticker && (
+                                                <button onClick={() => { void addStickerFavorite(stickerUrl); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.48 3.5l2.31 4.68 5.17.75-3.74 3.64.88 5.15-4.62-2.43-4.62 2.43.88-5.15L3.99 8.93l5.17-.75 2.32-4.68z" /></svg>
+                                                    Añadir a favoritos
+                                                </button>
+                                            )}
+                                            {isCustomSticker && (
+                                                <button onClick={() => { void saveStickerToLibrary(stickerUrl); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m-7-7h14" /></svg>
+                                                    Añadir a mis stickers
+                                                </button>
+                                            )}
                                             {isMine && !isSticker && (
                                                 <button onClick={() => { handleEditMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors flex items-center gap-2.5">
                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 00-2 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>

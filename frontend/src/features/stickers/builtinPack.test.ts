@@ -14,14 +14,23 @@ const stickerPath = (url: string) => join(publicDir, url.replace(/^\//, ''))
 
 const allStickers = BUILTIN_PACKS.flatMap((pack) => pack.stickers)
 
-describe('builtin sticker pack', () => {
-  it('ships a single "basic" pack with 12-16 stickers', () => {
-    expect(BUILTIN_PACKS.map((pack) => pack.id)).toEqual(['basic'])
-    expect(allStickers.length).toBeGreaterThanOrEqual(12)
-    expect(allStickers.length).toBeLessThanOrEqual(16)
+describe('builtin sticker packs', () => {
+  it('ships the basic pack plus at least two more original packs', () => {
+    const ids = BUILTIN_PACKS.map((pack) => pack.id)
+    expect(ids[0]).toBe('basic')
+    expect(ids.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('uses unique sticker ids', () => {
+  it('gives every pack a Spanish display name and 8-20 stickers', () => {
+    for (const pack of BUILTIN_PACKS) {
+      expect(pack.name.trim(), pack.id).not.toBe('')
+      expect(pack.stickers.length, pack.id).toBeGreaterThanOrEqual(8)
+      expect(pack.stickers.length, pack.id).toBeLessThanOrEqual(20)
+    }
+  })
+
+  it('uses unique sticker ids across every pack', () => {
     const ids = allStickers.map((sticker) => sticker.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
@@ -29,6 +38,16 @@ describe('builtin sticker pack', () => {
   it('gives every sticker a non-empty alt text', () => {
     for (const sticker of allStickers) {
       expect(sticker.alt.trim(), sticker.id).not.toBe('')
+    }
+  })
+
+  it('gives every sticker at least one lowercase, unaccented tag', () => {
+    for (const sticker of allStickers) {
+      expect(sticker.tags.length, sticker.id).toBeGreaterThanOrEqual(1)
+      for (const tag of sticker.tags) {
+        expect(tag, sticker.id).toBe(tag.toLowerCase())
+        expect(tag, sticker.id).toBe(tag.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+      }
     }
   })
 
@@ -60,6 +79,13 @@ describe('findBuiltinSticker', () => {
     expect(hola).toBeDefined()
     expect(hola?.id).toBe('hola')
     expect(hola?.alt).not.toBe('')
+  })
+
+  it('finds stickers from the extra packs too', () => {
+    const animales = BUILTIN_PACKS.find((pack) => pack.id === 'animales')
+    expect(animales).toBeDefined()
+    const first = animales!.stickers[0]!
+    expect(findBuiltinSticker(first.url)?.id).toBe(first.id)
   })
 
   it('returns undefined for unknown builtin or storage URLs', () => {

@@ -35,6 +35,8 @@ import ReactionTrigger from './reactions/ReactionTrigger';
 import ReactionsModal from './reactions/ReactionsModal';
 import FullEmojiPicker from './reactions/FullEmojiPicker';
 import { useLongPress } from '../hooks/useLongPress';
+import { useStickerLibrary } from '../../stickers/useStickerLibrary';
+import { findBuiltinSticker } from '../../stickers/builtinPack';
 import type { GroupMessageResponse, MediaUploadResult, MessageStatus, SearchPage, GroupRole, GroupInfoRequest } from '../../../types/api';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -69,15 +71,31 @@ interface GroupMessageBubbleProps {
     onMoreReactions?: (msg: GroupMessageResponse) => void;
     /** Abre la lista de quién reaccionó. */
     onShowReactions?: (msg: GroupMessageResponse) => void;
+    /** Feedback (toast) for the received-sticker menu items; optional. */
+    onStickerFeedback?: (message: string, type: 'success' | 'error') => void;
 }
 
-export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo, searchQuery, onReact, onMoreReactions, onShowReactions }: GroupMessageBubbleProps) => {
+export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo, searchQuery, onReact, onMoreReactions, onShowReactions, onStickerFeedback }: GroupMessageBubbleProps) => {
     const triggerRef = useRef<HTMLButtonElement>(null);
     const bindLongPress = useLongPress<number>(setMenuOpen);
     const myReaction = msg.Reactions?.find(r => r.Mine)?.Emoji;
 
     const isMenuOpen = menuOpen === msg.MessageID;
     const isSticker = msg.MediaType === 'sticker';
+    const stickerUrl = isSticker ? (msg.MediaUrl || msg.Message || '').trim() : '';
+    const builtinSticker = stickerUrl ? findBuiltinSticker(stickerUrl) : undefined;
+    const isCustomSticker = isSticker && !builtinSticker && stickerUrl.startsWith('/storage/');
+
+    // Received stickers (SF6): same menu as 1:1, backed by useStickerLibrary.
+    const stickerLibrary = useStickerLibrary();
+    const addStickerFavorite = async (url: string): Promise<void> => {
+        const ok = await stickerLibrary.toggleFavorite(url, true);
+        onStickerFeedback?.(ok ? 'Añadido a favoritos' : 'No se pudo añadir a favoritos', ok ? 'success' : 'error');
+    };
+    const saveStickerToLibrary = async (url: string): Promise<void> => {
+        const saved = await stickerLibrary.saveFromMessage(url);
+        onStickerFeedback?.(saved ? 'Añadido a Mis stickers' : 'No se pudo añadir el sticker', saved ? 'success' : 'error');
+    };
 
     return (
         <div data-message-id={msg.MessageID} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group px-2 py-0.5`}>
@@ -196,6 +214,26 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                         Responder
                     </button>
 
+                    {/* Received sticker — favorite a built-in, save a custom one */}
+                    {builtinSticker && (
+                        <button onClick={() => { void addStickerFavorite(stickerUrl); setMenuOpen(null); }}
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.48 3.5l2.31 4.68 5.17.75-3.74 3.64.88 5.15-4.62-2.43-4.62 2.43.88-5.15L3.99 8.93l5.17-.75 2.32-4.68z" />
+                            </svg>
+                            Añadir a favoritos
+                        </button>
+                    )}
+                    {isCustomSticker && (
+                        <button onClick={() => { void saveStickerToLibrary(stickerUrl); setMenuOpen(null); }}
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m-7-7h14" />
+                            </svg>
+                            Añadir a mis stickers
+                        </button>
+                    )}
+
                     {/* Info (quién lo leyó / recibió) — only my messages */}
                     {isMine && onInfo && (
                         <button onClick={() => { onInfo(msg); setMenuOpen(null); }}
@@ -275,7 +313,7 @@ export const GroupMessageList = ({
         handleEditMessage, handleDeleteMessage, handleDeleteMessageForMe,
         handleReplyToMessage, messageMenuOpen, setMessageMenuOpen,
     } = useGroupMessaging();
-    const { selectedGroup, groupReceipts, groupMemberNames, reactToMessage, outboxItems } = useDashboard();
+    const { selectedGroup, groupReceipts, groupMemberNames, reactToMessage, outboxItems, addToast } = useDashboard();
     // Outbox (PW9): own texts not yet acked, shown after the live list (not in a detached window).
     const pendingItems = useMemo(
         () => (groupID !== undefined && !detached ? outboxItemsFor(outboxItems, { kind: 'group', target: groupID }, messages) : []),
@@ -377,6 +415,7 @@ export const GroupMessageList = ({
                         onReact={(m, emoji) => reactTo(m.MessageID, emoji)}
                         onMoreReactions={(m) => setFullPicker({ groupID, messageID: m.MessageID })}
                         onShowReactions={(m) => setWho({ groupID, messageID: m.MessageID })}
+                        onStickerFeedback={(message, type) => addToast({ type, message })}
                     />
                 );
             })}

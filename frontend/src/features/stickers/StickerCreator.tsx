@@ -127,22 +127,31 @@ export default function StickerCreator({
         }
 
         if (file.type === 'image/webp') {
-            const bytes = new Uint8Array(await file.arrayBuffer());
-            if (isAnimatedWebp(bytes)) {
-                const bitmap = await createImageBitmap(file);
-                const validation = validateAnimatedSticker({
-                    width: bitmap.width, height: bitmap.height, size: file.size, type: file.type,
-                });
-                bitmap.close();
-                if (!validation.ok) {
-                    setPicked(null);
-                    setError(rejectMessage(validation.reason));
+            try {
+                const bytes = new Uint8Array(await file.arrayBuffer());
+                if (isAnimatedWebp(bytes)) {
+                    const bitmap = await createImageBitmap(file);
+                    const validation = validateAnimatedSticker({
+                        width: bitmap.width, height: bitmap.height, size: file.size, type: file.type,
+                    });
+                    bitmap.close();
+                    if (!validation.ok) {
+                        setPicked(null);
+                        setError(rejectMessage(validation.reason));
+                        return;
+                    }
+                    setPicked({ kind: 'animated', file });
+                    setAnimatedPreviewUrl(trackUrl(URL.createObjectURL(file)));
+                    setZoom(1);
+                    setOffset({ x: 0, y: 0 });
                     return;
                 }
-                setPicked({ kind: 'animated', file });
-                setAnimatedPreviewUrl(trackUrl(URL.createObjectURL(file)));
-                setZoom(1);
-                setOffset({ x: 0, y: 0 });
+            } catch {
+                // A corrupt/animated WebP that fails to decode must not surface as
+                // an unhandled rejection: show the generic process error instead.
+                setPicked(null);
+                setAnimatedPreviewUrl(null);
+                setError(PROCESS_MESSAGE);
                 return;
             }
         }
@@ -170,7 +179,7 @@ export default function StickerCreator({
         if (!ctx) throw new Error(PROCESS_MESSAGE);
 
         ctx.clearRect(0, 0, STICKER_SIZE, STICKER_SIZE);
-        if (rounded) {
+        if (rounded && typeof ctx.roundRect === 'function') {
             ctx.beginPath();
             ctx.roundRect(0, 0, STICKER_SIZE, STICKER_SIZE, STICKER_SIZE * ROUNDED_RADIUS_RATIO);
             ctx.clip();
@@ -204,7 +213,14 @@ export default function StickerCreator({
         try {
             const file = picked.kind === 'animated' ? picked.file : await buildStaticFile();
             const csv = normalizeTags(tags).join(',');
-            const created = await upload(file, csv || undefined);
+            let created: Sticker | null;
+            try {
+                created = await upload(file, csv || undefined);
+            } catch {
+                // Never surface a raw backend/network error: the user gets the
+                // stable Spanish message and the button becomes usable again.
+                throw new Error(UPLOAD_MESSAGE);
+            }
             if (!created) throw new Error(UPLOAD_MESSAGE);
             onCreated?.(created);
             if (sendNow) onSend?.(created.url);

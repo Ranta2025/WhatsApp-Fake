@@ -34,6 +34,13 @@ function mockContext(): CanvasRenderingContext2D {
     } as unknown as CanvasRenderingContext2D;
 }
 
+/** A 2D context missing `roundRect`, like Safari < 16.4. */
+function mockContextWithoutRoundRect(): CanvasRenderingContext2D {
+    const ctx = mockContext();
+    Reflect.deleteProperty(ctx, 'roundRect');
+    return ctx;
+}
+
 /** Fires the React onload synchronously once `src` is assigned. */
 class MockImage {
     onload: (() => void) | null = null;
@@ -68,6 +75,11 @@ describe('StickerCreator', () => {
     let container: HTMLDivElement;
     let root: Root;
     let toBlob: typeof HTMLCanvasElement.prototype.toBlob;
+    let context: CanvasRenderingContext2D = mockContext();
+
+    /** drawImage calls whose destination width is `dw` (preview 240, export 512). */
+    const drawCalls = (dw: number): unknown[][] =>
+        (vi.mocked(context.drawImage).mock.calls as unknown[][]).filter((call) => call[7] === dw);
 
     const onCreated = vi.fn();
     const onSend = vi.fn();
@@ -111,7 +123,7 @@ describe('StickerCreator', () => {
         })));
         URL.createObjectURL = vi.fn(() => 'blob:mock');
         URL.revokeObjectURL = vi.fn();
-        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(mockContext());
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context = mockContext());
 
         toBlob = HTMLCanvasElement.prototype.toBlob;
         HTMLCanvasElement.prototype.toBlob = function (callback: BlobCallback, type?: string) {
@@ -230,5 +242,101 @@ describe('StickerCreator', () => {
         await clickCreate();
 
         expect(onSend).toHaveBeenCalledWith(sticker.url);
+    });
+
+    // ── RF15-RF18: creator hardening folded into SF6 ──────────────────────
+
+    it('RF15: an animated pick that fails to decode shows an error, not an unhandled rejection', async () => {
+        vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('decode failed'); }));
+        render();
+        await pick(animatedWebpFile());
+
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain('No se pudo procesar');
+        expect(uploadMock).not.toHaveBeenCalled();
+    });
+
+    it('RF16: an upload rejection shows the Spanish error, resets busy and re-enables the button', async () => {
+        uploadMock.mockRejectedValue(new Error('backend exploded'));
+        render();
+        await pick(animatedWebpFile());
+        await clickCreate();
+
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain('No se pudo subir el sticker');
+        const button = Array.from(container.querySelectorAll('button'))
+            .find((item) => item.textContent?.includes('Crear sticker'))!;
+        expect(button.disabled).toBe(false);
+    });
+
+    it('RF16: a null upload response shows the Spanish error and re-enables the button', async () => {
+        uploadMock.mockResolvedValue(null);
+        render();
+        await pick(animatedWebpFile());
+        await clickCreate();
+
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain('No se pudo subir el sticker');
+        const button = Array.from(container.querySelectorAll('button'))
+            .find((item) => item.textContent?.includes('Crear sticker'))!;
+        expect(button.disabled).toBe(false);
+    });
+
+    it('RF17: falls back to unrounded corners when ctx.roundRect is unavailable', async () => {
+        vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(mockContextWithoutRoundRect());
+        render();
+        await pick(new File(['jpg'], 'foto.jpg', { type: 'image/jpeg' }));
+
+        const rounded = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+            .find((box) => box.parentElement?.textContent?.includes('Esquinas redondeadas'))!;
+        await act(async () => { rounded.click(); });
+        await clickCreate();
+
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+        expect(uploadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('RF18: dragging the crop preview changes the crop rectangle', async () => {
+        render();
+        await pick(new File(['jpg'], 'foto.jpg', { type: 'image/jpeg' }));
+        const canvas = container.querySelector('canvas[aria-label="Recorte"]')!;
+        const before = drawCalls(240).at(-1)!;
+
+        await act(async () => {
+            canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
+            canvas.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 140, clientY: 100 }));
+        });
+
+        const after = drawCalls(240).at(-1)!;
+        expect(after[1]).not.toBe(before[1]);
+    });
+
+    it('RF18: the zoom control changes the crop side', async () => {
+        render();
+        await pick(new File(['jpg'], 'foto.jpg', { type: 'image/jpeg' }));
+        const before = drawCalls(240).at(-1)!;
+        const zoom = container.querySelector<HTMLInputElement>('input[type="range"]')!;
+
+        await act(async () => {
+            const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+            setValue.call(zoom, '2');
+            zoom.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        const after = drawCalls(240).at(-1)!;
+        expect(after[3]).not.toBe(before[3]);
+    });
+
+    it('RF18: the exported crop matches the preview crop (parity)', async () => {
+        render();
+        await pick(new File(['jpg'], 'foto.jpg', { type: 'image/jpeg' }));
+        const canvas = container.querySelector('canvas[aria-label="Recorte"]')!;
+        await act(async () => {
+            canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
+            canvas.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 130, clientY: 100 }));
+        });
+        const preview = drawCalls(240).at(-1)!;
+
+        await clickCreate();
+
+        const exported = drawCalls(512).at(-1)!;
+        expect(exported.slice(1, 5)).toEqual(preview.slice(1, 5));
     });
 });

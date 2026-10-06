@@ -1,28 +1,31 @@
-// Generates the built-in "basic" sticker pack.
+// Generates the built-in sticker packs.
 //
-// Sources are 16 original hand-written SVG designs (faces, gestures and words).
-// They are rasterized at 320x320 with @resvg/resvg-js (already used by
-// generate-icons.mjs) and encoded to WebP with sharp. The resulting .webp files
-// are committed and no build step runs this script. sharp is still a
-// devDependency, so `npm ci` (CI and the Docker build stage) installs it.
+// Sources are original hand-written SVG designs (faces, gestures, words,
+// animals and food). They are rasterized at 320x320 with @resvg/resvg-js
+// (already used by generate-icons.mjs) and encoded to WebP with sharp. The
+// resulting .webp files are committed and no build step runs this script.
+// sharp is still a devDependency, so `npm ci` (CI and the Docker build stage)
+// installs it.
 //
 // Output is not byte-reproducible across machines: the word stickers render
 // text through FONT, and resvg resolves it from the host's system fonts.
 // Shipped files are never renamed, deleted or regenerated in place (old
-// messages reference them by URL); add new stickers as new files instead.
+// messages reference them by URL). To honour that, this script skips a file
+// that already exists; pass `--force` to regenerate in place anyway.
 //
 // Run with: npm run stickers  (from frontend/)
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Resvg } from '@resvg/resvg-js'
 import sharp from 'sharp'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const outDir = join(here, '..', 'public', 'stickers', 'basic')
+const publicStickersDir = join(here, '..', 'public', 'stickers')
 
 const SIZE = 320
 const FONT = "DejaVu Sans, Verdana, Helvetica, sans-serif"
+const FORCE = process.argv.includes('--force')
 
 /** Wraps an SVG body in the shared 320x320 canvas. */
 const svg = (body) =>
@@ -32,6 +35,11 @@ const svg = (body) =>
 const face = (fill, shade) => `
   <circle cx="160" cy="160" r="150" fill="${shade}"/>
   <circle cx="160" cy="150" r="150" fill="${fill}"/>`
+
+/** Smaller head disc (leaves room for ears drawn before it). */
+const head = (fill, shade) => `
+  <circle cx="160" cy="180" r="120" fill="${shade}"/>
+  <circle cx="160" cy="170" r="120" fill="${fill}"/>`
 
 /** Centered bold label (used by the word stickers). */
 const label = (text, y, size, fill = '#ffffff') =>
@@ -53,7 +61,7 @@ const eyeLine = (x, y) => `<path d="M${x - 20} ${y} q20 -22 40 0" stroke="#2b2b2
 const smile = (y, w = 60, lift = 34) => `<path d="M${160 - w} ${y} q${w} ${lift} ${w * 2} 0" stroke="#2b2b2b" stroke-width="13" fill="none" stroke-linecap="round"/>`
 const sad = (y, w = 60, drop = 34) => `<path d="M${160 - w} ${y + drop} q${w} -${drop} ${w * 2} 0" stroke="#2b2b2b" stroke-width="13" fill="none" stroke-linecap="round"/>`
 
-const STICKERS = [
+const BASIC_STICKERS = [
   {
     id: 'hola',
     alt: 'Sticker con la palabra Hola',
@@ -230,23 +238,288 @@ const STICKERS = [
   },
 ]
 
-try {
-  mkdirSync(outDir, { recursive: true })
-} catch {
-  // Directory already exists.
-}
+const ANIMAL_STICKERS = [
+  {
+    id: 'gato',
+    alt: 'Sticker de cara de gato',
+    tags: ['gato', 'cat', 'animal', 'mascota'],
+    body: `
+      <path d="M82 96 L66 30 L138 68 Z" fill="#E89B45"/>
+      <path d="M238 96 L254 30 L182 68 Z" fill="#E89B45"/>
+      <path d="M88 88 L78 44 L124 70 Z" fill="#F7C9A0"/>
+      <path d="M232 88 L242 44 L196 70 Z" fill="#F7C9A0"/>
+      ${head('#F7B267', '#E89B45')}
+      ${eye(118, 162)}${eye(202, 162)}
+      <path d="M160 196 l-14 12 h28 Z" fill="#E0607E"/>
+      <path d="M160 210 q-26 22 -42 4" stroke="#2b2b2b" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <path d="M160 210 q26 22 42 4" stroke="#2b2b2b" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <g stroke="#2b2b2b" stroke-width="6" stroke-linecap="round" opacity="0.8">
+        <path d="M44 186 h52"/><path d="M44 208 h52"/>
+        <path d="M276 186 h-52"/><path d="M276 208 h-52"/>
+      </g>`,
+  },
+  {
+    id: 'perro',
+    alt: 'Sticker de cara de perro',
+    tags: ['perro', 'dog', 'animal', 'mascota'],
+    body: `
+      <ellipse cx="62" cy="176" rx="40" ry="82" fill="#7E5236"/>
+      <ellipse cx="258" cy="176" rx="40" ry="82" fill="#7E5236"/>
+      ${head('#C98A5A', '#A96F44')}
+      ${eye(118, 154)}${eye(202, 154)}
+      <ellipse cx="160" cy="210" rx="48" ry="36" fill="#F3DDC4"/>
+      <ellipse cx="160" cy="196" rx="17" ry="12" fill="#2b2b2b"/>
+      <path d="M160 208 v14" stroke="#2b2b2b" stroke-width="7" stroke-linecap="round"/>
+      <path d="M134 226 q26 22 52 0" stroke="#2b2b2b" stroke-width="7" fill="none" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'oso',
+    alt: 'Sticker de cara de oso',
+    tags: ['oso', 'bear', 'animal'],
+    body: `
+      <circle cx="84" cy="82" r="40" fill="#A9713F"/>
+      <circle cx="236" cy="82" r="40" fill="#A9713F"/>
+      <circle cx="84" cy="82" r="20" fill="#D8A87A"/>
+      <circle cx="236" cy="82" r="20" fill="#D8A87A"/>
+      ${head('#B9824E', '#9C6B3D')}
+      ${eye(122, 164)}${eye(198, 164)}
+      <ellipse cx="160" cy="212" rx="46" ry="34" fill="#EBD3B5"/>
+      <ellipse cx="160" cy="198" rx="17" ry="12" fill="#2b2b2b"/>
+      <path d="M160 210 v12" stroke="#2b2b2b" stroke-width="7" stroke-linecap="round"/>
+      <path d="M138 228 q22 20 44 0" stroke="#2b2b2b" stroke-width="7" fill="none" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'conejo',
+    alt: 'Sticker de cara de conejo',
+    tags: ['conejo', 'rabbit', 'animal'],
+    body: `
+      <ellipse cx="122" cy="70" rx="24" ry="70" fill="#E8E8F0"/>
+      <ellipse cx="198" cy="70" rx="24" ry="70" fill="#E8E8F0"/>
+      <ellipse cx="122" cy="74" rx="11" ry="50" fill="#F7B8C8"/>
+      <ellipse cx="198" cy="74" rx="11" ry="50" fill="#F7B8C8"/>
+      ${head('#F2F2F7', '#D9D9E3')}
+      ${eye(120, 164)}${eye(200, 164)}
+      <path d="M160 196 l-12 10 h24 Z" fill="#E0607E"/>
+      <path d="M160 206 v8" stroke="#2b2b2b" stroke-width="7" stroke-linecap="round"/>
+      <path d="M138 220 q22 20 44 0" stroke="#2b2b2b" stroke-width="7" fill="none" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'zorro',
+    alt: 'Sticker de cara de zorro',
+    tags: ['zorro', 'fox', 'animal'],
+    body: `
+      <path d="M74 96 L62 26 L140 66 Z" fill="#E2703A"/>
+      <path d="M246 96 L258 26 L180 66 Z" fill="#E2703A"/>
+      <path d="M84 86 L80 46 L124 70 Z" fill="#3B2A2A"/>
+      <path d="M236 86 L240 46 L196 70 Z" fill="#3B2A2A"/>
+      ${head('#F08A4B', '#D9753A')}
+      ${eye(118, 158)}${eye(202, 158)}
+      <path d="M160 210 q-32 -40 0 -54 q32 14 0 54 Z" fill="#FFF4EA"/>
+      <ellipse cx="160" cy="198" rx="15" ry="11" fill="#2b2b2b"/>
+      <path d="M160 210 v10" stroke="#2b2b2b" stroke-width="7" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'panda',
+    alt: 'Sticker de cara de panda',
+    tags: ['panda', 'animal', 'oso'],
+    body: `
+      <circle cx="86" cy="84" r="38" fill="#2b2b2b"/>
+      <circle cx="234" cy="84" r="38" fill="#2b2b2b"/>
+      ${head('#F7F7F7', '#DDDDDD')}
+      <ellipse cx="120" cy="164" rx="30" ry="38" fill="#2b2b2b" transform="rotate(-18 120 164)"/>
+      <ellipse cx="200" cy="164" rx="30" ry="38" fill="#2b2b2b" transform="rotate(18 200 164)"/>
+      <circle cx="120" cy="164" r="9" fill="#ffffff"/>
+      <circle cx="200" cy="164" r="9" fill="#ffffff"/>
+      <ellipse cx="160" cy="206" rx="14" ry="10" fill="#2b2b2b"/>
+      <path d="M160 216 q-18 16 -32 2" stroke="#2b2b2b" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <path d="M160 216 q18 16 32 2" stroke="#2b2b2b" stroke-width="7" fill="none" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'rana',
+    alt: 'Sticker de cara de rana',
+    tags: ['rana', 'frog', 'animal'],
+    body: `
+      <circle cx="108" cy="84" r="44" fill="#6BBF59"/>
+      <circle cx="212" cy="84" r="44" fill="#6BBF59"/>
+      ${head('#7CCB6A', '#5FAE4E')}
+      <circle cx="108" cy="84" r="26" fill="#ffffff"/>
+      <circle cx="212" cy="84" r="26" fill="#ffffff"/>
+      <circle cx="108" cy="86" r="12" fill="#2b2b2b"/>
+      <circle cx="212" cy="86" r="12" fill="#2b2b2b"/>
+      <path d="M108 206 q52 44 104 0" stroke="#2b2b2b" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <circle cx="130" cy="172" r="8" fill="#3E7A33"/>
+      <circle cx="190" cy="172" r="8" fill="#3E7A33"/>`,
+  },
+  {
+    id: 'buho',
+    alt: 'Sticker de cara de búho',
+    tags: ['buho', 'owl', 'animal'],
+    body: `
+      <path d="M94 96 L76 34 L132 70 Z" fill="#8B6B4A"/>
+      <path d="M226 96 L244 34 L188 70 Z" fill="#8B6B4A"/>
+      ${head('#A9835B', '#8B6B4A')}
+      <circle cx="118" cy="162" r="42" fill="#F7F2E7"/>
+      <circle cx="202" cy="162" r="42" fill="#F7F2E7"/>
+      <circle cx="118" cy="162" r="17" fill="#2b2b2b"/>
+      <circle cx="202" cy="162" r="17" fill="#2b2b2b"/>
+      <path d="M160 186 l-16 16 l16 16 l16 -16 Z" fill="#E8A33D"/>`,
+  },
+]
+
+const FOOD_STICKERS = [
+  {
+    id: 'pizza',
+    alt: 'Sticker de porción de pizza',
+    tags: ['pizza', 'comida', 'food'],
+    body: `
+      <path d="M160 292 L54 120 q106 -54 212 0 Z" fill="#F2C14E"/>
+      <path d="M160 292 L70 138 q90 -40 180 0 Z" fill="#E06B3A"/>
+      <circle cx="130" cy="182" r="16" fill="#C63A2E"/>
+      <circle cx="196" cy="178" r="16" fill="#C63A2E"/>
+      <circle cx="160" cy="240" r="16" fill="#C63A2E"/>
+      <circle cx="112" cy="236" r="12" fill="#C63A2E"/>
+      <circle cx="210" cy="234" r="12" fill="#C63A2E"/>`,
+  },
+  {
+    id: 'hamburguesa',
+    alt: 'Sticker de hamburguesa',
+    tags: ['hamburguesa', 'burger', 'comida'],
+    body: `
+      <path d="M52 138 q108 -90 216 0 Z" fill="#E8A33D"/>
+      <circle cx="108" cy="110" r="7" fill="#F7E3B0"/>
+      <circle cx="160" cy="98" r="7" fill="#F7E3B0"/>
+      <circle cx="212" cy="110" r="7" fill="#F7E3B0"/>
+      <rect x="46" y="136" width="228" height="22" rx="11" fill="#5FAE4E"/>
+      <rect x="52" y="156" width="216" height="20" rx="10" fill="#C63A2E"/>
+      <rect x="50" y="174" width="220" height="18" rx="9" fill="#F2C14E"/>
+      <rect x="54" y="190" width="212" height="34" rx="14" fill="#8A5A3B"/>
+      <path d="M52 222 h216 q-14 52 -108 52 q-94 0 -108 -52 Z" fill="#D98C34"/>`,
+  },
+  {
+    id: 'helado',
+    alt: 'Sticker de helado',
+    tags: ['helado', 'icecream', 'postre'],
+    body: `
+      <path d="M92 176 L160 300 L228 176 Z" fill="#E0A96D"/>
+      <path d="M104 190 h112 M116 216 h88 M128 242 h64" stroke="#B9854A" stroke-width="8"/>
+      <circle cx="130" cy="150" r="52" fill="#F7B8C8"/>
+      <circle cx="190" cy="150" r="52" fill="#F2C14E"/>
+      <circle cx="160" cy="106" r="52" fill="#8ED1C4"/>
+      <circle cx="150" cy="92" r="7" fill="#E0607E"/>`,
+  },
+  {
+    id: 'dona',
+    alt: 'Sticker de dona glaseada',
+    tags: ['dona', 'donut', 'postre'],
+    body: `
+      <circle cx="160" cy="160" r="128" fill="#D98C5F"/>
+      <circle cx="160" cy="160" r="112" fill="#F7A8C4"/>
+      <circle cx="160" cy="160" r="46" fill="#D98C5F"/>
+      <circle cx="160" cy="160" r="46" fill="none" stroke="#B9744A" stroke-width="8"/>
+      <g stroke-width="9" stroke-linecap="round">
+        <path d="M112 112 l16 -10" stroke="#F2C14E"/>
+        <path d="M210 120 l14 8" stroke="#5FAE4E"/>
+        <path d="M110 214 l14 8" stroke="#4D9DE0"/>
+        <path d="M214 208 l12 -12" stroke="#C63A2E"/>
+        <path d="M160 84 l0 14" stroke="#8ED1C4"/>
+        <path d="M160 234 l0 12" stroke="#F2C14E"/>
+      </g>`,
+  },
+  {
+    id: 'cafe',
+    alt: 'Sticker de taza de café',
+    tags: ['cafe', 'coffee', 'bebida'],
+    body: `
+      <g stroke="#9AA7B4" stroke-width="9" stroke-linecap="round" fill="none" opacity="0.9">
+        <path d="M126 60 q-14 -22 0 -40"/>
+        <path d="M160 56 q-14 -22 0 -40"/>
+        <path d="M194 60 q-14 -22 0 -40"/>
+      </g>
+      <path d="M242 150 h30 a30 30 0 0 1 0 60 h-30" fill="none" stroke="#F7F2E7" stroke-width="16"/>
+      <path d="M78 130 h164 v70 a58 58 0 0 1 -58 58 h-48 a58 58 0 0 1 -58 -58 Z" fill="#F7F2E7"/>
+      <path d="M88 146 h144 v46 a48 48 0 0 1 -48 48 h-48 a48 48 0 0 1 -48 -48 Z" fill="#8A5A3B"/>
+      <ellipse cx="160" cy="292" rx="118" ry="14" fill="#C9BFAD"/>`,
+  },
+  {
+    id: 'taco',
+    alt: 'Sticker de taco',
+    tags: ['taco', 'comida', 'mexicano'],
+    body: `
+      <path d="M52 210 a108 108 0 0 1 216 0 Z" fill="#E8A33D"/>
+      <path d="M62 210 q98 -50 196 0 q-24 18 -46 0 q-22 18 -44 0 q-22 18 -44 0 q-22 18 -44 0 Z" fill="#5FAE4E"/>
+      <circle cx="120" cy="184" r="14" fill="#C63A2E"/>
+      <circle cx="160" cy="174" r="14" fill="#C63A2E"/>
+      <circle cx="200" cy="184" r="14" fill="#C63A2E"/>
+      <path d="M92 178 q14 -20 28 0" stroke="#F2C14E" stroke-width="9" fill="none" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'sushi',
+    alt: 'Sticker de sushi',
+    tags: ['sushi', 'comida', 'japones'],
+    body: `
+      <ellipse cx="160" cy="196" rx="118" ry="70" fill="#F7F2E7"/>
+      <path d="M54 176 q106 -70 212 0 q-30 44 -106 44 q-76 0 -106 -44 Z" fill="#F08A4B"/>
+      <path d="M78 156 q82 -44 164 0" stroke="#F7B8A0" stroke-width="10" fill="none" stroke-linecap="round"/>
+      <path d="M120 138 q-16 58 0 116 l80 0 q16 -58 0 -116 Z" fill="#2E3A34"/>
+      <ellipse cx="160" cy="196" rx="40" ry="70" fill="#3C4A42"/>`,
+  },
+  {
+    id: 'palomitas',
+    alt: 'Sticker de palomitas de maíz',
+    tags: ['palomitas', 'popcorn', 'cine'],
+    body: `
+      <g fill="#F7F2E7">
+        <circle cx="98" cy="126" r="34"/>
+        <circle cx="140" cy="104" r="38"/>
+        <circle cx="184" cy="104" r="38"/>
+        <circle cx="222" cy="128" r="34"/>
+        <circle cx="160" cy="126" r="40"/>
+      </g>
+      <g fill="#F2C14E">
+        <circle cx="120" cy="120" r="12"/><circle cx="160" cy="108" r="12"/>
+        <circle cx="200" cy="120" r="12"/><circle cx="140" cy="140" r="12"/><circle cx="182" cy="140" r="12"/>
+      </g>
+      <path d="M84 168 h152 l-16 122 h-120 Z" fill="#E8E8F0"/>
+      <g fill="#C63A2E">
+        <path d="M96 168 h30 l-10 122 h-24 Z"/>
+        <path d="M150 168 h30 l-4 122 h-24 Z"/>
+        <path d="M204 168 h30 l-2 122 h-26 Z"/>
+      </g>
+      <path d="M84 168 h152 l-16 122 h-120 Z" fill="none" stroke="#C9BFAD" stroke-width="6"/>`,
+  },
+]
+
+const PACKS = [
+  { id: 'basic', stickers: BASIC_STICKERS },
+  { id: 'animales', stickers: ANIMAL_STICKERS },
+  { id: 'comida', stickers: FOOD_STICKERS },
+]
 
 const render = (body) =>
   new Resvg(svg(body), { fitTo: { mode: 'width', value: SIZE } }).render().asPng()
 
 let total = 0
-for (const sticker of STICKERS) {
-  const png = render(sticker.body)
-  const webp = await sharp(png).webp({ quality: 82, effort: 5 }).toBuffer()
-  const file = join(outDir, `${sticker.id}.webp`)
-  writeFileSync(file, webp)
-  total += webp.length
-  console.log(`Generated ${sticker.id}.webp (${(webp.length / 1024).toFixed(1)} KB)`)
+let written = 0
+let skipped = 0
+for (const pack of PACKS) {
+  const outDir = join(publicStickersDir, pack.id)
+  mkdirSync(outDir, { recursive: true })
+  let packBytes = 0
+  for (const sticker of pack.stickers) {
+    const file = join(outDir, `${sticker.id}.webp`)
+    if (!FORCE && existsSync(file)) {
+      skipped += 1
+      continue
+    }
+    const png = render(sticker.body)
+    const webp = await sharp(png).webp({ quality: 82, effort: 5 }).toBuffer()
+    writeFileSync(file, webp)
+    packBytes += webp.length
+    total += webp.length
+    written += 1
+    console.log(`Generated ${pack.id}/${sticker.id}.webp (${(webp.length / 1024).toFixed(1)} KB)`)
+  }
+  console.log(`${pack.id}: ${pack.stickers.length} stickers (${(packBytes / 1024).toFixed(1)} KB written)`)
 }
 
-console.log(`\nDone! ${STICKERS.length} stickers in public/stickers/basic/ (${(total / 1024).toFixed(1)} KB total)`)
+console.log(`\nDone! ${written} written, ${skipped} skipped in public/stickers/ (${(total / 1024).toFixed(1)} KB total)`)
