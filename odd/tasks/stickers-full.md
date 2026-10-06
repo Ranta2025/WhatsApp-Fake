@@ -98,18 +98,22 @@ RED examples: a sticker validator table test (non-512 dimensions, 301 KB static,
 - **Safari WebP encode fallback:** recommended default = accept PNG 512x512 for stickers. Option: block creation on browsers without WebP encoding.
 
 ## Progress / Evidence
+- 2026-10-06: SF3 done (commit fd56dc0, delegated direct, 11 files +838/-14): sticker tables in `mediaReferencedSQL` (+`EnqueueMediaGC` bridge), delete enqueues key when unreferenced, server-side recents on 1:1/group sticker send (log-only failure), animated sniff on save, sha hardening, favorite reconcile on delete. Integration `backend/integration/sticker_gc_test.go` (sharedLogin, expired-message keeps object, last-reference delete GCs it, 31-recents trim). RED observed (SQL missing sticker FROMs; Animated=false; favorite remained; undefined WithRecents ctors), GREEN `go test ./...` all ok + `POSTGRES_PUBLIC_PORT=55432 make test-integration` ok 90.9s. Deviations accepted: `app.go` 2-line recents wiring (outside surfaces, required for prod), `stickerData.go` +33 GetStickerByID/GC bridges (natural home). Parent spot check: `go build ./...` ok. Accepted gap: deleted sticker lingering in `sticker_recents` keeps its object until rotation. Route: delegated; trigger evidence: integration + multi-file behavior.
 - 2026-10-06: branch `feat/stickers-full` created from `feat/stickers-basic` @ 754916b (verified via `git branch --show-current`). Note: instruction cited HEAD 9905a9f, but the live chain had advanced to 754916b (docs + e2e hardening c94dbe8/8965944/754916b); branched from current HEAD to avoid losing work.
 - 2026-10-06: SF1 review slice 8965944..6914fc0 (medium, reliability, lineage review-eaf9d48ec86bdab3): consent granted per standing user authorization; lens found R3-001 CRITICAL (absolute-URL alternative accepted any host) + R3-002/003/004 WARNINGs (test gaps). Bounded correction 146/150 lines (relative-only utils regex + services-level public-base pinning via MEDIA_PUBLIC_BASE_URL + regression/boundary/animated-upload tests), targeted validation green → **approved/acknowledged, authority burned**. R3-002/003/004 closed as informational. **Boundary now 6914fc0.**
 - 2026-10-06: SF2 review slice 6914fc0..f5499fa (medium, reliability, lineage review-e27e43e77a0e0c58): consent granted per standing authorization; lens admitted with 0 blockers → **approved/acknowledged, authority burned** (no correction). 8 advisory findings recorded as RF1–RF8 below (non-blocking; receipt stands). **Boundary now f5499fa.**
 
 ## Review follow-ups (advisory, slice 6914fc0..f5499fa)
 Fold into the first task touching each file (same rule as stickers-basic RFs); no re-review of f5499fa.
-- [ ] RF1 (WARNING) `serviceStickerLibrary.go:171`: SaveSticker hardcodes `animated=false`; a saved animated sticker lists wrong flag and it survives later dedupe. Fix: derive animation from stored bytes on save (or document why not) + assert Animated on save path. → SF3 (touches library service).
+- [x] RF1 (WARNING) → Done in SF3: SaveSticker derives `animated` from stored bytes (GetObject + SF1 header sniff; read-error → false, no save failure).
+- [x] RF4 (WARNING) → Done in SF3: behavioral integration test writes 31 recents vs real Postgres, asserts trim to 30 + newest-first.
+- [x] RF5 (SUGGESTION) → Done in SF3: explicit empty-sha/extensionless guards in `stickerKeyFromURL` + malformed-name/NotPanics tests.
+- [x] RF6 (SUGGESTION) → Done in SF3: DeleteSticker removes the `sticker_favorites` row before the reference check + delete-while-favorite test (unit + e2e).
 - [ ] RF2 (WARNING) `handlerSticker.go:35-41`: upload error mapping (409/400 branches) unexercised at HTTP boundary. Add handler upload-error cases. → SF7 (endpoint e2e/tests).
 - [ ] RF3 (WARNING) `serviceStickerLibrary.go:141-148`: service upload failure path (SF1 rejection, IsInternalError branch) untested. Add invalid-file service case. → SF7.
-- [ ] RF4 (WARNING) `stickerData.go:192-213` + `postgres.go:410-426`: recents trim-to-30 has only DryRun SQL-shape tests; execMigration indexes unverified vs ON CONFLICT targets. Add behavioral coverage. → SF3 (recents trim integration test).
-- [ ] RF5 (SUGGESTION) `serviceStickerLibrary.go:263-265`: `stickerKeyFromURL` sha extraction unguarded (empty sha / latent panic on extensionless names). Harden + malformed-name save tests. → SF3.
-- [ ] RF6 (SUGGESTION) `serviceStickerLibrary.go:228-241`: DeleteSticker leaves the `sticker_favorites` row, so a deleted sticker lingers in favorites. Reconcile on delete (default: remove favorite row too) + delete-while-favorite test. → SF3 (touches delete path).
+- [x] RF4 (WARNING) → Done in SF3 (see above).
+- [x] RF5 (SUGGESTION) → Done in SF3 (see above).
+- [x] RF6 (SUGGESTION) → Done in SF3 (see above).
 - [ ] RF7 (SUGGESTION) `models/sticker_test.go:12-18`: tautological constant-equality / struct-tag tests prove no contract. Replace with behavioral assertions or drop. → SF7.
 - [ ] RF8 (SUGGESTION) `serviceStickerLibrary.go:115-121`: 200-cap is count-then-create (concurrent uploads can exceed it). Harden or document soft + race test. → SF7 (Go e2e already covers dedupe race; extend to cap race).
 
@@ -118,4 +122,4 @@ Fold into the first task touching each file (same rule as stickers-basic RFs); n
 - Consent `granted` pre-authorized by user (revocable); still confirming it stays in force each time it is used.
 
 ## Next step
-SF3 (RED: GC test where an object referenced only by `user_stickers` is not deleted).
+SF3 review slice, then SF4 (RED: `useStickerLibrary` guard test dropping malformed rows).

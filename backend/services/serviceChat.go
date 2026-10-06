@@ -5,6 +5,7 @@ import (
 	"errors"
 	"gorm/backend/models"
 	"gorm/backend/schemas"
+	"log/slog"
 	"sort"
 	"time"
 )
@@ -65,10 +66,17 @@ type ChatRepoInterface interface {
 	GetChatDisappearingForUser(userID uint, ctx context.Context) (map[uint]int, error)
 }
 
+// StickerRecentRecorder registra el uso de un sticker para "Recientes". Lo
+// satisface *repos.RepoSticker; nil desactiva los recientes (el envío sigue).
+type StickerRecentRecorder interface {
+	UpsertRecent(ownerID uint, url string, now time.Time, ctx context.Context) error
+}
+
 type ServiceChat struct {
 	repo      ChatRepoInterface
-	reactions ReactionAggregator // opcional; nil = sin reacciones
-	now       func() time.Time   // reloj inyectable (nil = time.Now)
+	reactions ReactionAggregator    // opcional; nil = sin reacciones
+	recents   StickerRecentRecorder // opcional; nil = sin recientes
+	now       func() time.Time      // reloj inyectable (nil = time.Now)
 }
 
 // clock devuelve la hora actual según el reloj inyectado.
@@ -82,9 +90,27 @@ func (rp *ServiceChat) clock() time.Time {
 // InitServiceMessage crea el servicio de chat con su repositorio, devolviendo la interfaz ChatServicer.
 // El agregador de reacciones es opcional (nil = los mensajes salen sin reacciones).
 func InitServiceMessage(repo ChatRepoInterface, reactions ...ReactionAggregator) ChatServicer {
+	return InitServiceMessageWithRecents(repo, nil, reactions...)
+}
+
+// InitServiceMessageWithRecents es como InitServiceMessage pero con el
+// grabador de stickers recientes (nil = no se registran).
+func InitServiceMessageWithRecents(repo ChatRepoInterface, recents StickerRecentRecorder, reactions ...ReactionAggregator) ChatServicer {
 	return &ServiceChat{
 		repo:      repo,
+		recents:   recents,
 		reactions: pickAggregator(reactions),
+	}
+}
+
+// recordStickerRecent registra el uso de un sticker después de persistir el
+// mensaje. Un fallo se registra pero NUNCA rompe el envío.
+func (rp *ServiceChat) recordStickerRecent(ownerID uint, mediaType, mediaURL string, now time.Time, ctx context.Context) {
+	if rp.recents == nil || mediaType != "sticker" || mediaURL == "" {
+		return
+	}
+	if err := rp.recents.UpsertRecent(ownerID, mediaURL, now, ctx); err != nil {
+		slog.Warn("sticker: no se pudo registrar el reciente en 1:1", "user_id", ownerID, "err", err)
 	}
 }
 
@@ -176,6 +202,7 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 		if err := rp.repo.CreateMessage(&messageDB, ctx); err != nil {
 			return schemas.Message{}, err
 		}
+		rp.recordStickerRecent(uint(id_user), content.MediaType, content.MediaUrl, now, ctx)
 		return messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor), nil
 	}
 	duplicate, err := rp.repo.CreateMessageIdempotent(&messageDB, ctx)
@@ -187,6 +214,10 @@ func (rp *ServiceChat) ServiceCreatMessageWithStatus(message models.MessageCreat
 	}
 	out := messageToSchema(&messageDB, message.Telephon, message.MessageGet.Receptor)
 	out.Duplicate = duplicate
+	// Un replay idempotente no vuelve a registrar el reciente (no reordena).
+	if !duplicate {
+		rp.recordStickerRecent(uint(id_user), content.MediaType, content.MediaUrl, now, ctx)
+	}
 	return out, nil
 }
 

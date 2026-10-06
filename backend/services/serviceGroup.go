@@ -6,6 +6,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/schemas"
 	"gorm/backend/utils"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -104,8 +105,9 @@ type GroupContactRepoInterface interface {
 type ServiceGroup struct {
 	repo        GroupRepoInterface
 	contactRepo GroupContactRepoInterface
-	reactions   ReactionAggregator // opcional; nil = sin reacciones
-	now         func() time.Time   // reloj inyectable (nil = time.Now)
+	reactions   ReactionAggregator    // opcional; nil = sin reacciones
+	recents     StickerRecentRecorder // opcional; nil = sin recientes
+	now         func() time.Time      // reloj inyectable (nil = time.Now)
 }
 
 // clock devuelve la hora actual según el reloj inyectable.
@@ -120,7 +122,24 @@ func (s *ServiceGroup) clock() time.Time {
 // devolviendo la interfaz GroupServicer.
 // El agregador de reacciones es opcional (nil = los mensajes salen sin reacciones).
 func InitServiceGroup(repo GroupRepoInterface, contactRepo GroupContactRepoInterface, reactions ...ReactionAggregator) GroupServicer {
-	return &ServiceGroup{repo: repo, contactRepo: contactRepo, reactions: pickAggregator(reactions)}
+	return InitServiceGroupWithRecents(repo, contactRepo, nil, reactions...)
+}
+
+// InitServiceGroupWithRecents es como InitServiceGroup pero con el grabador de
+// stickers recientes (nil = no se registran).
+func InitServiceGroupWithRecents(repo GroupRepoInterface, contactRepo GroupContactRepoInterface, recents StickerRecentRecorder, reactions ...ReactionAggregator) GroupServicer {
+	return &ServiceGroup{repo: repo, contactRepo: contactRepo, recents: recents, reactions: pickAggregator(reactions)}
+}
+
+// recordStickerRecent registra el uso de un sticker de grupo después de
+// persistir el mensaje. Un fallo se registra pero NUNCA rompe el envío.
+func (s *ServiceGroup) recordStickerRecent(ownerID uint, mediaType, mediaURL string, now time.Time, ctx context.Context) {
+	if s.recents == nil || mediaType != "sticker" || mediaURL == "" {
+		return
+	}
+	if err := s.recents.UpsertRecent(ownerID, mediaURL, now, ctx); err != nil {
+		slog.Warn("sticker: no se pudo registrar el reciente en grupo", "user_id", ownerID, "err", err)
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -413,6 +432,10 @@ func (s *ServiceGroup) SendGroupMessage(telephonSender string, data models.Group
 		if duplicate && msg.GroupID != data.GroupID {
 			return nil, ErrClientIDConflict
 		}
+	}
+	// Un replay idempotente no vuelve a registrar el reciente (no reordena).
+	if !duplicate {
+		s.recordStickerRecent(uint(senderID), msg.MediaType, msg.MediaUrl, now, ctx)
 	}
 
 	senderUsername, _ := s.contactRepo.GetUsernameByTelephon(telephonSender, ctx)

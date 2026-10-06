@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
@@ -315,6 +316,54 @@ func TestSendGroupMessage_SaveErrorIsReported(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.EqualError(t, err, "error al guardar el mensaje")
+}
+
+// ==================== TESTS: recientes de stickers en grupo (SF3) ====================
+
+func TestSendGroupMessage_RecordsStickerRecent(t *testing.T) {
+	repo := &MockGroupRepo{}
+	contacts := &MockGroupContactRepo{}
+	expectMemberSend(repo, contacts)
+	rec := &fakeRecentRecorder{}
+	svc := InitServiceGroupWithRecents(repo, contacts, rec)
+
+	_, err := svc.SendGroupMessage(testSenderTel, models.GroupMessageSend{
+		GroupID: testGroupID, MediaUrl: "/stickers/basic/hola.webp", MediaType: "sticker",
+	}, context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, rec.calls, 1)
+	assert.Equal(t, uint(testSenderID), rec.calls[0].ownerID)
+	assert.Equal(t, "/stickers/basic/hola.webp", rec.calls[0].url)
+}
+
+func TestSendGroupMessage_DoesNotRecordNonSticker(t *testing.T) {
+	repo := &MockGroupRepo{}
+	contacts := &MockGroupContactRepo{}
+	expectMemberSend(repo, contacts)
+	rec := &fakeRecentRecorder{}
+	svc := InitServiceGroupWithRecents(repo, contacts, rec)
+
+	_, err := svc.SendGroupMessage(testSenderTel, models.GroupMessageSend{
+		GroupID: testGroupID, Message: "hola",
+	}, context.Background())
+
+	require.NoError(t, err)
+	assert.Empty(t, rec.calls, "solo los stickers entran en recientes")
+}
+
+func TestSendGroupMessage_RecentFailureDoesNotFailSend(t *testing.T) {
+	repo := &MockGroupRepo{}
+	contacts := &MockGroupContactRepo{}
+	expectMemberSend(repo, contacts)
+	rec := &fakeRecentRecorder{err: errors.New("db recientes")}
+	svc := InitServiceGroupWithRecents(repo, contacts, rec)
+
+	_, err := svc.SendGroupMessage(testSenderTel, models.GroupMessageSend{
+		GroupID: testGroupID, MediaUrl: "/stickers/basic/hola.webp", MediaType: "sticker",
+	}, context.Background())
+
+	require.NoError(t, err, "un fallo de recientes no debe romper el envío")
 }
 
 // ==================== TESTS: paginación por cursor ====================

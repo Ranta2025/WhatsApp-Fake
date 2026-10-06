@@ -311,16 +311,20 @@ func (r *RepoExpiry) DueMediaGC(ctx context.Context, limit int) ([]models.MediaG
 
 // mediaReferencedSQL comprueba si alguna fila VIVA (deleted_at IS NULL) sigue
 // apuntando al objeto: adjuntos de mensajes 1:1 y de grupo, estados, avatar y
-// fondo de usuario, fondo por contacto y avatar de grupo. Las URLs terminan en
-// "/" + key y las keys llevan un xid único, así que basta el sufijo exacto
-// (sin LIKE: nada de comodines que escapar).
+// fondo de usuario, fondo por contacto, avatar de grupo y la biblioteca de
+// stickers (propios, favoritos y recientes). Las URLs terminan en "/" + key y
+// las keys llevan un xid/sha único, así que basta el sufijo exacto (sin LIKE:
+// nada de comodines que escapar).
 const mediaReferencedSQL = `SELECT
 	EXISTS (SELECT 1 FROM messages WHERE deleted_at IS NULL AND right(media_url, @n) = @suffix)
 	OR EXISTS (SELECT 1 FROM group_messages WHERE deleted_at IS NULL AND right(media_url, @n) = @suffix)
 	OR EXISTS (SELECT 1 FROM statuses WHERE deleted_at IS NULL AND right(media_url, @n) = @suffix)
 	OR EXISTS (SELECT 1 FROM user_data_bases WHERE deleted_at IS NULL AND (right(avatar_url, @n) = @suffix OR right(wallpaper_url, @n) = @suffix))
 	OR EXISTS (SELECT 1 FROM contact_data_bases WHERE deleted_at IS NULL AND right(wallpaper_url, @n) = @suffix)
-	OR EXISTS (SELECT 1 FROM groups WHERE deleted_at IS NULL AND right(avatar_url, @n) = @suffix)`
+	OR EXISTS (SELECT 1 FROM groups WHERE deleted_at IS NULL AND right(avatar_url, @n) = @suffix)
+	OR EXISTS (SELECT 1 FROM user_stickers WHERE deleted_at IS NULL AND right(url, @n) = @suffix)
+	OR EXISTS (SELECT 1 FROM sticker_favorites WHERE right(url, @n) = @suffix)
+	OR EXISTS (SELECT 1 FROM sticker_recents WHERE right(url, @n) = @suffix)`
 
 // MediaKeyReferenced indica si el objeto sigue referenciado por alguna fila viva.
 func (r *RepoExpiry) MediaKeyReferenced(ctx context.Context, key string) (bool, error) {
@@ -333,6 +337,19 @@ func (r *RepoExpiry) MediaKeyReferenced(ctx context.Context, key string) (bool, 
 		"suffix": suffix,
 	}).Scan(&referenced).Error
 	return referenced, err
+}
+
+// EnqueueMediaGC encola un object key en la cola media_gc para que el job lo
+// borre de MinIO tras volver a comprobar que nada lo referencia. Es idempotente
+// (ON CONFLICT DO NOTHING). Lo usa la biblioteca de stickers al borrar la última
+// referencia a un objeto; una key vacía no encola nada.
+func (r *RepoExpiry) EnqueueMediaGC(ctx context.Context, key string) error {
+	if key == "" {
+		return nil
+	}
+	c, cancel := context.WithTimeout(ctx, expiryTimeout)
+	defer cancel()
+	return enqueueMediaGC(r.data.WithContext(c), []string{key})
 }
 
 // DeleteMediaGC saca una fila de la cola (borrado hecho, abandonado u omitido).

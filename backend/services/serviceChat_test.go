@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
@@ -206,4 +207,109 @@ func TestServiceEditMessage_AllowsTextMessage(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, repo.updated)
 	assert.Equal(t, uint(1), out.MessageID)
+}
+
+// ==================== TESTS: recientes de stickers (SF3) ====================
+
+// stubSendChatRepo cubre solo lo que usa ServiceCreatMessage; el resto entra por
+// la interfaz embebida (nil).
+type stubSendChatRepo struct {
+	ChatRepoInterface
+}
+
+func (r *stubSendChatRepo) GetIdByTelephon(telephon string, ctx context.Context) (int, error) {
+	if telephon == "+sender" {
+		return 1, nil
+	}
+	return 2, nil
+}
+
+func (r *stubSendChatRepo) GetChatDisappearing(idUser, idContact uint, ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (r *stubSendChatRepo) CreateMessage(msg *models.Message, ctx context.Context) error {
+	msg.Model.ID = 99
+	return nil
+}
+
+// recentCall registra una llamada a UpsertRecent.
+type recentCall struct {
+	ownerID uint
+	url     string
+	now     time.Time
+}
+
+// fakeRecentRecorder implementa StickerRecentRecorder en memoria.
+type fakeRecentRecorder struct {
+	calls []recentCall
+	err   error
+}
+
+func (f *fakeRecentRecorder) UpsertRecent(ownerID uint, url string, now time.Time, ctx context.Context) error {
+	f.calls = append(f.calls, recentCall{ownerID: ownerID, url: url, now: now})
+	return f.err
+}
+
+func TestServiceCreatMessage_RecordsStickerRecent(t *testing.T) {
+	rec := &fakeRecentRecorder{}
+	svc := InitServiceMessageWithRecents(&stubSendChatRepo{}, rec)
+
+	_, err := svc.ServiceCreatMessage(models.MessageCreat{
+		Telephon: "+sender",
+		MessageGet: models.MessageGet{
+			Receptor:  "+receptor",
+			MediaUrl:  "/stickers/basic/hola.webp",
+			MediaType: "sticker",
+		},
+	}, context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, rec.calls, 1)
+	assert.Equal(t, uint(1), rec.calls[0].ownerID, "el dueño es el remitente")
+	assert.Equal(t, "/stickers/basic/hola.webp", rec.calls[0].url)
+}
+
+func TestServiceCreatMessage_DoesNotRecordNonSticker(t *testing.T) {
+	rec := &fakeRecentRecorder{}
+	svc := InitServiceMessageWithRecents(&stubSendChatRepo{}, rec)
+
+	_, err := svc.ServiceCreatMessage(models.MessageCreat{
+		Telephon:   "+sender",
+		MessageGet: models.MessageGet{Receptor: "+receptor", Message: "hola"},
+	}, context.Background())
+
+	require.NoError(t, err)
+	assert.Empty(t, rec.calls, "solo los stickers entran en recientes")
+}
+
+// Un fallo al registrar el reciente nunca debe romper el envío.
+func TestServiceCreatMessage_RecentFailureDoesNotFailSend(t *testing.T) {
+	rec := &fakeRecentRecorder{err: assert.AnError}
+	svc := InitServiceMessageWithRecents(&stubSendChatRepo{}, rec)
+
+	_, err := svc.ServiceCreatMessage(models.MessageCreat{
+		Telephon: "+sender",
+		MessageGet: models.MessageGet{
+			Receptor:  "+receptor",
+			MediaUrl:  "/stickers/basic/hola.webp",
+			MediaType: "sticker",
+		},
+	}, context.Background())
+
+	require.NoError(t, err, "un fallo de recientes no debe romper el envío")
+}
+
+// Sin grabador (InitServiceMessage clásico) el envío sigue funcionando.
+func TestServiceCreatMessage_WithoutRecorder(t *testing.T) {
+	svc := InitServiceMessage(&stubSendChatRepo{})
+	_, err := svc.ServiceCreatMessage(models.MessageCreat{
+		Telephon: "+sender",
+		MessageGet: models.MessageGet{
+			Receptor:  "+receptor",
+			MediaUrl:  "/stickers/basic/hola.webp",
+			MediaType: "sticker",
+		},
+	}, context.Background())
+	require.NoError(t, err)
 }

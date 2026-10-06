@@ -202,11 +202,33 @@ func TestMediaKeyReferencedChecksEveryLiveMediaColumn(t *testing.T) {
 		"right(wallpaper_url",
 		"FROM contact_data_bases WHERE deleted_at IS NULL AND right(wallpaper_url",
 		"FROM groups WHERE deleted_at IS NULL AND right(avatar_url",
+		// Biblioteca de stickers: un sticker propio vivo, un favorito o un
+		// reciente impiden borrar el objeto (SF3).
+		"FROM user_stickers WHERE deleted_at IS NULL AND right(url",
+		"FROM sticker_favorites WHERE right(url",
+		"FROM sticker_recents WHERE right(url",
 	} {
 		assert.Contains(t, all, ref)
 	}
 	assert.Contains(t, all, "'/images/a.jpg'", "sufijo exacto /key (keys xid únicas)")
 	assert.NotContains(t, all, "LIKE", "sin comodines")
+}
+
+// EnqueueMediaGC expuesto para la biblioteca de stickers: idempotente y con
+// clave vacía como no-op.
+func TestEnqueueMediaGCExported(t *testing.T) {
+	db, rec := dryRunDB(t)
+	r := InitRepoExpiry(db)
+
+	require.NoError(t, r.EnqueueMediaGC(context.Background(), "stickers/abc.webp"))
+	stmts := stmtsOn(rec, "media_gc")
+	require.Len(t, stmts, 1)
+	assert.True(t, strings.HasPrefix(stmts[0], "INSERT INTO media_gc"), stmts[0])
+	assert.Contains(t, stmts[0], "'stickers/abc.webp'")
+	assert.Contains(t, stmts[0], "ON CONFLICT (object_key) DO NOTHING")
+
+	require.NoError(t, r.EnqueueMediaGC(context.Background(), ""))
+	assert.Len(t, stmtsOn(rec, "media_gc"), 1, "una key vacía no encola nada")
 }
 
 func TestMediaGCRowWrites(t *testing.T) {

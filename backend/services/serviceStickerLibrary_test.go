@@ -1,10 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"strings"
 	"testing"
@@ -27,9 +29,33 @@ type fakeStickerRepo struct {
 	favorites []models.StickerFavorite
 	recents   []models.StickerRecent
 
+	// GC (SF3): referenced simula media_gc.MediaKeyReferenced; enqueued registra
+	// los object keys encolados al borrar la última referencia.
+	referenced map[string]bool
+	enqueued   []string
+
 	lastMineLimit   int
 	lastFavLimit    int
 	lastRecentLimit int
+}
+
+func (f *fakeStickerRepo) GetStickerByID(ownerID, id uint, _ context.Context) (*models.UserSticker, error) {
+	for i := range f.stickers {
+		s := f.stickers[i]
+		if s.IdUser == ownerID && s.ID == id && !s.DeletedAt.Valid {
+			return &s, nil
+		}
+	}
+	return nil, models.ErrStickerNotFound
+}
+
+func (f *fakeStickerRepo) MediaKeyReferenced(_ context.Context, key string) (bool, error) {
+	return f.referenced[key], nil
+}
+
+func (f *fakeStickerRepo) EnqueueMediaGC(_ context.Context, key string) error {
+	f.enqueued = append(f.enqueued, key)
+	return nil
 }
 
 func (f *fakeStickerRepo) GetIdByTelephon(string, context.Context) (int, error) {
@@ -380,4 +406,152 @@ func TestStickerLibraryResolveUserErrorPropagates(t *testing.T) {
 	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
 	_, _, err := svc.UploadSticker("+51999", "", memStickerFileOf([]byte("x")), &multipart.FileHeader{}, context.Background())
 	assert.ErrorIs(t, err, assert.AnError)
+}
+
+// fakeStickerStoreWithObject añade lecturas de objeto (RF1) al doble de SF1 sin
+// tocar serviceSticker_test.go: embebe el fake compartido y sobrescribe
+// GetObject para devolver bytes en memoria.
+type fakeStickerStoreWithObject struct {
+	*fakeStickerStore
+	objectData []byte
+	objectErr  error
+}
+
+func (f *fakeStickerStoreWithObject) GetObject(_ context.Context, _, _ string, _ minio.GetObjectOptions) (io.ReadCloser, error) {
+	if f.objectErr != nil {
+		return nil, f.objectErr
+	}
+	return io.NopCloser(bytes.NewReader(f.objectData)), nil
+}
+
+// RF1: al guardar un sticker ya almacenado, el flag animated se deriva de los
+// bytes del objeto (no se asume false).
+func TestStickerLibrarySaveDerivesAnimatedFromObject(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	animated := loadStickerFixture(t, "sticker_anim_512.webp")
+	sha := strings.Repeat("e", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	store := &fakeStickerStoreWithObject{fakeStickerStore: &fakeStickerStore{}, objectData: animated}
+	svc := NewServiceStickerLibrary(store, &fakeStickerRepo{userID: 7})
+
+	res, created, err := svc.SaveSticker("+51999", url, context.Background())
+	require.NoError(t, err)
+	assert.True(t, created)
+	assert.True(t, res.Animated, "un sticker animado guardado debe listarse como animado")
+}
+
+func TestStickerLibrarySaveStaticObjectStaysNotAnimated(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	static := loadStickerFixture(t, "sticker_static_512.webp")
+	sha := strings.Repeat("d", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	store := &fakeStickerStoreWithObject{fakeStickerStore: &fakeStickerStore{}, objectData: static}
+	svc := NewServiceStickerLibrary(store, &fakeStickerRepo{userID: 7})
+
+	res, _, err := svc.SaveSticker("+51999", url, context.Background())
+	require.NoError(t, err)
+	assert.False(t, res.Animated, "un sticker estático sigue sin ser animado")
+}
+
+// Un fallo al leer los bytes no debe fallar el guardado: cae a animated=false.
+func TestStickerLibrarySaveObjectReadErrorDefaultsNotAnimated(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	sha := strings.Repeat("c", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	store := &fakeStickerStoreWithObject{fakeStickerStore: &fakeStickerStore{}, objectErr: assert.AnError}
+	svc := NewServiceStickerLibrary(store, &fakeStickerRepo{userID: 7})
+
+	res, _, err := svc.SaveSticker("+51999", url, context.Background())
+	require.NoError(t, err, "un fallo de lectura no debe impedir guardar")
+	assert.False(t, res.Animated)
+}
+
+// RF6: borrar un sticker propio quita también su fila de favorito (misma URL).
+func TestStickerLibraryDeleteRemovesFavorite(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	sha := strings.Repeat("f", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	repo := &fakeStickerRepo{
+		userID:    7,
+		stickers:  []models.UserSticker{{ID: 1, IdUser: 7, URL: url, SHA256: sha}},
+		favorites: []models.StickerFavorite{{ID: 1, IdUser: 7, URL: url}},
+	}
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
+
+	require.NoError(t, svc.DeleteSticker("+51999", 1, context.Background()))
+	assert.Empty(t, repo.favorites, "borrar un sticker propio quita también su favorito")
+}
+
+// RF5: la extracción de sha no debe entrar en pánico ni aceptar nombres vacíos
+// o sin extensión.
+func TestStickerKeyFromURLRejectsMalformed(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, &fakeStickerRepo{userID: 7})
+
+	cases := []string{
+		"",
+		"/storage/media/stickers/",
+		"/storage/media/stickers/.webp",
+		"/storage/media/stickers/abc.webp",
+		"/storage/media/stickers/" + strings.Repeat("a", 64),
+		"/storage/media/stickers/" + strings.Repeat("a", 63) + ".webp",
+		"/storage/media/stickers/" + strings.Repeat("a", 64) + ".gif",
+		"/storage/media/stickers/" + strings.Repeat("Z", 64) + ".webp",
+		"/storage/media/other/" + strings.Repeat("a", 64) + ".webp",
+	}
+	for _, raw := range cases {
+		_, _, ok := svc.stickerKeyFromURL(raw)
+		assert.False(t, ok, "%q", raw)
+	}
+}
+
+// Un nombre con forma válida pero sin parte de sha no debe entrar en pánico.
+func TestStickerKeyFromURLNeverPanicsOnExtensionlessName(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, &fakeStickerRepo{userID: 7})
+	assert.NotPanics(t, func() {
+		_, _, _ = svc.stickerKeyFromURL("/storage/media/stickers/" + strings.Repeat("a", 64))
+	})
+}
+
+// RF6 + GC: borrar el último sticker encola su objeto; si algo lo referencia,
+// no se encola (lo decide el GC con MediaKeyReferenced).
+func TestStickerLibraryDeleteEnqueuesWhenUnreferenced(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	sha := strings.Repeat("1", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	key := "stickers/" + sha + ".webp"
+	repo := &fakeStickerRepo{
+		userID:     7,
+		stickers:   []models.UserSticker{{ID: 3, IdUser: 7, URL: url, SHA256: sha}},
+		referenced: map[string]bool{},
+	}
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
+
+	require.NoError(t, svc.DeleteSticker("+51999", 3, context.Background()))
+	assert.Equal(t, []string{key}, repo.enqueued, "el objeto se encola al borrar la última referencia")
+}
+
+func TestStickerLibraryDeleteSkipsEnqueueWhenStillReferenced(t *testing.T) {
+	t.Setenv("MINIO_BUCKET", "media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	sha := strings.Repeat("2", 64)
+	url := "/storage/media/stickers/" + sha + ".webp"
+	key := "stickers/" + sha + ".webp"
+	repo := &fakeStickerRepo{
+		userID:     7,
+		stickers:   []models.UserSticker{{ID: 4, IdUser: 7, URL: url, SHA256: sha}},
+		referenced: map[string]bool{key: true},
+	}
+	svc := NewServiceStickerLibrary(&fakeStickerStore{}, repo)
+
+	require.NoError(t, svc.DeleteSticker("+51999", 4, context.Background()))
+	assert.Empty(t, repo.enqueued, "un mensaje vivo que usa el sticker impide encolarlo")
 }

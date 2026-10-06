@@ -224,9 +224,9 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	// Servicios
 	serviceUser := services.InitServices(repoUser, cacheUser)
 	serviceContact := services.InitServiceContact(repoContact)
-	serviceChat := services.InitServiceMessage(repoContact, repoReaction)
+	serviceChat := services.InitServiceMessageWithRecents(repoContact, repoSticker, repoReaction)
 	serviceCall := services.InitServiceCall(repoContact)
-	serviceGroup := services.InitServiceGroup(repoGroup, repoContact, repoReaction)
+	serviceGroup := services.InitServiceGroupWithRecents(repoGroup, repoContact, repoSticker, repoReaction)
 	mediaStore := services.NewServiceMedia(mc)
 	var serviceMedia services.MediaServicer = mediaStore
 	serviceBugReport := services.InitServiceBugReport()

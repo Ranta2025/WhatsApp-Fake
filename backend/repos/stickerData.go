@@ -86,6 +86,39 @@ func (r *RepoSticker) GetStickerByURL(ownerID uint, url string, ctx context.Cont
 	return &s, nil
 }
 
+// GetStickerByID devuelve el sticker activo del usuario con ese id, o
+// models.ErrStickerNotFound (nunca se revela un 403). DeleteSticker lo usa para
+// conocer la URL antes de borrar: reconciliar el favorito y encolar el objeto.
+func (r *RepoSticker) GetStickerByID(ownerID, id uint, ctx context.Context) (*models.UserSticker, error) {
+	c, cancel := context.WithTimeout(ctx, stickerRepoTimeout)
+	defer cancel()
+	var s models.UserSticker
+	err := r.data.WithContext(c).
+		Where("id_user = ? AND id = ?", ownerID, id).
+		First(&s).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, models.ErrStickerNotFound
+		}
+		return nil, err
+	}
+	if s.ID == 0 {
+		return nil, models.ErrStickerNotFound
+	}
+	return &s, nil
+}
+
+// MediaKeyReferenced comprueba si el objeto sigue referenciado por alguna fila
+// viva. Comparte el SQL de media_gc con el job de expiración (expiryData.go).
+func (r *RepoSticker) MediaKeyReferenced(ctx context.Context, key string) (bool, error) {
+	return InitRepoExpiry(r.data).MediaKeyReferenced(ctx, key)
+}
+
+// EnqueueMediaGC encola un objeto en la cola media_gc para su borrado por el job.
+func (r *RepoSticker) EnqueueMediaGC(ctx context.Context, key string) error {
+	return InitRepoExpiry(r.data).EnqueueMediaGC(ctx, key)
+}
+
 // CreateSticker inserta el sticker o, si el usuario ya tiene uno activo con el
 // mismo sha256, devuelve el existente. El segundo valor es true solo cuando se
 // creó una fila nueva.
