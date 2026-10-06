@@ -223,3 +223,17 @@ describe('index.html bootstrap script', () => {
     localStorage.clear()
   })
 })
+
+// Ticks, failure marks and the sticker time pill sit on surfaces that stay dark in
+// every theme (accent bubble, dark pill, media), so their colors must not invert.
+describe('fixed colors on dark surfaces', () => {
+  it.each(THEMES.map((t) => [t.id] as const))('%s keeps the sticker time pill dark', (id) => {
+    expect(tok(themeTokens(id), '--t-chip-strong')).toBe('rgb(0 0 0 / 0.45)')
+  })
+
+  it('defines non-themed tokens for ticks, failure marks and media actions', () => {
+    for (const token of ['tick-read', 'failed-on-accent', 'danger-on-media', 'pill-fg']) {
+      expect(css).toMatch(new RegExp(`--color-${token}:\\s*(oklch|#)`))
+    }
+  })
+})

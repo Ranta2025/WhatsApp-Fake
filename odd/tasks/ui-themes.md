@@ -83,8 +83,14 @@ Reviewed from Claude Code (lineage review-3789beb48a2d9958, medium, reliability,
 - [x] TRF10 (SUGGESTION) `ToastContainer.tsx:154-155` toast styles depend on `--t-*` vars being defined in every theme: verified all 7 vars exist in all 7 theme blocks; the registry completeness test already enforces it.
 - Note: UT4 deviated from pixel-identical dark in two places by design: the toast gradient follows the theme tokens (was hardcoded `#1e1b4b`/`#0f172a`) and `BugReportModal` uses `from-slate-900` instead of `from-gray-900` (gray does not invert).
 
+## Review follow-ups 4 (slice 1da17f5..d4923af)
+Reviewed from Claude Code (lineage review-793efe5b0d3991f6, medium, reliability, user granted): approved/acknowledged, burned. Boundary now d4923af.
+- [x] TRF11 (WARNING) `index.css:239-251` status shades remapped globally also darkened uses on surfaces that stay dark (read ticks `text-sky-300` on the own accent bubble, failed mark `text-rose-300` on pending own bubbles, StatusViewer `hover:text-rose-400` over media). Parent also found that the sticker time pill (`chip-strong`, white in light themes) made the delivered ticks (`on-accent/60`, white) invisible. Fixed in the close-out commit: sticker time pill stays dark in every theme (WhatsApp-like), with fixed non-themed tokens `tick-read`, `failed-on-accent`, `danger-on-media`, `pill-fg` (dark values unchanged). Tests: per-theme pill check, fixed-token check, tick class expectations (RED 9 failed, then GREEN). Full Vitest 147 files / 1380 tests, typecheck, lint, build green; light screenshot re-shot legible.
+- [ ] TRF12 (SUGGESTION) `themes.e2e.ts:53-65` "login keeps the theme" seeds storage in a fresh context instead of a real logout (deliberate: a real logout revokes the shared e2e session). Deferred.
+- [ ] TRF13 (SUGGESTION) status-text contrast is only checked against panel and page, not input fills or glass cards. Deferred.
+
 ## Assumptions
 - Theme list, `Automático` option and per-device storage chosen as defaults (user asked for "light, pastel, several alternatives"; no further spec).
 
 ## Next step
-Feature complete; final review of the last slice, then user decides merge to main.
+Feature complete (UT1-UT6 + follow-ups). Close-out fix commit pending review in the next slice from d4923af if any; user decides merge to main.

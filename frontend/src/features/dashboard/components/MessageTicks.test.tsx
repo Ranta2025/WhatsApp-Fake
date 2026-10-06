@@ -44,7 +44,7 @@ describe('MessageTicks', () => {
         const el = svg('visto');
         expect(el?.getAttribute('aria-label')).toBe('Visto');
         expect(el?.querySelectorAll('path')).toHaveLength(2);
-        expect(el?.getAttribute('class')).toContain('text-sky-300');
+        expect(el?.getAttribute('class')).toContain('text-tick-read');
     });
 
     it('clock for "pending" (outbox), with a stable test id', () => {

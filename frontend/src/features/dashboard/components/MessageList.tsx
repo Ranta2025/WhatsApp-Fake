@@ -377,7 +377,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                             {/* Info de pie de burbuja — en stickers es una píldora aparte */}
                                             {isSticker ? (
                                                 <div className="mt-1 flex justify-end">
-                                                    <div className="flex items-center gap-1 rounded-full bg-chip-strong px-2 py-0.5 text-[10px] text-slate-200">
+                                                    <div className="flex items-center gap-1 rounded-full bg-chip-strong px-2 py-0.5 text-[10px] text-pill-fg">
                                                         <ExpiryClock expiresAt={m.ExpiresAt} />
                                                         <span>{m.Edited && 'editado · '}{time}</span>
                                                         {isMine && <MessageTicks status={m.Status} />}

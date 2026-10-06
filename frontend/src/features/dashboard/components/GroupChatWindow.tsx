@@ -133,7 +133,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     {/* Footer: time + edited — en stickers es una píldora aparte */}
                     {isSticker ? (
                         <div className={`mt-1 flex ${isMine ? 'justify-end' : ''}`}>
-                            <div className="flex items-center gap-1 rounded-full bg-chip-strong px-2 py-0.5 text-[10px] text-slate-200">
+                            <div className="flex items-center gap-1 rounded-full bg-chip-strong px-2 py-0.5 text-[10px] text-pill-fg">
                                 {msg.Edited && <span>editado</span>}
                                 <ExpiryClock expiresAt={msg.ExpiresAt} />
                                 <span>{formatTime(msg.Time)}</span>

@@ -24,7 +24,7 @@ export default function MessageTicks({ status }: { status: TickStatus }): JSX.El
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 12"
-                className={`h-3 w-5 shrink-0 transition-colors duration-300 ${isRead ? 'text-sky-300' : 'text-on-accent/60'}`}
+                className={`h-3 w-5 shrink-0 transition-colors duration-300 ${isRead ? 'text-tick-read' : 'text-on-accent/60'}`}
                 role="img"
                 aria-label={isRead ? 'Visto' : 'Entregado'}
             >

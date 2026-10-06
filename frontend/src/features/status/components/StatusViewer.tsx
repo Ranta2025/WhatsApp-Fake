@@ -386,7 +386,7 @@ export default function StatusViewer() {
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                        className="flex items-center gap-1.5 text-white/80 hover:text-rose-400 text-sm font-medium transition-colors" // theme-ok
+                        className="flex items-center gap-1.5 text-white/80 hover:text-danger-on-media text-sm font-medium transition-colors" // theme-ok
                         aria-label="Eliminar este estado"
                     >
                         <TrashIcon />

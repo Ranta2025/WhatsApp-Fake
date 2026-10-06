@@ -73,7 +73,7 @@ describe('MessageList status ticks (1:1)', () => {
                 paths: ['M1.5 6.5 5 10l7.5-8', 'M8.6 9.4 9.2 10l7.5-8'], stroke: 'currentColor', strokeWidth: '1.7',
             },
             {
-                label: 'Visto', className: 'h-3 w-5 shrink-0 transition-colors duration-300 text-sky-300', viewBox: '0 0 20 12',
+                label: 'Visto', className: 'h-3 w-5 shrink-0 transition-colors duration-300 text-tick-read', viewBox: '0 0 20 12',
                 paths: ['M1.5 6.5 5 10l7.5-8', 'M8.6 9.4 9.2 10l7.5-8'], stroke: 'currentColor', strokeWidth: '1.7',
             },
         ]);

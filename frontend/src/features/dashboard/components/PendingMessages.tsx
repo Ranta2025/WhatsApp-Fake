@@ -14,7 +14,7 @@ import type { OutboxItem } from '../../outbox/outboxTypes';
  */
 
 const FailedMark = (): JSX.Element => (
-    <span data-testid="message-failed" className="inline-flex items-center gap-0.5 text-[11px] font-medium text-rose-300">
+    <span data-testid="message-failed" className="inline-flex items-center gap-0.5 text-[11px] font-medium text-failed-on-accent">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-3 w-3 shrink-0" aria-hidden="true">
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
             <path d="M12 7v6M12 16.5v.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
