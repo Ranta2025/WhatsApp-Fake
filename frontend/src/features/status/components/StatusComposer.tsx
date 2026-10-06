@@ -187,7 +187,7 @@ export default function StatusComposer() {
             <header className="flex items-center justify-between px-4 py-3 flex-shrink-0">
                 <button
                     onClick={handleClose}
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-slate-300 hover:bg-white/10 transition-colors"
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-slate-300 hover:bg-fg/10 transition-colors"
                     aria-label="Cerrar"
                 >
                     <CloseIcon />
@@ -224,10 +224,10 @@ export default function StatusComposer() {
                         placeholder="Escribe un estado..."
                         aria-label="Texto del estado"
                         maxLength={TEXT_MAX}
-                        className="w-full max-w-lg bg-transparent text-white text-2xl font-medium text-center placeholder-white/60 resize-none outline-none min-h-[8rem]"
+                        className="w-full max-w-lg bg-transparent text-white text-2xl font-medium text-center placeholder-white/60 resize-none outline-none min-h-[8rem]" // theme-ok
                         autoFocus
                     />
-                    <span className="text-white/70 text-xs mt-2">{text.length}/{TEXT_MAX}</span>
+                    <span className="text-white/70 text-xs mt-2">{text.length}/{TEXT_MAX}</span>{/* theme-ok */}
                 </div>
             )}
 
@@ -279,7 +279,7 @@ export default function StatusComposer() {
                     )}
                     <button
                         onClick={mode === 'text' ? () => setColorIndex(i => (i + 1) % BG_COLORS.length) : () => fileInputRef.current?.click()}
-                        className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-100 text-sm font-medium transition-colors"
+                        className="px-4 py-2.5 rounded-xl bg-fg/10 hover:bg-fg/15 text-slate-100 text-sm font-medium transition-colors"
                         aria-label={mode === 'text' ? 'Cambiar color de fondo' : 'Elegir otro archivo'}
                     >
                         {mode === 'text' ? 'Color' : 'Cambiar'}
@@ -287,7 +287,7 @@ export default function StatusComposer() {
                     <button
                         onClick={mode === 'text' ? publishText : publishMedia}
                         disabled={mode === 'text' ? !canPublishText : !canPublishMedia}
-                        className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+                        className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-on-accent text-sm font-semibold transition-colors"
                     >
                         Publicar
                     </button>

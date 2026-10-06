@@ -26,7 +26,7 @@ const MemberRow = ({ member }: { member: GroupMemberBrief }): JSX.Element => (
 const Section = ({ title, members, alwaysShow }: { title: string; members: GroupMemberBrief[]; alwaysShow: boolean }): JSX.Element | null => {
     if (members.length === 0 && !alwaysShow) return null;
     return (
-        <section className="px-4 py-3 border-t border-white/5">
+        <section className="px-4 py-3 border-t border-fg/5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{title}</h3>
             {members.length === 0
                 ? <p className="text-sm text-slate-500 py-1">Nadie todavía</p>
@@ -60,14 +60,14 @@ export default function GroupMessageInfoModal({ message, onClose }: GroupMessage
     }, [groupID, messageID]);
 
     return (
-        <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
              onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             <div role="dialog" aria-label="Info del mensaje"
-                 className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col">
-                <div className="flex items-center justify-between p-4 border-b border-white/5">
-                    <h2 className="font-semibold text-white">Info del mensaje</h2>
+                 className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col">
+                <div className="flex items-center justify-between p-4 border-b border-fg/5">
+                    <h2 className="font-semibold text-fg">Info del mensaje</h2>
                     <button onClick={onClose} aria-label="Cerrar"
-                            className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10">
+                            className="text-slate-400 hover:text-fg p-1 rounded-full hover:bg-fg/10">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>

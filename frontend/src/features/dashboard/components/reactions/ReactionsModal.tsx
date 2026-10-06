@@ -50,24 +50,24 @@ export default function ReactionsModal({ target, myTelephon, onClose }: Reaction
     const rows = visible.flatMap(e => e.users.map(user => ({ emoji: e.emoji, user })));
     const total = entries.reduce((sum, e) => sum + e.users.length, 0);
     const tabClass = (active: boolean) =>
-        `shrink-0 rounded-full px-2.5 py-1 text-xs ${active ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`;
+        `shrink-0 rounded-full px-2.5 py-1 text-xs ${active ? 'bg-indigo-600 text-on-accent' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`;
 
     return (
-        <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
              onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             <div role="dialog" aria-label="Reacciones"
-                 className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col">
-                <div className="flex items-center justify-between p-4 border-b border-white/5">
-                    <h2 className="font-semibold text-white">Reacciones</h2>
+                 className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col">
+                <div className="flex items-center justify-between p-4 border-b border-fg/5">
+                    <h2 className="font-semibold text-fg">Reacciones</h2>
                     <button onClick={onClose} aria-label="Cerrar"
-                            className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10">
+                            className="text-slate-400 hover:text-fg p-1 rounded-full hover:bg-fg/10">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
                 {state.status === 'ready' && entries.length > 0 && (
-                    <div className="flex gap-1.5 overflow-x-auto px-4 py-2 border-b border-white/5">
+                    <div className="flex gap-1.5 overflow-x-auto px-4 py-2 border-b border-fg/5">
                         <button type="button" aria-label="Ver todas" aria-pressed={filter === null}
                                 onClick={() => setFilter(null)} className={tabClass(filter === null)}>
                             Todas {total}

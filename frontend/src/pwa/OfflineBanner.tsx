@@ -34,7 +34,7 @@ export default function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed top-0 inset-x-0 z-toast bg-amber-600 py-1 text-center text-xs font-medium text-white"
+      className="fixed top-0 inset-x-0 z-toast bg-amber-600 py-1 text-center text-xs font-medium text-on-accent"
     >
       Sin conexión
     </div>

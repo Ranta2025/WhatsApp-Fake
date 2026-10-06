@@ -160,23 +160,23 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                             {newAvatarPreview || (myAvatar && !removeAvatar) ? (
                                 <img src={newAvatarPreview || myAvatar} alt="avatar" className="w-24 h-24 rounded-full object-cover border-2 border-indigo-500/50" />
                             ) : (
-                                <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-slate-600 rounded-full flex items-center justify-center font-bold text-3xl border-2 border-indigo-500/50 text-white">
+                                <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-slate-600 rounded-full flex items-center justify-center font-bold text-3xl border-2 border-indigo-500/50 text-on-accent">
                                     {user?.username?.charAt(0).toUpperCase()}
                                 </div>
                             )}
                             <div className="absolute inset-0 bg-slate-900/60 rounded-full opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
                                 {uploadingAvatar ? (
-                                    <svg className="w-6 h-6 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6 text-on-accent animate-spin" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                                     </svg>
                                 ) : (
                                     <>
-                                        <svg className="w-6 h-6 text-white mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg className="w-6 h-6 text-on-accent mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                                         </svg>
-                                        <span className="text-[10px] text-white font-medium">Cambiar</span>
+                                        <span className="text-[10px] text-on-accent font-medium">Cambiar</span>
                                     </>
                                 )}
                             </div>
@@ -214,7 +214,7 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-3 gap-3">
-                                    <label className="cursor-pointer flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-500/80 hover:bg-indigo-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg">
+                                    <label className="cursor-pointer flex items-center gap-1.5 text-sm font-medium text-on-accent bg-indigo-500/80 hover:bg-indigo-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg">
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
@@ -224,7 +224,7 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                                     <button
                                         type="button"
                                         onClick={handleRemoveGlobalWallpaper}
-                                        className="flex items-center gap-1.5 text-sm font-medium text-white bg-rose-500/80 hover:bg-rose-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg"
+                                        className="flex items-center gap-1.5 text-sm font-medium text-on-accent bg-rose-500/80 hover:bg-rose-500 backdrop-blur-md px-3 py-1.5 rounded-lg transition-all shadow-lg"
                                     >
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -294,13 +294,13 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-slate-300 bg-slate-700/50 hover:bg-slate-700 hover:text-white transition-colors"
+                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-slate-300 bg-slate-700/50 hover:bg-slate-700 hover:text-fg transition-colors"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
+                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-on-accent bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
                             disabled={uploadingAvatar || uploadingWallpaper}
                         >
                             {uploadingAvatar ? 'Guardando...' : 'Guardar Cambios'}

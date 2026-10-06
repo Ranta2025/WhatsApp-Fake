@@ -65,11 +65,11 @@ describe('MessageList status ticks (1:1)', () => {
     it('renders sent / delivered / read ticks for own messages only, with the exact geometry and colors', () => {
         expect(ticks()).toEqual([
             {
-                label: 'Enviado', className: 'h-3 w-5 shrink-0 text-white/60', viewBox: '0 0 20 12',
+                label: 'Enviado', className: 'h-3 w-5 shrink-0 text-on-accent/60', viewBox: '0 0 20 12',
                 paths: ['M4.5 6.5 8 10l7.5-8'], stroke: 'currentColor', strokeWidth: '1.7',
             },
             {
-                label: 'Entregado', className: 'h-3 w-5 shrink-0 transition-colors duration-300 text-white/60', viewBox: '0 0 20 12',
+                label: 'Entregado', className: 'h-3 w-5 shrink-0 transition-colors duration-300 text-on-accent/60', viewBox: '0 0 20 12',
                 paths: ['M1.5 6.5 5 10l7.5-8', 'M8.6 9.4 9.2 10l7.5-8'], stroke: 'currentColor', strokeWidth: '1.7',
             },
             {

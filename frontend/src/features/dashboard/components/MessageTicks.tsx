@@ -24,7 +24,7 @@ export default function MessageTicks({ status }: { status: TickStatus }): JSX.El
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 12"
-                className={`h-3 w-5 shrink-0 transition-colors duration-300 ${isRead ? 'text-sky-300' : 'text-white/60'}`}
+                className={`h-3 w-5 shrink-0 transition-colors duration-300 ${isRead ? 'text-sky-300' : 'text-on-accent/60'}`}
                 role="img"
                 aria-label={isRead ? 'Visto' : 'Entregado'}
             >
@@ -38,7 +38,7 @@ export default function MessageTicks({ status }: { status: TickStatus }): JSX.El
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 12"
-                className="h-3 w-5 shrink-0 text-white/60"
+                className="h-3 w-5 shrink-0 text-on-accent/60"
                 role="img"
                 aria-label="Enviado"
             >
@@ -50,7 +50,7 @@ export default function MessageTicks({ status }: { status: TickStatus }): JSX.El
         <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
-            className="h-3 w-3 shrink-0 text-white/50"
+            className="h-3 w-3 shrink-0 text-on-accent/50"
             role="img"
             aria-label={status === 'pending' ? 'Pendiente de envío' : 'Enviando'}
             {...(status === 'pending' ? { 'data-testid': 'message-pending' } : {})}

@@ -224,7 +224,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
+                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-on-accent bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98]"
                         >
                             {isLoading ? 'Añadiendo...' : 'Añadir'}
                         </button>

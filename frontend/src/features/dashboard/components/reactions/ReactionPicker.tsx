@@ -25,7 +25,7 @@ export default function ReactionPicker({ currentEmoji, onSelect, onMore }: React
                         aria-label={`Reaccionar con ${emoji}`}
                         aria-pressed={pressed}
                         onClick={() => onSelect(emoji)}
-                        className={`h-8 w-8 rounded-full text-lg leading-none transition-transform hover:scale-125 ${pressed ? 'bg-indigo-500/40 ring-1 ring-indigo-300' : 'hover:bg-white/10'}`}
+                        className={`h-8 w-8 rounded-full text-lg leading-none transition-transform hover:scale-125 ${pressed ? 'bg-indigo-500/40 ring-1 ring-indigo-300' : 'hover:bg-fg/10'}`}
                     >
                         {emoji}
                     </button>
@@ -35,7 +35,7 @@ export default function ReactionPicker({ currentEmoji, onSelect, onMore }: React
                 type="button"
                 aria-label="Más emojis"
                 onClick={onMore}
-                className="h-8 w-8 rounded-full bg-white/10 text-slate-200 hover:bg-white/20 flex items-center justify-center"
+                className="h-8 w-8 rounded-full bg-fg/10 text-slate-200 hover:bg-fg/20 flex items-center justify-center"
             >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14M5 12h14" />

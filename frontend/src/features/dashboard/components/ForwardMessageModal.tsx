@@ -93,7 +93,7 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
                             placeholder="Buscar contacto..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full bg-slate-900 text-slate-100 pl-9 pr-4 py-2.5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm placeholder:text-slate-500"
+                            className="w-full bg-slate-900 text-slate-100 pl-9 pr-4 py-2.5 rounded-xl border border-fg/10 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm placeholder:text-slate-500"
                         />
                     </div>
                     {selected.length === MAX_CONTACTS && (
@@ -138,7 +138,7 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
                                                 className="w-10 h-10 rounded-full object-cover"
                                             />
                                         ) : (
-                                            <div className="w-10 h-10 rounded-full bg-slate-700 border border-white/5 flex items-center justify-center text-sm font-bold text-indigo-400">
+                                            <div className="w-10 h-10 rounded-full bg-slate-700 border border-fg/5 flex items-center justify-center text-sm font-bold text-indigo-400">
                                                 {displayName.charAt(0).toUpperCase()}
                                             </div>
                                         )}
@@ -157,7 +157,7 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
                                             : 'border-slate-500'
                                     }`}>
                                         {isSelected && (
-                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <svg className="w-3 h-3 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                             </svg>
                                         )}
@@ -186,7 +186,7 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
                             className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors flex items-center gap-2 ${
                                 selected.length === 0
                                     ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/30'
+                                    : 'bg-indigo-600 hover:bg-indigo-500 text-on-accent shadow-lg shadow-indigo-900/30'
                             }`}
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

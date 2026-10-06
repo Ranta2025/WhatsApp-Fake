@@ -198,7 +198,7 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }: 
                 return (
                     <div
                         key={callID}
-                        className="group relative w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded flex items-center gap-3 cursor-pointer transition"
+                        className="group relative w-full text-left p-3 bg-fg/5 hover:bg-fg/10 rounded flex items-center gap-3 cursor-pointer transition"
                         onClick={() => {
                             // Al hacer click, abrir chat con ese contacto
                             const contact = contacts?.find(c => c.Number === remoteTelephon);
@@ -215,7 +215,7 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }: 
                         }}
                     >
                         {/* Avatar */}
-                        <div className="relative w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-sm shrink-0">
+                        <div className="relative w-9 h-9 bg-fg/10 rounded-full flex items-center justify-center text-sm shrink-0">
                             {displayName?.charAt(0)?.toUpperCase()}
                         </div>
 
@@ -252,7 +252,7 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }: 
                                             onStartCall(remoteTelephon, displayName, callType);
                                         }
                                     }}
-                                    className="p-1 rounded hover:bg-white/20 text-indigo-300 hover:text-white transition opacity-0 group-hover:opacity-100"
+                                    className="p-1 rounded hover:bg-fg/20 text-indigo-300 hover:text-fg transition opacity-0 group-hover:opacity-100"
                                     title={isVideo ? 'Videollamada' : 'Llamar'}
                                 >
                                     {isVideo ? <VideoIcon className="w-3.5 h-3.5" /> : <PhoneIcon className="w-3.5 h-3.5" />}

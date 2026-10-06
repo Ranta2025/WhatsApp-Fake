@@ -22,7 +22,7 @@ const ContactRow = ({ group, onOpen }: ContactRowProps) => {
     return (
         <button
             onClick={() => onOpen(group.Telephon)}
-            className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors"
+            className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-fg/[0.04] transition-colors"
         >
             <StatusRing segments={segments} size={52}>
                 <Avatar src={group.AvatarUrl} name={name} size="lg" />
@@ -72,7 +72,7 @@ const StatusList = () => {
                     <button
                         onClick={openComposer}
                         aria-label="Añadir una actualización de estado"
-                        className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center ring-2 ring-slate-900 hover:bg-indigo-400 transition-colors"
+                        className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-indigo-500 text-on-accent flex items-center justify-center ring-2 ring-slate-900 hover:bg-indigo-400 transition-colors"
                     >
                         <PlusIcon />
                     </button>

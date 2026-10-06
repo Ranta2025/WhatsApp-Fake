@@ -47,7 +47,7 @@ const DisappearingSelector = ({ value, onChange, readOnlyHint }: SelectorProps) 
     };
 
     return (
-        <div className="bg-white/5 rounded-xl p-4 border border-white/5 w-full" data-testid="disappearing-section">
+        <div className="bg-fg/5 rounded-xl p-4 border border-fg/5 w-full" data-testid="disappearing-section">
             <div className="text-xs text-indigo-300/70 mb-3 uppercase tracking-wider font-semibold">Mensajes temporales</div>
             {onChange ? (
                 <div className="flex items-center gap-2">
@@ -56,7 +56,7 @@ const DisappearingSelector = ({ value, onChange, readOnlyHint }: SelectorProps) 
                         value={String(value)}
                         onChange={e => { void handle(e); }}
                         disabled={pending}
-                        className="flex-1 bg-slate-800 text-white text-sm rounded-lg border border-white/10 px-3 py-2 disabled:opacity-60"
+                        className="flex-1 bg-slate-800 text-fg text-sm rounded-lg border border-fg/10 px-3 py-2 disabled:opacity-60"
                     >
                         {DISAPPEAR_OPTIONS.map(s => (
                             <option key={s} value={String(s)}>{disappearOptionLabel(s)}</option>
@@ -68,7 +68,7 @@ const DisappearingSelector = ({ value, onChange, readOnlyHint }: SelectorProps) 
                 </div>
             ) : (
                 <>
-                    <div className="text-sm text-white font-medium" data-testid="disappearing-readonly">{disappearOptionLabel(value)}</div>
+                    <div className="text-sm text-fg font-medium" data-testid="disappearing-readonly">{disappearOptionLabel(value)}</div>
                     {readOnlyHint && <p className="text-xs text-amber-200/80 mt-2">{readOnlyHint}</p>}
                 </>
             )}

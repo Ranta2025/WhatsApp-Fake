@@ -331,7 +331,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                 <div className="flex items-center gap-6 py-6">
                     <button
                         onClick={closeCameraPreview}
-                        className="w-14 h-14 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all text-white"
+                        className="w-14 h-14 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all text-fg"
                         aria-label="Cancelar"
                     >
                         <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -340,10 +340,10 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                     </button>
                     <button
                         onClick={capturePhoto}
-                        className="w-20 h-20 bg-white hover:bg-gray-200 rounded-full flex items-center justify-center transition-all shadow-lg border-4 border-white/50"
+                        className="w-20 h-20 bg-white hover:bg-gray-200 rounded-full flex items-center justify-center transition-all shadow-lg border-4 border-white/50" // theme-ok
                         aria-label="Tomar foto"
                     >
-                        <div className="w-16 h-16 bg-white rounded-full border-2 border-gray-300"></div>
+                        <div className="w-16 h-16 bg-white rounded-full border-2 border-gray-300"></div>{/* theme-ok */}
                     </button>
                     <div className="w-14 h-14"></div>
                 </div>
@@ -356,7 +356,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
             open
             onClose={onClose}
             anchorRef={anchorRef}
-            className="bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 min-w-[200px] animate-slide-up origin-bottom-left"
+            className="bg-slate-900/95 backdrop-blur-xl border border-fg/10 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 min-w-[200px] animate-slide-up origin-bottom-left"
         >
             <input
                 type="file" 
@@ -382,7 +382,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
                 <>
                     <button 
                         onClick={handleCameraCapture}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-all text-left text-sm text-white group"
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-fg/10 rounded-xl transition-all text-left text-sm text-fg group"
                     >
                         <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 group-active:scale-95 transition-all shadow-lg shadow-emerald-500/10">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -398,7 +398,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
 
                     <button 
                         onClick={() => triggerFileInput('image', 'image/*')}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-all text-left text-sm text-white group"
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-fg/10 rounded-xl transition-all text-left text-sm text-fg group"
                     >
                         <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-110 group-active:scale-95 transition-all shadow-lg shadow-blue-500/10">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -413,7 +413,7 @@ export default function MediaUploadMenu({ onUploadSuccess, onUploadError, onClos
 
                     <button 
                         onClick={() => triggerFileInput('document', '.doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx,.txt')}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 rounded-xl transition-all text-left text-sm text-white group"
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-fg/10 rounded-xl transition-all text-left text-sm text-fg group"
                     >
                         <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 group-active:scale-95 transition-all shadow-lg shadow-purple-500/10">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

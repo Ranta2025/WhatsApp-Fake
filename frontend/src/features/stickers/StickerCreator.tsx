@@ -256,7 +256,7 @@ export default function StickerCreator({
     };
 
     return (
-        <div role="dialog" aria-label="Crear sticker" className="flex flex-col gap-3 p-4 text-sm text-white">
+        <div role="dialog" aria-label="Crear sticker" className="flex flex-col gap-3 p-4 text-sm text-fg">
             <h2 className="text-base font-semibold">Crear sticker</h2>
 
             <input
@@ -264,7 +264,7 @@ export default function StickerCreator({
                 accept="image/*"
                 aria-label="Elegir imagen"
                 onChange={(event) => { void handlePick(event); }}
-                className="text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-1 file:text-white"
+                className="text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-1 file:text-on-accent"
             />
 
             {error && <p role="alert" className="text-rose-400">{error}</p>}
@@ -323,7 +323,7 @@ export default function StickerCreator({
                             value={tags}
                             placeholder="hola, amor"
                             onChange={(event) => setTags(event.target.value)}
-                            className="rounded-lg bg-white/10 px-3 py-1"
+                            className="rounded-lg bg-fg/10 px-3 py-1"
                         />
                     </label>
 
@@ -350,7 +350,7 @@ export default function StickerCreator({
             )}
 
             {onClose && (
-                <button type="button" onClick={onClose} className="rounded-lg bg-white/10 px-3 py-2">
+                <button type="button" onClick={onClose} className="rounded-lg bg-fg/10 px-3 py-2">
                     Cerrar
                 </button>
             )}

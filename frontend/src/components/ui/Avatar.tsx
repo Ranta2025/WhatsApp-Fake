@@ -56,7 +56,7 @@ export default function Avatar({ src, name = '', size = 'md', online = false, ri
             {src ? (
                 <img src={src} alt={name} className="w-full h-full rounded-full object-cover" loading="lazy" />
             ) : (
-                <div className={`w-full h-full rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center font-semibold text-white select-none`}>
+                <div className={`w-full h-full rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center font-semibold text-on-accent select-none`}>
                     {initial}
                 </div>
             )}

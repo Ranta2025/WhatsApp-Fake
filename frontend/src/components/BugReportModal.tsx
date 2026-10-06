@@ -111,16 +111,16 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
             className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="bg-gradient-to-br from-gray-900 to-purple-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-purple-500/30">
+            <div className="bg-gradient-to-br from-slate-900 to-purple-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-purple-500/30">
                 {/* Header */}
                 <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex justify-between items-center rounded-t-2xl">
                     <div className="flex items-center gap-2">
-                        <WarningIcon className="w-6 h-6 text-white" />
-                        <h2 className="text-2xl font-bold text-white">Reportar un Bug</h2>
+                        <WarningIcon className="w-6 h-6 text-on-accent" />
+                        <h2 className="text-2xl font-bold text-on-accent">Reportar un Bug</h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-white hover:bg-white/20 rounded-lg p-2 transition"
+                        className="text-on-accent hover:bg-on-accent/20 rounded-lg p-2 transition"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -136,7 +136,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
 
                     {/* Título */}
                     <div>
-                        <label className="block text-white font-semibold mb-2">
+                        <label className="block text-fg font-semibold mb-2">
                             Título del Bug <span className="text-red-400">*</span>
                         </label>
                         <input
@@ -146,13 +146,13 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                             onChange={handleChange}
                             required
                             placeholder="Ej: El botón de enviar no funciona"
-                            className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
+                            className="w-full px-4 py-3 bg-fg/10 border border-fg/20 rounded-lg text-fg placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                         />
                     </div>
 
                     {/* Descripción */}
                     <div>
-                        <label className="block text-white font-semibold mb-2">
+                        <label className="block text-fg font-semibold mb-2">
                             Descripción <span className="text-red-400">*</span>
                         </label>
                         <textarea
@@ -162,13 +162,13 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                             required
                             rows={3}
                             placeholder="Describe el problema que encontraste..."
-                            className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
+                            className="w-full px-4 py-3 bg-fg/10 border border-fg/20 rounded-lg text-fg placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                         />
                     </div>
 
                     {/* Pasos para reproducir */}
                     <div>
-                        <label className="block text-white font-semibold mb-2">
+                        <label className="block text-fg font-semibold mb-2">
                             Pasos para Reproducir
                         </label>
                         <textarea
@@ -177,14 +177,14 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                             onChange={handleChange}
                             rows={3}
                             placeholder="1. Ir a la página de login&#10;2. Ingresar credenciales&#10;3. Hacer clic en enviar..."
-                            className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
+                            className="w-full px-4 py-3 bg-fg/10 border border-fg/20 rounded-lg text-fg placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                         />
                     </div>
 
                     {/* Comportamiento esperado y actual en dos columnas */}
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-white font-semibold mb-2">
+                            <label className="block text-fg font-semibold mb-2">
                                 Comportamiento Esperado
                             </label>
                             <textarea
@@ -193,11 +193,11 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                                 onChange={handleChange}
                                 rows={2}
                                 placeholder="¿Qué debería pasar?"
-                                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
+                                className="w-full px-4 py-3 bg-fg/10 border border-fg/20 rounded-lg text-fg placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                             />
                         </div>
                         <div>
-                            <label className="block text-white font-semibold mb-2">
+                            <label className="block text-fg font-semibold mb-2">
                                 Comportamiento Actual
                             </label>
                             <textarea
@@ -206,14 +206,14 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                                 onChange={handleChange}
                                 rows={2}
                                 placeholder="¿Qué pasa realmente?"
-                                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
+                                className="w-full px-4 py-3 bg-fg/10 border border-fg/20 rounded-lg text-fg placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                             />
                         </div>
                     </div>
 
                     {/* Email del usuario */}
                     <div>
-                        <label className="block text-white font-semibold mb-2">
+                        <label className="block text-fg font-semibold mb-2">
                             Tu Email (opcional)
                         </label>
                         <input
@@ -222,7 +222,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                             value={formData.user_email}
                             onChange={handleChange}
                             placeholder="tu@email.com"
-                            className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
+                            className="w-full px-4 py-3 bg-fg/10 border border-fg/20 rounded-lg text-fg placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
                         />
                         <p className="text-indigo-300 text-xs mt-1">
                             Por si necesitamos contactarte para más detalles
@@ -230,7 +230,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                     </div>
 
                     {/* Información del sistema */}
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                    <div className="bg-fg/5 border border-fg/10 rounded-lg p-4">
                         <p className="text-indigo-300 text-sm flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -263,14 +263,14 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg transition border border-white/20"
+                            className="flex-1 px-6 py-3 bg-fg/10 hover:bg-fg/20 text-fg font-semibold rounded-lg transition border border-fg/20"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-lg transition transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                            className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-on-accent font-bold rounded-lg transition transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                         >
                             {isSubmitting ? (
                                 <span className="flex items-center justify-center gap-2">

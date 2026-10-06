@@ -44,9 +44,9 @@ const ViewersSheet = ({ viewers, onClose }: ViewersSheetProps) => (
         <div className="absolute inset-0 bg-black/60" />
         <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-h-[60vh] bg-slate-900 rounded-t-2xl border-t border-white/10 flex flex-col animate-slide-up"
+            className="relative w-full max-h-[60vh] bg-slate-900 rounded-t-2xl border-t border-fg/10 flex flex-col animate-slide-up"
         >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 flex-shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-fg/5 flex-shrink-0">
                 <h3 className="text-slate-100 font-semibold text-sm">Visto por {viewers.length}</h3>
                 <button onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1" aria-label="Cerrar lista de vistos">
                     <CloseIcon />
@@ -308,9 +308,9 @@ export default function StatusViewer() {
             {/* Barras de progreso */}
             <div className="flex gap-1 px-3 pt-3 flex-shrink-0">
                 {currentStatuses.map((s, i) => (
-                    <div key={s.ID} className="flex-1 h-0.5 rounded-full bg-white/25 overflow-hidden">
+                    <div key={s.ID} className="flex-1 h-0.5 rounded-full bg-white/25 overflow-hidden">{/* theme-ok */}
                         <div
-                            className="h-full bg-white"
+                            className="h-full bg-white" // theme-ok
                             style={{ width: `${i < statusIndex ? 100 : i === statusIndex ? progress : 0}%` }}
                         />
                     </div>
@@ -321,12 +321,12 @@ export default function StatusViewer() {
             <header className="flex items-center gap-3 px-4 py-3 flex-shrink-0">
                 <Avatar src={ownerAvatar} name={ownerName} size="sm" />
                 <div className="flex-1 min-w-0">
-                    <div className="text-white font-semibold text-sm truncate">{ownerName}</div>
-                    <div className="text-white/60 text-xs">{formatStatusTimestamp(currentStatus.CreatedAt)}</div>
+                    <div className="text-white font-semibold text-sm truncate">{ownerName}</div>{/* theme-ok */}
+                    <div className="text-white/60 text-xs">{formatStatusTimestamp(currentStatus.CreatedAt)}</div>{/* theme-ok */}
                 </div>
                 <button
                     onClick={closeViewer}
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors"
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors" // theme-ok
                     aria-label="Cerrar visor de estados"
                 >
                     <CloseIcon />
@@ -340,7 +340,7 @@ export default function StatusViewer() {
                         className="absolute inset-0 flex items-center justify-center p-8"
                         style={{ backgroundColor: currentStatus.BackgroundColor || '#128C7E' }}
                     >
-                        <p className="text-white text-2xl sm:text-3xl font-medium text-center break-words max-w-2xl">
+                        <p className="text-white text-2xl sm:text-3xl font-medium text-center break-words max-w-2xl">{/* theme-ok */}
                             {currentStatus.Text}
                         </p>
                     </div>
@@ -367,7 +367,7 @@ export default function StatusViewer() {
             {/* Leyenda */}
             {currentStatus.Caption && currentStatus.Type !== 'text' && (
                 <div className="px-4 pb-3 flex-shrink-0">
-                    <p className="text-white text-sm text-center bg-black/40 rounded-xl px-3 py-2 inline-block max-w-full">
+                    <p className="text-white text-sm text-center bg-black/40 rounded-xl px-3 py-2 inline-block max-w-full">{/* theme-ok */}
                         {currentStatus.Caption}
                     </p>
                 </div>
@@ -378,7 +378,7 @@ export default function StatusViewer() {
                 <footer className="flex items-center justify-center gap-6 px-4 py-3 flex-shrink-0">
                     <button
                         onClick={(e) => { e.stopPropagation(); openViewers(); }}
-                        className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors"
+                        className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors" // theme-ok
                         aria-label="Ver quién vio este estado"
                     >
                         <EyeIcon />
@@ -386,7 +386,7 @@ export default function StatusViewer() {
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                        className="flex items-center gap-1.5 text-white/80 hover:text-rose-400 text-sm font-medium transition-colors"
+                        className="flex items-center gap-1.5 text-white/80 hover:text-rose-400 text-sm font-medium transition-colors" // theme-ok
                         aria-label="Eliminar este estado"
                     >
                         <TrashIcon />

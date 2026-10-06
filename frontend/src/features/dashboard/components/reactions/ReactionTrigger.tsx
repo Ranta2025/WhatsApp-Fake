@@ -22,7 +22,7 @@ export default function ReactionTrigger({ currentEmoji, onSelect, onMore, align 
                 ref={triggerRef}
                 type="button"
                 onClick={() => setOpen(o => !o)}
-                className="p-1.5 glass rounded-full text-slate-400 hover:text-white transition-all shadow-lg"
+                className="p-1.5 glass rounded-full text-slate-400 hover:text-fg transition-all shadow-lg"
                 aria-label="Reaccionar"
             >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -34,7 +34,7 @@ export default function ReactionTrigger({ currentEmoji, onSelect, onMore, align 
                 onClose={() => setOpen(false)}
                 anchorRef={triggerRef}
                 align={align}
-                className="bg-slate-800 border border-white/10 rounded-full shadow-2xl animate-fade-in"
+                className="bg-slate-800 border border-fg/10 rounded-full shadow-2xl animate-fade-in"
             >
                 <ReactionPicker
                     currentEmoji={currentEmoji}

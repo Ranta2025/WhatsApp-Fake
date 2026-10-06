@@ -42,7 +42,7 @@ const ChatSearchBar = ({ search }: ChatSearchBarProps) => {
     };
 
     return (
-        <div className="flex-shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 border-b border-white/[0.06] bg-slate-900/90 backdrop-blur-xl animate-fade-in">
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 border-b border-fg/[0.06] bg-slate-900/90 backdrop-blur-xl animate-fade-in">
             <input
                 ref={inputRef}
                 type="text"
@@ -52,7 +52,7 @@ const ChatSearchBar = ({ search }: ChatSearchBarProps) => {
                 placeholder="Buscar"
                 aria-label="Buscar en el chat"
                 maxLength={100}
-                className="flex-1 min-w-0 bg-slate-800/80 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400/60"
+                className="flex-1 min-w-0 bg-slate-800/80 border border-fg/10 rounded-lg px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400/60"
             />
             <span role="status" aria-live="polite" className="text-xs text-slate-400 whitespace-nowrap min-w-[3.5rem] text-right">
                 {statusText(search)}

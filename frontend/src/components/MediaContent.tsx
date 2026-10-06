@@ -43,14 +43,14 @@ export default function MediaContent({ message, isMine }: MediaContentProps) {
             );
         case 'document':
             return (
-                <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-2 flex items-center gap-3 p-3 bg-black/20 hover:bg-black/30 rounded-xl transition-all border border-white/5 group">
+                <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="mb-2 flex items-center gap-3 p-3 bg-quote hover:bg-black/30 rounded-xl transition-all border border-fg/5 group">
                     <div className="w-11 h-11 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold text-white truncate">Documento</div>
+                        <div className={`text-sm font-bold ${isMine ? 'text-on-accent' : 'text-fg'} truncate`}>Documento</div>
                         <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300/60">Clic para descargar</div>
                     </div>
                 </a>

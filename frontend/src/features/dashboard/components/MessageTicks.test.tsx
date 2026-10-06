@@ -30,14 +30,14 @@ describe('MessageTicks', () => {
         const el = svg('enviado');
         expect(el?.getAttribute('aria-label')).toBe('Enviado');
         expect(el?.querySelectorAll('path')).toHaveLength(1);
-        expect(el?.getAttribute('class')).toContain('text-white/60');
+        expect(el?.getAttribute('class')).toContain('text-on-accent/60');
     });
 
     it('double grey check for "entregado"', () => {
         const el = svg('entregado');
         expect(el?.getAttribute('aria-label')).toBe('Entregado');
         expect(el?.querySelectorAll('path')).toHaveLength(2);
-        expect(el?.getAttribute('class')).toContain('text-white/60');
+        expect(el?.getAttribute('class')).toContain('text-on-accent/60');
     });
 
     it('double blue check for "visto"', () => {

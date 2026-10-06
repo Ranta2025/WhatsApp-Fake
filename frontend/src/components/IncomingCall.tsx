@@ -93,12 +93,12 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
 
     return (
         <div className="fixed inset-0 z-call bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-8 w-full max-w-sm text-center shadow-2xl animate-fade-in">
+            <div className="bg-slate-900 border border-fg/10 rounded-[2.5rem] p-8 w-full max-w-sm text-center shadow-2xl animate-fade-in">
                 {/* Avatar animado */}
                 <div className="relative mx-auto w-32 h-32 mb-8">
                     <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping duration-1000"></div>
                     <div className="absolute inset-4 bg-indigo-500/30 rounded-full animate-ping duration-1000 delay-300"></div>
-                    <div className="relative w-32 h-32 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-2xl">
+                    <div className="relative w-32 h-32 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-on-accent text-4xl font-bold shadow-2xl">
                         {(callerName || callerNumber)?.charAt(0)?.toUpperCase()}
                     </div>
                     {/* Icono de tipo de llamada */}
@@ -117,7 +117,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
 
                 {/* Identificación */}
                 <div className="space-y-2 mb-10">
-                    <h3 className="text-white text-3xl font-bold tracking-tight">
+                    <h3 className="text-fg text-3xl font-bold tracking-tight">
                         {callerName || 'Desconocido'}
                     </h3>
                     <p className="text-indigo-400 font-medium tracking-wider">
@@ -141,7 +141,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                             className="w-20 h-20 bg-red-500 hover:bg-red-600 active:scale-90 rounded-full flex items-center justify-center transition-all shadow-xl shadow-red-500/20 group"
                             aria-label="Rechazar llamada"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white rotate-[135deg] group-hover:rotate-[145deg] transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-on-accent rotate-[135deg] group-hover:rotate-[145deg] transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                             </svg>
                         </button>
@@ -159,7 +159,7 @@ export default function IncomingCall({ callerName, callerNumber, callType = 'vid
                             className="w-20 h-20 bg-emerald-500 hover:bg-emerald-600 active:scale-90 rounded-full flex items-center justify-center transition-all shadow-xl shadow-emerald-500/20 group"
                             aria-label="Aceptar llamada"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-on-accent group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                             </svg>
                         </button>

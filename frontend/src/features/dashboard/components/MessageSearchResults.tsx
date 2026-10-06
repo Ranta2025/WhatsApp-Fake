@@ -34,7 +34,7 @@ const MessageSearchResults = ({ status, chats, onOpen }: MessageSearchResultsPro
                             type="button"
                             data-chat-header
                             onClick={() => { if (newest) onOpen(chat, newest.messageID); }}
-                            className="w-full text-left flex items-center gap-3 px-3 pt-2 pb-1 rounded-xl hover:bg-white/[0.04] transition-colors"
+                            className="w-full text-left flex items-center gap-3 px-3 pt-2 pb-1 rounded-xl hover:bg-fg/[0.04] transition-colors"
                         >
                             <Avatar src={chat.avatarUrl || undefined} name={chat.name} size="sm" />
                             <span className="font-semibold text-[14px] text-slate-100 truncate">{chat.name}</span>
@@ -49,7 +49,7 @@ const MessageSearchResults = ({ status, chats, onOpen }: MessageSearchResultsPro
                                         type="button"
                                         data-result-id={result.messageID}
                                         onClick={() => onOpen(chat, result.messageID)}
-                                        className="w-full text-left flex items-baseline justify-between gap-2 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+                                        className="w-full text-left flex items-baseline justify-between gap-2 px-3 py-1.5 rounded-lg hover:bg-fg/[0.04] transition-colors"
                                     >
                                         <span className="text-[13px] text-slate-300 truncate">
                                             {splitByRanges(result.snippet, result.highlights).map((seg, i) => (

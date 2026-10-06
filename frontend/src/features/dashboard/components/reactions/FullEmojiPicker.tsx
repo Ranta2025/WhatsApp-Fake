@@ -48,14 +48,14 @@ export default function FullEmojiPicker({ onSelect, onClose }: FullEmojiPickerPr
     }, []);
 
     return (
-        <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
              onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             <div role="dialog" aria-label="Elegir emoji"
-                 className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-                    <h2 className="font-semibold text-white">Elegir emoji</h2>
+                 className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-fg/5">
+                    <h2 className="font-semibold text-fg">Elegir emoji</h2>
                     <button onClick={onClose} aria-label="Cerrar"
-                            className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10">
+                            className="text-slate-400 hover:text-fg p-1 rounded-full hover:bg-fg/10">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>

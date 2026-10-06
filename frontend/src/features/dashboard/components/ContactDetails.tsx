@@ -91,17 +91,17 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
     const displayName = selected.ContactName || selected.Username;
 
     return (
-        <div className="fixed inset-0 lg:static lg:w-80 bg-slate-900/95 lg:border-l border-white/10 flex flex-col h-full z-modal shadow-2xl transition-all duration-300">
-            <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-white/5">
+        <div className="fixed inset-0 lg:static lg:w-80 bg-slate-900/95 lg:border-l border-fg/10 flex flex-col h-full z-modal shadow-2xl transition-all duration-300">
+            <div className="p-4 border-b border-fg/10 flex items-center gap-3 bg-fg/5">
                 <button 
                     onClick={onClose}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+                    className="p-2 hover:bg-fg/10 rounded-full transition-colors text-slate-400 hover:text-fg"
                 >
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                 </button>
-                <h3 className="font-bold text-lg text-white">Info. del contacto</h3>
+                <h3 className="font-bold text-lg text-fg">Info. del contacto</h3>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
@@ -113,13 +113,13 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                     {avatarUrl ? (
                         <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
                     ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-4xl font-bold text-white">
+                        <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-4xl font-bold text-on-accent">
                             {displayName?.charAt(0)?.toUpperCase()}
                         </div>
                     )}
                     {avatarUrl && (
                         <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="w-8 h-8 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                             </svg>
                         </div>
@@ -129,7 +129,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                     )}
                 </div>
                 
-                <h2 className="text-2xl font-bold text-white mb-1 text-center">
+                <h2 className="text-2xl font-bold text-fg mb-1 text-center">
                     {displayName}
                 </h2>
                 <p className="text-indigo-300 mb-6 text-center">
@@ -137,17 +137,17 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                 </p>
 
                 <div className="w-full space-y-4">
-                    <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                    <div className="bg-fg/5 rounded-xl p-4 border border-fg/5">
                         <div className="text-xs text-indigo-300/70 mb-1 uppercase tracking-wider font-semibold">Estado</div>
                         <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full ${isContactOnline(selected.Number) ? 'bg-green-500' : 'bg-slate-500'}`}></span>
-                            <span className="text-white font-medium">
+                            <span className="text-fg font-medium">
                                 {isContactOnline(selected.Number) ? 'En línea' : (getLastSeenText(selected.Number) || 'Desconectado')}
                             </span>
                         </div>
                     </div>
                     
-                    <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                    <div className="bg-fg/5 rounded-xl p-4 border border-fg/5">
                         <div className="text-xs text-indigo-300/70 mb-1 uppercase tracking-wider font-semibold">Acciones</div>
                         <div className="flex gap-2 mt-3">
                             <button 
@@ -175,7 +175,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
 
                     <ChatDisappearingSection />
 
-                    <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                    <div className="bg-fg/5 rounded-xl p-4 border border-fg/5">
                         <div className="text-xs text-indigo-300/70 mb-3 uppercase tracking-wider font-semibold">Fondo de este chat</div>
                         {chatWallpapers[selected.Number] ? (
                             <div className="relative rounded-xl overflow-hidden h-28 mb-2">
@@ -185,7 +185,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                                     className="w-full h-full object-cover"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 gap-2">
-                                    <label className="cursor-pointer flex items-center gap-1 text-xs text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
+                                    <label className="cursor-pointer flex items-center gap-1 text-xs text-on-accent bg-on-accent/20 hover:bg-on-accent/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
@@ -205,7 +205,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                                 </div>
                             </div>
                         ) : (
-                            <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed border-white/20 hover:border-indigo-400/60 bg-white/5 hover:bg-white/10 transition-all cursor-pointer gap-2 ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed border-fg/20 hover:border-indigo-400/60 bg-fg/5 hover:bg-fg/10 transition-all cursor-pointer gap-2 ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
                                 {uploadingWallpaper ? (
                                     <svg className="animate-spin h-5 w-5 text-indigo-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>

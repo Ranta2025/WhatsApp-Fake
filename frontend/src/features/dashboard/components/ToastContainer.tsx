@@ -149,21 +149,21 @@ const InAppNotification = ({ notif, onDismiss, onOpen }: InAppNotificationProps)
         >
             {/* Card principal */}
             <div
-                className="relative overflow-hidden rounded-2xl border border-white/[0.06]"
+                className="relative overflow-hidden rounded-2xl border border-fg/[0.06]"
                 style={{
-                    background: 'linear-gradient(145deg, #1e1b4b 0%, #0f172a 50%, #1e1b4b 100%)',
-                    boxShadow: '0 20px 60px -12px rgba(0,0,0,0.6), 0 4px 20px -4px rgba(79,70,229,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+                    background: 'linear-gradient(145deg, var(--t-indigo-950) 0%, var(--t-slate-900) 50%, var(--t-indigo-950) 100%)',
+                    boxShadow: '0 20px 60px -12px rgba(0,0,0,0.6), 0 4px 20px -4px color-mix(in oklab, var(--t-indigo-600) 20%, transparent), inset 0 1px 0 color-mix(in oklab, var(--t-fg) 5%, transparent)',
                 }}
             >
                 {/* Glow sutil en hover */}
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    style={{ background: 'radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(99,102,241,0.06), transparent 40%)' }}
+                    style={{ background: 'radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), color-mix(in oklab, var(--t-indigo-500) 6%, transparent), transparent 40%)' }}
                 />
 
                 <div className="relative flex items-center gap-3.5 p-3.5 pr-3">
                     {/* Avatar */}
                     <div className="relative flex-shrink-0">
-                        <div className="w-[52px] h-[52px] rounded-[16px] overflow-hidden shadow-lg ring-1 ring-white/10">
+                        <div className="w-[52px] h-[52px] rounded-[16px] overflow-hidden shadow-lg ring-1 ring-fg/10">
                             {hasAvatar ? (
                                 <img
                                     src={notif.icon}
@@ -177,7 +177,7 @@ const InAppNotification = ({ notif, onDismiss, onOpen }: InAppNotificationProps)
                                 />
                             ) : null}
                             <div
-                                className={`w-full h-full bg-gradient-to-br ${gradientClass} items-center justify-center text-white font-bold text-xl`}
+                                className={`w-full h-full bg-gradient-to-br ${gradientClass} items-center justify-center text-on-accent font-bold text-xl`}
                                 style={{ display: hasAvatar ? 'none' : 'flex' }}
                             >
                                 {initial}
@@ -186,14 +186,14 @@ const InAppNotification = ({ notif, onDismiss, onOpen }: InAppNotificationProps)
 
                         {/* Badge app */}
                         <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center shadow-lg ring-2 ring-slate-900">
-                            <span className="text-[9px] font-black text-white leading-none">T</span>
+                            <span className="text-[9px] font-black text-on-accent leading-none">T</span>
                         </div>
                     </div>
 
                     {/* Contenido */}
                     <div className="flex-1 min-w-0 py-0.5">
                         <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="font-semibold text-[14px] text-white truncate leading-tight">
+                            <span className="font-semibold text-[14px] text-fg truncate leading-tight">
                                 {notif.senderName}
                             </span>
                             <span className="text-[10px] text-indigo-400/60 flex-shrink-0 font-medium uppercase tracking-wider">
@@ -209,7 +209,7 @@ const InAppNotification = ({ notif, onDismiss, onOpen }: InAppNotificationProps)
                     <button
                         onClick={(e) => { e.stopPropagation(); dismiss(); }}
                         className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl
-                                   text-white/0 group-hover:text-white/40 hover:!text-white/80 hover:bg-white/[0.06]
+                                   text-fg/0 group-hover:text-fg/40 hover:!text-fg/80 hover:bg-fg/[0.06]
                                    transition-all duration-200"
                     >
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -219,12 +219,12 @@ const InAppNotification = ({ notif, onDismiss, onOpen }: InAppNotificationProps)
                 </div>
 
                 {/* Barra de progreso */}
-                <div className="h-[2px] w-full bg-white/[0.03]">
+                <div className="h-[2px] w-full bg-fg/[0.03]">
                     <div
                         className="h-full rounded-full"
                         style={{
                             width: `${progress}%`,
-                            background: 'linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7)',
+                            background: 'linear-gradient(90deg, var(--t-indigo-500), var(--t-purple-500), var(--t-purple-400))',
                             transition: 'none',
                         }}
                     />

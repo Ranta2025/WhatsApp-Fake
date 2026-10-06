@@ -8,7 +8,7 @@ const NotificationBanner = () => {
     if (notifPermission !== 'default') return null;
 
     return (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-toast bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-sm">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-toast bg-indigo-600 text-on-accent px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-sm">
             <BellIcon className="w-6 h-6 flex-shrink-0" />
             <div className="flex-1 text-sm">
                 <div className="font-semibold">Activa las notificaciones</div>
@@ -22,13 +22,13 @@ const NotificationBanner = () => {
                     const perm = await requestNotificationPermission();
                     setNotifPermission(perm);
                 }}
-                className="bg-white text-indigo-700 font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition flex-shrink-0"
+                className="bg-white text-indigo-700 font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition flex-shrink-0" // theme-ok
             >
                 Activar
             </button>
             <button
                 onClick={() => setNotifPermission('dismissed')}
-                className="text-white/50 hover:text-white text-lg leading-none"
+                className="text-on-accent/50 hover:text-on-accent text-lg leading-none"
             >
                 ×
             </button>

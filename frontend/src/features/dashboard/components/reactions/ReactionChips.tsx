@@ -27,7 +27,7 @@ export default function ReactionChips({ reactions, onToggle, onShowWho, align = 
                     aria-label={Mine ? `${Emoji} ${Count}, reaccionaste` : `${Emoji} ${Count}`}
                     onClick={() => onToggle(Emoji)}
                     className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs shadow-sm transition-colors
-                        ${Mine ? 'border-indigo-400 bg-indigo-500/30 text-white' : 'border-white/10 bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
+                        ${Mine ? 'border-indigo-400 bg-indigo-500/30 text-fg' : 'border-fg/10 bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
                 >
                     <span aria-hidden="true">{Emoji}</span>
                     <span aria-hidden="true">{Count}</span>
@@ -37,7 +37,7 @@ export default function ReactionChips({ reactions, onToggle, onShowWho, align = 
                 type="button"
                 aria-label="Ver reacciones"
                 onClick={onShowWho}
-                className="rounded-full px-1.5 py-0.5 text-[11px] text-slate-400 hover:text-white hover:bg-white/10"
+                className="rounded-full px-1.5 py-0.5 text-[11px] text-slate-400 hover:text-fg hover:bg-fg/10"
             >
                 Ver
             </button>

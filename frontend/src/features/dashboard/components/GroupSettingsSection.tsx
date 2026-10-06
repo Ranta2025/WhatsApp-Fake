@@ -25,12 +25,12 @@ export const GroupPermissionToggle = ({ label, value, onChange, testId }: GroupP
                     {value ? 'Solo admins' : 'Todos'}
                 </span>
             ) : (
-                <div className="flex rounded-lg overflow-hidden border border-white/10 flex-shrink-0" role="group" aria-label={label}>
+                <div className="flex rounded-lg overflow-hidden border border-fg/10 flex-shrink-0" role="group" aria-label={label}>
                     <button
                         type="button"
                         aria-pressed={!value}
                         onClick={() => onChange(false)}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${!value ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-white/10'}`}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${!value ? 'bg-indigo-600 text-on-accent' : 'text-slate-400 hover:bg-fg/10'}`}
                     >
                         Todos
                     </button>
@@ -38,7 +38,7 @@ export const GroupPermissionToggle = ({ label, value, onChange, testId }: GroupP
                         type="button"
                         aria-pressed={value}
                         onClick={() => onChange(true)}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${value ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-white/10'}`}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${value ? 'bg-indigo-600 text-on-accent' : 'text-slate-400 hover:bg-fg/10'}`}
                     >
                         Solo admins
                     </button>
@@ -89,7 +89,7 @@ const GroupSettingsSection = () => {
     return (
         <div className="px-5 py-4" aria-label="Configuración del grupo">
             <div className="text-xs text-indigo-300/70 mb-1 uppercase tracking-wider font-semibold">Configuración del grupo</div>
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-fg/5">
                 {ROWS.map(row => (
                     <GroupPermissionToggle
                         key={row.key}

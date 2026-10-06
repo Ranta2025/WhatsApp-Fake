@@ -102,10 +102,10 @@ export default function AudioPlayer({ src, isMine = false }: AudioPlayerProps) {
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
     // Colores basados en el diseño senior
-    const accentColor = isMine ? 'bg-white' : 'bg-indigo-400';
+    const accentColor = isMine ? 'bg-on-accent' : 'bg-indigo-400';
     const textColor = isMine ? 'text-indigo-100/80' : 'text-slate-400';
-    const btnBg = isMine ? 'bg-white/20 hover:bg-white/30' : 'bg-indigo-500/20 hover:bg-indigo-500/30';
-    const iconColor = isMine ? 'text-white' : 'text-indigo-400';
+    const btnBg = isMine ? 'bg-on-accent/20 hover:bg-on-accent/30' : 'bg-indigo-500/20 hover:bg-indigo-500/30';
+    const iconColor = isMine ? 'text-on-accent' : 'text-indigo-400';
 
     return (
         <div className="flex items-center gap-3 py-1 min-w-[240px]">
@@ -133,7 +133,7 @@ export default function AudioPlayer({ src, isMine = false }: AudioPlayerProps) {
                 <div 
                     ref={progressRef}
                     onClick={handleSeek}
-                    className="relative h-1.5 bg-black/20 rounded-full cursor-pointer group"
+                    className={`relative h-1.5 ${isMine ? 'bg-black/20' : 'bg-quote'} rounded-full cursor-pointer group`}
                 >
                     <div 
                         className={`absolute top-0 left-0 h-full rounded-full transition-all duration-100 ${accentColor}`}
@@ -154,7 +154,7 @@ export default function AudioPlayer({ src, isMine = false }: AudioPlayerProps) {
                     {/* Selector de velocidad */}
                     <button 
                         onClick={cycleSpeed}
-                        className={`px-2 py-0.5 rounded-md text-[9px] font-black tracking-tighter transition-all active:scale-95 ${isMine ? 'bg-white/10 text-white' : 'bg-slate-700/50 text-indigo-300'}`}
+                        className={`px-2 py-0.5 rounded-md text-[9px] font-black tracking-tighter transition-all active:scale-95 ${isMine ? 'bg-on-accent/10 text-on-accent' : 'bg-slate-700/50 text-indigo-300'}`}
                     >
                         {playbackRate}x
                     </button>

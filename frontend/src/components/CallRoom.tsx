@@ -189,7 +189,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                         <div className="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
                     </div>
                     <div className="text-center space-y-2">
-                        <h2 className="text-white text-xl font-bold tracking-tight">Estableciendo conexión segura</h2>
+                        <h2 className="text-fg text-xl font-bold tracking-tight">Estableciendo conexión segura</h2>
                         <p className="text-slate-400 text-sm animate-pulse">Configurando cifrado de extremo a extremo...</p>
                     </div>
                 </div>
@@ -198,11 +198,11 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
             {callStatus === 'error' && (
                 <div className="absolute inset-0 z-50 bg-red-950/20 backdrop-blur-xl flex flex-col items-center justify-center gap-4">
                     <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">
-                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-8 h-8 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </div>
-                    <p className="text-white font-bold text-lg">{errorMsg}</p>
+                    <p className="text-fg font-bold text-lg">{errorMsg}</p>
                 </div>
             )}
 
@@ -211,7 +211,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                 <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full ${callStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
                     <div className="flex flex-col">
-                        <span className="text-white text-xs font-black uppercase tracking-[0.2em]">
+                        <span className="text-fg text-xs font-black uppercase tracking-[0.2em]">
                             {callType === 'video' ? 'Videollamada' : 'Llamada de voz'}
                         </span>
                         <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
@@ -234,7 +234,7 @@ export default function CallRoom({ roomID, userID, userName, callType = 'video',
                 className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 w-16 h-16 bg-red-500 hover:bg-red-600 active:scale-95 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/30 transition-all sm:hidden"
                 aria-label="Finalizar llamada"
             >
-                <svg className="w-8 h-8 text-white rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-8 h-8 text-on-accent rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
             </button>
