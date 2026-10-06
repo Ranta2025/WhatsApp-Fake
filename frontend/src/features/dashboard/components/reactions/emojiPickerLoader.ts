@@ -11,6 +11,7 @@ import emojiDataUrl from 'emoji-picker-element-data/es/cldr/data.json?url';
  */
 export function createEmojiPicker(): Picker {
     const picker = new Picker({ dataSource: emojiDataUrl, locale: 'es', i18n: es });
-    picker.classList.add('dark');
+    // emoji-picker-element styles itself from a `dark`/`light` class; follow the active theme scheme.
+    picker.classList.add(document.documentElement.style.colorScheme === 'light' ? 'light' : 'dark');
     return picker;
 }

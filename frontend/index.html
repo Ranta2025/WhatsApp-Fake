@@ -13,6 +13,23 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="todos" />
     <meta name="description" content="todos — mensajería, llamadas y grupos en tiempo real" />
+    <script>
+      // Applies the saved theme before first paint (no flash). Keep ids/colors in sync with src/features/theme/themes.ts (tested).
+      (function () {
+        var m = { dark: "#0a1015", light: "#f3f6f7", rosa: "#fbe9ef", menta: "#e9fbf2", lavanda: "#f1e9fb", durazno: "#fbf1e9", cielo: "#e9f4fb" };
+        var t = "dark";
+        try {
+          var p = localStorage.getItem("whatsapp-fake:theme");
+          if (p === "auto") t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          else if (p && Object.prototype.hasOwnProperty.call(m, p)) t = p;
+        } catch (e) {}
+        var r = document.documentElement;
+        r.dataset.theme = t;
+        r.style.colorScheme = t === "dark" ? "dark" : "light";
+        var c = document.querySelector("meta[name=theme-color]");
+        if (c) c.setAttribute("content", m[t]);
+      })();
+    </script>
     <title>todos · Chat en tiempo real</title>
   </head>
   <body>
