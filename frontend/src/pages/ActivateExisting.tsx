@@ -40,7 +40,7 @@ export default function ActivateExisting() {
             subtitle="Ingresa tu username para recibir un código de activación"
             footer={(
                 <span>
-                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver al login</Link>
+                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-fg">Volver al login</Link>
                 </span>
             )}
         >
@@ -58,7 +58,7 @@ export default function ActivateExisting() {
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200"
+                            className="w-full pl-10 p-3.5 rounded-xl bg-fg/10 border border-fg/20 text-fg placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-fg/20 transition-all duration-200"
                             placeholder="Tu username"
                         />
                     </div>

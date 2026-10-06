@@ -95,7 +95,7 @@ export default function ActivateAccount() {
             subtitle={isBloqueado ? "Tu cuenta ha sido bloqueada" : "Ingresa el código enviado a tu email"}
             footer={(
                 <span>
-                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-white">Volver al login</Link>
+                    ¿Necesitas ayuda? <Link to="/login" className="text-indigo-300 hover:text-fg">Volver al login</Link>
                 </span>
             )}
         >
@@ -105,7 +105,7 @@ export default function ActivateAccount() {
             {isBloqueado ? (
                 <div className="text-center py-8">
                     <p className="text-red-400 mb-4">Tu cuenta ha sido bloqueada. Por favor contacta con soporte para más información.</p>
-                    <Link to="/login" className="text-indigo-300 hover:text-white underline">
+                    <Link to="/login" className="text-indigo-300 hover:text-fg underline">
                         Volver al inicio
                     </Link>
                 </div>
@@ -123,7 +123,7 @@ export default function ActivateAccount() {
                                 type="text"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}
-                                className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200 text-center tracking-widest text-lg"
+                                className="w-full pl-10 p-3.5 rounded-xl bg-fg/10 border border-fg/20 text-fg placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-fg/20 transition-all duration-200 text-center tracking-widest text-lg"
                                 placeholder="000000"
                                 maxLength={20}
                             />
@@ -143,7 +143,7 @@ export default function ActivateAccount() {
                         type="button"
                         onClick={handleResendCode}
                         disabled={resendLoading}
-                        className="w-full bg-white/5 hover:bg-white/10 disabled:opacity-50 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
+                        className="w-full bg-fg/5 hover:bg-fg/10 disabled:opacity-50 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
                     >
                         {resendLoading ? 'Reenviando...' : 'No recibí el código'}
                     </button>

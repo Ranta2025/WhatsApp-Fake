@@ -11,7 +11,7 @@ const FEATURES = [
 /** Vista previa decorativa de una conversación (panel de marca) */
 const ChatPreview = () => (
     <div className="glass rounded-3xl p-5 w-full max-w-sm shadow-2xl shadow-black/40 space-y-3">
-        <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
+        <div className="flex items-center gap-3 pb-3 border-b border-fg/[0.06]">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center text-sm font-semibold">L</div>
             <div>
                 <div className="text-sm font-semibold">Laura</div>
@@ -22,7 +22,7 @@ const ChatPreview = () => (
             <div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 text-sm max-w-[80%]">¿Nos vemos a las 8? 🎉</div>
         </div>
         <div className="flex justify-end">
-            <div className="bg-indigo-700 rounded-2xl rounded-br-md px-3.5 py-2 text-sm max-w-[80%]">¡Perfecto! Te llamo al salir 📞</div>
+            <div className="bg-indigo-700 text-on-accent rounded-2xl rounded-br-md px-3.5 py-2 text-sm max-w-[80%]">¡Perfecto! Te llamo al salir 📞</div>
         </div>
         <div className="flex justify-start">
             <div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 text-sm flex items-center gap-1">
@@ -48,7 +48,7 @@ export default function AuthLayout({ children, title, subtitle, footer, backTo =
         <div className="h-full w-full overflow-y-auto hero-surface text-slate-100">
             <div className="min-h-full grid lg:grid-cols-[1.05fr_1fr]">
                 {/* Panel de marca (escritorio) */}
-                <aside className="hidden lg:flex flex-col justify-between p-12 xl:p-16 border-r border-white/[0.05] relative overflow-hidden">
+                <aside className="hidden lg:flex flex-col justify-between p-12 xl:p-16 border-r border-fg/[0.05] relative overflow-hidden">
                     <Link to="/" className="flex items-center gap-2.5 w-fit">
                         <img src="/todos.svg" alt="" className="w-9 h-9" />
                         <span className="text-lg font-bold tracking-tight">todos</span>
@@ -63,7 +63,7 @@ export default function AuthLayout({ children, title, subtitle, footer, backTo =
                         <ul className="space-y-4">
                             {FEATURES.map(f => (
                                 <li key={f.title} className="flex gap-3">
-                                    <span className="w-9 h-9 rounded-xl bg-white/[0.05] border border-white/[0.06] flex items-center justify-center flex-shrink-0 text-indigo-300">
+                                    <span className="w-9 h-9 rounded-xl bg-fg/[0.05] border border-fg/[0.06] flex items-center justify-center flex-shrink-0 text-indigo-300">
                                         <f.Icon />
                                     </span>
                                     <div>

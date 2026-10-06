@@ -41,7 +41,7 @@ const AppMockup = () => (
     <div className="relative w-full max-w-xl mx-auto">
         <div className="absolute -inset-6 bg-gradient-to-r from-indigo-500/25 to-purple-500/25 blur-3xl rounded-full" aria-hidden="true" />
         <div className="relative glass rounded-3xl overflow-hidden shadow-2xl shadow-black/50 flex h-[340px] sm:h-[380px]">
-            <div className="hidden sm:flex flex-col w-44 border-r border-white/[0.06] bg-slate-900/60 p-3 gap-1.5">
+            <div className="hidden sm:flex flex-col w-44 border-r border-fg/[0.06] bg-slate-900/60 p-3 gap-1.5">
                 {MOCKUP_CHATS.map(({ name, gradient, preview, PreviewIcon, active }) => (
                     <div key={name} className={`flex items-center gap-2 rounded-xl p-2 ${active ? 'bg-indigo-500/10 ring-1 ring-indigo-500/20' : ''}`}>
                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-xs font-semibold`}>{name.charAt(0)}</div>
@@ -56,7 +56,7 @@ const AppMockup = () => (
                 ))}
             </div>
             <div className="flex-1 flex flex-col chat-surface">
-                <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06] bg-slate-900/60">
+                <div className="flex items-center gap-2.5 px-4 py-3 border-b border-fg/[0.06] bg-slate-900/60">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center text-xs font-semibold">L</div>
                     <div>
                         <div className="text-sm font-semibold">Laura</div>
@@ -65,11 +65,11 @@ const AppMockup = () => (
                 </div>
                 <div className="flex-1 p-4 space-y-2.5 text-sm">
                     <div className="flex justify-start"><div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%] flex items-center gap-1.5">¡Hola! ¿Nos vemos a las 8? <SparklesIcon className="w-3.5 h-3.5 flex-shrink-0 text-amber-300" /></div></div>
-                    <div className="flex justify-end"><div className="bg-indigo-700 rounded-2xl rounded-br-md px-3.5 py-2 max-w-[80%] flex items-center gap-1.5">¡Claro! Te llamo al salir <PhoneIcon className="w-3.5 h-3.5 flex-shrink-0" /></div></div>
+                    <div className="flex justify-end"><div className="bg-indigo-700 text-on-accent rounded-2xl rounded-br-md px-3.5 py-2 max-w-[80%] flex items-center gap-1.5">¡Claro! Te llamo al salir <PhoneIcon className="w-3.5 h-3.5 flex-shrink-0" /></div></div>
                     <div className="flex justify-start"><div className="bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%] flex items-center gap-1.5">Perfecto, te mando la ubicación <MapPinIcon className="w-3.5 h-3.5 flex-shrink-0 text-rose-300" /></div></div>
-                    <div className="flex justify-end"><div className="bg-indigo-700 rounded-2xl rounded-br-md px-3.5 py-2 flex items-center gap-1"><CheckCircleIcon className="w-4 h-4 flex-shrink-0" /> <span className="text-[10px] text-white/60 ml-1">✓✓</span></div></div>
+                    <div className="flex justify-end"><div className="bg-indigo-700 text-on-accent rounded-2xl rounded-br-md px-3.5 py-2 flex items-center gap-1"><CheckCircleIcon className="w-4 h-4 flex-shrink-0" /> <span className="text-[10px] text-on-accent/60 ml-1">✓✓</span></div></div>
                 </div>
-                <div className="p-3 border-t border-white/[0.06] bg-slate-900/60 flex items-center gap-2">
+                <div className="p-3 border-t border-fg/[0.06] bg-slate-900/60 flex items-center gap-2">
                     <div className="flex-1 h-9 rounded-xl bg-slate-800/80 px-3 flex items-center text-xs text-slate-500">Escribe un mensaje…</div>
                     <div className="w-9 h-9 rounded-full bg-indigo-500" />
                 </div>
@@ -95,7 +95,7 @@ export default function Welcome() {
     return (
         <div ref={containerRef} className="h-full overflow-y-auto hero-surface text-slate-100">
             {/* Navegación */}
-            <nav className={`sticky top-0 z-40 transition-all ${isScrolled ? 'bg-slate-950/80 backdrop-blur-xl border-b border-white/[0.06]' : ''}`}>
+            <nav className={`sticky top-0 z-40 transition-all ${isScrolled ? 'bg-slate-950/80 backdrop-blur-xl border-b border-fg/[0.06]' : ''}`}>
                 <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
                     <Link to="/" className="flex items-center gap-2.5">
                         <img src="/todos.svg" alt="" className="w-8 h-8" />
@@ -112,7 +112,7 @@ export default function Welcome() {
                             <Link to="/dashboard" className="btn-primary !py-2 !px-4 text-sm">Abrir app</Link>
                         ) : (
                             <>
-                                <Link to="/login" className="text-sm font-medium text-slate-300 hover:text-white px-3 py-2 transition-colors">Iniciar sesión</Link>
+                                <Link to="/login" className="text-sm font-medium text-slate-300 hover:text-fg px-3 py-2 transition-colors">Iniciar sesión</Link>
                                 <Link to="/register" className="btn-primary !py-2 !px-4 text-sm">Crear cuenta</Link>
                             </>
                         )}
@@ -195,7 +195,7 @@ export default function Welcome() {
                 </div>
             </section>
 
-            <footer className="border-t border-white/[0.06]">
+            <footer className="border-t border-fg/[0.06]">
                 <div className="max-w-6xl mx-auto px-5 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
                     <div className="flex items-center gap-2">
                         <img src="/todos.svg" alt="" className="w-6 h-6" />

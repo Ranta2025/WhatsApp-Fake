@@ -72,7 +72,7 @@ export default function Login() {
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full pl-10 p-3 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
+                            className="w-full pl-10 p-3 rounded-xl bg-slate-800/80 border border-fg/[0.06] text-fg placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
                             placeholder="Tu usuario"
                             autoComplete="username"
                         />
@@ -91,7 +91,7 @@ export default function Login() {
                             type={showPassword ? 'text' : 'password'}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-10 p-3 pr-16 rounded-xl bg-slate-800/80 border border-white/[0.06] text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors tracking-wide"
+                            className="w-full pl-10 p-3 pr-16 rounded-xl bg-slate-800/80 border border-fg/[0.06] text-fg placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors tracking-wide"
                             placeholder="••••••••"
                             autoComplete="current-password"
                         />

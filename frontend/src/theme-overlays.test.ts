@@ -11,17 +11,8 @@ const SRC_DIR = __dirname;
 const WHITE_UTILITY =
   /(?:^|[\s"'`:])(?:[a-z-]+:)*!?(?:bg|text|border|ring|divide|from|to|via|outline|placeholder|fill|stroke)-white(?:\/[\w.[\]]+)?(?=[\s"'`])/;
 
-// Files still pending migration. Shrinks to empty in UT5.
-const ALLOWLIST: readonly string[] = [
-  'components/AuthLayout.tsx',
-  'pages/ActivateAccount.tsx',
-  'pages/ActivateExisting.tsx',
-  'pages/Login.tsx',
-  'pages/RecoverPassword.tsx',
-  'pages/Register.tsx',
-  'pages/UnblockAccount.tsx',
-  'pages/Welcome.tsx',
-];
+// Migration is complete: no file is exempt. Keep the constant for future temporary exemptions.
+const ALLOWLIST: readonly string[] = [];
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

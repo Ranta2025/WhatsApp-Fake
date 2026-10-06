@@ -120,7 +120,7 @@ export default function RecoverPassword() {
             }
             footer={(
                 <span>
-                    ¿Recuerdas tu contraseña? <Link to="/login" className="text-indigo-300 hover:text-white">Inicia sesión</Link>
+                    ¿Recuerdas tu contraseña? <Link to="/login" className="text-indigo-300 hover:text-fg">Inicia sesión</Link>
                 </span>
             )}
         >
@@ -141,7 +141,7 @@ export default function RecoverPassword() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200"
+                                className="w-full pl-10 p-3.5 rounded-xl bg-fg/10 border border-fg/20 text-fg placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-fg/20 transition-all duration-200"
                                 placeholder="tu@email.com"
                             />
                         </div>
@@ -171,7 +171,7 @@ export default function RecoverPassword() {
                                 type="text"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}
-                                className="w-full pl-10 p-3.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200 text-center tracking-widest text-lg"
+                                className="w-full pl-10 p-3.5 rounded-xl bg-fg/10 border border-fg/20 text-fg placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-fg/20 transition-all duration-200 text-center tracking-widest text-lg"
                                 placeholder="000000"
                                 maxLength={20}
                             />
@@ -189,7 +189,7 @@ export default function RecoverPassword() {
                     <button
                         type="button"
                         onClick={() => setStep(1)}
-                        className="w-full bg-white/5 hover:bg-white/10 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
+                        className="w-full bg-fg/5 hover:bg-fg/10 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
                     >
                         Volver
                     </button>
@@ -211,13 +211,13 @@ export default function RecoverPassword() {
                                 type={showPassword ? 'text' : 'password'}
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
-                                className="w-full pl-10 p-3.5 pr-12 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200 tracking-wide"
+                                className="w-full pl-10 p-3.5 pr-12 rounded-xl bg-fg/10 border border-fg/20 text-fg placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-fg/20 transition-all duration-200 tracking-wide"
                                 placeholder="Mínimo 8 caracteres"
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword((v) => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-white text-sm font-medium transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-fg text-sm font-medium transition-colors"
                             >
                                 {showPassword ? 'Ocultar' : 'Ver'}
                             </button>
@@ -235,13 +235,13 @@ export default function RecoverPassword() {
                                 type={showConfirm ? 'text' : 'password'}
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full pl-10 p-3.5 pr-12 rounded-xl bg-white/10 border border-white/20 text-white placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-white/20 transition-all duration-200 tracking-wide"
+                                className="w-full pl-10 p-3.5 pr-12 rounded-xl bg-fg/10 border border-fg/20 text-fg placeholder-indigo-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent focus:bg-fg/20 transition-all duration-200 tracking-wide"
                                 placeholder="Confirma tu contraseña"
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowConfirm((v) => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-white text-sm font-medium transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-200 hover:text-fg text-sm font-medium transition-colors"
                             >
                                 {showConfirm ? 'Ocultar' : 'Ver'}
                             </button>
@@ -257,7 +257,7 @@ export default function RecoverPassword() {
                     <button
                         type="button"
                         onClick={() => setStep(2)}
-                        className="w-full bg-white/5 hover:bg-white/10 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
+                        className="w-full bg-fg/5 hover:bg-fg/10 text-indigo-300 font-bold py-3.5 rounded-xl transition-all duration-200"
                     >
                         Volver
                     </button>
