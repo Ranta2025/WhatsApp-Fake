@@ -103,7 +103,8 @@ Resolved 2026-10-03. The app runs ONLY locally (no deployed clients, user: "haz 
 - **Semantic renames (orchestrator):** included in the same cutover (`Gmail` -> `email`, `Number`/`numero` -> `telephon`), because breaking the contract once is cheaper than twice and there are no external clients. Each rename listed in `docs/API_CONTRACT.md`.
 
 ## Progress / Evidence
-- 2026-10-06 AC0 DONE on feat/api-casing: inventory test GREEN (60 structs / 146 keys / 69 allowlisted). Commit pending. Boundary for RDD slice: base abb5ec4 (covers 91167fa under_budget + fbcf00d docs + AC0).
+- 2026-10-06 AC0 DONE on feat/api-casing: inventory test GREEN (60 structs / 146 keys / 69 allowlisted). Commit a9282dc. Boundary for RDD slice: base abb5ec4 (covers 91167fa under_budget + fbcf00d docs + AC0).
+- 2026-10-06 AC0 review GRANTED->APPROVED (medium, reliability, 521 lines, 6 files). Findings non-blocking: R3-001 absent-toast selector (WARNING, pre-existing SF7 test), R3-002 e2e count() probe timing (SUGGESTION), R3-003 manual registry gap (SUGGESTION, close in AC7 with completeness assert). Authority burned lineage review-1c6009b188125b6e. New boundary: a9282dc (slice abb5ec4..a9282dc closed).
 - Docker: active without sudo (web Up 41m, app Up 6h). Images web 15:50 / backend 10:42 pre-fbcf00d (16:20) but fbcf00d docs-only; rebuild only app/web when domain slices need integration (POSTGRES_PUBLIC_PORT=55432 always).
 - Consent: user authorized granted without asking for this feature (confirm in reply).
 
