@@ -55,6 +55,9 @@ describe('ProfileModal error extraction', () => {
     afterEach(() => {
         act(() => { root.unmount(); });
         container.remove();
+        // The theme test persists a preference: reset it so later tests start on the default theme.
+        localStorage.clear();
+        delete document.documentElement.dataset.theme;
     });
 
     it('shows response.data.error from a plain (non-Axios) rejection', async () => {

@@ -362,12 +362,12 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                                                 autoFocus
                                                                 value={editingMessageText}
                                                                 onChange={handleEditMessageChange}
-                                                                className="w-full bg-black/20 border border-fg/10 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-fg/30"
+                                                                className="w-full bg-black/20 border border-on-accent/10 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-on-accent/30"
                                                                 rows={2}
                                                             />
                                                             <div className="flex justify-end gap-2">
                                                                 <button onClick={handleEditMessageCancel} className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest">Cancelar</button>
-                                                                <button onClick={handleEditMessageSave} className="px-2 py-1 bg-fg/20 rounded-md text-[10px] font-bold uppercase tracking-widest">Guardar</button>
+                                                                <button onClick={handleEditMessageSave} className="px-2 py-1 bg-on-accent/20 rounded-md text-[10px] font-bold uppercase tracking-widest">Guardar</button>
                                                             </div>
                                                         </div>
                                                     ) : <HighlightedText text={m.Message} query={searchQuery} />}

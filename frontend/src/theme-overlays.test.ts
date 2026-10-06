@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 const SRC_DIR = __dirname;
 
 const WHITE_UTILITY =
-  /(?:^|[\s"'`:])(?:[a-z-]+:)*(?:bg|text|border|ring|divide|from|to|via|outline|placeholder|fill|stroke)-white(?:\/[\w.[\]]+)?(?=[\s"'`])/;
+  /(?:^|[\s"'`:])(?:[a-z-]+:)*!?(?:bg|text|border|ring|divide|from|to|via|outline|placeholder|fill|stroke)-white(?:\/[\w.[\]]+)?(?=[\s"'`])/;
 
 // Files still pending migration. Shrinks to empty in UT5.
 const ALLOWLIST: readonly string[] = [
