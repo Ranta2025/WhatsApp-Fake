@@ -35,7 +35,7 @@ const Switch = ({ label, description, checked, disabled, onToggle }: SwitchProps
             onClick={onToggle}
             className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${checked ? 'bg-indigo-600' : 'bg-slate-600'}`}
         >
-            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} /> // theme-ok
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />{/* theme-ok: knob on an accent track */}
         </button>
     </div>
 );

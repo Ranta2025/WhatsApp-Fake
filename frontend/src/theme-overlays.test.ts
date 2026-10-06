@@ -52,6 +52,19 @@ describe('theme overlays', () => {
     }
   });
 
+  // `// theme-ok` after a JSX element that starts the line is JSX text, not a comment:
+  // it renders literally. Use `{/* theme-ok */}` there instead.
+  it('no line-comment markers in JSX children position', () => {
+    const offenders = walk(SRC_DIR).flatMap((file) =>
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .map((line, i) => ({ line, n: i + 1 }))
+        .filter(({ line }) => /^\s*<[^>]*>\s*\/\/\s*theme-ok/.test(line) || /^\s*<.*\/>\s*\/\/\s*theme-ok/.test(line))
+        .map(({ n }) => `${relative(SRC_DIR, file)}:${n}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it('no white-based utilities outside the allowlist', () => {
     const violations = files
       .filter((f) => !ALLOWLIST.includes(f))

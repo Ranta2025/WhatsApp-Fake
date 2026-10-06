@@ -106,6 +106,12 @@ describe('PushSettings', () => {
         expect(getSwitch('Mostrar vista previa')?.getAttribute('aria-checked')).toBe('false');
     });
 
+    it('switches render no text content (only the knob)', async () => {
+        await render();
+        expect(getSwitch('Notificaciones push')?.textContent).toBe('');
+        expect(getSwitch('Mostrar vista previa')?.textContent).toBe('');
+    });
+
     it('turning push on ensures the subscription', async () => {
         await render();
         const toggle = getSwitch('Notificaciones push')!;
