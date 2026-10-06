@@ -15,7 +15,7 @@ Relevant current code (verified on `feat/security-hardening`; re-check line numb
 - Frontend send path: identical to `stickers-basic` (`useMessaging.handleSend`/`useGroupMessaging.handleSend` media branch, online-only). The sticker panel (`frontend/src/features/stickers/StickerPanel.tsx`) and the manifest (`frontend/src/features/stickers/builtinPack.ts`) come from `stickers-basic`.
 
 ## Scope / Authorized
-Approved roadmap item, plan only (not yet authorized to implement).
+Authorized implementation from `feat/stickers-basic` (HEAD 754916b) on branch `feat/stickers-full`. User authorized SF1→SF8 with TDD, one commit per task, RDD per slice, and consent grant for reviews (confirmed by user instruction; revocable at any time).
 Scope: sticker upload endpoint plus validation and dedupe, `user_stickers` (+ favorites, recents) persistence and owner-only endpoints, GC integration, a client-side creator (pick image, crop square, WebP 512x512, size cap), panel v2 (tabs, search, favorites, delete, save received), animated WebP stickers, more built-in packs, tests, docs.
 Out of scope: background removal (unless the open question below picks a cheap option), Lottie/TGS animation (default), sticker pack sharing/marketplace, server-side moderation, offline queueing of stickers.
 
@@ -98,7 +98,12 @@ RED examples: a sticker validator table test (non-512 dimensions, 301 KB static,
 - **Safari WebP encode fallback:** recommended default = accept PNG 512x512 for stickers. Option: block creation on browsers without WebP encoding.
 
 ## Progress / Evidence
-(not started)
+- 2026-10-06: branch `feat/stickers-full` created from `feat/stickers-basic` @ 754916b (verified via `git branch --show-current`). Note: instruction cited HEAD 9905a9f, but the live chain had advanced to 754916b (docs + e2e hardening c94dbe8/8965944/754916b); branched from current HEAD to avoid losing work.
+- 2026-10-06: SF1 done (commit f27a36f, delegated direct, 12 files +511/-4): `serviceSticker.go` (validate type/dims/size/ANIM, SHA-256, `stickers/<sha>.<ext>`, StatObject skip), tightened `sticker` rule (`IsBuiltinStickerURL || IsStickerStorageURL`), fixtures under `backend/services/testdata/`, `x/image v0.44.0` (keeps go 1.25.5; DecodeConfig reads VP8X canvas, hand-rolled ANIM walker). RED observed (undefined symbols + behavioral revert proving old rule accepted arbitrary URLs), GREEN `go test ./backend/services/ ./backend/utils/` ok, `go vet` clean, `go build ./...` ok. Parent spot check: `go vet` clean, utils cached ok. Route: delegated (security-sensitive validation); trigger evidence: 2+ non-trivial files + new dep decision.
+
+## Assumptions
+- Open questions use documented defaults (no background removal, animated WebP as-is, global `stickers/<sha256>.webp`, favorites incl. built-in, limits 512x512 / 300KB / 1MB / 200 / 30 / 30-per-hour-IP, PNG fallback accepted). No product questions asked (user absent → defaults + noted here).
+- Consent `granted` pre-authorized by user (revocable); still confirming it stays in force each time it is used.
 
 ## Next step
-After `stickers-basic` is complete and this plan is authorized, re-verify the cited line numbers on the chain branch, create `feat/stickers-full`, and start SF1 (RED: the sticker validator table test).
+SF2 (RED: duplicate `(owner, sha256)` returns existing row).

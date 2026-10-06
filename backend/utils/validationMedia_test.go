@@ -45,6 +45,37 @@ func TestIsBuiltinStickerURL(t *testing.T) {
 	}
 }
 
+func TestIsStickerStorageURL(t *testing.T) {
+	sha := strings.Repeat("a", 64)
+	cases := map[string]bool{
+		"/storage/media/stickers/" + sha + ".webp": true,
+		"/storage/media/stickers/" + sha + ".png":  true,
+		// Absolute URLs are no longer accepted here; the service layer pins
+		// them to MEDIA_PUBLIC_BASE_URL.
+		"https://pub-x.r2.dev/stickers/" + sha + ".webp": false,
+		"https://pub-x.r2.dev/stickers/" + sha + ".png":  false,
+		// External hosts with a valid 64-hex name must stay rejected.
+		"https://evil-host/stickers/" + sha + ".webp":                  false,
+		"http://evil-host/stickers/" + sha + ".png":                    false,
+		"/storage/media/stickers/" + sha + ".svg":                      false,
+		"/storage/media/stickers/" + sha + ".gif":                      false,
+		"/storage/media/stickers/" + sha + ".WebP":                     false,
+		"/storage/media/stickers/" + strings.Repeat("a", 63) + ".webp": false,
+		"/storage/media/stickers/" + strings.Repeat("z", 64) + ".webp": false,
+		"/storage/media/images/" + sha + ".webp":                       false,
+		"/stickers/basic/hola.webp":                                    false,
+		"https://evil.com/cat.webp":                                    false,
+		"javascript:alert(1)":                                          false,
+		"/storage/media/stickers/../" + sha + ".webp":                  false,
+		"": false,
+	}
+	for url, want := range cases {
+		if got := IsStickerStorageURL(url); got != want {
+			t.Errorf("IsStickerStorageURL(%q) = %v, want %v", url, got, want)
+		}
+	}
+}
+
 func TestIsValidMediaType(t *testing.T) {
 	for _, mt := range []string{"", "image", "audio", "video", "sticker", "document"} {
 		if !IsValidMediaType(mt) {

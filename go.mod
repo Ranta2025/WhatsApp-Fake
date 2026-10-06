@@ -24,6 +24,7 @@ require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/rivo/uniseg v0.4.7
+	golang.org/x/image v0.44.0
 )
 
 require github.com/yuin/gopher-lua v1.1.1 // indirect

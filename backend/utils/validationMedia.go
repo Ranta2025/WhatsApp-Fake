@@ -61,3 +61,40 @@ func IsBuiltinStickerURL(raw string) bool {
 	}
 	return builtinStickerURL.MatchString(raw)
 }
+
+// stickerStorageTail is the content-addressed path tail shared by the relative
+// and absolute sticker forms: "stickers/<sha256>.(webp|png)". Only a 64-char
+// lowercase-hex SHA-256 name and the .webp/.png extension are accepted, which
+// keeps arbitrary external media and "javascript:"/"data:" out.
+const stickerStorageTail = `stickers/[0-9a-f]{64}\.(?:webp|png)`
+
+// stickerStorageURL matches the relative content-addressed URLs of user-uploaded
+// stickers: "/storage/<bucket>/stickers/<sha256>.(webp|png)". The absolute
+// public-base form is NOT accepted here; the service layer validates it against
+// the configured MEDIA_PUBLIC_BASE_URL.
+var stickerStorageURL = regexp.MustCompile(`^/storage/[A-Za-z0-9._-]+/` + stickerStorageTail + `$`)
+
+// stickerStorageSuffix matches the content-addressed tail used to validate
+// absolute public-base sticker URLs: "stickers/<sha256>.(webp|png)".
+var stickerStorageSuffix = regexp.MustCompile(`^` + stickerStorageTail + `$`)
+
+// IsStickerStorageSuffix reports whether tail (a path without a leading slash,
+// e.g. "stickers/<sha256>.webp") is a content-addressed sticker key. It is the
+// shared rule behind IsStickerStorageURL and absolute public-base validation.
+func IsStickerStorageSuffix(tail string) bool {
+	return stickerStorageSuffix.MatchString(tail)
+}
+
+// IsStickerStorageURL reports whether raw is a relative content-addressed custom
+// sticker URL produced by the sticker upload (see ServiceSticker), of the form
+// "/storage/<bucket>/stickers/<sha256>.(webp|png)". Absolute URLs are rejected
+// here; see isPublicBaseStickerURL for the public-base allowlist.
+func IsStickerStorageURL(raw string) bool {
+	if raw == "" || len(raw) > MaxMediaURLLen {
+		return false
+	}
+	if strings.Contains(raw, "..") {
+		return false
+	}
+	return stickerStorageURL.MatchString(raw)
+}

@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"gorm/backend/utils"
+	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -46,11 +47,12 @@ func validateMessageContent(m *messageContent) error {
 		return errors.New("falta la URL del archivo adjunto")
 	}
 	if m.MediaUrl != "" {
-		// A sticker may point at an app-provided path under /stickers/; every
-		// other media type keeps the stricter IsSafeMediaURL allowlist.
+		// A sticker points either at an app-provided path under /stickers/ or at
+		// a content-addressed custom sticker URL under .../stickers/<sha256>.<ext>.
+		// Every other media type keeps the stricter IsSafeMediaURL allowlist.
 		if m.MediaType == "sticker" {
-			if !utils.IsBuiltinStickerURL(m.MediaUrl) && !utils.IsSafeMediaURL(m.MediaUrl) {
-				return errors.New("URL del archivo adjunto no válida")
+			if !utils.IsBuiltinStickerURL(m.MediaUrl) && !utils.IsStickerStorageURL(m.MediaUrl) && !isPublicBaseStickerURL(m.MediaUrl) {
+				return errors.New("URL del sticker no válida")
 			}
 		} else if !utils.IsSafeMediaURL(m.MediaUrl) {
 			return errors.New("URL del archivo adjunto no válida")
@@ -66,6 +68,26 @@ func validateMessageContent(m *messageContent) error {
 		m.ReplyToMessage = &truncated
 	}
 	return nil
+}
+
+// isPublicBaseStickerURL reports whether raw is an absolute content-addressed
+// sticker URL on the configured public media base, i.e.
+// "<MEDIA_PUBLIC_BASE_URL>/stickers/<sha256>.(webp|png)". The env var is trimmed
+// of a trailing slash (like ServiceMedia/ServiceSticker). When it is unset or
+// empty, absolute sticker URLs are rejected.
+func isPublicBaseStickerURL(raw string) bool {
+	if raw == "" || len(raw) > utils.MaxMediaURLLen {
+		return false
+	}
+	base := strings.TrimRight(os.Getenv("MEDIA_PUBLIC_BASE_URL"), "/")
+	if base == "" {
+		return false
+	}
+	tail, ok := strings.CutPrefix(raw, base+"/")
+	if !ok {
+		return false
+	}
+	return utils.IsStickerStorageSuffix(tail)
 }
 
 // validateEditedContent valida el nuevo contenido de un mensaje editado.
