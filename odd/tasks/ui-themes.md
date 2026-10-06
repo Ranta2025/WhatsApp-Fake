@@ -89,8 +89,14 @@ Reviewed from Claude Code (lineage review-793efe5b0d3991f6, medium, reliability,
 - [ ] TRF12 (SUGGESTION) `themes.e2e.ts:53-65` "login keeps the theme" seeds storage in a fresh context instead of a real logout (deliberate: a real logout revokes the shared e2e session). Deferred.
 - [ ] TRF13 (SUGGESTION) status-text contrast is only checked against panel and page, not input fills or glass cards. Deferred.
 
+## Review follow-ups 5 (slice d4923af..94d03d3)
+Reviewed from Claude Code (lineage review-26e99a1a123efb6c, medium, reliability; user asked to "review everything"): approved/acknowledged, burned. **Boundary now 94d03d3.**
+- [x] TRF14 (WARNING) `--t-chip-strong` flipped to dark in light themes could darken other consumers: refuted, the only consumers are the two sticker time pills (`MessageList.tsx:380`, `GroupChatWindow.tsx:136`), both now `text-pill-fg`.
+- [x] TRF15 (SUGGESTION) `pill-fg #d2d9dd` differs from Tailwind slate-200: refuted, the app overrides slate and its dark `--t-slate-200` is `#d2d9dd` (`index.css:144`), so dark is unchanged.
+- [ ] TRF16 (SUGGESTION) class swaps `text-failed-on-accent`, `text-pill-fg`, `hover:text-danger-on-media` have no component assertion. Deferred.
+
 ## Assumptions
 - Theme list, `Automático` option and per-device storage chosen as defaults (user asked for "light, pastel, several alternatives"; no further spec).
 
 ## Next step
-Feature complete (UT1-UT6 + follow-ups). Close-out fix commit pending review in the next slice from d4923af if any; user decides merge to main.
+Feature complete and fully reviewed (boundary 94d03d3). Merge to main after the final e2e run.
