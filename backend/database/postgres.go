@@ -129,6 +129,13 @@ func Conection() (*gorm.DB, error) {
 		// Índices idx_chat_mutes_user_chat (único) e idx_chat_mutes_target y
 		// el CHECK chk_chat_mutes_kind salen de los tags del modelo.
 		&models.ChatMute{},
+		// ── Stickers (biblioteca del usuario) ──────────────────────────────
+		// Los índices únicos (owner, sha256) parcial y (owner, url) salen de
+		// execMigration (ver POST-MIGRATION): el parcial no se puede expresar
+		// con tags de AutoMigrate.
+		&models.UserSticker{},
+		&models.StickerFavorite{},
+		&models.StickerRecent{},
 	); err != nil {
 		return nil, fmt.Errorf("error al migrar la base de datos: %w", err)
 	}
@@ -399,6 +406,23 @@ func Conection() (*gorm.DB, error) {
 				CHECK (message_kind IN ('direct', 'group'));
 		END IF;
 	END $$;`)
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// STICKERS: biblioteca del usuario
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// Índice único parcial (solo filas activas): dedupe por contenido por
+	// usuario. Al ser parcial, un sticker borrado se puede volver a subir.
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_stickers_owner_sha
+		ON user_stickers (id_user, sha256)
+		WHERE deleted_at IS NULL`)
+
+	// Favoritos y recientes: una URL por usuario (cubre stickers integrados y
+	// propios en favoritos).
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_sticker_favorites_owner_url
+		ON sticker_favorites (id_user, url)`)
+	execMigration(data, `CREATE UNIQUE INDEX IF NOT EXISTS idx_sticker_recents_owner_url
+		ON sticker_recents (id_user, url)`)
 
 	setupMessageSearch(data)
 

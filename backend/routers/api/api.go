@@ -6,6 +6,7 @@ import (
 	"gorm/backend/models"
 	"gorm/backend/services"
 	"gorm/backend/websocket"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,6 +22,7 @@ type RouterApiMessage struct {
 	handlerSearch  *handlers.HandlerSearch
 	handlerPush    *handlers.HandlerPush
 	handlerMute    *handlers.HandlerMute
+	handlerSticker *handlers.HandlerSticker
 	hub            *websocket.Hub
 	chatService    services.ChatServicer
 	contactService services.ContactServicer
@@ -150,6 +152,33 @@ func (rt *RouterApiMessage) ApiSearch() {
 // ApiMedia registra la ruta de subida de archivos multimedia.
 func (rt *RouterApiMessage) ApiMedia() {
 	rt.app.POST("upload", rt.handlerMedia.HandlerUploadMedia())
+}
+
+// SetHandlerSticker asigna el handler de la biblioteca de stickers (se inyecta
+// aparte, como push/mute, para no alargar la firma posicional).
+func (rt *RouterApiMessage) SetHandlerSticker(h *handlers.HandlerSticker) {
+	rt.handlerSticker = h
+}
+
+// ApiSticker registra la biblioteca de stickers del usuario autenticado:
+//
+//	POST   /api/v1/stickers            → subir sticker (multipart file + tags CSV)
+//	POST   /api/v1/stickers/save       → guardar un sticker recibido {url}
+//	GET    /api/v1/stickers            → {mine, favorites, recents}
+//	PUT    /api/v1/stickers/favorites  → marcar/desmarcar {url, favorite}
+//	DELETE /api/v1/stickers/:id        → borrar un sticker propio
+//
+// La subida va limitada a 30/hora por IP. Sin handler no registra nada.
+func (rt *RouterApiMessage) ApiSticker() {
+	if rt.handlerSticker == nil {
+		return
+	}
+	uploadLimit := middleware.NewRateLimiter(30, time.Hour).Middleware()
+	rt.app.POST("stickers", uploadLimit, rt.handlerSticker.HandlerUploadSticker())
+	rt.app.POST("stickers/save", rt.handlerSticker.HandlerSaveSticker())
+	rt.app.GET("stickers", rt.handlerSticker.HandlerListStickers())
+	rt.app.PUT("stickers/favorites", rt.handlerSticker.HandlerSetFavorite())
+	rt.app.DELETE("stickers/:id", rt.handlerSticker.HandlerDeleteSticker())
 }
 
 // ApiStatus registra las rutas del feature de "Estados" (stories): publicar,

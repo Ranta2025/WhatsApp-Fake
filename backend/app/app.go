@@ -211,6 +211,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	repoReaction := repos.InitRepoReaction(db)
 	repoPush := repos.InitRepoPush(db, repoContact)
 	repoMute := repos.InitRepoMute(db, repoContact)
+	repoSticker := repos.InitRepoSticker(db, repoContact)
 	cacheUser := cache.InitChacheUser(rd)
 
 	// Hub de WebSocket (presencia y mensajería en tiempo real)
@@ -241,6 +242,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 	// Silencio por chat: endpoints propios y estado en los listados del
 	// sidebar (chats, contactos y grupos).
 	serviceMute := services.InitServiceMute(repoMute, repoGroup)
+	serviceSticker := services.InitServiceStickerLibrary(mc, repoSticker)
 	handlerGroup := handlers.InitHandlerGroup(serviceGroup, hub, m)
 	handlerGroup.SetPushNotifier(pushNotifier)
 	handlerGroup.SetMuteService(serviceMute)
@@ -272,6 +274,7 @@ func buildDeps(db *gorm.DB, rd *redis.Client, mc *minio.Client, m *metrics.Metri
 		HandlerBugReport: handlers.InitHandlerBugReport(serviceBugReport),
 		HandlerPush:      handlers.InitHandlerPush(servicePush),
 		HandlerMute:      handlers.InitHandlerMute(serviceMute),
+		HandlerSticker:   handlers.InitHandlerSticker(serviceSticker),
 		Hub:              hub,
 		WSTickets:        cache.NewWSTicketStore(rd),
 		ChatService:      serviceChat,

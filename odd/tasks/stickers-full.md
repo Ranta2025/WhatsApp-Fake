@@ -100,10 +100,11 @@ RED examples: a sticker validator table test (non-512 dimensions, 301 KB static,
 ## Progress / Evidence
 - 2026-10-06: branch `feat/stickers-full` created from `feat/stickers-basic` @ 754916b (verified via `git branch --show-current`). Note: instruction cited HEAD 9905a9f, but the live chain had advanced to 754916b (docs + e2e hardening c94dbe8/8965944/754916b); branched from current HEAD to avoid losing work.
 - 2026-10-06: SF1 review slice 8965944..6914fc0 (medium, reliability, lineage review-eaf9d48ec86bdab3): consent granted per standing user authorization; lens found R3-001 CRITICAL (absolute-URL alternative accepted any host) + R3-002/003/004 WARNINGs (test gaps). Bounded correction 146/150 lines (relative-only utils regex + services-level public-base pinning via MEDIA_PUBLIC_BASE_URL + regression/boundary/animated-upload tests), targeted validation green → **approved/acknowledged, authority burned**. R3-002/003/004 closed as informational. **Boundary now 6914fc0.**
+- 2026-10-06: SF2 done (delegated direct, 10 files +1703): models `UserSticker`/`StickerFavorite`/`StickerRecent` + camelCase DTOs, AutoMigrate + partial unique indexes via `execMigration`, `RepoSticker` (idempotent create, owner-scoped list/soft-delete, favorites upsert, recents upsert+trim 30), `StickerLibraryServicer` (upload 201/200, save-by-URL via StatObject no-copy, 200-cap, tag normalization), handlers + routes (`POST /stickers` 1MB cap + 30/hour limiter, `POST /stickers/save`, `GET /stickers`, `PUT /stickers/favorites`, `DELETE /stickers/:id`; 404 never 403). Parent wired composition root inline (central.go Deps + ApiSticker mount, app.go repo/service/handler; `go build` + `go vet` clean). RED observed (undefined symbols), GREEN `go test ./backend/...` 14 pkgs ok (176 sticker RUN/PASS), DryRun SQL-shape repo tests (no DB). Route: delegated (migration + authz); trigger evidence: 8+ non-trivial files.
 
 ## Assumptions
 - Open questions use documented defaults (no background removal, animated WebP as-is, global `stickers/<sha256>.webp`, favorites incl. built-in, limits 512x512 / 300KB / 1MB / 200 / 30 / 30-per-hour-IP, PNG fallback accepted). No product questions asked (user absent → defaults + noted here).
 - Consent `granted` pre-authorized by user (revocable); still confirming it stays in force each time it is used.
 
 ## Next step
-SF2 (RED: duplicate `(owner, sha256)` returns existing row).
+SF3 (RED: GC test where an object referenced only by `user_stickers` is not deleted).
