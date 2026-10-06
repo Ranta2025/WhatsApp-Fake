@@ -61,7 +61,7 @@ const GroupMessageInput = () => {
     // when the cause is an admin removal vs. a voluntary leave (`RemovedByAdmin`).
     if (isLeft) {
         return (
-            <div data-testid="group-composer-left" className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
+            <div data-testid="group-composer-left" className="flex-shrink-0 border-t border-fg/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
@@ -76,7 +76,7 @@ const GroupMessageInput = () => {
     // (attach / voice / emoji hidden; reply and edit already cancelled above).
     if (restrictedSend) {
         return (
-            <div data-testid="group-composer-restricted" className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
+            <div data-testid="group-composer-restricted" className="flex-shrink-0 border-t border-fg/5 bg-slate-900/95 backdrop-blur-md px-4 py-4 flex items-center justify-center gap-2 text-slate-500 text-sm italic">
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
@@ -131,7 +131,7 @@ const GroupMessageInput = () => {
         : (e: ChangeEvent<HTMLTextAreaElement>) => { setText(e.target.value); handleTyping(); };
 
     return (
-        <div className="flex-shrink-0 border-t border-white/5 bg-slate-900/95 backdrop-blur-md">
+        <div className="flex-shrink-0 border-t border-fg/5 bg-slate-900/95 backdrop-blur-md">
             {/* Reply banner */}
             {replyingTo && !editingMessageId && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-indigo-900/30 border-b border-indigo-500/20">
@@ -141,7 +141,7 @@ const GroupMessageInput = () => {
                         </div>
                         <div className="text-xs text-slate-400 truncate">{previewMessage(replyingTo)}</div>
                     </div>
-                    <button onClick={cancelReply} className="text-slate-500 hover:text-white transition-colors">
+                    <button onClick={cancelReply} className="text-slate-500 hover:text-fg transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -156,7 +156,7 @@ const GroupMessageInput = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                     <span className="text-xs text-amber-300 flex-1">Editando mensaje</span>
-                    <button onClick={handleEditMessageCancel} className="text-slate-500 hover:text-white transition-colors">
+                    <button onClick={handleEditMessageCancel} className="text-slate-500 hover:text-fg transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -172,7 +172,7 @@ const GroupMessageInput = () => {
                             ref={attachButtonRef}
                             onClick={() => setShowAttachMenu(!showAttachMenu)}
                             disabled={!isConnected || isRecording}
-                            className="p-2.5 text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed rounded-full transition-all flex-shrink-0"
+                            className="p-2.5 text-slate-400 hover:text-slate-200 hover:bg-fg/[0.06] disabled:opacity-40 disabled:cursor-not-allowed rounded-full transition-all flex-shrink-0"
                             aria-label="Adjuntar archivo"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 transform -rotate-45">
@@ -195,7 +195,7 @@ const GroupMessageInput = () => {
                             ref={stickerButtonRef}
                             onClick={() => setShowStickerPanel(!showStickerPanel)}
                             disabled={isRecording}
-                            className="p-2.5 text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed rounded-full transition-all flex-shrink-0"
+                            className="p-2.5 text-slate-400 hover:text-slate-200 hover:bg-fg/[0.06] disabled:opacity-40 disabled:cursor-not-allowed rounded-full transition-all flex-shrink-0"
                             aria-label="Stickers"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -212,7 +212,7 @@ const GroupMessageInput = () => {
                     </div>
                 )}
                 {isRecording ? (
-                    <div className="flex-1 min-h-[42px] flex items-center justify-between px-4 text-red-400 bg-slate-800 border border-white/10 rounded-2xl">
+                    <div className="flex-1 min-h-[42px] flex items-center justify-between px-4 text-red-400 bg-slate-800 border border-fg/10 rounded-2xl">
                         <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
                             <span className="font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
@@ -228,7 +228,7 @@ const GroupMessageInput = () => {
                         onKeyDown={onKeyDown}
                         disabled={!isConnected}
                         placeholder={isConnected ? 'Escribe un mensaje en el grupo...' : 'Sin conexión...'}
-                        className="flex-1 resize-none bg-slate-800 border border-white/10 rounded-2xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto transition-all"
+                        className="flex-1 resize-none bg-slate-800 border border-fg/10 rounded-2xl px-4 py-2.5 text-fg placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto transition-all"
                         style={{ height: 'auto', minHeight: '42px' }}
                         onInput={e => {
                             const el = e.currentTarget;
@@ -241,7 +241,7 @@ const GroupMessageInput = () => {
                     <button
                         onClick={editingMessageId ? handleEditMessageSave : onSend}
                         disabled={!isConnected || !(editingMessageId ? editingMessageText.trim() : text.trim())}
-                        className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg"
+                        className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-on-accent rounded-full transition-all flex-shrink-0 shadow-lg"
                         aria-label="Enviar"
                     >
                         {editingMessageId ? (
@@ -258,7 +258,7 @@ const GroupMessageInput = () => {
                     <button
                         onClick={isRecording ? stopRecording : startRecording}
                         disabled={!isConnected}
-                        className={`p-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full transition-all flex-shrink-0 shadow-lg ${isRecording ? 'bg-rose-500 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-500'}`}
+                        className={`p-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-on-accent rounded-full transition-all flex-shrink-0 shadow-lg ${isRecording ? 'bg-rose-500 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-500'}`}
                         aria-label={isRecording ? 'Detener y enviar nota de voz' : 'Grabar nota de voz'}
                     >
                         {isRecording ? (

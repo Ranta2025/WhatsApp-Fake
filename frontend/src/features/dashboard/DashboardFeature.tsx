@@ -96,7 +96,7 @@ const CallingOverlay = ({ callState, onEndCall }: CallingOverlayProps) => {
 
     return (
         <div className="fixed inset-0 z-call bg-black/80 backdrop-blur-md flex items-center justify-center">
-            <div className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-[2rem] p-10 w-80 text-center shadow-2xl border border-white/10 relative overflow-hidden">
+            <div className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-[2rem] p-10 w-80 text-center shadow-2xl border border-on-accent/10 relative overflow-hidden">
                 {/* Animación de ondas */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-40 h-40 border border-indigo-500/20 rounded-full animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
@@ -105,13 +105,13 @@ const CallingOverlay = ({ callState, onEndCall }: CallingOverlayProps) => {
                 <div className="relative z-10">
                     {/* Avatar / Icono */}
                     <div className="w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-indigo-500/30">
-                        <span className="text-white text-3xl font-bold">
+                        <span className="text-on-accent text-3xl font-bold">
                             {(callState.remoteName || callState.remoteTelephon)?.charAt(0)?.toUpperCase() || '?'}
                         </span>
                     </div>
 
                     {/* Estado */}
-                    <h2 className="text-xl font-bold text-white mb-1">Llamando...</h2>
+                    <h2 className="text-xl font-bold text-on-accent mb-1">Llamando...</h2>
                     <p className="text-indigo-300 font-medium mb-1">
                         {callState.remoteName || callState.remoteTelephon}
                     </p>
@@ -126,7 +126,7 @@ const CallingOverlay = ({ callState, onEndCall }: CallingOverlayProps) => {
                         className="w-16 h-16 bg-red-500 hover:bg-red-600 rounded-full mx-auto flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 shadow-lg shadow-red-500/25"
                         aria-label="Cancelar llamada"
                     >
-                        <svg className="w-8 h-8 text-white rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-8 h-8 text-on-accent rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                         </svg>
                     </button>
@@ -219,7 +219,7 @@ const DashboardContent = () => {
                 >
                     <div className="relative max-w-5xl max-h-[90vh] w-full h-full flex items-center justify-center p-4">
                         <button 
-                            className="absolute -top-12 right-0 text-white/50 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-3 transition-all active:scale-90"
+                            className="absolute -top-12 right-0 text-on-accent/50 hover:text-on-accent bg-on-accent/5 hover:bg-on-accent/10 rounded-full p-3 transition-all active:scale-90"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setViewImage(null);
@@ -252,7 +252,7 @@ const DashboardContent = () => {
             )}
 
             {callState && callState.status === 'active' && (
-                <Suspense fallback={<div className="fixed inset-0 z-call bg-black/80 flex items-center justify-center text-white">Conectando llamada...</div>}>
+                <Suspense fallback={<div className="fixed inset-0 z-call bg-black/80 flex items-center justify-center text-on-accent">Conectando llamada...</div>}>
                     <CallRoom
                         roomID={callState.roomID}
                         userID={user?.telephon || profile?.Telephon}

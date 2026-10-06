@@ -58,7 +58,7 @@ interface EmptyStateProps {
 
 const EmptyState = ({ icon, title, action, onAction }: EmptyStateProps) => (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6 animate-fade-in">
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-500 mb-4">
+        <div className="w-14 h-14 rounded-2xl bg-fg/[0.04] border border-fg/[0.06] flex items-center justify-center text-slate-500 mb-4">
             <Svg d={icon} className="h-7 w-7" />
         </div>
         <p className="text-sm text-slate-400">{title}</p>
@@ -87,7 +87,7 @@ const ListItem = ({ active, onClick, avatar, title, badge, subtitle, meta, unrea
     <button
         onClick={onClick}
         className={`group w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
-            active ? 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/20' : 'hover:bg-white/[0.04]'
+            active ? 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/20' : 'hover:bg-fg/[0.04]'
         }`}
     >
         {avatar}
@@ -243,14 +243,14 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
 
     return (
         <aside className={`
-            bg-slate-900 border-r border-white/[0.06] flex flex-col min-h-0
+            bg-slate-900 border-r border-fg/[0.06] flex flex-col min-h-0
             ${(selected || selectedGroup) ? 'hidden lg:flex lg:w-[380px]' : 'w-full lg:w-[380px]'}
         `}>
             {/* Cabecera: perfil y acciones */}
             <header className="px-4 pt-4 pb-3 flex items-center justify-between gap-3">
                 <button
                     onClick={onOpenProfile}
-                    className="flex items-center gap-3 min-w-0 rounded-xl p-1 -m-1 hover:bg-white/[0.04] transition-colors text-left"
+                    className="flex items-center gap-3 min-w-0 rounded-xl p-1 -m-1 hover:bg-fg/[0.04] transition-colors text-left"
                     title="Ver perfil"
                 >
                     <Avatar src={myAvatar} name={user?.username} size="md" online={isConnected} />
@@ -300,7 +300,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
 
             {/* Pestañas (control segmentado) */}
             <nav className="px-4 pb-2" role="tablist">
-                <div className="grid grid-cols-5 gap-1 p-1 rounded-xl bg-slate-950/60 border border-white/[0.04]">
+                <div className="grid grid-cols-5 gap-1 p-1 rounded-xl bg-slate-950/60 border border-fg/[0.04]">
                     {TABS.map(tab => (
                         <button
                             key={tab.id}
@@ -376,7 +376,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                     <>
                         <button
                             onClick={onAddContact}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors text-left mt-1"
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-fg/[0.04] transition-colors text-left mt-1"
                         >
                             <span className="w-12 h-12 rounded-full bg-indigo-500/15 text-indigo-400 flex items-center justify-center">
                                 <Svg d={Icon.userPlus} />
@@ -414,7 +414,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                     <>
                         <button
                             onClick={onCreateGroup}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors text-left mt-1"
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-fg/[0.04] transition-colors text-left mt-1"
                         >
                             <span className="w-12 h-12 rounded-full bg-indigo-500/15 text-indigo-400 flex items-center justify-center">
                                 <Svg d={Icon.groupPlus} />

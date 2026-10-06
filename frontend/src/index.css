@@ -57,6 +57,9 @@
   --color-overlay-strong: var(--t-overlay-strong);
   --color-border-subtle: var(--t-border-subtle);
   --color-scrim: var(--t-scrim);
+  --color-chip: var(--t-chip);
+  --color-chip-strong: var(--t-chip-strong);
+  --color-quote: var(--t-quote);
 
   --shadow-glow:
     0 0 0 1px color-mix(in oklab, var(--color-indigo-500) 25%, transparent),
@@ -156,6 +159,9 @@
   --t-overlay-strong: rgb(255 255 255 / 0.1);
   --t-border-subtle: rgb(255 255 255 / 0.1);
   --t-scrim: rgb(0 0 0 / 0.6);
+  --t-chip: rgb(0 0 0 / 0.4);
+  --t-chip-strong: rgb(0 0 0 / 0.45);
+  --t-quote: rgb(0 0 0 / 0.2);
 }
 
 :root[data-theme="light"] {
@@ -200,6 +206,9 @@
   --t-overlay-strong: rgb(0 0 0 / 0.08);
   --t-border-subtle: rgb(0 0 0 / 0.1);
   --t-scrim: rgb(0 0 0 / 0.45);
+  --t-chip: rgb(255 255 255 / 0.8);
+  --t-chip-strong: rgb(255 255 255 / 0.85);
+  --t-quote: rgb(0 0 0 / 0.06);
 }
 
 :root[data-theme="rosa"] {
@@ -244,6 +253,9 @@
   --t-overlay-strong: rgb(0 0 0 / 0.08);
   --t-border-subtle: rgb(0 0 0 / 0.1);
   --t-scrim: rgb(0 0 0 / 0.45);
+  --t-chip: rgb(255 255 255 / 0.8);
+  --t-chip-strong: rgb(255 255 255 / 0.85);
+  --t-quote: rgb(0 0 0 / 0.06);
 }
 
 :root[data-theme="menta"] {
@@ -288,6 +300,9 @@
   --t-overlay-strong: rgb(0 0 0 / 0.08);
   --t-border-subtle: rgb(0 0 0 / 0.1);
   --t-scrim: rgb(0 0 0 / 0.45);
+  --t-chip: rgb(255 255 255 / 0.8);
+  --t-chip-strong: rgb(255 255 255 / 0.85);
+  --t-quote: rgb(0 0 0 / 0.06);
 }
 
 :root[data-theme="lavanda"] {
@@ -332,6 +347,9 @@
   --t-overlay-strong: rgb(0 0 0 / 0.08);
   --t-border-subtle: rgb(0 0 0 / 0.1);
   --t-scrim: rgb(0 0 0 / 0.45);
+  --t-chip: rgb(255 255 255 / 0.8);
+  --t-chip-strong: rgb(255 255 255 / 0.85);
+  --t-quote: rgb(0 0 0 / 0.06);
 }
 
 :root[data-theme="durazno"] {
@@ -376,6 +394,9 @@
   --t-overlay-strong: rgb(0 0 0 / 0.08);
   --t-border-subtle: rgb(0 0 0 / 0.1);
   --t-scrim: rgb(0 0 0 / 0.45);
+  --t-chip: rgb(255 255 255 / 0.8);
+  --t-chip-strong: rgb(255 255 255 / 0.85);
+  --t-quote: rgb(0 0 0 / 0.06);
 }
 
 :root[data-theme="cielo"] {
@@ -420,6 +441,9 @@
   --t-overlay-strong: rgb(0 0 0 / 0.08);
   --t-border-subtle: rgb(0 0 0 / 0.1);
   --t-scrim: rgb(0 0 0 / 0.45);
+  --t-chip: rgb(255 255 255 / 0.8);
+  --t-chip-strong: rgb(255 255 255 / 0.85);
+  --t-quote: rgb(0 0 0 / 0.06);
 }
 
 @layer base {

@@ -114,7 +114,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                 <div className={
                     isSticker
                         ? 'relative text-sm leading-relaxed break-words'
-                        : `relative px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed break-words ${isMine ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-slate-800 text-slate-100 rounded-tl-sm'}`
+                        : `relative px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed break-words ${isMine ? 'bg-indigo-600 text-on-accent rounded-tr-sm' : 'bg-slate-800 text-slate-100 rounded-tl-sm'}`
                 } {...bindLongPress(msg.MessageID)}>
                     {/* Sender name for non-mine messages */}
                     {!isMine && (
@@ -133,7 +133,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     {/* Footer: time + edited — en stickers es una píldora aparte */}
                     {isSticker ? (
                         <div className={`mt-1 flex ${isMine ? 'justify-end' : ''}`}>
-                            <div className="flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-[10px] text-slate-200">
+                            <div className="flex items-center gap-1 rounded-full bg-chip-strong px-2 py-0.5 text-[10px] text-slate-200">
                                 {msg.Edited && <span>editado</span>}
                                 <ExpiryClock expiresAt={msg.ExpiresAt} />
                                 <span>{formatTime(msg.Time)}</span>
@@ -154,7 +154,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                         ref={triggerRef}
                         onClick={(e) => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : msg.MessageID); }}
                         className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'}
-                            px-1 transition-opacity text-slate-400 hover:text-white focus-visible:opacity-100
+                            px-1 transition-opacity text-slate-400 hover:text-fg focus-visible:opacity-100
                             ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         aria-label="Opciones"
                     >
@@ -193,7 +193,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     onClose={() => setMenuOpen(null)}
                     anchorRef={triggerRef}
                     align={isMine ? 'right' : 'left'}
-                    className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]"
+                    className="bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]"
                 >
                     {onReact && (
                         <>
@@ -202,12 +202,12 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                                 onSelect={(emoji) => { onReact(msg, emoji); setMenuOpen(null); }}
                                 onMore={() => { setMenuOpen(null); onMoreReactions?.(msg); }}
                             />
-                            <div className="h-px bg-white/10" />
+                            <div className="h-px bg-fg/10" />
                         </>
                     )}
                     {/* Reply — always available */}
                     <button onClick={() => { onReply(msg); setMenuOpen(null); }}
-                            className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                         </svg>
@@ -217,7 +217,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     {/* Received sticker — favorite a built-in, save a custom one */}
                     {builtinSticker && (
                         <button onClick={() => { void addStickerFavorite(stickerUrl); setMenuOpen(null); }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.48 3.5l2.31 4.68 5.17.75-3.74 3.64.88 5.15-4.62-2.43-4.62 2.43.88-5.15L3.99 8.93l5.17-.75 2.32-4.68z" />
                             </svg>
@@ -226,7 +226,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     )}
                     {isCustomSticker && (
                         <button onClick={() => { void saveStickerToLibrary(stickerUrl); setMenuOpen(null); }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m-7-7h14" />
                             </svg>
@@ -237,7 +237,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     {/* Info (quién lo leyó / recibió) — only my messages */}
                     {isMine && onInfo && (
                         <button onClick={() => { onInfo(msg); setMenuOpen(null); }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -248,7 +248,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     {/* Edit — only my messages, never stickers */}
                     {isMine && !isSticker && (
                         <button onClick={() => { onEdit(msg); setMenuOpen(null); }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
@@ -269,7 +269,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
 
                     {/* Delete for me — always available */}
                     <button onClick={() => { onDeleteForMe(msg); setMenuOpen(null); }}
-                            className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-white/5 flex items-center gap-2">
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-fg/5 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                         </svg>
@@ -389,7 +389,7 @@ export const GroupMessageList = ({
                 if (isSystemGroupMessage(msg)) {
                     return (
                         <div key={msg.MessageID} className="flex justify-center py-1 px-4">
-                            <span className="bg-black/40 backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
+                            <span className="bg-chip backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
                                 {describeGroupSystemMessage(msg, myTelephon, resolveSystemName)}
                             </span>
                         </div>
@@ -497,31 +497,31 @@ const AddMembersModal = ({ isOpen, onClose, group }: AddMembersModalProps) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
              onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col"
+            <div className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[80vh] flex flex-col"
                  onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-4 border-b border-white/5">
-                    <h3 className="font-semibold text-white">Añadir miembros</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10">
+                <div className="flex items-center justify-between p-4 border-b border-fg/5">
+                    <h3 className="font-semibold text-fg">Añadir miembros</h3>
+                    <button onClick={onClose} className="text-slate-400 hover:text-fg p-1 rounded-full hover:bg-fg/10">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
-                <div className="p-4 border-b border-white/5">
+                <div className="p-4 border-b border-fg/5">
                     <input type="text" value={search} onChange={e => setSearch(e.target.value)}
                            placeholder="Buscar contacto..."
-                           className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm" />
+                           className="w-full bg-slate-800 border border-fg/10 rounded-xl px-3 py-2 text-fg placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm" />
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-1">
                     {candidates.map(c => (
                         <button key={c.Number} type="button" onClick={() => toggle(c.Number)}
-                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left ${selected.has(c.Number) ? 'bg-indigo-600/20' : 'hover:bg-white/5'}`}>
+                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left ${selected.has(c.Number) ? 'bg-indigo-600/20' : 'hover:bg-fg/5'}`}>
                             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${selected.has(c.Number) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-600'}`}>
-                                {selected.has(c.Number) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                {selected.has(c.Number) && <svg className="w-3 h-3 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                             </div>
-                            <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center text-sm font-semibold text-white overflow-hidden flex-shrink-0">
+                            <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center text-sm font-semibold text-fg overflow-hidden flex-shrink-0">
                                 {(c.ContactName || c.Username)?.charAt(0)?.toUpperCase()}
                             </div>
                             <div className="flex-1 overflow-hidden">
@@ -532,10 +532,10 @@ const AddMembersModal = ({ isOpen, onClose, group }: AddMembersModalProps) => {
                     ))}
                     {candidates.length === 0 && <p className="text-center text-slate-500 py-6 text-sm">No hay contactos disponibles</p>}
                 </div>
-                <div className="p-4 border-t border-white/5 flex gap-3">
+                <div className="p-4 border-t border-fg/5 flex gap-3">
                     <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors">Cancelar</button>
                     <button onClick={submit} disabled={loading || !selected.size}
-                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-on-accent text-sm font-semibold transition-colors">
                         {loading ? 'Añadiendo...' : `Añadir (${selected.size})`}
                     </button>
                 </div>
@@ -865,10 +865,10 @@ const GroupChatWindowInner = () => {
     return (
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden bg-slate-950 relative">
             {/* ── Header ── */}
-            <div className="flex-shrink-0 px-4 py-3 border-b border-white/5 bg-slate-900/95 backdrop-blur-md flex items-center gap-3 z-10 shadow-sm">
+            <div className="flex-shrink-0 px-4 py-3 border-b border-fg/5 bg-slate-900/95 backdrop-blur-md flex items-center gap-3 z-10 shadow-sm">
                 {/* Back (mobile) */}
                 <button onClick={() => setSelectedGroup(null)}
-                        className="lg:hidden p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400"
+                        className="lg:hidden p-2 hover:bg-fg/10 rounded-full transition-colors text-slate-400"
                         aria-label="Volver">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -876,7 +876,7 @@ const GroupChatWindowInner = () => {
                 </button>
 
                 {/* Avatar */}
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-white text-lg flex-shrink-0 shadow overflow-hidden">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-on-accent text-lg flex-shrink-0 shadow overflow-hidden">
                     {selectedGroup.AvatarUrl
                         ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
                         : selectedGroup.Name?.charAt(0)?.toUpperCase()
@@ -901,7 +901,7 @@ const GroupChatWindowInner = () => {
                 <div className="flex items-center gap-1 flex-shrink-0">
                     {canSearch && (
                         <button onClick={chatSearch.isOpen ? chatSearch.close : chatSearch.open}
-                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+                                className="p-2 hover:bg-fg/10 rounded-full transition-colors text-slate-400 hover:text-fg"
                                 title="Buscar" aria-label="Buscar en el chat" aria-pressed={chatSearch.isOpen}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -911,18 +911,18 @@ const GroupChatWindowInner = () => {
                     {/* More options kebab */}
                     <div className="relative" ref={optionsRef}>
                         <button ref={optionsTriggerRef} type="button" onClick={() => setShowOptions(v => !v)}
-                                className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+                                className="p-2 hover:bg-fg/10 rounded-full transition-colors text-slate-400 hover:text-fg"
                                 title="Más opciones" aria-label="Más opciones" aria-haspopup="menu" aria-expanded={showOptions}>
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                             </svg>
                         </button>
                         {showOptions && (
-                            <div role="menu" ref={optionsMenuRef} onKeyDown={onOptionsKeyDown} className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[220px] z-dropdown">
+                            <div role="menu" ref={optionsMenuRef} onKeyDown={onOptionsKeyDown} className="absolute right-0 top-full mt-1 bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[220px] z-dropdown">
                                 {selectedGroup.UserRole !== 'left' && (
                                     <>
                                         <MuteMenuItems key={selectedGroup.ID} target={{ kind: 'group', id: selectedGroup.ID }} onDone={() => setShowOptions(false)} />
-                                        <div className="border-t border-white/5" />
+                                        <div className="border-t border-fg/5" />
                                     </>
                                 )}
                                 {selectedGroup?.UserRole !== 'left' && (
@@ -941,9 +941,9 @@ const GroupChatWindowInner = () => {
                                     </svg>
                                     Eliminar de mi lista
                                 </button>
-                                <div className="border-t border-white/5" />
+                                <div className="border-t border-fg/5" />
                                 <button type="button" role="menuitem" onClick={() => { setConfirmClear(true); setShowOptions(false); }}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-white/5 flex items-center gap-2">
+                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-fg/5 flex items-center gap-2">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -969,14 +969,14 @@ const GroupChatWindowInner = () => {
                          style={{ animation: 'slideInRight 0.22s ease' }}>
 
                         {/* Panel header */}
-                        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-slate-900 flex-shrink-0">
+                        <div className="flex items-center gap-3 px-4 py-3 border-b border-fg/5 bg-slate-900 flex-shrink-0">
                             <button onClick={() => setShowMembers(false)}
-                                    className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400">
+                                    className="p-2 hover:bg-fg/10 rounded-full transition-colors text-slate-400">
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
-                            <span className="font-semibold text-white text-sm">Info del grupo</span>
+                            <span className="font-semibold text-fg text-sm">Info del grupo</span>
                         </div>
 
                         <div className="flex-1 overflow-y-auto">
@@ -990,7 +990,7 @@ const GroupChatWindowInner = () => {
                                         className="relative w-24 h-24 rounded-full overflow-hidden shadow-xl focus:outline-none"
                                         aria-label="Foto del grupo"
                                         disabled={uploadingAvatar || (!selectedGroup.AvatarUrl && !canEditInfoNow)}>
-                                        <div className="w-full h-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-4xl font-bold text-white">
+                                        <div className="w-full h-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-4xl font-bold text-on-accent">
                                             {selectedGroup.AvatarUrl
                                                 ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
                                                 : selectedGroup.Name?.charAt(0)?.toUpperCase()
@@ -998,13 +998,13 @@ const GroupChatWindowInner = () => {
                                         </div>
                                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
                                             {uploadingAvatar
-                                                ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> // theme-ok: spinner over media overlay
                                                 : canEditInfoNow
-                                                    ? <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    ? <svg className="w-7 h-7 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                                                       </svg>
-                                                    : <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    : <svg className="w-7 h-7 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                       </svg>
@@ -1018,12 +1018,12 @@ const GroupChatWindowInner = () => {
                                         open={showAvatarMenu}
                                         onClose={() => setShowAvatarMenu(false)}
                                         anchorRef={avatarTriggerRef}
-                                        className="w-44 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
+                                        className="w-44 bg-slate-800 border border-fg/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
                                     >
                                         {selectedGroup.AvatarUrl && (
                                             <button
                                                 onClick={() => { setViewAvatarOpen(true); setShowAvatarMenu(false); }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors">
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-fg hover:bg-fg/10 transition-colors">
                                                 <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -1032,7 +1032,7 @@ const GroupChatWindowInner = () => {
                                             </button>
                                         )}
                                         {canEditInfoNow && (
-                                            <label className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors cursor-pointer">
+                                            <label className="w-full flex items-center gap-3 px-4 py-3 text-sm text-fg hover:bg-fg/10 transition-colors cursor-pointer">
                                                 <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1061,7 +1061,7 @@ const GroupChatWindowInner = () => {
                                             maxLength={60}
                                             aria-label="Nombre del grupo"
                                             placeholder="Nombre del grupo"
-                                            className="w-full bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
+                                            className="w-full bg-slate-800 border border-fg/10 rounded-xl px-3 py-2 text-fg placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
                                         />
                                         <textarea
                                             value={infoDescription}
@@ -1070,7 +1070,7 @@ const GroupChatWindowInner = () => {
                                             rows={2}
                                             aria-label="Descripción del grupo"
                                             placeholder="Descripción del grupo"
-                                            className="w-full resize-none bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
+                                            className="w-full resize-none bg-slate-800 border border-fg/10 rounded-xl px-3 py-2 text-fg placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
                                         />
                                         <div className="flex gap-2">
                                             <button onClick={() => setEditingInfo(false)} disabled={savingInfo}
@@ -1078,7 +1078,7 @@ const GroupChatWindowInner = () => {
                                                 Cancelar
                                             </button>
                                             <button onClick={saveGroupInfo} disabled={savingInfo || !infoName.trim()}
-                                                    className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                                                    className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-on-accent text-sm font-semibold transition-colors">
                                                 {savingInfo ? 'Guardando...' : 'Guardar'}
                                             </button>
                                         </div>
@@ -1086,10 +1086,10 @@ const GroupChatWindowInner = () => {
                                 ) : (
                                     <>
                                         <div className="flex items-center justify-center gap-2 mt-0">
-                                            <h2 className="text-xl font-bold text-white text-center">{selectedGroup.Name}</h2>
+                                            <h2 className="text-xl font-bold text-fg text-center">{selectedGroup.Name}</h2>
                                             {canEditInfoNow && (
                                                 <button onClick={openEditInfo} aria-label="Editar info del grupo"
-                                                        className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors">
+                                                        className="p-1.5 text-slate-400 hover:text-fg rounded-full hover:bg-fg/10 transition-colors">
                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                     </svg>
@@ -1120,7 +1120,7 @@ const GroupChatWindowInner = () => {
                                     <div className="relative rounded-xl overflow-hidden h-28 mb-1">
                                         <img src={groupWallpapers[selectedGroup.ID]} alt="fondo" className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 gap-2">
-                                            <label className="cursor-pointer flex items-center gap-1 text-xs text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
+                                            <label className="cursor-pointer flex items-center gap-1 text-xs text-on-accent bg-on-accent/20 hover:bg-on-accent/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                 </svg>
@@ -1137,9 +1137,9 @@ const GroupChatWindowInner = () => {
                                         </div>
                                     </div>
                                 ) : (
-                                    <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed border-white/20 hover:border-indigo-400/60 bg-white/5 hover:bg-white/10 transition-all cursor-pointer gap-2 ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <label className={`flex flex-col items-center justify-center h-20 rounded-xl border-2 border-dashed border-fg/20 hover:border-indigo-400/60 bg-fg/5 hover:bg-fg/10 transition-all cursor-pointer gap-2 ${uploadingWallpaper ? 'opacity-50 pointer-events-none' : ''}`}>
                                         {uploadingWallpaper
-                                            ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            ? <div className="w-5 h-5 border-2 border-fg border-t-transparent rounded-full animate-spin" />
                                             : <>
                                                 <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1188,9 +1188,9 @@ const GroupChatWindowInner = () => {
                                                         else getMemberTriggerRef.release(m.Telephon);
                                                     }}
                                                     onClick={() => !isSelf && setMemberMenuOpen(isOpen ? null : m.Telephon)}
-                                                    className={`flex items-center gap-3 px-4 py-3 transition-colors ${!isSelf ? 'hover:bg-white/5 cursor-pointer' : ''}`}>
+                                                    className={`flex items-center gap-3 px-4 py-3 transition-colors ${!isSelf ? 'hover:bg-fg/5 cursor-pointer' : ''}`}>
                                                     {/* Avatar */}
-                                                    <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-slate-600 to-slate-500 flex items-center justify-center text-base font-bold text-white flex-shrink-0 overflow-hidden">
+                                                    <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-slate-600 to-slate-500 flex items-center justify-center text-base font-bold text-fg flex-shrink-0 overflow-hidden">
                                                         {(isSelf ? myAvatar : avatarMap[m.Telephon]) ? (
                                                             <img src={isSelf ? myAvatar : avatarMap[m.Telephon]} alt="" className="w-full h-full object-cover" />
                                                         ) : (
@@ -1198,7 +1198,7 @@ const GroupChatWindowInner = () => {
                                                         )}
                                                     </div>
                                                     {/* Info */}
-                                                    <div className="flex-1 min-w-0 border-b border-white/5 pb-3">
+                                                    <div className="flex-1 min-w-0 border-b border-fg/5 pb-3">
                                                         <div className="flex items-center gap-2">
                                                             <span className={`font-medium truncate text-sm ${isSelf ? 'text-indigo-300' : 'text-slate-100'}`}>
                                                                 {displayName}
@@ -1217,11 +1217,11 @@ const GroupChatWindowInner = () => {
                                                     open={isOpen}
                                                     onClose={() => setMemberMenuOpen(null)}
                                                     anchorRef={getMemberTriggerRef(m.Telephon)}
-                                                    className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[190px]"
+                                                    className="bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[190px]"
                                                 >
                                                     <button
                                                         onClick={() => { setSelected({ Number: m.Telephon, Username: m.Username, ContactName: m.ContactName || '', Status: 'unknown' }); setShowMembers(false); setMemberMenuOpen(null); }}
-                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                                         </svg>
@@ -1230,7 +1230,7 @@ const GroupChatWindowInner = () => {
                                                     {!isContact && (
                                                         <button
                                                             onClick={() => { setAddContactTarget({ number: m.Telephon, username: m.Username }); setAddContactOpen(true); setMemberMenuOpen(null); }}
-                                                            className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                                            className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                                                             </svg>
@@ -1239,10 +1239,10 @@ const GroupChatWindowInner = () => {
                                                     )}
                                                     {canManageMembersNow && (
                                                         <>
-                                                            <div className="border-t border-white/5" />
+                                                            <div className="border-t border-fg/5" />
                                                             {m.Role === 'admin' ? (
                                                                 <button onClick={() => { void handleMemberRole(m.Telephon, 'member', m.ContactName || m.Username); }}
-                                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                                     </svg>
@@ -1250,7 +1250,7 @@ const GroupChatWindowInner = () => {
                                                                 </button>
                                                             ) : (
                                                                 <button onClick={() => { void handleMemberRole(m.Telephon, 'admin', m.ContactName || m.Username); }}
-                                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 flex items-center gap-2">
+                                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z" />
                                                                     </svg>
@@ -1301,9 +1301,9 @@ const GroupChatWindowInner = () => {
                                     </svg>
                                     <span className="text-sm font-medium">Eliminar de mi lista</span>
                                 </button>
-                                <div className="border-t border-white/5 mx-4 my-1" />
+                                <div className="border-t border-fg/5 mx-4 my-1" />
                                 <button onClick={() => { setShowMembers(false); setConfirmClear(true); }}
-                                        className="w-full flex items-center gap-4 px-5 py-3.5 text-slate-400 hover:bg-white/5 transition-colors">
+                                        className="w-full flex items-center gap-4 px-5 py-3.5 text-slate-400 hover:bg-fg/5 transition-colors">
                                     <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -1343,7 +1343,7 @@ const GroupChatWindowInner = () => {
                 {focused && selectedGroup && (
                     <button
                         onClick={() => returnToLatest({ kind: 'group', id: selectedGroup.ID })}
-                        className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-white/10 transition-colors"
+                        className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-fg/10 transition-colors"
                         aria-label="Ir a los mensajes recientes"
                     >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
@@ -1374,9 +1374,9 @@ const GroupChatWindowInner = () => {
 
             {/* ── Confirm leave group dialog ── */}
             {confirmLeave && (
-                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
                      onClick={() => setConfirmLeave(false)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
+                    <div className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
                          onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0">
@@ -1385,7 +1385,7 @@ const GroupChatWindowInner = () => {
                                 </svg>
                             </div>
                             <div>
-                                <p className="font-semibold text-white">¿Salir del grupo?</p>
+                                <p className="font-semibold text-fg">¿Salir del grupo?</p>
                                 <p className="text-xs text-slate-400 mt-0.5">Dejarás de poder enviar mensajes, pero podrás seguir leyendo el historial.</p>
                             </div>
                         </div>
@@ -1395,7 +1395,7 @@ const GroupChatWindowInner = () => {
                                 Cancelar
                             </button>
                             <button onClick={handleLeaveGroup} disabled={loadingLeave}
-                                    className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                                    className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-on-accent text-sm font-semibold transition-colors">
                                 {loadingLeave ? 'Saliendo...' : 'Salir'}
                             </button>
                         </div>
@@ -1405,9 +1405,9 @@ const GroupChatWindowInner = () => {
 
             {/* ── Confirm remove member dialog ── */}
             {confirmRemoveMember && (
-                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
                      onClick={() => setConfirmRemoveMember(null)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
+                    <div className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
                          onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
@@ -1416,7 +1416,7 @@ const GroupChatWindowInner = () => {
                                 </svg>
                             </div>
                             <div>
-                                <p className="font-semibold text-white">¿Eliminar a {confirmRemoveMember.username || confirmRemoveMember.telephon}?</p>
+                                <p className="font-semibold text-fg">¿Eliminar a {confirmRemoveMember.username || confirmRemoveMember.telephon}?</p>
                                 <p className="text-xs text-slate-400 mt-0.5">Dejará de ser miembro del grupo. Podrás volver a añadirlo después.</p>
                             </div>
                         </div>
@@ -1426,7 +1426,7 @@ const GroupChatWindowInner = () => {
                                 Cancelar
                             </button>
                             <button onClick={handleRemoveMember} disabled={memberActionLoading}
-                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-on-accent text-sm font-semibold transition-colors">
                                 {memberActionLoading ? 'Eliminando...' : 'Eliminar'}
                             </button>
                         </div>
@@ -1436,9 +1436,9 @@ const GroupChatWindowInner = () => {
 
             {/* ── Confirm delete group dialog ── */}
             {confirmDelete && (
-                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
                      onClick={() => setConfirmDelete(false)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
+                    <div className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
                          onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
@@ -1447,7 +1447,7 @@ const GroupChatWindowInner = () => {
                                 </svg>
                             </div>
                             <div>
-                                <p className="font-semibold text-white">¿Eliminar de tu lista?</p>
+                                <p className="font-semibold text-fg">¿Eliminar de tu lista?</p>
                                 <p className="text-xs text-slate-400 mt-0.5">Saldrás del grupo y desaparecerá de tu lista. Esta acción no se puede deshacer.</p>
                             </div>
                         </div>
@@ -1457,7 +1457,7 @@ const GroupChatWindowInner = () => {
                                 Cancelar
                             </button>
                             <button onClick={handleDeleteGroup} disabled={loadingLeave}
-                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-on-accent text-sm font-semibold transition-colors">
                                 {loadingLeave ? 'Eliminando...' : 'Eliminar'}
                             </button>
                         </div>
@@ -1470,8 +1470,8 @@ const GroupChatWindowInner = () => {
                 <div className="fixed inset-0 z-modal bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
                      onClick={() => setViewAvatarOpen(false)}>
                     <button onClick={() => setViewAvatarOpen(false)}
-                            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-                        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-on-accent/10 hover:bg-on-accent/20 flex items-center justify-center transition-colors">
+                        <svg className="w-5 h-5 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -1481,15 +1481,15 @@ const GroupChatWindowInner = () => {
                         className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain"
                         onClick={e => e.stopPropagation()}
                     />
-                    <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/70 text-sm font-medium">{selectedGroup.Name}</p>
+                    <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-on-accent/70 text-sm font-medium">{selectedGroup.Name}</p>
                 </div>
             )}
 
             {/* ── Confirm clear chat dialog ── */}
             {confirmClear && (
-                <div className="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                <div className="fixed inset-0 z-modal bg-scrim backdrop-blur-sm flex items-center justify-center p-4"
                      onClick={() => setConfirmClear(false)}>
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
+                    <div className="bg-slate-900 border border-fg/10 rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col gap-4"
                          onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
@@ -1498,7 +1498,7 @@ const GroupChatWindowInner = () => {
                                 </svg>
                             </div>
                             <div>
-                                <p className="font-semibold text-white">¿Vaciar chat?</p>
+                                <p className="font-semibold text-fg">¿Vaciar chat?</p>
                                 <p className="text-xs text-slate-400 mt-0.5">Solo se borrará en tu dispositivo. Los demás miembros seguirán viendo los mensajes.</p>
                             </div>
                         </div>
@@ -1508,7 +1508,7 @@ const GroupChatWindowInner = () => {
                                 Cancelar
                             </button>
                             <button onClick={handleClearChat}
-                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-colors">
+                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-on-accent text-sm font-semibold transition-colors">
                                 Vaciar
                             </button>
                         </div>

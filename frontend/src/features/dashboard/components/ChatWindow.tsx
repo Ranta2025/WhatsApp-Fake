@@ -170,7 +170,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
         <MessagingProvider>
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden bg-slate-950">
             {/* Cabecera */}
-            <header className="flex-shrink-0 h-[68px] px-3 sm:px-4 border-b border-white/[0.06] bg-slate-900/80 backdrop-blur-xl flex items-center gap-2 z-10">
+            <header className="flex-shrink-0 h-[68px] px-3 sm:px-4 border-b border-fg/[0.06] bg-slate-900/80 backdrop-blur-xl flex items-center gap-2 z-10">
                 <button
                     onClick={() => setSelected(null)}
                     className="lg:hidden icon-btn -ml-1"
@@ -180,7 +180,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                 </button>
 
                 <button
-                    className="flex items-center gap-3 min-w-0 flex-1 rounded-xl p-1.5 -ml-1 hover:bg-white/[0.04] transition-colors text-left"
+                    className="flex items-center gap-3 min-w-0 flex-1 rounded-xl p-1.5 -ml-1 hover:bg-fg/[0.04] transition-colors text-left"
                     onClick={onShowContactDetails}
                     title="Ver información del contacto"
                 >
@@ -211,7 +211,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                     <button onClick={chatSearch.isOpen ? chatSearch.close : chatSearch.open} className="icon-btn" title="Buscar" aria-label="Buscar en el chat" aria-pressed={chatSearch.isOpen}>
                         <Svg d={SearchGlyph} />
                     </button>
-                    <span className="w-px h-6 bg-white/10 mx-1" />
+                    <span className="w-px h-6 bg-fg/10 mx-1" />
                     <button onClick={handleClearChat} className="icon-btn hover:!text-rose-400 hover:!bg-rose-500/10" title="Vaciar chat" aria-label="Vaciar chat">
                         <Svg d={TrashIcon} />
                     </button>
@@ -227,7 +227,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                         anchorRef={optionsTriggerRef}
                         align="right"
                         menuNavigation
-                        className="bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[220px]"
+                        className="bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[220px]"
                     >
                         <MuteMenuItems key={selected.Number} target={{ kind: 'direct', key: selected.Number }} onDone={closeOptions} />
                     </Popover>
@@ -256,7 +256,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                 {focusedChat[selected.Number] && (
                     <button
                         onClick={() => returnToLatest({ kind: 'chat', key: selected.Number })}
-                        className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-white/10 transition-colors"
+                        className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-fg/10 transition-colors"
                         aria-label="Ir a los mensajes recientes"
                     >
                         <Svg d={ArrowDownGlyph} className="h-4 w-4" />

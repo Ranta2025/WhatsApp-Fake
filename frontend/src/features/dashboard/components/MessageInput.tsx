@@ -59,9 +59,9 @@ const MessageInput = () => {
     if (!selected) return null;
 
     return (
-        <div className="flex-shrink-0 bg-slate-900/80 backdrop-blur-xl border-t border-white/[0.06]">
+        <div className="flex-shrink-0 bg-slate-900/80 backdrop-blur-xl border-t border-fg/[0.06]">
             {replyingTo && (
-                <div className="px-4 py-2 bg-slate-800/50 border-b border-white/5 flex items-center gap-3">
+                <div className="px-4 py-2 bg-slate-800/50 border-b border-fg/5 flex items-center gap-3">
                     <div className="w-1 h-8 bg-indigo-500 rounded-full"></div>
                     <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-indigo-400">
@@ -82,7 +82,7 @@ const MessageInput = () => {
                     <button
                         ref={attachButtonRef}
                         onClick={() => setShowAttachMenu(!showAttachMenu)}
-                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] transition-all"
+                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-fg/[0.06] transition-all"
                         aria-label="Adjuntar archivo"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 transform -rotate-45">
@@ -104,7 +104,7 @@ const MessageInput = () => {
                         ref={stickerButtonRef}
                         onClick={() => setShowStickerPanel(!showStickerPanel)}
                         disabled={isRecording}
-                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        className="h-[44px] w-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-200 hover:bg-fg/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                         aria-label="Stickers"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -120,7 +120,7 @@ const MessageInput = () => {
                     )}
                 </div>
 
-                <div className="flex-1 relative bg-slate-800/80 rounded-2xl flex items-end border border-white/[0.04] focus-within:border-indigo-500/40 transition-colors">
+                <div className="flex-1 relative bg-slate-800/80 rounded-2xl flex items-end border border-fg/[0.04] focus-within:border-indigo-500/40 transition-colors">
                     {isRecording ? (
                         <div className="w-full h-[44px] flex items-center justify-between px-4 text-red-400">
                             <div className="flex items-center gap-3">
@@ -158,7 +158,7 @@ const MessageInput = () => {
                     </button>
                 ) : (
                     <button
-                        className={`h-[44px] w-[44px] flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95 ${isRecording ? 'bg-rose-500 text-white animate-pulse' : 'bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-lg shadow-indigo-500/25'}`}
+                        className={`h-[44px] w-[44px] flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95 ${isRecording ? 'bg-rose-500 text-on-accent animate-pulse' : 'bg-indigo-500 hover:bg-indigo-400 text-slate-950 shadow-lg shadow-indigo-500/25'}`}
                         aria-label={isRecording ? 'Detener y enviar nota de voz' : 'Grabar nota de voz'}
                         onClick={isRecording ? stopRecording : startRecording}
                     >

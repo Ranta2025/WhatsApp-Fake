@@ -282,7 +282,7 @@ export default function StickerPanel({
                 data-sticker-url={tile.url}
                 aria-label={tile.alt}
                 onClick={() => handleSelect(tile.url)}
-                className="w-16 h-16 rounded-xl flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
+                className="w-16 h-16 rounded-xl flex items-center justify-center hover:bg-fg/10 active:scale-95 transition-all"
             >
                 <StickerThumbnail tile={tile} reducedMotion={reducedMotion} />
             </button>
@@ -309,7 +309,7 @@ export default function StickerPanel({
             open
             onClose={onClose}
             anchorRef={anchorRef}
-            className="w-80 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 animate-slide-up origin-bottom-left"
+            className="w-80 bg-slate-900/95 backdrop-blur-xl border border-fg/10 rounded-2xl shadow-2xl p-2 animate-slide-up origin-bottom-left"
         >
             <input
                 type="search"
@@ -317,7 +317,7 @@ export default function StickerPanel({
                 placeholder="Buscar por etiqueta"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="w-full mb-2 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-slate-500 outline-none focus:bg-white/[0.14]"
+                className="w-full mb-2 rounded-lg bg-fg/10 px-3 py-1.5 text-sm text-fg placeholder:text-slate-500 outline-none focus:bg-fg/[0.14]"
             />
 
             <div role="tablist" aria-label="Categorías de stickers" className="flex items-center gap-0.5 mb-2 overflow-x-auto">
@@ -331,7 +331,7 @@ export default function StickerPanel({
                             aria-selected={selected}
                             onClick={() => { setActiveTab(item.id); setMenuFor(null); }}
                             className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors shrink-0 ${
-                                selected ? 'bg-emerald-600/80 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                                selected ? 'bg-emerald-600/80 text-on-accent' : 'text-slate-400 hover:bg-fg/10 hover:text-slate-200'
                             }`}
                         >
                             <TabIcon>{item.icon}</TabIcon>
@@ -367,13 +367,13 @@ export default function StickerPanel({
                     role="menu"
                     aria-label={`Opciones de ${menuTile.alt}`}
                     style={menuStyle}
-                    className="absolute z-20 w-44 rounded-xl border border-white/10 bg-slate-800 p-1 shadow-2xl"
+                    className="absolute z-20 w-44 rounded-xl border border-fg/10 bg-slate-800 p-1 shadow-2xl"
                 >
                     <button
                         type="button"
                         role="menuitem"
                         onClick={() => { void handleToggleFavorite(menuTile); }}
-                        className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-white/[0.06] transition-colors"
+                        className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-fg/[0.06] transition-colors"
                     >
                         {isFavorite(menuTile) ? 'Quitar de favoritos' : 'Favorito'}
                     </button>
@@ -413,19 +413,19 @@ export default function StickerPanel({
                     className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-black/70 p-4 text-center"
                 >
                     <div>
-                        <p className="text-sm text-white">¿Eliminar este sticker de &quot;Mis stickers&quot;?</p>
+                        <p className="text-sm text-on-accent">¿Eliminar este sticker de &quot;Mis stickers&quot;?</p>
                         <div className="mt-3 flex justify-center gap-2">
                             <button
                                 type="button"
                                 onClick={() => setConfirmDelete(null)}
-                                className="rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20"
+                                className="rounded-lg bg-on-accent/10 px-3 py-1.5 text-sm text-on-accent hover:bg-on-accent/20"
                             >
                                 Cancelar
                             </button>
                             <button
                                 type="button"
                                 onClick={() => { void handleDelete(); }}
-                                className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500"
+                                className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-rose-500"
                             >
                                 Eliminar
                             </button>
