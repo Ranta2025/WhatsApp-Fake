@@ -1,0 +1,27 @@
+# Feature: outbox-sender-echo (bug)
+
+## Objective
+After reconnecting, a text that the sender queued offline must appear in the sender's own chat view, not only on the receiver's side.
+
+## Problem / Evidence (2026-10-06)
+- Spec `frontend/e2e/offline-send.e2e.ts:64` ("los textos se encolan, sobreviven a una recarga y se entregan una sola vez al reconectar") failed **2 of 4** runs on `main` + ui-themes (`54237e9`, stack rebuilt). It passed in the two runs just before and after, so it is intermittent.
+- Failing assertion: `offline-send.e2e.ts:106` `expect(messageText(ana.page, chatText)).toHaveCount(1)` gets `0` right after `pending(ana.page, chatText)` became `0`. So the outbox entry was acked and removed, but Ana's open 1:1 chat never shows the message.
+- The message **was delivered**: Luis's screenshot shows it (07:39 PM), and his sidebar preview has the text. Ana's sidebar preview still shows the previous message ("✨ Sticker"), so her client did not apply the echo or the reloaded history.
+- Flow in the spec: Ana goes offline, queues one group text and one 1:1 text, reloads offline (the shell comes from the SW and the outbox persists in IndexedDB), reconnects, opens the group (OK), then opens the 1:1 chat with Luis (fails).
+- Not caused by ui-themes: the same spec passed in the full e2e run of `d4923af` and in the HEAD verification of `bec86e1`; the themes diff is CSS and class names only.
+
+## Suspects (to verify)
+- The outbox flush happens while the group chat is open: the ack/echo for the 1:1 message arrives for a chat that is not selected, and neither the message store nor the sidebar preview is updated (`frontend/src/features/outbox/useOutbox.ts`, `outboxQueue.ts` `ack`, `DashboardContext` WS handlers for `message`/ack).
+- Opening the 1:1 chat afterwards loads history from a stale in-memory window or skips the fetch, so the server copy of the message is not shown (`focusedWindow`, `mergeMessages`, pagination cache).
+- `reconcile(knownClientIDs)` dropping the pending entry before the echo is rendered.
+
+## Scope / Authorized
+Investigation and fix only after the user authorizes it (registered on request: "si encuentras un error registra el feature y después se arregla"). Branch from `main`.
+
+## Tasks
+- [ ] OE1 Reproduce deterministically (Vitest around `useOutbox`/`DashboardContext`: ack for a non-selected chat, then select it), identify the root cause.
+- [ ] OE2 Fix with a RED test first; the sender's chat and sidebar preview reflect the delivered message in every order of events.
+- [ ] OE3 Run `offline-send.e2e.ts` 5 times (65 s apart) and the full e2e suite once; docs + mirror.
+
+## Related flake
+- `frontend/e2e/stickers-full.e2e.ts:168` ("favoritos: un sticker integrado marcado persiste tras recargar") failed once in the same full run and passed when rerun alone. Not investigated; track here if it recurs.

@@ -29,7 +29,8 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 | stickers-basic | `feat/stickers-basic` | done (merged to main) | [stickers-basic.md](stickers-basic.md) |
 | stickers-full | `feat/stickers-full` | done (merged to main) | [stickers-full.md](stickers-full.md) |
 | api-casing | `feat/api-casing` | in progress (AC0 done and merged; AC3-AC7, AC10 pending) |
-| ui-themes | `feat/ui-themes` | done (merged to main) | [api-casing.md](api-casing.md) |
+| ui-themes | `feat/ui-themes` | done (merged to main) |
+| outbox-sender-echo | (bug, branch from `main`) | pending: intermittent, offline-queued 1:1 text missing from the sender's own view after reconnect | [outbox-sender-echo.md](outbox-sender-echo.md) | [api-casing.md](api-casing.md) |
 
 ## Recommended order for the pending features
 1. **observability** - backend-only, independent, low blast radius, and gives metrics/request ids to debug everything after it.
@@ -47,7 +48,7 @@ Cross-feature rules until api-casing lands: fields added inside an existing Pasc
 ## Handoff state (2026-10-06)
 - **Current tip:** `main` (roadmap features plus ui-themes merged and pushed). The only unfinished feature is **api-casing**: continue it on a branch from `main` (`git switch -c feat/api-casing-2 main`, or recreate `feat/api-casing` from `main`).
 - **Last reviewed boundary:** `94d03d3` (ui-themes final slice, acknowledged); later commits on `main` are doc-only.
-- **Next:** `api-casing.md` AC3 -> AC7, AC10.
+- **Next:** `outbox-sender-echo.md` (bug), then `api-casing.md` AC3 -> AC7, AC10.
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
