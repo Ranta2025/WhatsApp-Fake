@@ -318,7 +318,19 @@ peticiones por IP.
 |--------|------|-------------|
 | `POST` | `/api/v1/upload` | Subir archivo a MinIO → devuelve URL pública |
 
-La app incluye un pack de stickers básicos servido como assets estáticos en `/stickers/basic/<id>.webp`; se envían como mensajes con `mediaType=sticker` y no pasan por `/api/v1/upload`.
+La app incluye packs de stickers integrados servidos como assets estáticos en `/stickers/<pack>/<id>.webp` (básicos, animales, comida); se envían como mensajes con `mediaType=sticker` y no pasan por `/api/v1/upload`.
+
+### Stickers personalizados — `/api/v1/stickers` (requiere JWT)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/v1/stickers` | Subir sticker (multipart `file` + `tags` opcional; 201 nuevo, 200 si ya existía) |
+| `POST` | `/api/v1/stickers/save` | Guardar un sticker recibido en "Mis stickers" (`{url}`) |
+| `GET` | `/api/v1/stickers` | Biblioteca propia: `{mine, favorites, recents}` |
+| `PUT` | `/api/v1/stickers/favorites` | Marcar/desmarcar favorito (`{url, favorite}`) |
+| `DELETE` | `/api/v1/stickers/:id` | Eliminar de "Mis stickers" (los mensajes ya enviados se siguen viendo) |
+
+Límites y formatos: WebP o PNG de **512x512** exactos, estáticos **≤ 300 KB**, animados (WebP) **≤ 1 MB**; cuerpo máximo 1 MB y 30 subidas/hora por IP; **200** stickers propios y **30** recientes por usuario. Los objetos se deduplican por contenido (`stickers/<sha256>.<ext>`, un solo objeto aunque lo suban varios usuarios) y el recolector de mensajes temporales nunca borra un objeto referenciado por la biblioteca. Aviso de privacidad: la deduplicación global implica que subir bytes idénticos a los de otro usuario reutiliza el mismo objeto.
 
 ### Público
 
