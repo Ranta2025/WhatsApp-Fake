@@ -99,9 +99,10 @@ RED examples: a sticker validator table test (non-512 dimensions, 301 KB static,
 
 ## Progress / Evidence
 - 2026-10-06: SF3 done (commit 3a8d8bd, delegated direct, 12 files +847/-19): sticker tables in `mediaReferencedSQL`, delete enqueues key when unreferenced, server-side recents on 1:1/group sticker send, animated sniff on save + sha hardening + favorite reconcile (RF1/RF4/RF5/RF6 closed). Integration `sticker_gc_test.go` (sharedLogin; expired keeps object; last-ref delete GCs; 31→30 trim). RED observed, GREEN `go test ./...` + integration 90.9s. Parent spot check `go build` ok.
+- 2026-10-06: SF3 review slice f5499fa..3a8d8bd (medium, reliability, lineage review-7bf689c32b377226): consent granted per standing authorization; lens admitted with 0 blockers → **approved/acknowledged, authority burned** (no correction). 6 advisories recorded as RF9–RF14 below (non-blocking; receipt stands). **Boundary now 3a8d8bd.**
 - 2026-10-06: SF4 done (commit 1114c86 incl. correction, delegated direct, 6 files +675/-1): `stickerApi.ts` + `useStickerLibrary` + types as above; correction added per-URL rollback, rejection/empty-sha tests. RED observed, GREEN 20 tests + suite 1123 passed, typecheck/lint clean. Parent spot check ok.
 - 2026-10-06: SF4 review slice 3a8d8bd..1114c86 (medium, reliability, lineage review-3a7df1a0ce766455): consent granted per standing authorization; lens found R3-001 CRITICAL (stale-snapshot optimistic rollback) + R3-002/003/004 test gaps. Bounded correction 91/120 lines (per-URL functional rollback + interleaved test, rejection tests, empty-sha guard), targeted validation green → **approved/acknowledged, authority burned**. R3-001–004 closed by the correction; no new follow-ups. **Boundary now 1114c86.**
-- 2026-10-06: SF3 review slice f5499fa..3a8d8bd (medium, reliability, lineage review-7bf689c32b377226): consent granted per standing authorization; lens admitted with 0 blockers → **approved/acknowledged, authority burned** (no correction). 6 advisories recorded as RF9–RF14 below (non-blocking; receipt stands). **Boundary now 3a8d8bd.**
+- 2026-10-06: SF5 done (commit 7fdb79c, delegated direct, 4 files +1031): `stickerImage.ts` (crop-rect/contain math, quality-loop 0.9→0.5 ≤300KB, Safari PNG fallback detect, VP8X ANIM sniff mirroring backend, animated 512x512 ≤1MB validation, tag normalize 5x20) + 31 tests, `StickerCreator.tsx` (file pick, drag/zoom crop canvas, rounded mask, 512 canvas, encode loop, Spanish errors, tags input, upload via stickerApi, animated as-is; `onCreated`/`onSend` seams, no panel/composer changes). RED observed (missing modules), GREEN 38 new + features-dir 62 passed, typecheck/lint clean. Rounded mask per default; no flood-fill/ML. Parent spot check: stickerImage 31 passed. Route: delegated; trigger evidence: component + helpers + tests.
 
 ## Review follow-ups 2 (advisory, slice f5499fa..3a8d8bd)
 All backend test-coverage gaps; fold into SF7 (Go endpoint e2e / backend tests). No re-review of 3a8d8bd.
@@ -134,4 +135,4 @@ Fold into the first task touching each file (same rule as stickers-basic RFs); n
 - Consent `granted` pre-authorized by user (revocable); still confirming it stays in force each time it is used.
 
 ## Next step
-SF4 review slice, then SF5 (RED: crop-rect math / quality-loop with mocked encoder).
+SF5 review slice, then SF6 (RED: tag-search filter / tile menu cases).
