@@ -99,6 +99,7 @@ RED examples: a sticker validator table test (non-512 dimensions, 301 KB static,
 
 ## Progress / Evidence
 - 2026-10-06: SF3 done (commit 3a8d8bd, delegated direct, 12 files +847/-19): sticker tables in `mediaReferencedSQL`, delete enqueues key when unreferenced, server-side recents on 1:1/group sticker send, animated sniff on save + sha hardening + favorite reconcile (RF1/RF4/RF5/RF6 closed). Integration `sticker_gc_test.go` (sharedLogin; expired keeps object; last-ref delete GCs; 31→30 trim). RED observed, GREEN `go test ./...` + integration 90.9s. Parent spot check `go build` ok.
+- 2026-10-06: SF4 done (commit 4e00e2f, delegated direct, 5 files +592): `stickerApi.ts` (upload/save/list/setFavorite/remove, M4b guards: malformed list rows dropped, single-object mismatch → null, network errors reject), `useStickerLibrary` (fetch-on-first-open, in-memory cache + shared in-flight, retry, optimistic favorite rollback, remove, saveFromMessage), sticker types in `types/api.ts` (camelCase, mirrors backend models). RED observed (unresolved imports), GREEN 16 new tests + full suite 137 files/1123 passed, typecheck/lint clean. Skill resolution: none (no registry skill matches API/hook work). Parent spot check: stickerApi tests 7 passed. Route: delegated; trigger evidence: 4+ non-trivial files.
 - 2026-10-06: SF3 review slice f5499fa..3a8d8bd (medium, reliability, lineage review-7bf689c32b377226): consent granted per standing authorization; lens admitted with 0 blockers → **approved/acknowledged, authority burned** (no correction). 6 advisories recorded as RF9–RF14 below (non-blocking; receipt stands). **Boundary now 3a8d8bd.**
 
 ## Review follow-ups 2 (advisory, slice f5499fa..3a8d8bd)
@@ -132,4 +133,4 @@ Fold into the first task touching each file (same rule as stickers-basic RFs); n
 - Consent `granted` pre-authorized by user (revocable); still confirming it stays in force each time it is used.
 
 ## Next step
-SF3 review slice, then SF4 (RED: `useStickerLibrary` guard test dropping malformed rows).
+SF4 review slice, then SF5 (RED: crop-rect math / quality-loop with mocked encoder).

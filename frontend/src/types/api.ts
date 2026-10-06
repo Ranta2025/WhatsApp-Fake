@@ -577,6 +577,51 @@ export interface GlobalSearchResponse {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Sticker library (camelCase, /api/v1/stickers/*) — backend/models/sticker.go
+// ─────────────────────────────────────────────────────────────────────────
+
+/** One owned sticker (StickerResponse). */
+export interface Sticker {
+  id: number;
+  url: string;
+  sha256: string;
+  animated: boolean;
+  favorite: boolean;
+  tags: string[];
+  createdAt: string;
+}
+
+/** A favorite, built-in or owned (StickerFavoriteItem). */
+export interface StickerFavoriteItem {
+  url: string;
+  createdAt: string;
+}
+
+/** A recently used sticker (StickerRecentItem). */
+export interface StickerRecentItem {
+  url: string;
+  lastUsedAt: string;
+}
+
+/** GET /api/v1/stickers. */
+export interface StickerLibraryResponse {
+  mine: Sticker[];
+  favorites: StickerFavoriteItem[];
+  recents: StickerRecentItem[];
+}
+
+/** POST /api/v1/stickers/save body. */
+export interface StickerSaveRequest {
+  url: string;
+}
+
+/** PUT /api/v1/stickers/favorites body. */
+export interface StickerFavoriteRequest {
+  url: string;
+  favorite: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Errores
 // ─────────────────────────────────────────────────────────────────────────
 
