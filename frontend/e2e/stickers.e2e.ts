@@ -23,6 +23,8 @@ function stickerBubble(page: Page, alt: string): Locator {
 
 async function sendSticker(page: Page, alt: string): Promise<void> {
   await page.getByLabel('Stickers').click();
+  // The panel opens on "Recientes"; built-in stickers always live under "Básicos".
+  await page.getByRole('tab', { name: 'Básicos' }).click();
   await page.getByRole('button', { name: alt, exact: true }).click();
 }
 
@@ -113,6 +115,8 @@ test.describe('stickers', () => {
       await sendChatText(ana.page, controlText);
       await expectTextBubbleHasBackground(ana.page, controlText);
       await expect(sidebarRow(ana.page, 'Luis', controlText)).toBeVisible();
+      // Luis' history is rendered (and his socket live) before his baseline is read.
+      await expect(bubbleWithText(luis.page, controlText)).toBeVisible();
 
       const anaBefore = await stickerImage(ana.page, HOLA).count();
       const luisBefore = await stickerImage(luis.page, HOLA).count();
@@ -181,6 +185,11 @@ test.describe('stickers', () => {
       // Baseline counts of HOLA stickers in the Ana<->Marta chat (older runs left some).
       await openChat(ana.page, 'Marta');
       await openChat(marta.page, 'Ana');
+      // Anchor: both sides render a fresh message, so history has loaded before counting.
+      const anchor = uniqueText('ancla reenvio');
+      await sendChatText(ana.page, anchor);
+      await expect(bubbleWithText(ana.page, anchor)).toBeVisible();
+      await expect(bubbleWithText(marta.page, anchor)).toBeVisible();
       const anaMartaBefore = await stickerImage(ana.page, HOLA).count();
       const martaBefore = await stickerImage(marta.page, HOLA).count();
 
@@ -228,6 +237,7 @@ test.describe('stickers', () => {
       const controlText = uniqueText('control grupo');
       await sendGroupText(ana.page, controlText);
       await expectTextBubbleHasBackground(ana.page, controlText);
+      await expect(bubbleWithText(luis.page, controlText)).toBeVisible();
 
       const anaBefore = await stickerImage(ana.page, HOLA).count();
       const luisBefore = await stickerImage(luis.page, HOLA).count();

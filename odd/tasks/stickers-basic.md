@@ -130,8 +130,8 @@ Slice reviewed from Claude Code (lineage review-009d64e379f82d23, medium, reliab
 
 ## Review follow-ups 4 (advisory, slice c94dbe8..8965944) — deferred
 Slice reviewed from Claude Code (lineage review-ee04736fedc10fd1, medium, reliability): approved/acknowledged, burned. **Boundary now 8965944.** Not fixed in this feature (no review loop on test-only flake risks); pick up if `stickers.e2e.ts` flakes.
-- [ ] RF17 (WARNING) `stickers.e2e.ts:182-185`: forward-test baselines (`anaMartaBefore`, `martaBefore`) use a non-retrying `count()` right after `openChat`; wait for a history anchor first.
-- [ ] RF18 (WARNING) `stickers.e2e.ts:118` (and group test): `luisBefore` is read before Luis's page confirms history rendered; wait for `bubbleWithText(controlText)` on Luis's page first.
+- [x] RF17 (WARNING) `stickers.e2e.ts:182-185`: forward-test baselines (`anaMartaBefore`, `martaBefore`) use a non-retrying `count()` right after `openChat`; wait for a history anchor first. → Done 2026-10-06: unique anchor message rendered on both sides before the baselines.
+- [x] RF18 (WARNING) `stickers.e2e.ts:118` (and group test): `luisBefore` is read before Luis's page confirms history rendered; wait for `bubbleWithText(controlText)` on Luis's page first. → Done 2026-10-06: baselines wait for the control text on Luis's page (1:1 and group).
 - [ ] RF19 (SUGGESTION) `stickers.e2e.ts:122-123`: `before + 1` counts assume an unvirtualized, unpaginated list; pinning `data-message-id` or anchoring after a unique text is more robust.
 - [ ] RF20 (SUGGESTION) `stickers.e2e.ts:55-57`: `expectTextBubbleHasBackground` checks descendants only; include the element itself.
 
