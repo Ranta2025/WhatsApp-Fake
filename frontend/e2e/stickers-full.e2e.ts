@@ -173,12 +173,20 @@ test.describe('stickers full', () => {
       await openTab(ana.page, 'Básicos');
       await openTileMenu(ana.page, HOLA);
 
-      // Idempotent: only activate when the menu offers "Favorito" (not "Quitar").
-      if (await ana.page.getByRole('menuitem', { name: 'Favorito', exact: true }).count() > 0) {
-        // HOLA is the first tile of "Básicos" (left column): a real mouse click
-        // works now that the menu is a sibling of the grid, not clipped by it.
-        await ana.page.getByRole('menuitem', { name: 'Favorito', exact: true }).click();
+      // Deterministic on repeat runs against the shared stack: unfavorite
+      // first if a previous run left HOLA favorited, so the menu always offers
+      // "Favorito" and the real mouse click below always runs (the durable
+      // regression proof for the unclipped menu layer).
+      if (await ana.page.getByRole('menuitem', { name: 'Quitar de favoritos', exact: true }).count() > 0) {
+        await ana.page.getByRole('menuitem', { name: 'Quitar de favoritos', exact: true }).click();
+        await closePanel(ana.page);
+        await openPanel(ana.page);
+        await openTab(ana.page, 'Básicos');
+        await openTileMenu(ana.page, HOLA);
       }
+      // HOLA is the first tile of "Básicos" (left column): a real mouse click
+      // works now that the menu is a sibling of the grid, not clipped by it.
+      await ana.page.getByRole('menuitem', { name: 'Favorito', exact: true }).click();
       await closePanel(ana.page);
 
       await ana.page.reload();

@@ -208,4 +208,22 @@ describe('GroupMessageList sticker feedback wiring', () => {
         expect(lib.toggleFavorite).toHaveBeenCalledWith('/stickers/animales/gato.webp', true);
         expect(addToast).toHaveBeenCalledWith({ type: 'success', message: 'Añadido a favoritos' });
     });
+
+    it('does not crash the sticker feedback when the dashboard toast is absent', async () => {
+        mockUseDashboard.mockReturnValue({
+            selectedGroup: { ID: 5, Members: [] },
+            groupReceipts: {},
+            groupMemberNames: {},
+            reactToMessage: vi.fn(),
+            outboxItems: [],
+        } as unknown as DashboardContextValue);
+        renderList(baseMsg({ MediaType: 'sticker', MediaUrl: '/stickers/animales/gato.webp', Message: '/stickers/animales/gato.webp' }));
+        const item = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+            .find((button) => button.textContent?.includes('Añadir a favoritos'))!;
+        expect(item).toBeTruthy();
+
+        await act(async () => { item.click(); await Promise.resolve(); });
+
+        expect(lib.toggleFavorite).toHaveBeenCalledWith('/stickers/animales/gato.webp', true);
+    });
 });
