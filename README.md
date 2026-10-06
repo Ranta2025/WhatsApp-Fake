@@ -143,6 +143,10 @@ copia `.env.example` a `.env` con los valores de `localhost` y ejecuta `go run .
 
 ---
 
+## 🎨 Temas
+
+Cada persona elige el aspecto de la interfaz en **Ajustes** (icono de engranaje de la barra lateral) → sección **Tema**. Hay 8 opciones: **Oscuro** (por defecto), **Claro**, los pasteles **Rosa**, **Menta**, **Lavanda**, **Durazno** y **Cielo**, y **Automático**, que sigue el modo claro/oscuro del sistema operativo y cambia en vivo si este cambia. El tema se aplica al instante en toda la app (incluidas las pantallas de acceso), se guarda por dispositivo en `localStorage` (`whatsapp-fake:theme`) y se restaura antes de pintar, sin parpadeo.
+
 ## 🔔 Notificaciones push (Web Push)
 
 Avisos del sistema para mensajes nuevos (1:1 y de grupo) aunque la app no esté abierta.
@@ -448,7 +452,7 @@ make test-integration
 # si el Postgres del stack está publicado en otro puerto (POSTGRES_PUBLIC_PORT), p. ej. 55432:
 POSTGRES_PUBLIC_PORT=55432 make test-integration
 
-# e2e de navegador con Playwright (login, chat, grupo con media, administración de grupos, estados, paginación, búsqueda, PWA, envío offline y Web Push)
+# e2e de navegador con Playwright (login, chat, grupo con media, administración de grupos, estados, paginación, búsqueda, PWA, envío offline, Web Push y temas)
 cd frontend && npm ci
 npx playwright install chromium   # solo la primera vez
 npm run test:e2e                  # o, desde la raíz: make e2e

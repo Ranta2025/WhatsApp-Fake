@@ -36,6 +36,20 @@
   --color-purple-900: var(--t-purple-900);
   --color-purple-950: var(--t-purple-950);
 
+  /* Estado, solo los tonos usados como texto/borde sobre superficies del tema */
+  --color-amber-200: var(--t-amber-200);
+  --color-amber-300: var(--t-amber-300);
+  --color-amber-400: var(--t-amber-400);
+  --color-emerald-400: var(--t-emerald-400);
+  --color-green-200: var(--t-green-200);
+  --color-green-400: var(--t-green-400);
+  --color-red-200: var(--t-red-200);
+  --color-red-300: var(--t-red-300);
+  --color-red-400: var(--t-red-400);
+  --color-rose-300: var(--t-rose-300);
+  --color-rose-400: var(--t-rose-400);
+  --color-sky-300: var(--t-sky-300);
+
   /* Neutros */
   --color-slate-50: var(--t-slate-50);
   --color-slate-100: var(--t-slate-100);
@@ -162,6 +176,19 @@
   --t-chip: rgb(0 0 0 / 0.4);
   --t-chip-strong: rgb(0 0 0 / 0.45);
   --t-quote: rgb(0 0 0 / 0.2);
+  /* Estado (valores por defecto de Tailwind) */
+  --t-amber-200: oklch(92.4% 0.12 95.746);
+  --t-amber-300: oklch(87.9% 0.169 91.605);
+  --t-amber-400: oklch(82.8% 0.189 84.429);
+  --t-emerald-400: oklch(76.5% 0.177 163.223);
+  --t-green-200: oklch(92.5% 0.084 155.995);
+  --t-green-400: oklch(79.2% 0.209 151.711);
+  --t-red-200: oklch(88.5% 0.062 18.334);
+  --t-red-300: oklch(80.8% 0.114 19.571);
+  --t-red-400: oklch(70.4% 0.191 22.216);
+  --t-rose-300: oklch(81% 0.117 11.638);
+  --t-rose-400: oklch(71.2% 0.194 13.428);
+  --t-sky-300: oklch(82.8% 0.111 230.318);
 }
 
 :root[data-theme="light"] {
@@ -209,6 +236,19 @@
   --t-chip: rgb(255 255 255 / 0.8);
   --t-chip-strong: rgb(255 255 255 / 0.85);
   --t-quote: rgb(0 0 0 / 0.06);
+  /* Estado, tonos oscuros para texto legible sobre fondos claros */
+  --t-amber-200: #b04300;
+  --t-amber-300: #b04300;
+  --t-amber-400: #b04300;
+  --t-emerald-400: #007752;
+  --t-green-200: #00792d;
+  --t-green-400: #00792d;
+  --t-red-200: #c10007;
+  --t-red-300: #c10007;
+  --t-red-400: #c10007;
+  --t-rose-300: #c70036;
+  --t-rose-400: #c70036;
+  --t-sky-300: #0069a8;
 }
 
 :root[data-theme="rosa"] {
@@ -256,6 +296,19 @@
   --t-chip: rgb(255 255 255 / 0.8);
   --t-chip-strong: rgb(255 255 255 / 0.85);
   --t-quote: rgb(0 0 0 / 0.06);
+  /* Estado, tonos oscuros para texto legible sobre fondos claros */
+  --t-amber-200: #b04300;
+  --t-amber-300: #b04300;
+  --t-amber-400: #b04300;
+  --t-emerald-400: #007752;
+  --t-green-200: #00792d;
+  --t-green-400: #00792d;
+  --t-red-200: #c10007;
+  --t-red-300: #c10007;
+  --t-red-400: #c10007;
+  --t-rose-300: #c70036;
+  --t-rose-400: #c70036;
+  --t-sky-300: #0069a8;
 }
 
 :root[data-theme="menta"] {
@@ -303,6 +356,19 @@
   --t-chip: rgb(255 255 255 / 0.8);
   --t-chip-strong: rgb(255 255 255 / 0.85);
   --t-quote: rgb(0 0 0 / 0.06);
+  /* Estado, tonos oscuros para texto legible sobre fondos claros */
+  --t-amber-200: #b04300;
+  --t-amber-300: #b04300;
+  --t-amber-400: #b04300;
+  --t-emerald-400: #007752;
+  --t-green-200: #00792d;
+  --t-green-400: #00792d;
+  --t-red-200: #c10007;
+  --t-red-300: #c10007;
+  --t-red-400: #c10007;
+  --t-rose-300: #c70036;
+  --t-rose-400: #c70036;
+  --t-sky-300: #0069a8;
 }
 
 :root[data-theme="lavanda"] {
@@ -350,6 +416,19 @@
   --t-chip: rgb(255 255 255 / 0.8);
   --t-chip-strong: rgb(255 255 255 / 0.85);
   --t-quote: rgb(0 0 0 / 0.06);
+  /* Estado, tonos oscuros para texto legible sobre fondos claros */
+  --t-amber-200: #b04300;
+  --t-amber-300: #b04300;
+  --t-amber-400: #b04300;
+  --t-emerald-400: #007752;
+  --t-green-200: #00792d;
+  --t-green-400: #00792d;
+  --t-red-200: #c10007;
+  --t-red-300: #c10007;
+  --t-red-400: #c10007;
+  --t-rose-300: #c70036;
+  --t-rose-400: #c70036;
+  --t-sky-300: #0069a8;
 }
 
 :root[data-theme="durazno"] {
@@ -397,6 +476,19 @@
   --t-chip: rgb(255 255 255 / 0.8);
   --t-chip-strong: rgb(255 255 255 / 0.85);
   --t-quote: rgb(0 0 0 / 0.06);
+  /* Estado, tonos oscuros para texto legible sobre fondos claros */
+  --t-amber-200: #b04300;
+  --t-amber-300: #b04300;
+  --t-amber-400: #b04300;
+  --t-emerald-400: #007752;
+  --t-green-200: #00792d;
+  --t-green-400: #00792d;
+  --t-red-200: #c10007;
+  --t-red-300: #c10007;
+  --t-red-400: #c10007;
+  --t-rose-300: #c70036;
+  --t-rose-400: #c70036;
+  --t-sky-300: #0069a8;
 }
 
 :root[data-theme="cielo"] {
@@ -444,6 +536,19 @@
   --t-chip: rgb(255 255 255 / 0.8);
   --t-chip-strong: rgb(255 255 255 / 0.85);
   --t-quote: rgb(0 0 0 / 0.06);
+  /* Estado, tonos oscuros para texto legible sobre fondos claros */
+  --t-amber-200: #b04300;
+  --t-amber-300: #b04300;
+  --t-amber-400: #b04300;
+  --t-emerald-400: #007752;
+  --t-green-200: #00792d;
+  --t-green-400: #00792d;
+  --t-red-200: #c10007;
+  --t-red-300: #c10007;
+  --t-red-400: #c10007;
+  --t-rose-300: #c70036;
+  --t-rose-400: #c70036;
+  --t-sky-300: #0069a8;
 }
 
 @layer base {

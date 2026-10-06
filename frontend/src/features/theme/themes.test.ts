@@ -124,6 +124,42 @@ describe('theme contrast (WCAG)', () => {
   })
 })
 
+const STATUS_SHADES: Record<string, string> = {
+  'amber-200': 'oklch(92.4% 0.12 95.746)',
+  'amber-300': 'oklch(87.9% 0.169 91.605)',
+  'amber-400': 'oklch(82.8% 0.189 84.429)',
+  'emerald-400': 'oklch(76.5% 0.177 163.223)',
+  'green-200': 'oklch(92.5% 0.084 155.995)',
+  'green-400': 'oklch(79.2% 0.209 151.711)',
+  'red-200': 'oklch(88.5% 0.062 18.334)',
+  'red-300': 'oklch(80.8% 0.114 19.571)',
+  'red-400': 'oklch(70.4% 0.191 22.216)',
+  'rose-300': 'oklch(81% 0.117 11.638)',
+  'rose-400': 'oklch(71.2% 0.194 13.428)',
+  'sky-300': 'oklch(82.8% 0.111 230.318)',
+}
+
+describe('status colors (amber/red/rose/emerald/green/sky text shades)', () => {
+  it('maps every status shade to its runtime token in @theme', () => {
+    for (const shade of Object.keys(STATUS_SHADES))
+      expect(css).toContain(`--color-${shade}: var(--t-${shade});`)
+  })
+
+  it('keeps the dark theme on the exact Tailwind defaults', () => {
+    const dark = themeTokens('dark')
+    for (const [shade, value] of Object.entries(STATUS_SHADES)) expect(dark[`--t-${shade}`]).toBe(value)
+  })
+
+  describe.each(THEMES.filter((t) => t.scheme === 'light').map((t) => [t.id] as const))('%s', (id) => {
+    const t = themeTokens(id)
+    it.each(Object.keys(STATUS_SHADES))('%s text >= 4.5 on panel and page', (shade) => {
+      const color = tok(t, `--t-${shade}`)
+      expect(contrast(color, tok(t, '--t-slate-900'))).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(color, tok(t, '--t-slate-950'))).toBeGreaterThanOrEqual(4.5)
+    })
+  })
+})
+
 describe('registry metadata', () => {
   it('uses the page background (slate-950) as meta color and first swatch', () => {
     for (const th of THEMES) {
