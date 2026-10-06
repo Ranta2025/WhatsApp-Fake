@@ -136,4 +136,24 @@ describe('ThemeProvider', () => {
     click('rosa')
     expect(root.dataset.theme).toBe('rosa')
   })
+
+  it('re-reads storage when another tab clears it (key === null)', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'rosa')
+    mount()
+    expect(root.dataset.theme).toBe('rosa')
+    localStorage.clear()
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: null }))
+    })
+    expect(root.dataset.theme).toBe('dark')
+  })
+
+  it('falls back to the default theme when getItem throws at mount', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    mount()
+    expect(text('theme')).toBe('dark')
+    expect(root.dataset.theme).toBe('dark')
+  })
 })

@@ -6,6 +6,8 @@ import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { getErrorMessage } from '../../../lib/errors';
 import InstallApp from '../../../pwa/InstallApp';
 import PushSettings from './PushSettings';
+import ThemePicker from '../../theme/ThemePicker';
+import { useTheme } from '../../theme/useTheme';
 import type { MediaUploadResult } from '../../../types/api';
 
 interface ProfileModalProps {
@@ -16,6 +18,7 @@ interface ProfileModalProps {
 const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
     const { myAvatar, setMyAvatar, globalWallpaper, setGlobalWallpaper, fetchProfile } = useDashboard();
     const { user, updateUsername } = useAuth();
+    const { preference, setPreference } = useTheme();
 
     const [newUsername, setNewUsername] = useState(user?.username || '');
     const [newAvatarFile, setNewAvatarFile] = useState<File | null>(null);
@@ -194,6 +197,11 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                                 </button>
                             )}
                         </div>
+                    </div>
+
+                    <div>
+                        <span id="theme-picker-label" className="block text-sm font-medium text-slate-300 mb-2">Tema</span>
+                        <ThemePicker value={preference} onChange={setPreference} />
                     </div>
 
                     <div>

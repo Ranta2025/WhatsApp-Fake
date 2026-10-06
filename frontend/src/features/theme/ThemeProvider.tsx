@@ -31,7 +31,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Keep tabs in sync.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === THEME_STORAGE_KEY) setPreferenceState(parsePreference(e.newValue))
+      // `key === null` means another tab called `localStorage.clear()`: re-read what is stored now.
+      if (e.key === null) setPreferenceState(readStoredPreference())
+      else if (e.key === THEME_STORAGE_KEY) setPreferenceState(parsePreference(e.newValue))
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)

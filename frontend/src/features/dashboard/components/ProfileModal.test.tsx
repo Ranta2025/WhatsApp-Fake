@@ -6,6 +6,8 @@ import ProfileModal from './ProfileModal';
 import { useDashboard, type DashboardContextValue } from '../context/DashboardContext';
 import { useAuth } from '../../../context/AuthContext';
 import api from '../../../api/axios';
+import { ThemeProvider } from '../../theme/ThemeProvider';
+import { THEME_STORAGE_KEY } from '../../theme/themes';
 
 // Item 6b: ProfileModal used `axios.isAxiosError`, so a plain-object rejection
 // lost `response.data.error` / `.message`. Now structural via lib/errors.
@@ -58,7 +60,7 @@ describe('ProfileModal error extraction', () => {
     it('shows response.data.error from a plain (non-Axios) rejection', async () => {
         mockPut.mockRejectedValue({ response: { data: { error: 'profile boom' } } });
 
-        await act(async () => { root.render(<ProfileModal isOpen onClose={vi.fn()} />); });
+        await act(async () => { root.render(<ThemeProvider><ProfileModal isOpen onClose={vi.fn()} /></ThemeProvider>); });
 
         const usernameInput = container.querySelector('input[placeholder="Tu nombre visible"]') as HTMLInputElement;
         await act(async () => { setInputValue(usernameInput, 'newname'); });
@@ -77,7 +79,7 @@ describe('ProfileModal error extraction', () => {
     it('prefers response.data.message over response.data.error when a body carries both (original precedence)', async () => {
         mockPut.mockRejectedValue({ response: { data: { error: 'generic err', message: 'specific msg' } } });
 
-        await act(async () => { root.render(<ProfileModal isOpen onClose={vi.fn()} />); });
+        await act(async () => { root.render(<ThemeProvider><ProfileModal isOpen onClose={vi.fn()} /></ThemeProvider>); });
 
         const usernameInput = container.querySelector('input[placeholder="Tu nombre visible"]') as HTMLInputElement;
         await act(async () => { setInputValue(usernameInput, 'newname'); });
@@ -90,5 +92,21 @@ describe('ProfileModal error extraction', () => {
 
         expect(container.textContent).toContain('specific msg');
         expect(container.textContent).not.toContain('generic err');
+    });
+
+    it('shows the "Tema" group and applies + persists a chosen theme', async () => {
+        localStorage.clear();
+        await act(async () => { root.render(<ThemeProvider><ProfileModal isOpen onClose={vi.fn()} /></ThemeProvider>); });
+
+        const group = container.querySelector('[role="radiogroup"][aria-label="Tema"]');
+        expect(group).not.toBeNull();
+        const rosa = Array.from(group!.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
+            .find(r => r.getAttribute('aria-label') === 'Rosa');
+        expect(rosa).toBeDefined();
+        await act(async () => { rosa!.click(); });
+
+        expect(document.documentElement.dataset.theme).toBe('rosa');
+        expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('rosa');
+        expect(rosa!.getAttribute('aria-checked')).toBe('true');
     });
 });

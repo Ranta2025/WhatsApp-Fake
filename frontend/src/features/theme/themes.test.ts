@@ -161,16 +161,23 @@ describe('index.html bootstrap script', () => {
   it('applies the stored theme when run (auto, known, garbage)', () => {
     const run = (stored: string | null, light: boolean) => {
       document.documentElement.removeAttribute('data-theme')
+      document.documentElement.style.colorScheme = ''
       document.head.innerHTML = '<meta name="theme-color" content="#000000">'
       const orig = window.matchMedia
       window.matchMedia = (() => ({ matches: light })) as unknown as typeof window.matchMedia
-      if (stored === null) localStorage.removeItem(THEME_STORAGE_KEY)
-      else localStorage.setItem(THEME_STORAGE_KEY, stored)
-      new Function(script)()
-      window.matchMedia = orig
+      try {
+        if (stored === null) localStorage.removeItem(THEME_STORAGE_KEY)
+        else localStorage.setItem(THEME_STORAGE_KEY, stored)
+        new Function(script)()
+      } finally {
+        window.matchMedia = orig
+      }
       return document.documentElement.dataset.theme
     }
     expect(run('rosa', false)).toBe('rosa')
+    expect(document.documentElement.style.colorScheme).toBe('light')
+    expect(run('dark', true)).toBe('dark')
+    expect(document.documentElement.style.colorScheme).toBe('dark')
     expect(run('auto', true)).toBe('light')
     expect(run('auto', false)).toBe('dark')
     expect(run('garbage', true)).toBe('dark')

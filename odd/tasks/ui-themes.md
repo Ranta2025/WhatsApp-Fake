@@ -39,7 +39,7 @@ RED examples: registry test (every theme defines every token; contrast >= 4.5); 
 
 ## Tasks
 - [x] UT1 Theme engine: tokens per theme in `index.css` (remap slate/indigo/purple + semantic tokens + selection/scrollbar/glow), `index.html` bootstrap script, `features/theme/` (`themes.ts`, `ThemeProvider`, `useTheme`), emoji picker class, meta theme-color. Tests: registry completeness + contrast, provider behavior. Route: delegated. → Done delegated direct (writer).
-- [ ] UT2 Picker: "Tema" radiogroup with swatches in `ProfileModal.tsx`; tests. Route: delegated (with UT1 writer if small) or inline.
+- [x] UT2 Picker: "Tema" radiogroup with swatches in `ProfileModal.tsx`; tests. Route: delegated (with UT1 writer if small) or inline. → Done delegated direct (writer): `features/theme/ThemePicker.tsx` (presentational, roving tabindex, arrow keys with wraparound, 4-column grid) used by `ProfileModal` via `useTheme()`.
 - [ ] UT3 Overlay migration, dashboard core: `Sidebar`, `ChatWindow`, `MessageList`, `GroupChatWindow`, `MessageInput`, `GroupMessageInput`, sticker panel; `data-own` on bubbles; update color-class tests. Route: delegated.
 - [ ] UT4 Overlay migration, modals and secondary surfaces: profile/contact/group modals, status, calls, reactions, toasts, notifications. Route: delegated.
 - [ ] UT5 Overlay migration, auth and standalone pages: Welcome, Login, Register, RecoverPassword, UnblockAccount, Activate*. Route: delegated.
@@ -56,7 +56,15 @@ RED examples: registry test (every theme defines every token; contrast >= 4.5); 
 - Inverting slate for light themes can mis-map a shade used with a different role; fix per call site during migration.
 
 ## Progress / Evidence
-- UT1 done: `@theme` slate/indigo/purple -> `var(--t-*)` + 7 semantic tokens (`fg`, `fg-muted`, `on-accent`, `overlay`, `overlay-strong`, `border-subtle`, `scrim`); 7 theme blocks; `index.html` bootstrap; `features/theme/` (registry, provider via `useSyncExternalStore`, storage sync); emoji picker follows `colorScheme`. Dark tokens verified identical to the previous palette (33/33). typecheck/lint/build green, full Vitest 145 files / 1287 tests. RED observed for the registry/contrast tests (59 failed with old CSS); provider and loader tests were written after the implementation (no RED observed).
+- UT1 done (commit 55b6bae, review approved/burned, boundary 55b6bae): `@theme` slate/indigo/purple -> `var(--t-*)` + 7 semantic tokens (`fg`, `fg-muted`, `on-accent`, `overlay`, `overlay-strong`, `border-subtle`, `scrim`); 7 theme blocks; `index.html` bootstrap; `features/theme/` (registry, provider via `useSyncExternalStore`, storage sync); emoji picker follows `colorScheme`. Dark tokens verified identical to the previous palette (33/33). typecheck/lint/build green, full Vitest 145 files / 1287 tests. RED observed for the registry/contrast tests (59 failed with old CSS); provider and loader tests were written after the implementation (no RED observed).
+- UT2 done: `ThemePicker` + "Tema" section in ProfileModal before "Fondo Global de Chats"; RED observed (ThemePicker import missing, ProfileModal "Tema" group absent) then GREEN; TRF2-TRF4 folded in. typecheck, lint and build green; full Vitest 146 files / 1294 tests.
+
+## Review follow-ups (advisory, slice a9282dc..55b6bae)
+Reviewed from Claude Code (lineage review-9b64870a73b1dd0f, medium, reliability, user granted): approved/acknowledged, burned. Boundary now 55b6bae.
+- [x] TRF1 (WARNING) `themes.test.ts:8-10` reads CSS/HTML via `process.cwd()`: won't fix, same convention as `src/pwa/manifest.test.ts` and `builtinPack.test.ts`; Vitest always runs from `frontend/`.
+- [x] TRF2 (SUGGESTION) `themes.test.ts:165-170`: restore `matchMedia` in `try/finally` and assert the bootstrap `colorScheme`. Fold into UT2. → Done in UT2.
+- [x] TRF3 (SUGGESTION) `ThemeProvider.tsx:33-35`: handle `StorageEvent` with `key === null` (another tab cleared storage) and cover a throwing `getItem` at mount. Fold into UT2. → Done in UT2: provider re-reads storage on `key === null`; two new provider tests.
+- [x] TRF4 (SUGGESTION) `emojiPickerLoader.ts:15`: picker class is set once at creation; if instances are reused they keep a stale dark/light class. Verify reuse and update the class on theme change. Fold into UT2. → Done, no code: `FullEmojiPicker` creates a fresh picker on every open and removes it on unmount (no cache/reuse), so the class is always read from the current scheme; a theme change while the dialog is open is not reachable from the UI (the theme picker lives in the profile modal).
 
 ## Assumptions
 - Theme list, `Automático` option and per-device storage chosen as defaults (user asked for "light, pastel, several alternatives"; no further spec).
