@@ -74,7 +74,7 @@ Contract-test design:
 6. **Playwright**: existing specs are the regression net; update helpers in `e2e/support/api.ts` per domain.
 
 ## Tasks (direct cutover, superseding the shim plan; 2026-10-03)
-- [ ] AC0 Contract inventory test: reflection test that walks every response/WS/request schema and fails on any non-camelCase JSON key (allowlist starts with the full current list and shrinks per domain; empty at the end). No production change. Route: delegated.
+- [x] AC0 Contract inventory test: reflection test that walks every response/WS/request schema and fails on any non-camelCase JSON key (allowlist starts with the full current list and shrinks per domain; empty at the end). No production change. Route: delegated. DONE 2026-10-06 — `backend/casing/inventory_test.go` (60 structs, 146 keys, 69 allowlisted, 0 missing/stale; RED with empty allowlist -> 69 missing, GREEN with allowlist). Spot: `go test ./backend/casing/ -run TestInventory -v` PASS. Gaps: hand-built map[string]any WS payloads invisible to reflection (group_delete_message MessageID/GroupID, status_viewed/status_deleted statusId, offline last_seen) -> rename by hand in domain tasks.
 - [ ] AC3 Domain user/auth/contacts: rename tags natively (incl. `Gmail` -> `email`, `Number`/`numero` -> `telephon`), WS `online/offline/username_changed/avatar_changed`, request bodies (`contact_name` -> `contactName`), frontend types/guards/`authUser.ts`/`ProfileModal.tsx`/`usePresence.ts`/DashboardContext, Go integration + e2e helpers. Matrix green. One commit. Route: delegated.
 - [ ] AC4 Domain chat 1:1 (`Message`, `ChatGroup`, chat WS events, normalizers, `mergeMessages`, `focusedWindow`, `MessageList`, search jump, reactions/disappearing/outbox fields added by earlier features). Matrix green. One commit. Route: delegated.
 - [ ] AC5 Domain groups (`Group*` schemas, `group_*` WS events, receipts, admin/settings, `GroupChatWindow.tsx`, `groupApi.ts`). Matrix green. One commit. Route: delegated.
@@ -103,7 +103,9 @@ Resolved 2026-10-03. The app runs ONLY locally (no deployed clients, user: "haz 
 - **Semantic renames (orchestrator):** included in the same cutover (`Gmail` -> `email`, `Number`/`numero` -> `telephon`), because breaking the contract once is cheaper than twice and there are no external clients. Each rename listed in `docs/API_CONTRACT.md`.
 
 ## Progress / Evidence
-(not started)
+- 2026-10-06 AC0 DONE on feat/api-casing: inventory test GREEN (60 structs / 146 keys / 69 allowlisted). Commit pending. Boundary for RDD slice: base abb5ec4 (covers 91167fa under_budget + fbcf00d docs + AC0).
+- Docker: active without sudo (web Up 41m, app Up 6h). Images web 15:50 / backend 10:42 pre-fbcf00d (16:20) but fbcf00d docs-only; rebuild only app/web when domain slices need integration (POSTGRES_PUBLIC_PORT=55432 always).
+- Consent: user authorized granted without asking for this feature (confirm in reply).
 
 ## Next step
-Do not start until the other pending features are merged; first task AC0 (goldens), which is safe to do at any time.
+AC3 Domain user/auth/contacts (delegated, one commit, matrix green).
