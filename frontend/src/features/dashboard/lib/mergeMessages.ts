@@ -124,13 +124,16 @@ export function isContiguousWindow(
 }
 
 /**
- * Applies a fresh "latest window" from the server without wiping older pages
- * that were already loaded: inside the window the server is the truth (edits
+ * Applies a fresh "latest window" from the server without wiping pages that
+ * were already loaded: inside the window the server is the truth (edits
  * refresh, server-side deletions disappear); entries older than the window are
- * kept ONLY when `isContiguousWindow` holds. If not, the older block is dropped
+ * kept ONLY when `isContiguousWindow` holds. If not, the loaded block is dropped
  * (result = fresh window) so no id range is silently skipped; callers must then
- * reset paging (see `isContiguousWindow`). `windowHasMore=false` marks the window
- * as the full history. An empty window means an empty history.
+ * reset paging (see `isContiguousWindow`). Live entries NEWER than the window
+ * (e.g. a sender echo inserted by the socket before a stale/short resync lands)
+ * are always preserved, so a stale page cannot discard them; the time comparison
+ * is the equivalent for non-numeric (synthetic) ids. `windowHasMore=false` marks
+ * the window as the full history. An empty window means an empty history.
  */
 export function mergeLatestWindow<T extends MergeableMessage>(
     prev: readonly T[] | undefined,
@@ -142,11 +145,20 @@ export function mergeLatestWindow<T extends MergeableMessage>(
     if (freshOldestId === null || !prev || prev.length === 0) return dedupeAndSort([...fresh]);
     if (!isContiguousWindow(prev, fresh, windowHasMore)) return dedupeAndSort([...fresh]);
 
-    const freshOldestTime = Math.min(...fresh.map(m => Date.parse(m.Time)).filter(Number.isFinite));
-    const kept = prev.filter(m => (
-        isRealId(m.MessageID)
-            ? m.MessageID < freshOldestId
-            : Date.parse(m.Time) < freshOldestTime
-    ));
+    const freshNewestId = newestRealMessageId(fresh);
+    const freshTimes = fresh.map(m => Date.parse(m.Time)).filter(Number.isFinite);
+    const freshOldestTime = Math.min(...freshTimes);
+    const freshNewestTime = Math.max(...freshTimes);
+    const kept = prev.filter(m => {
+        if (isRealId(m.MessageID)) {
+            // Older than the window: an already-loaded older page.
+            if (m.MessageID < freshOldestId) return true;
+            // Newer than the window: a live message the stale page has not reached.
+            return freshNewestId !== null && m.MessageID > freshNewestId;
+        }
+        // Synthetic entries have no cursor; fall back to time on both sides.
+        const t = Date.parse(m.Time);
+        return t < freshOldestTime || (Number.isFinite(t) && t > freshNewestTime);
+    });
     return dedupeAndSort([...kept, ...fresh]);
 }

@@ -136,6 +136,21 @@ describe('mergeLatestWindow contiguity (no silent gaps)', () => {
         const prev = [...window, e(101, at(101))];
         expect(ids(mergeLatestWindow(prev, window, false))).toContain(101);
     });
+
+    it('keeps a live id newer than the window when the window still has older pages (hasMore=true)', () => {
+        const at = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
+        const window = Array.from({ length: 11 }, (_, i) => e(90 + i, at(90 + i)));
+        const prev = [...window, e(101, at(101))];
+        // The page overlaps at 90 (contiguous) but is not the full history.
+        expect(ids(mergeLatestWindow(prev, window, true))).toContain(101);
+    });
+
+    it('keeps a non-numeric live entry newer than the window by time', () => {
+        const at = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
+        const prev = [e(90, at(90)), sys('system_live', at(101))];
+        const fresh = [e(90, at(90)), e(91, at(91))];
+        expect(ids(mergeLatestWindow(prev, fresh, false))).toContain('system_live');
+    });
 });
 
 describe('reactions preservation', () => {
