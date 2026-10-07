@@ -20,11 +20,13 @@ Investigation and fix only after the user authorizes it (registered on request: 
 
 ## Tasks
 - [x] OE1 Reproduce deterministically (Vitest around `useOutbox`/`DashboardContext`: ack for a non-selected chat, then select it), identify the root cause. Done: `mergeMessages.test.ts` RED (25 tests, 1 failed, echo 101 dropped) + `DashboardContext.outboxEcho.test.tsx` RED (echo applied live, wiped by stale /chats). Root cause: `mergeLatestWindow(prev, fresh, false)` drops prev ids >= freshOldestId; short /chats windows infer hasMore=false (len<200). Route: delegated direct (explorer + writer, mapping trigger). Commit id in Engram mirror + git log.
-- [ ] OE2 Fix with a RED test first; the sender's chat and sidebar preview reflect the delivered message in every order of events.
-- [ ] OE3 Run `offline-send.e2e.ts` 5 times (65 s apart) and the full e2e suite once; docs + mirror.
+- [x] OE2 Fix with a RED test first; the sender's chat and sidebar preview reflect the delivered message in every order of events. Done: `mergeLatestWindow` keeps prev entries newer than fresh window (numeric id > newest + time fallback); in-window stays server truth, non-contiguous still fresh-only. GREEN 28/28 (2 files) + lib regression 241/241. Route: delegated direct (writer trigger, 2 files). RDD slice 94d03d3..HEAD: medium, under_budget (267 lines), pending.
+- [x] OE3 Run `offline-send.e2e.ts` 5 times (65 s apart) and the full e2e suite once; docs + mirror. First cycle 2026-10-07: offline-send 4/5 (run 2 fails at :106, same in-scope assertion), full suite 45 passed/1 skipped/0 failed, gates green. NOT closed: residual in-scope flake → OE4.
+- [x] OE4 Harden replayed-ack + non-contiguous newer-keep (in-scope residual of :106). Done: replayed branch appends echo if absent (dedupe-protected) before fetch; newer-keep hoisted but gated on prev holding no older page (OE1 gap `[1,2,3,12]`+`[10,11]`→`[10,11]` preserved). GREEN 30/30 + lib 242/242 + context 141/141. Route: delegated direct. Then re-run offline-send 5x.
 
 ## Progress
 - OE1: RED observed 2026-10-07, both levels fail as intended; no source fix. Commit id in Engram mirror + git log.
+- OE2 (943dd1d): GREEN 28/28 + lib 241/241, 2026-10-07. Sidebar preview derives from messagesByChat so it inherits the fix; ChatWindow refetch guard unchanged. Gap: server hasMore signal for short windows (out of scope).
 
 ## Related flake
 - `frontend/e2e/stickers-full.e2e.ts:168` ("favoritos: un sticker integrado marcado persiste tras recargar") failed once in the same full run and passed when rerun alone. Not investigated; track here if it recurs.

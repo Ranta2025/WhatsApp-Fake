@@ -145,6 +145,19 @@ describe('mergeLatestWindow contiguity (no silent gaps)', () => {
         expect(ids(mergeLatestWindow(prev, window, true))).toContain(101);
     });
 
+    it('keeps a newer live id when a non-contiguous window has no loaded older page (hasMore=true)', () => {
+        // Reconnect/reload: only the sender's own live echo (101) is loaded. The
+        // stale short window (90..100) does not carry the window's oldest id (90)
+        // in prev, so it is non-contiguous. The echo is newer than the whole
+        // window and the function's own doc promises it is always preserved;
+        // today the non-contiguous early return drops it.
+        const at = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
+        const window = Array.from({ length: 11 }, (_, i) => e(90 + i, at(90 + i)));
+        const prev = [e(101, at(101))];
+        expect(isContiguousWindow(prev, window, true)).toBe(false);
+        expect(ids(mergeLatestWindow(prev, window, true))).toContain(101);
+    });
+
     it('keeps a non-numeric live entry newer than the window by time', () => {
         const at = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
         const prev = [e(90, at(90)), sys('system_live', at(101))];

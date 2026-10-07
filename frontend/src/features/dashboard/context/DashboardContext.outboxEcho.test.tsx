@@ -62,6 +62,7 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 }
 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 1, n)).toISOString();
+const CID = '0b7f3c1e-2d4a-4f6b-9c8d-1a2b3c4d5e6f';
 const chatMsg = (id: number): Message => ({
     MessageID: id, SenderTelephon: 'B', Receptor: '111', Message: `m${id}`, Status: 'visto', Time: iso(id), Edited: false,
 });
@@ -141,5 +142,37 @@ describe('DashboardContext sender echo vs stale full-history window', () => {
 
         // RED: the live echo must survive the stale window; current code drops it.
         expect(ids(latest.messagesByChat['222'])).toContain(101);
+    });
+
+    it('replayed ack appends the echoed frame (pending clears) even when the history reload fails', async () => {
+        const store = createOutboxStore();
+        // Rehydrated-after-reload entry: attempts already >= 1, so the ack of the
+        // resend is classified `replayed` (may be a server replay, reload history).
+        await store.put('111', { clientID: CID, kind: 'direct', target: '222', text: 'eco', replyTo: null, createdAt: 1, attempts: 2 });
+        store.close();
+
+        // The history reload for the replayed ack fails: only the echoed frame
+        // itself can put 101 on screen.
+        mockGet.mockImplementation((url: string) => {
+            if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111', Username: 'ana' } });
+            if (url === '/api/v1/chats') return Promise.resolve({ data: [], headers: {} });
+            if (url === '/api/v1/chat/222') return Promise.reject(new Error('history down'));
+            if (url === '/api/v1/contact') return Promise.resolve({ data: [] });
+            return Promise.resolve({ data: null, headers: {} });
+        });
+
+        stableWs.isConnected = true;
+        await render();
+        await act(async () => { await vi.waitFor(() => expect(latest.outboxItems.map(i => i.entry.clientID)).toEqual([CID])); });
+
+        await emit('message', {
+            MessageID: 101, SenderTelephon: '111', Receptor: '222', Message: 'eco', Status: 'enviado', Time: iso(101), Edited: false, ClientID: CID,
+        });
+
+        // RED: the replayed branch only reloaded; the echo was never appended.
+        expect(ids(latest.messagesByChat['222'])).toContain(101);
+        expect(latest.outboxItems).toEqual([]);
+        // Server truth is still requested.
+        expect(mockGet).toHaveBeenCalledWith('/api/v1/chat/222');
     });
 });

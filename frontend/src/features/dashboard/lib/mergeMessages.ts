@@ -131,9 +131,12 @@ export function isContiguousWindow(
  * (result = fresh window) so no id range is silently skipped; callers must then
  * reset paging (see `isContiguousWindow`). Live entries NEWER than the window
  * (e.g. a sender echo inserted by the socket before a stale/short resync lands)
- * are always preserved, so a stale page cannot discard them; the time comparison
- * is the equivalent for non-numeric (synthetic) ids. `windowHasMore=false` marks
- * the window as the full history. An empty window means an empty history.
+ * are always preserved, so a stale page cannot discard them: alongside the kept
+ * older pages when the window is contiguous, and on their own when it is not
+ * but `prev` holds no page older than the window (a mixed block with a hole is
+ * dropped whole). The time comparison is the equivalent for non-numeric
+ * (synthetic) ids. `windowHasMore=false` marks the window as the full history.
+ * An empty window means an empty history.
  */
 export function mergeLatestWindow<T extends MergeableMessage>(
     prev: readonly T[] | undefined,
@@ -143,22 +146,31 @@ export function mergeLatestWindow<T extends MergeableMessage>(
     if (fresh.length === 0) return [];
     const freshOldestId = oldestRealMessageId(fresh);
     if (freshOldestId === null || !prev || prev.length === 0) return dedupeAndSort([...fresh]);
-    if (!isContiguousWindow(prev, fresh, windowHasMore)) return dedupeAndSort([...fresh]);
 
     const freshNewestId = newestRealMessageId(fresh);
     const freshTimes = fresh.map(m => Date.parse(m.Time)).filter(Number.isFinite);
     const freshOldestTime = Math.min(...freshTimes);
     const freshNewestTime = Math.max(...freshTimes);
-    const kept = prev.filter(m => {
-        if (isRealId(m.MessageID)) {
-            // Older than the window: an already-loaded older page.
-            if (m.MessageID < freshOldestId) return true;
-            // Newer than the window: a live message the stale page has not reached.
-            return freshNewestId !== null && m.MessageID > freshNewestId;
-        }
-        // Synthetic entries have no cursor; fall back to time on both sides.
+    const isOlderThanWindow = (m: T): boolean => (
+        isRealId(m.MessageID) ? m.MessageID < freshOldestId : Date.parse(m.Time) < freshOldestTime
+    );
+    const isNewerThanWindow = (m: T): boolean => {
+        if (isRealId(m.MessageID)) return freshNewestId !== null && m.MessageID > freshNewestId;
         const t = Date.parse(m.Time);
-        return t < freshOldestTime || (Number.isFinite(t) && t > freshNewestTime);
-    });
+        return Number.isFinite(t) && t > freshNewestTime;
+    };
+
+    if (!isContiguousWindow(prev, fresh, windowHasMore)) {
+        // The loaded block does not reach the window (there is a hole), so it is
+        // dropped and the window becomes the truth. A live entry newer than the
+        // whole window is not part of that block and must survive a stale/short
+        // page — but only when `prev` carries no older page at all: a mixed block
+        // is dropped whole so no id range is silently skipped.
+        return prev.some(isOlderThanWindow)
+            ? dedupeAndSort([...fresh])
+            : dedupeAndSort([...prev.filter(isNewerThanWindow), ...fresh]);
+    }
+
+    const kept = prev.filter(m => isOlderThanWindow(m) || isNewerThanWindow(m));
     return dedupeAndSort([...kept, ...fresh]);
 }

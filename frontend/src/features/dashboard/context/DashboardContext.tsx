@@ -1250,19 +1250,26 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
             const contactNumber = SenderTelephon === myTelephon ? Receptor : SenderTelephon;
             const clientID = readClientID(messageData);
+            const appendIncoming = () => {
+                setMessagesByChat(prev => {
+                    const existing = prev[contactNumber] || [];
+                    const alreadyExists = existing.some(m => m.MessageID === MessageID || (clientID !== null && m.ClientID === clientID));
+                    if (alreadyExists) return prev;
+                    return { ...prev, [contactNumber]: [...existing, messageData] };
+                });
+            };
             // Outbox ack: a possible server replay (retried send) may be a message deleted
-            // since; reload the chat from history instead of inserting the echo.
+            // since; reload the chat from history instead of trusting the echo alone. The
+            // echo frame still proves the message reached the server, so append it now
+            // (same dedupe path as a fresh echo) and let the reload merge/refine it: a
+            // failed or short reload must not hide it.
             if (clientID && outboxAck(clientID) === 'replayed') {
+                appendIncoming();
                 void fetchChatMessages(contactNumber);
                 return;
             }
 
-            setMessagesByChat(prev => {
-                const existing = prev[contactNumber] || [];
-                const alreadyExists = existing.some(m => m.MessageID === MessageID || (clientID !== null && m.ClientID === clientID));
-                if (alreadyExists) return prev;
-                return { ...prev, [contactNumber]: [...existing, messageData] };
-            });
+            appendIncoming();
             // Enviar un mensaje estando en una ventana desprendida vuelve a los últimos mensajes.
             if (SenderTelephon === myTelephon) returnToLatest({ kind: 'chat', key: contactNumber });
             // Primer mensaje de alguien que aún no tenemos en la lista de chats
