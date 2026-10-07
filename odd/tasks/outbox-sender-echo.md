@@ -30,5 +30,10 @@ Investigation and fix only after the user authorizes it (registered on request: 
 - OE4 (7536e24): GREEN 30/30 + lib 242/242 + context 141/141. Replayed append-if-absent; newer-keep gated on no older page.
 - OE3-close: 3/3 offline-send FULL + suite 45/1/0 on 7536e24 (2026-10-07). :106 7/7 post-OE4. Out-of-scope :84 race → offline-placeholder-race.md + ROADMAP (not fixed).
 
+## Review (RDD)
+- Assess `94d03d3 --committed-only`: medium, 379 lines, `under_budget` (review_due false); closing review run anyway per instruction.
+- Outcome: **unavailable** — lineage `review-e76cefbdd222b6c7` (base-ref `49afc1a`, committed-only) granted consent and froze, but the single lens `review-reliability` cannot be relayed in this runtime: no `review-reliability` Task agent exists (only explore/general), `capture-result` without `--input` is refused, `--agent=review-reliability` is not a runtime, and `--agent=opencode` has no compiled in-process adapter (`opencode_provider_injected` needs the live host transport). No verdict authored, no acknowledgement burned, no authority created. Verification of record: writer GREEN reports + parent spot checks + e2e/suite evidence above.
+- Independent (non-authoritative) read-only analysis noted one theoretical HIGH worth a future decision, NOT observed in any run: a server-deleted replayed echo could be resurrected by newer-keep when the reload window is non-empty (requires deletion between save and retry-fetch). Tradeoff is inherent to length-inferred `hasMore`; needs explicit live-marker/short-window-only design if ever pursued. Group replayed path (`handleGroupChatMessage`) still fetch-only (same latent class, unobserved).
+
 ## Related flake
 - `frontend/e2e/stickers-full.e2e.ts:168` ("favoritos: un sticker integrado marcado persiste tras recargar") failed once in the same full run and passed when rerun alone. Not investigated; track here if it recurs.
