@@ -19,9 +19,12 @@ After reconnecting, a text that the sender queued offline must appear in the sen
 Investigation and fix only after the user authorizes it (registered on request: "si encuentras un error registra el feature y después se arregla"). Branch from `main`.
 
 ## Tasks
-- [ ] OE1 Reproduce deterministically (Vitest around `useOutbox`/`DashboardContext`: ack for a non-selected chat, then select it), identify the root cause.
+- [x] OE1 Reproduce deterministically (Vitest around `useOutbox`/`DashboardContext`: ack for a non-selected chat, then select it), identify the root cause. Done: `mergeMessages.test.ts` RED (25 tests, 1 failed, echo 101 dropped) + `DashboardContext.outboxEcho.test.tsx` RED (echo applied live, wiped by stale /chats). Root cause: `mergeLatestWindow(prev, fresh, false)` drops prev ids >= freshOldestId; short /chats windows infer hasMore=false (len<200). Route: delegated direct (explorer + writer, mapping trigger). Commit id in Engram mirror + git log.
 - [ ] OE2 Fix with a RED test first; the sender's chat and sidebar preview reflect the delivered message in every order of events.
 - [ ] OE3 Run `offline-send.e2e.ts` 5 times (65 s apart) and the full e2e suite once; docs + mirror.
+
+## Progress
+- OE1: RED observed 2026-10-07, both levels fail as intended; no source fix. Commit id in Engram mirror + git log.
 
 ## Related flake
 - `frontend/e2e/stickers-full.e2e.ts:168` ("favoritos: un sticker integrado marcado persiste tras recargar") failed once in the same full run and passed when rerun alone. Not investigated; track here if it recurs.

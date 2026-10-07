@@ -125,6 +125,17 @@ describe('mergeLatestWindow contiguity (no silent gaps)', () => {
         expect(isContiguousWindow(prev, gapped)).toBe(false);
         expect(ids(mergeLatestWindow(prev, gapped))).toEqual([10, 11]);
     });
+
+    it('keeps a live-appended sender echo newer than a stale full-history window (hasMore=false)', () => {
+        // Reconnect: history 90..100 is loaded, the sender's own live echo 101 is
+        // appended by the WS handler, then a stale no-more-pages chats refetch
+        // (still 90..100) lands. The echo is newer than the whole window and must
+        // survive; today it is silently dropped.
+        const at = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
+        const window = Array.from({ length: 11 }, (_, i) => e(90 + i, at(90 + i)));
+        const prev = [...window, e(101, at(101))];
+        expect(ids(mergeLatestWindow(prev, window, false))).toContain(101);
+    });
 });
 
 describe('reactions preservation', () => {
