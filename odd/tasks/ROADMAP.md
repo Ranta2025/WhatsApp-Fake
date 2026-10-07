@@ -49,6 +49,7 @@ Cross-feature rules until api-casing lands: fields added inside an existing Pasc
 - **Current tip:** `main` (roadmap features plus ui-themes merged and pushed). The only unfinished feature is **api-casing**: continue it on a branch from `main` (`git switch -c feat/api-casing-2 main`, or recreate `feat/api-casing` from `main`).
 - **Last reviewed boundary:** `94d03d3` (ui-themes final slice, acknowledged); later commits on `main` are doc-only.
 - **Next:** `outbox-sender-echo.md` (bug), then `api-casing.md` AC3 -> AC7, AC10.
+- **New (2026-10-07, not fixed):** `offline-placeholder-race.md` — `offline-send.e2e.ts:84` setup flake: group composer placeholder follows WS `isConnected` (lags `setOffline(true)`), so `openGroup` races disconnect detection. Found during outbox-sender-echo OE3 re-verification; needs its own branch after user approval.
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
