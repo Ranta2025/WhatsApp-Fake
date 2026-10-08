@@ -40,7 +40,7 @@ export default function PendingMessages({ items }: { items: readonly OutboxItem[
                         {entry.replyTo && (
                             <div className="mb-1.5 px-2.5 py-1.5 rounded-lg border-l-[3px] bg-black/15 border-on-accent/40 text-[12px] text-on-accent/80 line-clamp-2">
                                 <div className="font-semibold text-[11px] mb-0.5 text-on-accent/90">Respuesta</div>
-                                {entry.replyTo.Message}
+                                {entry.replyTo.message}
                             </div>
                         )}
                         <div className="text-[14.5px] leading-snug break-words whitespace-pre-wrap">{entry.text}</div>

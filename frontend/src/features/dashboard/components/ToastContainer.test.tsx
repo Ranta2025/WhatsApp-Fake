@@ -10,10 +10,10 @@ import type { ContactChat } from '../../../types/api';
 // R3 (M6): `ToastContainer`'s `handleOpen` had the same fallback-shape bug
 // fixed in M4's `resolveChatTarget` (features/dashboard/lib/chatSelection.ts)
 // — falling back directly to an `allChatGroups` entry, which has
-// `ContactTelephon` but no `Number` field, silently breaking every later
+// `contactTelephon` but no `Number` field, silently breaking every later
 // `selected.Number` comparison. Fixed by delegating to `resolveChatTarget`.
 // M6b item 4: the M6 refactor dropped the original
-// `ContactName: notif.senderName` from the last-resort fallback; now passed
+// `contactName: notif.senderName` from the last-resort fallback; now passed
 // through as `resolveChatTarget`'s fallbackName.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -100,7 +100,7 @@ describe('ToastContainer handleOpen', () => {
         await renderWith({
             toasts: [makeToast({ telephon: '555', senderName: 'Bob' })],
             allChatGroups: {
-                '555': { ContactTelephon: '555', ContactUsername: 'bob', ContactName: 'Bob', IsContact: true },
+                '555': { contactTelephon: '555', contactUsername: 'bob', contactName: 'Bob', isContact: true },
             },
         });
 

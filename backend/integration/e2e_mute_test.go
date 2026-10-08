@@ -135,9 +135,9 @@ func TestE2EChatMute(t *testing.T) {
 		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "telephon", luis.Telephon)
 		assert.Equal(t, true, contact["muted"])
 		assert.Equal(t, until, contact["mutedUntil"])
-		chat := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/chats"), "ContactTelephon", luis.Telephon)
-		assert.Equal(t, true, chat["Muted"])
-		assert.Equal(t, until, chat["MutedUntil"])
+		chat := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/chats"), "contactTelephon", luis.Telephon)
+		assert.Equal(t, true, chat["muted"])
+		assert.Equal(t, until, chat["mutedUntil"])
 	})
 
 	t.Run("1:1 para siempre: mutedUntil null", func(t *testing.T) {

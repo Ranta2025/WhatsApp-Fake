@@ -1,5 +1,6 @@
 import type { DisappearSeconds, Message } from '../../../types/api';
 import type { MergeableMessage } from './mergeMessages';
+import { messageIdOf } from './mergeMessages';
 import type { FocusedWindow } from './focusedWindow';
 
 /**
@@ -81,7 +82,7 @@ export function describeDirectSystemMessage(
     viewerTelephon: string | undefined,
     resolveName: (telephon: string) => string | undefined,
 ): string {
-    return describeDisappearingSystemText(msg.Message, msg.SenderTelephon, resolveName(msg.SenderTelephon), viewerTelephon);
+    return describeDisappearingSystemText(msg.message, msg.senderTelephon, resolveName(msg.senderTelephon), viewerTelephon);
 }
 
 /** `ExpiresAt` (RFC 3339) -> epoch ms; anything invalid is ignored (message never expires locally). */
@@ -91,20 +92,31 @@ export function parseExpiresAt(raw: unknown): number | undefined {
     return Number.isNaN(ms) ? undefined : ms;
 }
 
-/** Shape shared by 1:1 and group messages for expiry and reply scrubbing. */
+/** Shape shared by 1:1 (camel) and group (Pascal) messages for expiry and reply scrubbing. */
 export interface ExpirableMessage extends MergeableMessage {
     ExpiresAt?: string;
+    expiresAt?: string;
     Kind?: 'system';
+    kind?: 'system';
     ReplyToMessageID?: number;
+    replyToMessageID?: number;
     ReplyToTelephon?: string;
+    replyToTelephon?: string;
     ReplyToMessage?: string;
+    replyToMessage?: string;
 }
+
+const replyIdOf = (m: ExpirableMessage): number | undefined =>
+    m.replyToMessageID !== undefined ? m.replyToMessageID : m.ReplyToMessageID;
 
 const dropReply = <T extends ExpirableMessage>(m: T): T => {
     const copy = { ...m };
     delete copy.ReplyToMessageID;
+    delete copy.replyToMessageID;
     delete copy.ReplyToTelephon;
+    delete copy.replyToTelephon;
     delete copy.ReplyToMessage;
+    delete copy.replyToMessage;
     return copy;
 };
 
@@ -120,8 +132,10 @@ export function removeMessagesByIds<T extends ExpirableMessage>(list: readonly T
     let changed = false;
     const out: T[] = [];
     for (const m of list) {
-        if (typeof m.MessageID === 'number' && ids.has(m.MessageID)) { changed = true; continue; }
-        if (m.ReplyToMessageID !== undefined && ids.has(m.ReplyToMessageID)) {
+        const id = messageIdOf(m);
+        if (typeof id === 'number' && ids.has(id)) { changed = true; continue; }
+        const replyId = replyIdOf(m);
+        if (replyId !== undefined && ids.has(replyId)) {
             changed = true;
             out.push(dropReply(m));
             continue;
@@ -132,8 +146,12 @@ export function removeMessagesByIds<T extends ExpirableMessage>(list: readonly T
 }
 
 /** Expiry instant of a message the local sweep may remove (numeric id, never a system notice). */
-const removableExpiry = (m: ExpirableMessage): number | undefined =>
-    typeof m.MessageID === 'number' && m.Kind !== 'system' ? parseExpiresAt(m.ExpiresAt) : undefined;
+const removableExpiry = (m: ExpirableMessage): number | undefined => {
+    const id = messageIdOf(m);
+    const kind = m.kind !== undefined ? m.kind : m.Kind;
+    const expiresAt = m.expiresAt !== undefined ? m.expiresAt : m.ExpiresAt;
+    return typeof id === 'number' && kind !== 'system' ? parseExpiresAt(expiresAt) : undefined;
+};
 
 const isExpired = (m: ExpirableMessage, now: number): boolean => {
     const at = removableExpiry(m);
@@ -144,7 +162,8 @@ const isExpired = (m: ExpirableMessage, now: number): boolean => {
 export function removeExpiredMessages<T extends ExpirableMessage>(list: T[], now: number): T[] {
     const ids = new Set<number>();
     for (const m of list) {
-        if (typeof m.MessageID === 'number' && isExpired(m, now)) ids.add(m.MessageID);
+        const id = messageIdOf(m);
+        if (typeof id === 'number' && isExpired(m, now)) ids.add(id);
     }
     return removeMessagesByIds(list, ids);
 }
@@ -178,13 +197,13 @@ export function expiryDelay(earliest: number | null, now: number, maxMs: number 
     return Math.min(Math.max(earliest - now, 0), maxMs);
 }
 
-export const isSystemDirectMessage = (m: Pick<Message, 'Kind'>): boolean => m.Kind === 'system';
+export const isSystemDirectMessage = (m: Pick<Message, 'kind'>): boolean => m.kind === 'system';
 
 /** Incoming, not yet seen, real (non-system) messages from `from`. */
 export function countUnreadFrom(messages: readonly Message[] | undefined, from: string): number {
     let n = 0;
     for (const m of messages ?? []) {
-        if (m?.SenderTelephon === from && m.Status !== 'visto' && !isSystemDirectMessage(m)) n++;
+        if (m?.senderTelephon === from && m.status !== 'visto' && !isSystemDirectMessage(m)) n++;
     }
     return n;
 }

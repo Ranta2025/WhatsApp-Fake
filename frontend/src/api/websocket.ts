@@ -1,6 +1,6 @@
 import api from './axios';
 import { WS_URL } from '../config';
-import type { Message, CallType, MediaType } from '../types/api';
+import type { CallType, MediaType } from '../types/api';
 import type {
     WsEventOf,
     WsEventType,
@@ -47,8 +47,27 @@ export type WsHandlerEvent = keyof WsHandlerMap;
 /** Estados que puede reportar `onConnectionState`. */
 export type WsConnectionState = 'connected' | 'disconnected' | 'unauthorized' | 'error';
 
-/** Forma mínima que necesita `sendMessage`/`sendGroupMessage` del mensaje al que se responde. */
-type ReplySource = Pick<Message, 'MessageID' | 'SenderTelephon' | 'Message'>;
+/**
+ * Forma mínima que necesitan `sendMessage`/`sendGroupMessage` del mensaje al que
+ * se responde. Acepta el 1:1 camel (`messageID`/`senderTelephon`/`message`) y el
+ * grupo Pascal (`MessageID`/`SenderTelephon`/`Message`) mientras dura el corte
+ * por dominios (AC4/AC5); también el `OutboxReplyRef` camel persistido.
+ */
+export interface ReplySource {
+    MessageID?: number;
+    messageID?: number;
+    SenderTelephon?: string;
+    senderTelephon?: string;
+    Message?: string;
+    message?: string;
+}
+
+const replyMessageId = (r: ReplySource): number | undefined =>
+    r.messageID !== undefined ? r.messageID : r.MessageID;
+const replySender = (r: ReplySource): string | undefined =>
+    r.senderTelephon !== undefined ? r.senderTelephon : r.SenderTelephon;
+const replyText = (r: ReplySource): string | undefined =>
+    r.message !== undefined ? r.message : r.Message;
 
 interface WsTicketResponse {
     ticket: string;
@@ -361,9 +380,12 @@ class WebSocketManager {
         const payload: ClientPayloadOf<'chat'> = { receptor: to, message };
         if (clientID) payload.clientID = clientID;
         if (replyTo) {
-            payload.replyToMessageID = replyTo.MessageID;
-            payload.replyToTelephon = replyTo.SenderTelephon;
-            payload.replyToMessage = replyTo.Message;
+            const id = replyMessageId(replyTo);
+            const sender = replySender(replyTo);
+            const text = replyText(replyTo);
+            if (id !== undefined) payload.replyToMessageID = id;
+            if (sender !== undefined) payload.replyToTelephon = sender;
+            if (text !== undefined) payload.replyToMessage = text;
         }
         if (mediaType) {
             payload.mediaType = mediaType;
@@ -419,9 +441,12 @@ class WebSocketManager {
         const payload: ClientPayloadOf<'group_chat'> = { groupID, message };
         if (clientID) payload.clientID = clientID;
         if (replyTo) {
-            payload.replyToMessageID = replyTo.MessageID;
-            payload.replyToTelephon = replyTo.SenderTelephon;
-            payload.replyToMessage  = replyTo.Message;
+            const id = replyMessageId(replyTo);
+            const sender = replySender(replyTo);
+            const text = replyText(replyTo);
+            if (id !== undefined) payload.replyToMessageID = id;
+            if (sender !== undefined) payload.replyToTelephon = sender;
+            if (text !== undefined) payload.replyToMessage = text;
         }
         if (mediaType) {
             payload.mediaType = mediaType;

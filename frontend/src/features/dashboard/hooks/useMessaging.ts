@@ -112,8 +112,8 @@ const useMessagingInternal = (): UseMessagingResult => {
     }, [selected, isConnected, sendMessage, sendText, replyingTo, setDrafts, addToast]);
 
     const handleEditMessage = useCallback((message: Message) => {
-        setEditingMessageId(message.MessageID);
-        setEditingMessageText(message.Message);
+        setEditingMessageId(message.messageID);
+        setEditingMessageText(message.message);
         setMessageMenuOpen(null);
     }, []);
 
@@ -149,17 +149,17 @@ const useMessagingInternal = (): UseMessagingResult => {
         try {
             if (forEveryone) {
                 if (isConnected) {
-                    sendDeleteMessage(message.MessageID, selected.telephon);
+                    sendDeleteMessage(message.messageID, selected.telephon);
                 } else {
                     addToast({ type: 'error', message: 'Sin conexión' });
                 }
             } else {
-                await api.delete(`/api/v1/message/${message.MessageID}/me`);
+                await api.delete(`/api/v1/message/${message.messageID}/me`);
                 setMessagesByChat((prev) => {
                     const updated = { ...prev };
                     const chatMessages = updated[selected.telephon];
                     if (chatMessages) {
-                        updated[selected.telephon] = chatMessages.filter(m => m.MessageID !== message.MessageID);
+                        updated[selected.telephon] = chatMessages.filter(m => m.messageID !== message.messageID);
                     }
                     return updated;
                 });
@@ -192,10 +192,10 @@ const useMessagingInternal = (): UseMessagingResult => {
             addToast({ type: 'error', message: 'No hay conexión con el servidor' });
             return;
         }
-        const mediaType = forwardingMessage.MediaType || null;
+        const mediaType = forwardingMessage.mediaType || null;
         const content = mediaType
-            ? (forwardingMessage.MediaUrl || forwardingMessage.Message)
-            : forwardingMessage.Message;
+            ? (forwardingMessage.mediaUrl || forwardingMessage.message)
+            : forwardingMessage.message;
         targetNumbers.forEach(number => {
             if (mediaType) sendMessage(number, content, null, mediaType);
             else {

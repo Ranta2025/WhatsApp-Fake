@@ -9,7 +9,7 @@ import type { GroupMessageResponse, Message } from '../../../types/api';
 
 // PW9: DashboardContext wires the offline outbox: text sends get a clientID and are
 // queued while the socket is closed (shown as pending), the sender's echo is
-// reconciled by ClientID (never twice), a possibly-replayed ack reloads history
+// reconciled by clientID (never twice), a possibly-replayed ack reloads history
 // instead of being inserted (a since-deleted message is not resurrected), a
 // permanent WS error marks the message failed, and logout clears the queue.
 
@@ -74,8 +74,8 @@ function Harness({ tick, onReady }: { tick: number; onReady: (value: DashboardCo
 const CID = '0b7f3c1e-2d4a-4f6b-9c8d-1a2b3c4d5e6f';
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const echo = (id: number, clientID: string | undefined, over: Partial<Message> = {}): Message => ({
-    MessageID: id, SenderTelephon: '111', Receptor: '222', Message: 'hola', Status: 'enviado', Time: iso(id), Edited: false,
-    ...(clientID ? { ClientID: clientID } : {}), ...over,
+    messageID: id, senderTelephon: '111', receptor: '222', message: 'hola', status: 'enviado', time: iso(id), edited: false,
+    ...(clientID ? { clientID: clientID } : {}), ...over,
 });
 const groupEcho = (id: number, clientID: string): GroupMessageResponse => ({
     MessageID: id, GroupID: 9, SenderTelephon: '111', SenderUsername: 'ana', Message: 'hola grupo', Time: iso(id), Edited: false,
@@ -134,11 +134,11 @@ afterEach(() => {
 });
 
 describe('DashboardContext outbox wiring', () => {
-    it('pins existing reconciliation: the same echo (same MessageID) is inserted once', async () => {
+    it('pins existing reconciliation: the same echo (same messageID) is inserted once', async () => {
         await setConnected(true);
         await emit('message', echo(5, undefined));
         await emit('message', echo(5, undefined));
-        expect(latest.messagesByChat['222']?.map(m => m.MessageID)).toEqual([5]);
+        expect(latest.messagesByChat['222']?.map(m => m.messageID)).toEqual([5]);
     });
 
     it('online text send goes straight to the socket with a clientID and queues nothing', async () => {
@@ -149,7 +149,7 @@ describe('DashboardContext outbox wiring', () => {
         expect(latest.outboxItems).toEqual([]);
     });
 
-    it('queues a text sent while disconnected (pending), flushes it on connect and reconciles the echo once by ClientID', async () => {
+    it('queues a text sent while disconnected (pending), flushes it on connect and reconciles the echo once by clientID', async () => {
         await render();
         await act(async () => { await latest.sendText({ kind: 'direct', target: '222', text: 'hola', replyTo: null }); });
         expect(latest.outboxItems).toEqual([{ state: 'pending', entry: expect.objectContaining({ kind: 'direct', target: '222', text: 'hola' }) }]);
@@ -162,7 +162,7 @@ describe('DashboardContext outbox wiring', () => {
         await emit('message', echo(7, clientID));
         await emit('message', echo(7, clientID));
         expect(latest.outboxItems).toEqual([]);
-        expect(latest.messagesByChat['222']?.map(m => m.MessageID)).toEqual([7]);
+        expect(latest.messagesByChat['222']?.map(m => m.messageID)).toEqual([7]);
     });
 
     it('a possibly-replayed ack (second attempt) is not inserted: the chat is reloaded from history instead', async () => {
@@ -174,7 +174,7 @@ describe('DashboardContext outbox wiring', () => {
         await settle(() => expect(mockSendMessage).toHaveBeenCalledWith('222', 'borrado', null, null, CID));
         mockGet.mockClear();
 
-        await emit('message', echo(3, CID, { Message: 'borrado' }));
+        await emit('message', echo(3, CID, { message: 'borrado' }));
 
         expect(latest.messagesByChat['222'] ?? []).toEqual([]);
         expect(latest.outboxItems).toEqual([]);

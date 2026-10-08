@@ -80,9 +80,14 @@ func (s *evStream) none(t *testing.T, eventType string, wait time.Duration) {
 	}
 }
 
-// reactionSummaries extrae Reactions de un mensaje de la historia.
+// reactionSummaries extrae Reactions de un mensaje de la historia. Tras AC4 el
+// mensaje 1:1 usa `reactions` (camel) y el de grupo `Reactions` (Pascal, AC5):
+// el helper acepta ambos mientras dura el corte por dominios.
 func reactionSummaries(m map[string]interface{}) []map[string]interface{} {
-	list, _ := m["Reactions"].([]interface{})
+	list, _ := m["reactions"].([]interface{})
+	if list == nil {
+		list, _ = m["Reactions"].([]interface{})
+	}
 	out := make([]map[string]interface{}, 0, len(list))
 	for _, r := range list {
 		out = append(out, r.(map[string]interface{}))
@@ -141,7 +146,7 @@ func TestE2EReactions(t *testing.T) {
 	text := fmt.Sprintf("mensaje de bob %d", suffix)
 	require.NoError(t, rawB.WriteJSON(map[string]interface{}{"type": "chat", "payload": map[string]string{"receptor": alice.Telephon, "message": text}}))
 	sent := wsB.wait(t, "chat")
-	directID := int(sent["payload"].(map[string]interface{})["MessageID"].(float64))
+	directID := int(sent["payload"].(map[string]interface{})["messageID"].(float64))
 	wsA.wait(t, "chat")
 
 	t.Run("1:1 reaccionar: el autor recibe el evento con authorTelephon y preview", func(t *testing.T) {
@@ -171,7 +176,7 @@ func TestE2EReactions(t *testing.T) {
 		var msgs []map[string]interface{} // la historia 1:1 es una lista plana de Message
 		require.NoError(t, json.Unmarshal(resp.body, &msgs), string(resp.body))
 		for _, mm := range msgs {
-			if int(mm["MessageID"].(float64)) == directID {
+			if int(mm["messageID"].(float64)) == directID {
 				return mm
 			}
 		}

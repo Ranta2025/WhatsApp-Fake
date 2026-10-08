@@ -1,4 +1,4 @@
-import { adoptServerReactions, newestRealMessageId, sortUnique, type MergeableMessage } from './mergeMessages';
+import { adoptServerReactions, messageIdOf, messageTimeOf, newestRealMessageId, sortUnique, type MergeableMessage } from './mergeMessages';
 
 /**
  * A "detached" slice of a chat's history, opened to jump to a message that is
@@ -38,7 +38,7 @@ export function createFocusedWindow<T extends MergeableMessage>(
 }
 
 export function windowHasMessage<T extends MergeableMessage>(win: FocusedWindow<T>, id: number): boolean {
-    return win.messages.some(m => m.MessageID === id);
+    return win.messages.some(m => messageIdOf(m) === id);
 }
 
 /** Points the window at another message it already contains (no refetch). */
@@ -81,12 +81,13 @@ export function composeFocusedMessages<T extends MergeableMessage>(
     if (win.hasMoreNewer || !live || live.length === 0) return win.messages;
     const newestId = newestRealMessageId(win.messages);
     const last = win.messages[win.messages.length - 1];
-    const lastTime = last ? Date.parse(last.Time) : Number.NaN;
-    const tail = live.filter(m => (
-        typeof m.MessageID === 'number'
-            ? newestId === null || m.MessageID > newestId
-            : Date.parse(m.Time) > lastTime
-    ));
+    const lastTime = last ? Date.parse(messageTimeOf(last) ?? '') : Number.NaN;
+    const tail = live.filter(m => {
+        const id = messageIdOf(m);
+        return typeof id === 'number'
+            ? newestId === null || id > newestId
+            : Date.parse(messageTimeOf(m) ?? '') > lastTime;
+    });
     return tail.length === 0 ? win.messages : sortUnique([...win.messages, ...tail]);
 }
 
@@ -106,5 +107,5 @@ export function updateFocusedMessages<T extends MergeableMessage>(
 /** Removes a message deleted for everyone; same object when it is not in the window. */
 export function removeFocusedMessage<T extends MergeableMessage>(win: FocusedWindow<T>, id: number): FocusedWindow<T> {
     if (!windowHasMessage(win, id)) return win;
-    return { ...win, messages: win.messages.filter(m => m.MessageID !== id) };
+    return { ...win, messages: win.messages.filter(m => messageIdOf(m) !== id) };
 }

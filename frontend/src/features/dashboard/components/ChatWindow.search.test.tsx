@@ -31,7 +31,7 @@ const mockSearchChat = vi.mocked(searchChat);
 const hit = (id: number) => ({ messageID: id, time: '2026-01-01T00:00:00Z', snippet: `m${id}`, highlights: [] as [number, number][] });
 const page = (ids: number[]): SearchPage => ({ results: ids.map(hit), hasMore: false });
 const msg = (id: number): Message => ({
-    MessageID: id, SenderTelephon: '222', Receptor: '111', Message: `m${id}`, Status: 'visto', Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: id, senderTelephon: '222', receptor: '111', message: `m${id}`, status: 'visto', time: '2026-01-01T10:00:00Z', edited: false,
 });
 
 describe('ChatWindow in-chat search', () => {

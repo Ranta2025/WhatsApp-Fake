@@ -120,7 +120,7 @@ func TestE2EDisappearingMessages(t *testing.T) {
 
 	// ── (a) 1:1 ────────────────────────────────────────────────────────────
 	oldMsg := sendDirect(ca, luis.Telephon, fmt.Sprintf("antes del timer %d", suffix))
-	assert.Nil(t, oldMsg["ExpiresAt"], "sin timer no hay ExpiresAt")
+	assert.Nil(t, oldMsg["expiresAt"], "sin timer no hay ExpiresAt")
 
 	t.Run("1:1 valor inválido 400 y contacto inexistente 404", func(t *testing.T) {
 		code, out := ca.do("PUT", path, map[string]int{"seconds": 3600})
@@ -141,11 +141,11 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		assert.Equal(t, ana.Telephon, out["byTelephon"])
 		sm, ok := out["systemMessage"].(map[string]interface{})
 		require.True(t, ok, "debe traer systemMessage: %v", out)
-		assert.Equal(t, "system", sm["Kind"])
-		assert.Equal(t, models.SystemEventDisappearingChanged, sm["SystemEvent"])
-		assert.Equal(t, "86400", sm["Message"])
-		assert.Nil(t, sm["ExpiresAt"], "los mensajes de sistema no expiran")
-		sysID = sm["MessageID"].(float64)
+		assert.Equal(t, "system", sm["kind"])
+		assert.Equal(t, models.SystemEventDisappearingChanged, sm["systemEvent"])
+		assert.Equal(t, "86400", sm["message"])
+		assert.Nil(t, sm["expiresAt"], "los mensajes de sistema no expiran")
+		sysID = sm["messageID"].(float64)
 
 		code, out = ca.do("PUT", path, map[string]int{"seconds": 86400})
 		require.Equal(t, 200, code, out)
@@ -169,19 +169,19 @@ func TestE2EDisappearingMessages(t *testing.T) {
 
 	t.Run("1:1 mensaje nuevo lleva ExpiresAt ~ now+24h; el viejo no", func(t *testing.T) {
 		newMsg := sendDirect(cl, ana.Telephon, fmt.Sprintf("despues del timer %d", suffix))
-		raw, ok := newMsg["ExpiresAt"].(string)
+		raw, ok := newMsg["expiresAt"].(string)
 		require.True(t, ok, "ExpiresAt presente: %v", newMsg)
 		exp, err := time.Parse(time.RFC3339Nano, raw)
 		require.NoError(t, err)
 		assert.WithinDuration(t, time.Now().Add(24*time.Hour), exp, 2*time.Minute)
 
 		for _, m := range history(ca, luis.Telephon) {
-			switch m["MessageID"] {
-			case oldMsg["MessageID"]:
-				assert.Nil(t, m["ExpiresAt"], "el mensaje previo no se toca")
+			switch m["messageID"] {
+			case oldMsg["messageID"]:
+				assert.Nil(t, m["expiresAt"], "el mensaje previo no se toca")
 			case sysID:
-				assert.Equal(t, "system", m["Kind"])
-				assert.Nil(t, m["ExpiresAt"])
+				assert.Equal(t, "system", m["kind"])
+				assert.Nil(t, m["expiresAt"])
 			}
 		}
 	})
@@ -193,9 +193,9 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		require.NoError(t, json.Unmarshal(resp.body, &chats))
 		found := false
 		for _, c := range chats {
-			if c["ContactTelephon"] == luis.Telephon {
+			if c["contactTelephon"] == luis.Telephon {
 				found = true
-				assert.EqualValues(t, 86400, c["DisappearSeconds"])
+				assert.EqualValues(t, 86400, c["disappearSeconds"])
 			}
 		}
 		assert.True(t, found)
@@ -208,7 +208,7 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		require.Equal(t, 200, code, out)
 		res := deResults(t, out)
 		require.Len(t, res, 1, "solo el mensaje normal, no el de sistema: %v", res)
-		assert.Equal(t, ctl["MessageID"], res[0]["messageID"], "búsqueda por chat")
+		assert.Equal(t, ctl["messageID"], res[0]["messageID"], "búsqueda por chat")
 
 		code, out = ca.do("GET", "/api/v1/search?q=86400", nil)
 		require.Equal(t, 200, code, out)
@@ -227,9 +227,9 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		require.Equal(t, 200, code, out)
 		sm, ok := out["systemMessage"].(map[string]interface{})
 		require.True(t, ok, out)
-		assert.Equal(t, "0", sm["Message"])
+		assert.Equal(t, "0", sm["message"])
 		after := sendDirect(ca, luis.Telephon, fmt.Sprintf("apagado %d", suffix))
-		assert.Nil(t, after["ExpiresAt"])
+		assert.Nil(t, after["expiresAt"])
 	})
 
 	// ── (b) grupo ──────────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ func TestE2EDisappearingMessages(t *testing.T) {
 	t.Run("1:1 mensaje vencido: no se lee, busca, edita, borra, reacciona ni se responde", func(t *testing.T) {
 		live := sendDirect(ca, luis.Telephon, "vigente"+tag)
 		gone := sendDirect(ca, luis.Telephon, "caducado"+tag)
-		liveID, goneID := live["MessageID"].(float64), gone["MessageID"].(float64)
+		liveID, goneID := live["messageID"].(float64), gone["messageID"].(float64)
 		peer := luis.Telephon
 		searchGone := func() (int, int) {
 			code, out := ca.do("GET", "/api/v1/chat/"+peer+"/search?q=caducado"+tag, nil)
@@ -364,14 +364,14 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		resp := ca.raw("GET", "/api/v1/chat/"+peer)
 		require.Equal(t, 200, resp.status)
 		require.NoError(t, json.Unmarshal(resp.body, &all))
-		assert.True(t, deHasID(t, all, "MessageID", liveID), "el vigente sigue en el historial")
-		assert.False(t, deHasID(t, all, "MessageID", goneID), "historial")
+		assert.True(t, deHasID(t, all, "messageID", liveID), "el vigente sigue en el historial")
+		assert.False(t, deHasID(t, all, "messageID", goneID), "historial")
 
 		resp = ca.raw("GET", fmt.Sprintf("/api/v1/chat/%s?before=%d&limit=50", peer, int(liveID)+1))
 		require.Equal(t, 200, resp.status)
 		all = nil
 		require.NoError(t, json.Unmarshal(resp.body, &all))
-		assert.False(t, deHasID(t, all, "MessageID", goneID), "página con cursor")
+		assert.False(t, deHasID(t, all, "messageID", goneID), "página con cursor")
 
 		code, out = ca.do("GET", fmt.Sprintf("/api/v1/chat/%s?around=%d", peer, int(goneID)), nil)
 		assert.Equal(t, 404, code, "around de un vencido: 404, no ventana vacía: %v", out)
@@ -379,15 +379,15 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		require.Equal(t, 200, resp.status)
 		all = nil
 		require.NoError(t, json.Unmarshal(resp.body, &all))
-		assert.True(t, deHasID(t, all, "MessageID", liveID))
-		assert.False(t, deHasID(t, all, "MessageID", goneID), "around del vigente no arrastra el vencido")
+		assert.True(t, deHasID(t, all, "messageID", liveID))
+		assert.False(t, deHasID(t, all, "messageID", goneID), "around del vigente no arrastra el vencido")
 
-		resp = ca.raw("GET", fmt.Sprintf("/api/v1/chat/%s?after=%d", peer, int(oldMsg["MessageID"].(float64))))
+		resp = ca.raw("GET", fmt.Sprintf("/api/v1/chat/%s?after=%d", peer, int(oldMsg["messageID"].(float64))))
 		require.Equal(t, 200, resp.status)
 		all = nil
 		require.NoError(t, json.Unmarshal(resp.body, &all))
-		assert.True(t, deHasID(t, all, "MessageID", liveID))
-		assert.False(t, deHasID(t, all, "MessageID", goneID), "after")
+		assert.True(t, deHasID(t, all, "messageID", liveID))
+		assert.False(t, deHasID(t, all, "messageID", goneID), "after")
 
 		// Lista de chats: el último mensaje es el vigente.
 		resp = ca.raw("GET", "/api/v1/chats")
@@ -396,15 +396,15 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		require.NoError(t, json.Unmarshal(resp.body, &chats))
 		seen := false
 		for _, c := range chats {
-			if c["ContactTelephon"] != peer {
+			if c["contactTelephon"] != peer {
 				continue
 			}
 			seen = true
-			msgs, ok := c["Messages"].([]interface{})
-			require.True(t, ok, "Messages[] en el chat: %v", c)
+			msgs, ok := c["messages"].([]interface{})
+			require.True(t, ok, "messages[] en el chat: %v", c)
 			require.NotEmpty(t, msgs)
-			assert.False(t, deHasID(t, msgs, "MessageID", goneID), "lista de chats")
-			assert.Equal(t, liveID, msgs[len(msgs)-1].(map[string]interface{})["MessageID"], "último mensaje = el vigente")
+			assert.False(t, deHasID(t, msgs, "messageID", goneID), "lista de chats")
+			assert.Equal(t, liveID, msgs[len(msgs)-1].(map[string]interface{})["messageID"], "último mensaje = el vigente")
 		}
 		assert.True(t, seen, "el chat aparece en la lista")
 

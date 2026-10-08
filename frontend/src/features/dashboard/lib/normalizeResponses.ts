@@ -38,10 +38,18 @@ export function normalizeReactions(data: unknown): ReactionSummary[] | undefined
 
 /** Sanitizes `Reactions` on one message; same object when it has none (the common case). */
 const withNormalizedReactions = <T extends object>(message: T): T => {
-    if (!('Reactions' in message)) return message;
-    const { Reactions, ...rest } = message as T & { Reactions?: unknown };
-    const clean = normalizeReactions(Reactions);
-    return (clean ? { ...rest, Reactions: clean } : rest) as T;
+    // 1:1 messages carry `reactions` (camel, AC4); group messages still `Reactions` (AC5).
+    if ('reactions' in message) {
+        const { reactions, ...rest } = message as T & { reactions?: unknown };
+        const clean = normalizeReactions(reactions);
+        return (clean ? { ...rest, reactions: clean } : rest) as T;
+    }
+    if ('Reactions' in message) {
+        const { Reactions, ...rest } = message as T & { Reactions?: unknown };
+        const clean = normalizeReactions(Reactions);
+        return (clean ? { ...rest, Reactions: clean } : rest) as T;
+    }
+    return message;
 };
 
 /** Sanitizes Reactions on every element; returns the SAME array when no element changed. */
@@ -104,14 +112,14 @@ export function normalizeGroupDetailMessages(data: unknown): GroupMessageRespons
 
 /**
  * `/api/v1/chat/:contact` (fetchChatMessages / loadOlderMessages): non-array body -> no
- * messages. Entries without a numeric `MessageID` are dropped: the id is the dedupe key
+ * messages. Entries without a numeric `messageID` are dropped: the id is the dedupe key
  * and the pagination cursor, so a malformed element must never reach the merge.
  */
 export function normalizeChatMessagesResponse(data: unknown): Message[] {
     if (!Array.isArray(data)) return [];
     return data
         .filter((m): m is Message => (
-            !!m && typeof m === 'object' && typeof (m as { MessageID?: unknown }).MessageID === 'number'
+            !!m && typeof m === 'object' && typeof (m as { messageID?: unknown }).messageID === 'number'
         ))
         .map(withNormalizedReactions);
 }

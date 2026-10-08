@@ -53,40 +53,39 @@ var allowlist = map[string]string{
 	// Shared keys: after AC3 renamed its own emitters these are still emitted by
 	// later domains, so they stay allowlisted until the last owner lands.
 	//   Username/Telephon -> AC5 GroupMemberResponse, AC6 StatusOwnerBrief/Viewer
-	//   Muted/MutedUntil  -> AC4 ChatGroup, AC5 GroupResponse
+	//   Muted/MutedUntil  -> AC5 GroupResponse
 	"Username":   "AC5-groups/AC6-status",
 	"Telephon":   "AC5-groups/AC6-status",
-	"Muted":      "AC4-chat/AC5-groups",
-	"MutedUntil": "AC4-chat/AC5-groups",
+	"Muted":      "AC5-groups",
+	"MutedUntil": "AC5-groups",
 
-	// AC4 chat 1:1 (Message, ChatGroup, reactions).
-	"Message":          "AC4-chat",
-	"MessageID":        "AC4-chat",
-	"SenderTelephon":   "AC4-chat",
-	"Receptor":         "AC4-chat",
-	"Status":           "AC4-chat",
-	"Time":             "AC4-chat",
-	"Edited":           "AC4-chat",
-	"MediaUrl":         "AC4-chat",
-	"MediaType":        "AC4-chat",
-	"ReplyToMessageID": "AC4-chat",
-	"ReplyToTelephon":  "AC4-chat",
-	"ReplyToMessage":   "AC4-chat",
-	"Reactions":        "AC4-chat",
-	"ExpiresAt":        "AC4-chat",
-	"Kind":             "AC4-chat",
-	"SystemEvent":      "AC4-chat",
-	"ClientID":         "AC4-chat",
-	"ContactTelephon":  "AC4-chat",
-	"ContactUsername":  "AC4-chat",
-	"ContactName":      "AC4-chat",
-	"ContactAvatarUrl": "AC4-chat",
-	"IsContact":        "AC4-chat",
-	"Messages":         "AC4-chat",
-	"DisappearSeconds": "AC4-chat",
-	"Emoji":            "AC4-chat",
-	"Count":            "AC4-chat",
-	"Mine":             "AC4-chat",
+	// Re-homed from AC4: schemas.Message/ChatGroup were renamed natively in AC4,
+	// so the 1:1 chat domain no longer emits these keys. They stay allowlisted
+	// under their remaining owner: the AC5 group schemas (GroupMessageResponse,
+	// GroupDetail, GroupResponse, and the shared ReactionSummary), plus AC6 for
+	// ContactName (StatusOwnerBrief) and Mine (StatusFeed). Emoji/Count are
+	// co-owned by AC5 through ReactionSummary, which is outside AC4's surfaces.
+	"Message":          "AC5-groups",
+	"MessageID":        "AC5-groups",
+	"SenderTelephon":   "AC5-groups",
+	"Time":             "AC5-groups",
+	"Edited":           "AC5-groups",
+	"MediaUrl":         "AC5-groups",
+	"MediaType":        "AC5-groups",
+	"ReplyToMessageID": "AC5-groups",
+	"ReplyToTelephon":  "AC5-groups",
+	"ReplyToMessage":   "AC5-groups",
+	"Reactions":        "AC5-groups",
+	"ExpiresAt":        "AC5-groups",
+	"Kind":             "AC5-groups",
+	"SystemEvent":      "AC5-groups",
+	"ClientID":         "AC5-groups",
+	"Messages":         "AC5-groups",
+	"DisappearSeconds": "AC5-groups",
+	"Emoji":            "AC5-groups",
+	"Count":            "AC5-groups",
+	"ContactName":      "AC5-groups/AC6-status",
+	"Mine":             "AC5-groups/AC6-status",
 
 	// AC5 groups (Group* schemas + WS).
 	"ID":                      "AC5-groups",

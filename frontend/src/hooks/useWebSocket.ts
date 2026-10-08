@@ -1,13 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import wsManager, { type WsHandlerEvent, type WsHandlerMap, type WsConnectionState } from '../api/websocket';
-import type { CallType, MediaType, Message } from '../types/api';
+import wsManager, { type ReplySource, type WsHandlerEvent, type WsHandlerMap, type WsConnectionState } from '../api/websocket';
+import type { CallType, MediaType } from '../types/api';
 
 // Contador de referencia global para el singleton WebSocket.
 // Solo se conecta al primer consumidor y desconecta al último.
 let wsRefCount = 0;
-
-/** Forma mínima que necesita sendMessage/sendGroupMessage del mensaje al que se responde. */
-type ReplySource = Pick<Message, 'MessageID' | 'SenderTelephon' | 'Message'>;
 
 // Handler tal como lo ven los consumidores del hook (mismo tipo genérico que
 // wsManager.on/off, ver src/api/websocket.ts).

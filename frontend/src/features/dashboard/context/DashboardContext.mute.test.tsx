@@ -75,7 +75,7 @@ const contact = (n: string, over: Partial<ContactChat> = {}): ContactChat => ({
     username: n, telephon: n, status: 'accepted', contactName: n, lastSeen: null, avatarUrl: '', wallpaperUrl: '', ...over,
 });
 const chat = (n: string, over: Partial<ChatGroup> = {}): ChatGroup => ({
-    ContactTelephon: n, ContactUsername: n, ContactName: n, ContactAvatarUrl: '', IsContact: false, Messages: [], ...over,
+    contactTelephon: n, contactUsername: n, contactName: n, contactAvatarUrl: '', isContact: false, messages: [], ...over,
 });
 const groupRow = (id: number, over: Partial<GroupResponse> = {}): GroupResponse => ({
     ID: id, Name: `G${id}`, CreatorTelephon: '111', MemberCount: 2, UserRole: 'member', CreatedAt: '2026-01-01T00:00:00Z',
@@ -91,8 +91,8 @@ const deferred = <T,>() => {
     return { promise, resolve };
 };
 const incoming = (id: number, from: string): Message => ({
-    MessageID: id, SenderTelephon: from, Receptor: '111', Message: `hola ${id}`, Status: 'entregado',
-    Time: new Date().toISOString(), Edited: false,
+    messageID: id, senderTelephon: from, receptor: '111', message: `hola ${id}`, status: 'entregado',
+    time: new Date().toISOString(), edited: false,
 });
 
 describe('DashboardProvider per-chat mute', () => {
@@ -148,8 +148,8 @@ describe('DashboardProvider per-chat mute', () => {
         it('reads Muted/MutedUntil from /contact, /chats and /group, treating a past MutedUntil as not muted', async () => {
             contactsPayload = [contact('B', { muted: true }), contact('E')];
             chatsPayload = [
-                chat('C', { Muted: true, MutedUntil: inFuture() }),
-                chat('D', { Muted: true, MutedUntil: inPast() }),
+                chat('C', { muted: true, mutedUntil: inFuture() }),
+                chat('D', { muted: true, mutedUntil: inPast() }),
             ];
             groupsPayload = { groups: [groupRow(9, { Muted: true }), groupRow(10), groupRow(11, { Muted: true, MutedUntil: inPast() })] };
             await mount();
@@ -165,17 +165,17 @@ describe('DashboardProvider per-chat mute', () => {
         });
 
         it('ignores malformed mute fields', async () => {
-            chatsPayload = [{ ...chat('C'), Muted: 'yes' }];
-            groupsPayload = { groups: [{ ...groupRow(9), Muted: 1 }] };
+            chatsPayload = [{ ...chat('C'), muted: 'yes' }];
+            groupsPayload = { groups: [{ ...groupRow(9), muted: 1 }] };
             await mount();
             expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(false);
             expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(false);
         });
 
-        it('Muted:true with a malformed MutedUntil is not muted and warns', async () => {
+        it('muted:true with a malformed MutedUntil is not muted and warns', async () => {
             const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            chatsPayload = [{ ...chat('C'), Muted: true, MutedUntil: 'mañana' }];
-            groupsPayload = { groups: [{ ...groupRow(9), Muted: true, MutedUntil: 'mañana' }] };
+            chatsPayload = [{ ...chat('C'), muted: true, MutedUntil: 'mañana' }];
+            groupsPayload = { groups: [{ ...groupRow(9), muted: true, MutedUntil: 'mañana' }] };
             await mount();
             expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(false);
             expect(ctx!.isMuted({ kind: 'group', id: 9 })).toBe(false);
@@ -188,7 +188,7 @@ describe('DashboardProvider per-chat mute', () => {
 
         it('a MutedUntil 1 s ahead flips isMuted to false once it passes, without a reload', async () => {
             vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-            chatsPayload = [chat('C', { Muted: true, MutedUntil: new Date(Date.now() + 1000).toISOString() })];
+            chatsPayload = [chat('C', { muted: true, mutedUntil: new Date(Date.now() + 1000).toISOString() })];
             groupsPayload = { groups: [groupRow(9, { Muted: true, MutedUntil: new Date(Date.now() + 1000).toISOString() })] };
             await mount();
             expect(ctx!.isMuted({ kind: 'direct', key: 'C' })).toBe(true);
@@ -234,7 +234,7 @@ describe('DashboardProvider per-chat mute', () => {
             act(() => {
                 handlerFor<unknown>('group_info')({
                     groupID: 9, name: 'Nuevo', description: 'd',
-                    systemMessage: { ID: 50, GroupID: 9, SenderTelephon: '', Message: 'x', Time: new Date().toISOString(), Type: 'system' },
+                    systemMessage: { ID: 50, GroupID: 9, senderTelephon: '', message: 'x', time: new Date().toISOString(), Type: 'system' },
                 });
             });
             expect(ctx!.groups.find(g => g.ID === 9)?.AvatarUrl).toBe('/a.png');
@@ -286,7 +286,7 @@ describe('DashboardProvider per-chat mute', () => {
             await act(async () => { await ctx!.setMute({ kind: 'direct', key: 'B' }, '8h'); });
             await act(async () => {
                 contactsReq.resolve({ data: [contact('B'), contact('E', { muted: true })] });
-                chatsReq.resolve({ data: [chat('B'), chat('F', { Muted: true })] });
+                chatsReq.resolve({ data: [chat('B'), chat('F', { muted: true })] });
             });
             expect(ctx!.isMuted({ kind: 'direct', key: 'B' })).toBe(true);
             expect(ctx!.isMuted({ kind: 'direct', key: 'E' })).toBe(true);
@@ -383,7 +383,7 @@ describe('DashboardProvider per-chat mute', () => {
         });
 
         it('an expired mute (stale list) notifies', async () => {
-            chatsPayload = [chat('D', { Muted: true, MutedUntil: inPast() })];
+            chatsPayload = [chat('D', { muted: true, mutedUntil: inPast() })];
             await mount();
             emitMessage(incoming(1, 'D'));
             expect(mockNotify).toHaveBeenCalledTimes(1);

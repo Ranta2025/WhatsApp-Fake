@@ -1,9 +1,9 @@
 // Tipos REST derivados a mano del backend (backend/schemas/*.go,
 // backend/models/*.go). La API sigue mezclando casings mientras avanza el
-// corte a camelCase (AC3 ya migró user/auth/contactos a camelCase; los
-// schemas de chat/grupo/estado siguen en PascalCase): esto refleja
-// fielmente el contrato real del backend, no es un error de tipado.
-// Cada dominio se migra en su propio corte.
+// corte a camelCase (AC3 migró user/auth/contactos; AC4 el chat 1:1; los
+// schemas de grupo/estado siguen en PascalCase): esto refleja fielmente el
+// contrato real del backend, no es un error de tipado. Cada dominio se migra
+// en su propio corte.
 
 // ─────────────────────────────────────────────────────────────────────────
 // Enums (string literal unions), verificados contra el código Go real
@@ -116,44 +116,44 @@ export interface MessageReactionsResponse {
 }
 
 export interface Message {
-  MessageID: number;
-  SenderTelephon: string;
-  Receptor: string;
-  Message: string;
-  Status: MessageStatus;
+  messageID: number;
+  senderTelephon: string;
+  receptor: string;
+  message: string;
+  status: MessageStatus;
   /** ISO 8601 (time.Time serializado por encoding/json). */
-  Time: string;
-  Edited: boolean;
-  MediaUrl?: string;
-  MediaType?: MediaType;
-  ReplyToMessageID?: number;
-  ReplyToTelephon?: string;
-  ReplyToMessage?: string;
+  time: string;
+  edited: boolean;
+  mediaUrl?: string;
+  mediaType?: MediaType;
+  replyToMessageID?: number;
+  replyToTelephon?: string;
+  replyToMessage?: string;
   /** Omitido por el backend cuando no hay reacciones (omitempty). */
-  Reactions?: ReactionSummary[];
+  reactions?: ReactionSummary[];
   /** RFC 3339; solo si el chat tenía temporizador al enviar (omitempty). Inválido = ignorado. */
-  ExpiresAt?: string;
-  /** Solo en mensajes de sistema (omitempty); su `Message` son los segundos ("0" = off). */
-  Kind?: MessageKind;
-  SystemEvent?: GroupSystemEvent;
+  expiresAt?: string;
+  /** Solo en mensajes de sistema (omitempty); su `message` son los segundos ("0" = off). */
+  kind?: MessageKind;
+  systemEvent?: GroupSystemEvent;
   /** Sender's idempotency key echoed back (omitempty); untrusted, read via readClientID. */
-  ClientID?: string;
+  clientID?: string;
 }
 
 /** GET del historial de chat 1:1 con un contacto. */
 export interface ChatGroup {
-  ContactTelephon: string;
-  ContactUsername: string;
-  ContactName: string;
-  ContactAvatarUrl: string;
-  IsContact: boolean;
-  Messages: Message[];
+  contactTelephon: string;
+  contactUsername: string;
+  contactName: string;
+  contactAvatarUrl: string;
+  isContact: boolean;
+  messages: Message[];
   /** Temporizador del chat en segundos (omitempty: ausente = 0). */
-  DisappearSeconds?: number;
-  /** Silencio por chat (omitempty): ausente = no silenciado; true sin MutedUntil = "Siempre". */
-  Muted?: boolean;
-  /** RFC 3339 UTC; el cliente trata `MutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
-  MutedUntil?: string;
+  disappearSeconds?: number;
+  /** Silencio por chat (omitempty): ausente = no silenciado; true sin mutedUntil = "Siempre". */
+  muted?: boolean;
+  /** RFC 3339 UTC; el cliente trata `mutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
+  mutedUntil?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

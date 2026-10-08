@@ -37,7 +37,7 @@ describe('outboxStore', () => {
         const store = createOutboxStore(freshName());
         const entry: OutboxEntry = {
             clientID: ID1, kind: 'group', target: 9, text: 'hola grupo', createdAt: 1, attempts: 2,
-            replyTo: { MessageID: 4, SenderTelephon: '333', Message: 'antes' },
+            replyTo: { messageID: 4, senderTelephon: '333', message: 'antes' },
         };
         await store.put('111', entry);
         expect(await store.list('111')).toEqual([entry]);

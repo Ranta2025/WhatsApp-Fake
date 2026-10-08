@@ -19,8 +19,8 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseMessaging = vi.mocked(useMessaging);
 
 const msg = (id: number, text = `m${id}`): Message => ({
-    MessageID: id, SenderTelephon: '222', Receptor: '111', Message: text, Status: 'visto',
-    Time: `2026-01-01T10:00:${String(id % 60).padStart(2, '0')}Z`, Edited: false,
+    messageID: id, senderTelephon: '222', receptor: '111', message: text, status: 'visto',
+    time: `2026-01-01T10:00:${String(id % 60).padStart(2, '0')}Z`, edited: false,
 });
 
 describe('MessageList detached window (1:1)', () => {

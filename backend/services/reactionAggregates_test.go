@@ -293,14 +293,14 @@ func TestReactionsJSON_OmittedWhenEmpty(t *testing.T) {
 	for _, v := range []any{schemas.Message{}, schemas.GroupMessageResponse{}} {
 		b, err := json.Marshal(v)
 		require.NoError(t, err)
-		assert.NotContains(t, string(b), "Reactions")
+		assert.NotContains(t, string(b), "eactions")
 	}
 }
 
-func TestReactionsJSON_PascalCaseKeys(t *testing.T) {
+func TestReactionsJSON_CamelCaseKeys(t *testing.T) {
 	b, err := json.Marshal(schemas.Message{Reactions: wantThumbs()})
 	require.NoError(t, err)
-	assert.Contains(t, string(b), `"Reactions":[{"Emoji":"👍","Count":2,"Mine":true}]`)
+	assert.Contains(t, string(b), `"reactions":[{"Emoji":"👍","Count":2,"Mine":true}]`)
 }
 
 // Un *RepoReaction nil dentro de la interfaz no es == nil: el receptor debe ser

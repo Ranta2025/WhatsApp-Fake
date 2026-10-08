@@ -68,9 +68,9 @@ describe('normalizeChatMessagesResponse', () => {
         expect(normalizeChatMessagesResponse({ messages: [] })).toEqual([]);
     });
 
-    it('drops entries without a numeric MessageID (they cannot be cursors or dedupe keys)', () => {
-        const ok = { MessageID: 3, Message: 'hola' };
-        expect(normalizeChatMessagesResponse([ok, null, 'x', { MessageID: '4' }, {}])).toEqual([ok]);
+    it('drops entries without a numeric messageID (they cannot be cursors or dedupe keys)', () => {
+        const ok = { messageID: 3, message: 'hola' };
+        expect(normalizeChatMessagesResponse([ok, null, 'x', { messageID: '4' }, {}])).toEqual([ok]);
     });
 });
 
@@ -146,21 +146,20 @@ describe('normalizeReactions', () => {
 });
 
 describe('Reactions inside message normalizers', () => {
-    const msg = (extra: Record<string, unknown> = {}) => ({ MessageID: 1, Time: '2024-01-01T00:00:00Z', ...extra });
-
-    it('normalizeChatMessagesResponse sanitizes Reactions and removes an all-invalid field', () => {
+    it('normalizeChatMessagesResponse sanitizes reactions and removes an all-invalid field', () => {
         const [a, b] = normalizeChatMessagesResponse([
-            msg({ Reactions: [{ Emoji: '👍', Count: 1, Mine: false }, { nope: true }] }),
-            msg({ MessageID: 2, Reactions: [{ nope: true }] }),
+            { messageID: 1, time: '2024-01-01T00:00:00Z', reactions: [{ Emoji: '👍', Count: 1, Mine: false }, { nope: true }] },
+            { messageID: 2, time: '2024-01-01T00:00:00Z', reactions: [{ nope: true }] },
         ]);
-        expect(a?.Reactions).toEqual([{ Emoji: '👍', Count: 1, Mine: false }]);
-        expect('Reactions' in (b ?? {})).toBe(false);
+        expect(a?.reactions).toEqual([{ Emoji: '👍', Count: 1, Mine: false }]);
+        expect('reactions' in (b ?? {})).toBe(false);
     });
 
     it('group history / detail normalizers sanitize Reactions too', () => {
-        const [g] = normalizeGroupMessagesResponse({ messages: [msg({ Reactions: [{ Emoji: '🙏', Count: 2, Mine: true }, null] })] });
+        const grp = { MessageID: 1, Time: '2024-01-01T00:00:00Z', Reactions: [{ Emoji: '🙏', Count: 2, Mine: true }, null] };
+        const [g] = normalizeGroupMessagesResponse({ messages: [grp] });
         expect(g?.Reactions).toEqual([{ Emoji: '🙏', Count: 2, Mine: true }]);
-        const [d] = normalizeGroupDetailMessages({ Messages: [msg({ Reactions: 'garbage' })] });
+        const [d] = normalizeGroupDetailMessages({ Messages: [{ ...grp, Reactions: 'garbage' }] });
         expect('Reactions' in (d ?? {})).toBe(false);
     });
 });

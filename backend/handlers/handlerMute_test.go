@@ -159,12 +159,12 @@ func TestHandlerGetAllChatsCarriesMuteFields(t *testing.T) {
 	var got []map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	require.Len(t, got, 3)
-	assert.Equal(t, true, got[0]["Muted"])
-	assert.Equal(t, "2026-10-04T20:00:00Z", got[0]["MutedUntil"])
-	assert.Equal(t, true, got[1]["Muted"])
-	assert.NotContains(t, got[1], "MutedUntil", "para siempre: sin vencimiento")
-	assert.NotContains(t, got[2], "Muted")
-	assert.NotContains(t, got[2], "MutedUntil")
+	assert.Equal(t, true, got[0]["muted"])
+	assert.Equal(t, "2026-10-04T20:00:00Z", got[0]["mutedUntil"])
+	assert.Equal(t, true, got[1]["muted"])
+	assert.NotContains(t, got[1], "mutedUntil", "para siempre: sin vencimiento")
+	assert.NotContains(t, got[2], "muted")
+	assert.NotContains(t, got[2], "mutedUntil")
 }
 
 // Si falla la consulta de silencios el listado sale igual (sin estado).

@@ -20,10 +20,10 @@ vi.mock('../api/searchApi', () => ({ searchAll: vi.fn() }));
 const mockUseDashboard = vi.mocked(useDashboard);
 
 const msg = (id: number, over: Partial<Message> = {}): Message => ({
-    MessageID: id, SenderTelephon: '222', Receptor: '111', Message: `hola ${id}`, Status: 'visto',
-    Time: `2026-01-01T10:0${id}:00Z`, Edited: false, ...over,
+    messageID: id, senderTelephon: '222', receptor: '111', message: `hola ${id}`, status: 'visto',
+    time: `2026-01-01T10:0${id}:00Z`, edited: false, ...over,
 });
-const sys = (id: number): Message => msg(id, { Kind: 'system', SystemEvent: 'disappearing_changed', Message: '86400', Status: 'enviado' });
+const sys = (id: number): Message => msg(id, { kind: 'system', systemEvent: 'disappearing_changed', message: '86400', status: 'enviado' });
 
 describe('Sidebar system messages', () => {
     let container: HTMLDivElement;
@@ -65,7 +65,7 @@ describe('Sidebar system messages', () => {
     });
 
     it('does not count the system notice in the unread badge but counts a real unseen message', () => {
-        renderWith([msg(1, { Status: 'enviado' }), sys(2)]);
+        renderWith([msg(1, { status: 'enviado' }), sys(2)]);
         const badges = Array.from(container.querySelectorAll('span')).filter(s => s.textContent === '1');
         expect(badges.length).toBeGreaterThan(0);
         expect(Array.from(container.querySelectorAll('span')).some(s => s.textContent === '2')).toBe(false);

@@ -26,7 +26,7 @@ const ForwardMessageModalWrapper = () => {
     return (
         // key: el estado interno del modal se reinicia con cada mensaje a reenviar
         <ForwardMessageModal
-            key={forwardingMessage?.MessageID ?? 'closed'}
+            key={forwardingMessage?.messageID ?? 'closed'}
             isOpen={!!forwardingMessage}
             onClose={() => setForwardingMessage(null)}
             message={forwardingMessage}
@@ -240,7 +240,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
             {isUnknown && (
                 <div className="flex-shrink-0 px-4 py-2.5 bg-amber-500/[0.08] border-b border-amber-500/15 flex items-center justify-between gap-3 animate-fade-in">
                     <span className="text-sm text-amber-200/90 truncate">
-                        <strong className="font-semibold">{allChatGroups[selected.telephon]?.ContactUsername || selected.telephon}</strong> no está en tus contactos
+                        <strong className="font-semibold">{allChatGroups[selected.telephon]?.contactUsername || selected.telephon}</strong> no está en tus contactos
                     </span>
                     <button
                         onClick={() => setShowAddContactModal(true)}
@@ -270,7 +270,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                 isOpen={showAddContactModal}
                 onClose={() => setShowAddContactModal(false)}
                 initialNumber={selected?.telephon || ''}
-                initialName={allChatGroups[selected?.telephon]?.ContactUsername || ''}
+                initialName={allChatGroups[selected?.telephon]?.contactUsername || ''}
             />
 
             <ForwardMessageModalWrapper />

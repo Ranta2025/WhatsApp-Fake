@@ -96,11 +96,15 @@ export function applyReceiptEvent(state: GroupReceiptsState, event: GroupReceipt
     };
 }
 
-/** Highest real (numeric) message id; synthetic client-only entries use string ids. */
-export function latestRealMessageId(messages: ReadonlyArray<{ MessageID: number | string }> | undefined): number {
+/** Highest real (numeric) message id; synthetic client-only entries use string ids.
+ * Acepta el 1:1 camel (`messageID`) y el grupo Pascal (`MessageID`). */
+export function latestRealMessageId(
+    messages: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined,
+): number {
     let max = 0;
     for (const m of messages ?? []) {
-        if (typeof m.MessageID === 'number' && Number.isFinite(m.MessageID) && m.MessageID > max) max = m.MessageID;
+        const id = m.messageID !== undefined ? m.messageID : m.MessageID;
+        if (typeof id === 'number' && Number.isFinite(id) && id > max) max = id;
     }
     return max;
 }

@@ -37,7 +37,7 @@ func TestHandlerGetChats_AroundReturnsArrayAndWindowHeaders(t *testing.T) {
 	assert.Equal(t, "true", w.Header().Get("X-Has-More-Older"))
 	assert.Equal(t, "false", w.Header().Get("X-Has-More-Newer"))
 	assert.Equal(t, "", w.Header().Get("X-Has-More"), "sin cursor before: el flag clásico no aplica")
-	assert.Contains(t, w.Body.String(), `"MessageID": 40`)
+	assert.Contains(t, w.Body.String(), `"messageID": 40`)
 	assert.Equal(t, byte('['), w.Body.Bytes()[0])
 	svc.AssertExpectations(t)
 }

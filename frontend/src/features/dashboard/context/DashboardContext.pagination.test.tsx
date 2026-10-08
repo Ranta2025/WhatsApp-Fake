@@ -52,13 +52,13 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const chatMsg = (id: number): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: '111', Message: `m${id}`, Status: 'visto', Time: iso(id), Edited: false,
+    messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
 });
 const groupMsg = (id: number): GroupMessageResponse => ({
     MessageID: id, GroupID: 9, SenderTelephon: 'B', SenderUsername: 'bea', Message: `g${id}`, Time: iso(id), Edited: false,
 });
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-const ids = (list: ReadonlyArray<{ MessageID: number | string }> | undefined) => (list ?? []).map(m => m.MessageID);
+const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
 
 describe('DashboardProvider message pagination', () => {
     let container: HTMLDivElement;
@@ -190,8 +190,8 @@ describe('DashboardProvider message pagination', () => {
 
             chatsHandler = () => ({
                 data: [{
-                    ContactTelephon: 'B', ContactUsername: 'bea', ContactName: 'Bea', ContactAvatarUrl: '',
-                    IsContact: true, Messages: range(51, 101).map(chatMsg),
+                    contactTelephon: 'B', contactUsername: 'bea', contactName: 'Bea', contactAvatarUrl: '',
+                    isContact: true, messages: range(51, 101).map(chatMsg),
                 }],
             });
             await act(async () => { await ctx!.fetchAllChats(); });
@@ -203,8 +203,8 @@ describe('DashboardProvider message pagination', () => {
         it('fetchAllChats derives hasMore from a full initial window (200)', async () => {
             chatsHandler = () => ({
                 data: [{
-                    ContactTelephon: 'B', ContactUsername: 'bea', ContactName: 'Bea', ContactAvatarUrl: '',
-                    IsContact: true, Messages: range(1, 200).map(chatMsg),
+                    contactTelephon: 'B', contactUsername: 'bea', contactName: 'Bea', contactAvatarUrl: '',
+                    isContact: true, messages: range(1, 200).map(chatMsg),
                 }],
             });
             await mount();
@@ -254,8 +254,8 @@ describe('DashboardProvider message pagination', () => {
 
             chatsHandler = () => ({
                 data: [{
-                    ContactTelephon: 'B', ContactUsername: 'bea', ContactName: 'Bea', ContactAvatarUrl: '',
-                    IsContact: true, Messages: range(351, 550).map(chatMsg),
+                    contactTelephon: 'B', contactUsername: 'bea', contactName: 'Bea', contactAvatarUrl: '',
+                    isContact: true, messages: range(351, 550).map(chatMsg),
                 }],
             });
             await act(async () => { await ctx!.fetchAllChats(); });
@@ -283,7 +283,7 @@ describe('DashboardProvider message pagination', () => {
             await mount();
             await act(async () => { await ctx!.fetchGroupMessages(9); });
             // Malformed/legacy entry (non-numeric id): never a pagination cursor.
-            const malformed = { MessageID: 'system_1', GroupID: 9, Message: 'x', Time: iso(1) } as unknown as GroupMessageResponse;
+            const malformed = { messageID: 'system_1', GroupID: 9, message: 'x', time: iso(1) } as unknown as GroupMessageResponse;
             await act(async () => {
                 ctx!.setGroupMessages(prev => ({
                     ...prev,

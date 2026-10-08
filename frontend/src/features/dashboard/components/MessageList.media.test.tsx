@@ -20,13 +20,13 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseMessaging = vi.mocked(useMessaging);
 
 const baseMessage = (over: Partial<Message>): Message => ({
-    MessageID: 1,
-    SenderTelephon: '222',
-    Receptor: '111',
-    Message: '',
-    Status: 'enviado',
-    Time: '2026-01-01T10:00:00Z',
-    Edited: false,
+    messageID: 1,
+    senderTelephon: '222',
+    receptor: '111',
+    message: '',
+    status: 'enviado',
+    time: '2026-01-01T10:00:00Z',
+    edited: false,
     ...over,
 });
 
@@ -66,7 +66,7 @@ describe('MessageList media rendering (1:1)', () => {
     });
 
     it('imagen: <img> con la URL, sin texto redundante', () => {
-        renderWith(baseMessage({ MediaType: 'image', MediaUrl: '/storage/a.png', Message: '/storage/a.png' }));
+        renderWith(baseMessage({ mediaType: 'image', mediaUrl: '/storage/a.png', message: '/storage/a.png' }));
         const img = container.querySelector('img');
         expect(img?.getAttribute('src')).toBe('/storage/a.png');
         expect(img?.getAttribute('alt')).toBe('Imagen adjunta');
@@ -75,28 +75,28 @@ describe('MessageList media rendering (1:1)', () => {
 
     it('imagen: clic abre la URL en otra pestaña', () => {
         const open = vi.spyOn(window, 'open').mockImplementation(() => null);
-        renderWith(baseMessage({ MediaType: 'image', MediaUrl: '/storage/a.png' }));
+        renderWith(baseMessage({ mediaType: 'image', mediaUrl: '/storage/a.png' }));
         act(() => { container.querySelector('img')?.click(); });
         expect(open).toHaveBeenCalledWith('/storage/a.png', '_blank');
         open.mockRestore();
     });
 
     it('video: <video controls> con la URL', () => {
-        renderWith(baseMessage({ MediaType: 'video', MediaUrl: '/storage/v.mp4' }));
+        renderWith(baseMessage({ mediaType: 'video', mediaUrl: '/storage/v.mp4' }));
         const video = container.querySelector('video');
         expect(video?.getAttribute('src')).toBe('/storage/v.mp4');
         expect(video?.hasAttribute('controls')).toBe(true);
     });
 
     it('audio: usa el AudioPlayer (audio con la URL, sin controles nativos)', () => {
-        renderWith(baseMessage({ MediaType: 'audio', MediaUrl: '/storage/n.webm' }));
+        renderWith(baseMessage({ mediaType: 'audio', mediaUrl: '/storage/n.webm' }));
         const audio = container.querySelector('audio');
         expect(audio?.getAttribute('src')).toBe('/storage/n.webm');
         expect(audio?.hasAttribute('controls')).toBe(false);
     });
 
     it('documento: enlace seguro con etiqueta "Documento"', () => {
-        renderWith(baseMessage({ MediaType: 'document', MediaUrl: '/storage/d.pdf' }));
+        renderWith(baseMessage({ mediaType: 'document', mediaUrl: '/storage/d.pdf' }));
         const a = container.querySelector('a');
         expect(a?.getAttribute('href')).toBe('/storage/d.pdf');
         expect(a?.getAttribute('target')).toBe('_blank');
@@ -105,24 +105,24 @@ describe('MessageList media rendering (1:1)', () => {
     });
 
     it('media con texto distinto de la URL: oculta el texto (comportamiento actual)', () => {
-        renderWith(baseMessage({ MediaType: 'image', MediaUrl: '/storage/a.png', Message: 'mira esto' }));
+        renderWith(baseMessage({ mediaType: 'image', mediaUrl: '/storage/a.png', message: 'mira esto' }));
         expect(container.querySelector('img')).not.toBeNull();
         expect(container.textContent).not.toContain('mira esto');
     });
 
-    it('legado: texto con /media/audio/ sin MediaType se infiere como audio', () => {
-        renderWith(baseMessage({ Message: 'https://x.test/media/audio/n.ogg' }));
+    it('legado: texto con /media/audio/ sin mediaType se infiere como audio', () => {
+        renderWith(baseMessage({ message: 'https://x.test/media/audio/n.ogg' }));
         expect(container.querySelector('audio')?.getAttribute('src')).toBe('https://x.test/media/audio/n.ogg');
     });
 
     it('sin media: solo texto', () => {
-        renderWith(baseMessage({ Message: 'hola' }));
+        renderWith(baseMessage({ message: 'hola' }));
         expect(container.querySelector('img, video, audio, a')).toBeNull();
         expect(container.textContent).toContain('hola');
     });
 
-    it('MediaType sin URL: no pinta media y conserva el texto normal', () => {
-        renderWith(baseMessage({ MediaType: 'image', Message: 'texto normal' }));
+    it('mediaType sin URL: no pinta media y conserva el texto normal', () => {
+        renderWith(baseMessage({ mediaType: 'image', message: 'texto normal' }));
         expect(container.querySelector('img')).toBeNull();
         expect(container.textContent).toContain('texto normal');
     });

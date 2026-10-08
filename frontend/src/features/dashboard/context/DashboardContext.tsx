@@ -58,7 +58,7 @@ import {
 } from '../lib/groupAdminEvents';
 import {
     normalizeDisappearSeconds, removeMessagesByIds, removeIdsFromWindow, removeExpiredMessages, removeExpiredFromWindow,
-    earliestExpiry, hasUnreadFrom, isSystemDirectMessage,
+    earliestExpiry, hasUnreadFrom, isSystemDirectMessage, type ExpirableMessage,
 } from '../lib/disappearing';
 import {
     parseDisappearingChanged, parseMessagesExpired, type DisappearingChangedEvent,
@@ -442,8 +442,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             if (!msgs) return prev;
             if (!hasUnreadFrom(msgs, contactNumber)) return prev;
             const updated = msgs.map(m =>
-                m.SenderTelephon === contactNumber && m.Status !== 'visto'
-                    ? { ...m, Status: 'visto' as const }
+                m.senderTelephon === contactNumber && m.status !== 'visto'
+                    ? { ...m, status: 'visto' as const }
                     : m
             );
             return { ...prev, [contactNumber]: updated };
@@ -555,19 +555,19 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const chatAvatarMap: Record<string, string> = {};
             const timers: Record<string, number> = {};
             chatGroups.forEach(group => {
-                const key = group.ContactTelephon;
+                const key = group.contactTelephon;
                 if (key) {
-                    timers[key] = normalizeDisappearSeconds(group.DisappearSeconds);
-                    msgMap[key] = Array.isArray(group.Messages) ? group.Messages : [];
+                    timers[key] = normalizeDisappearSeconds(group.disappearSeconds);
+                    msgMap[key] = Array.isArray(group.messages) ? group.messages : [];
                     groupMap[key] = {
-                        ContactTelephon: group.ContactTelephon,
-                        ContactUsername: group.ContactUsername,
-                        ContactName: group.ContactName,
-                        IsContact: group.IsContact,
+                        contactTelephon: group.contactTelephon,
+                        contactUsername: group.contactUsername,
+                        contactName: group.contactName,
+                        isContact: group.isContact,
                     };
                     // Guardar avatar de todos los participantes (incluidos no-contactos)
-                    if (group.ContactAvatarUrl) {
-                        chatAvatarMap[key] = group.ContactAvatarUrl;
+                    if (group.contactAvatarUrl) {
+                        chatAvatarMap[key] = group.contactAvatarUrl;
                     }
                 }
             });
@@ -598,9 +598,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             setAllChatGroups(groupMap);
             setChatDisappear(prev => ({ ...prev, ...timers }));
             setChatMutes(prev => mergeMutes(prev, chatGroups
-                .filter(group => group.ContactTelephon
-                    && !muteChangedSince({ kind: 'direct', key: group.ContactTelephon }, muteStart))
-                .map(group => [group.ContactTelephon, parseMuteFields(group)])));
+                .filter(group => group.contactTelephon
+                    && !muteChangedSince({ kind: 'direct', key: group.contactTelephon }, muteStart))
+                .map(group => [group.contactTelephon, parseMuteFields(group)])));
             // Merge avatares de chats al avatarMap (contactos tienen prioridad, no sobreescribir)
             setAvatarMap(prev => ({ ...chatAvatarMap, ...prev }));
         } catch (err) {
@@ -780,7 +780,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         if (!msg) return;
         setMessagesByChat(prev => {
             const list = prev[chatKey] ?? [];
-            if (list.some(m => m.MessageID === msg.MessageID)) return prev;
+            if (list.some(m => m.messageID === msg.messageID)) return prev;
             return { ...prev, [chatKey]: [...list, msg] };
         });
         setAllChatGroups(prev => {
@@ -788,7 +788,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const isContact = contactsRef.current.some(c => c.telephon === chatKey);
             return {
                 ...prev,
-                [chatKey]: { ContactTelephon: chatKey, ContactUsername: chatKey, ContactName: '', IsContact: isContact },
+                [chatKey]: { contactTelephon: chatKey, contactUsername: chatKey, contactName: '', isContact },
             };
         });
     }, []);
@@ -834,7 +834,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
     /** Local expiry sweep: drops every loaded message with `now >= ExpiresAt` (lists and windows). */
     const sweepExpired = useCallback((now: number) => {
-        const sweepRecord = <T extends { MessageID: number | string; Time: string; ExpiresAt?: string; ReplyToMessageID?: number; ReplyToTelephon?: string; ReplyToMessage?: string }, K extends string | number>(
+        const sweepRecord = <T extends ExpirableMessage, K extends string | number>(
             prev: Record<K, T[]>,
         ): Record<K, T[]> => {
             let out = prev;
@@ -1072,7 +1072,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             if (target.kind === 'chat') {
                 const win = await getChatWindowAround(target.key, messageId, WINDOW_LIMIT);
                 if (openSeqRef.current.get(fk) !== openSeq) return false;
-                if (!win.messages.some(m => m.MessageID === messageId)) throw new Error('target missing from window');
+                if (!win.messages.some(m => m.messageID === messageId)) throw new Error('target missing from window');
                 // seq sobre la ventana vigente *ahora* (un re-enfoque intermedio ya lo subió).
                 const seq = (focusedChatRef.current[target.key]?.seq ?? 0) + 1;
                 bumpFocusEpoch(fk); // las cargas de la ventana anterior pasan a ser obsoletas
@@ -1246,14 +1246,14 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         const handleIncomingMessage = (messageData: WsHandlerMap['message']) => {
             const myTelephon = profileRef.current?.telephon;
             const currentSelected = selectedRef.current;
-            const { SenderTelephon, Receptor, MessageID, Message: messageText, MediaType } = messageData;
+            const { senderTelephon, receptor, messageID, message: messageText, mediaType } = messageData;
 
-            const contactNumber = SenderTelephon === myTelephon ? Receptor : SenderTelephon;
+            const contactNumber = senderTelephon === myTelephon ? receptor : senderTelephon;
             const clientID = readClientID(messageData);
             const appendIncoming = () => {
                 setMessagesByChat(prev => {
                     const existing = prev[contactNumber] || [];
-                    const alreadyExists = existing.some(m => m.MessageID === MessageID || (clientID !== null && m.ClientID === clientID));
+                    const alreadyExists = existing.some(m => m.messageID === messageID || (clientID !== null && m.clientID === clientID));
                     if (alreadyExists) return prev;
                     return { ...prev, [contactNumber]: [...existing, messageData] };
                 });
@@ -1271,7 +1271,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
             appendIncoming();
             // Enviar un mensaje estando en una ventana desprendida vuelve a los últimos mensajes.
-            if (SenderTelephon === myTelephon) returnToLatest({ kind: 'chat', key: contactNumber });
+            if (senderTelephon === myTelephon) returnToLatest({ kind: 'chat', key: contactNumber });
             // Primer mensaje de alguien que aún no tenemos en la lista de chats
             setAllChatGroups(prev => {
                 if (prev[contactNumber]) return prev;
@@ -1279,10 +1279,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 return {
                     ...prev,
                     [contactNumber]: {
-                        ContactTelephon: contactNumber,
-                        ContactUsername: contactNumber,
-                        ContactName: '',
-                        IsContact: isContact,
+                        contactTelephon: contactNumber,
+                        contactUsername: contactNumber,
+                        contactName: '',
+                        isContact: isContact,
                     },
                 };
             });
@@ -1294,23 +1294,23 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Silenciado: sin notificación nativa (que es también el sonido), pero el mensaje ya
             // está en messagesByChat, así que el contador de no leídos sube igual.
             const muted = isChatMuted(chatMutesRef.current[contactNumber], Date.now());
-            if (SenderTelephon !== myTelephon && currentSelected?.telephon !== contactNumber && !muted) {
+            if (senderTelephon !== myTelephon && currentSelected?.telephon !== contactNumber && !muted) {
                 // buscar nombre para mostrar
                 const contact = contactsRef.current.find(c => c.telephon === contactNumber);
                 const group = allChatGroupsRef.current[contactNumber];
-                const title = contact?.contactName || group?.ContactName || group?.ContactUsername || contactNumber;
+                const title = contact?.contactName || group?.contactName || group?.contactUsername || contactNumber;
                 let body = '';
-                if (MediaType) {
-                    if (MediaType === 'audio') body = '🎵 Audio';
-                    else if (MediaType === 'image') body = '📷 Foto';
-                    else if (MediaType === 'video') body = '🎥 Video';
-                    else if (MediaType === 'document') body = '📄 Documento';
+                if (mediaType) {
+                    if (mediaType === 'audio') body = '🎵 Audio';
+                    else if (mediaType === 'image') body = '📷 Foto';
+                    else if (mediaType === 'video') body = '🎥 Video';
+                    else if (mediaType === 'document') body = '📄 Documento';
                 }
                 if (!body) body = messageText || 'Nuevo mensaje';
                 // Obtener avatar del contacto para la notificación
                 const icon = avatarMapRef.current[contactNumber] || undefined;
                 // Si es imagen, incluirla como preview en la notificación nativa
-                const image = MediaType === 'image' ? (messageData.MediaUrl || undefined) : undefined;
+                const image = mediaType === 'image' ? (messageData.mediaUrl || undefined) : undefined;
 
                 // El usuario pidió explícitamente QUITAR la notificación interna (Toast)
                 // y enviar siempre la notificación nativa externa del sistema
@@ -1325,7 +1325,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 });
             }
 
-            if (SenderTelephon !== myTelephon && currentSelected?.telephon === contactNumber) {
+            if (senderTelephon !== myTelephon && currentSelected?.telephon === contactNumber) {
                 markAsRead(contactNumber);
             }
         };
@@ -1339,15 +1339,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 const msgs = prev[readerTelephon];
                 if (!msgs) return prev;
                 const updated = msgs.map(m =>
-                    m.Receptor === readerTelephon && (m.Status === 'enviado' || m.Status === 'entregado')
-                        ? { ...m, Status: 'visto' as const }
+                    m.receptor === readerTelephon && (m.status === 'enviado' || m.status === 'entregado')
+                        ? { ...m, status: 'visto' as const }
                         : m
                 );
                 return { ...prev, [readerTelephon]: updated };
             });
             patchFocusedChat(readerTelephon, w => updateFocusedMessages(w, m =>
-                m.Receptor === readerTelephon && (m.Status === 'enviado' || m.Status === 'entregado')
-                    ? { ...m, Status: 'visto' as const }
+                m.receptor === readerTelephon && (m.status === 'enviado' || m.status === 'entregado')
+                    ? { ...m, status: 'visto' as const }
                     : m
             ));
         };
@@ -1361,15 +1361,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 const msgs = prev[receiverTelephon];
                 if (!msgs) return prev;
                 const updated = msgs.map(m =>
-                    m.Receptor === receiverTelephon && m.Status === 'enviado'
-                        ? { ...m, Status: 'entregado' as const }
+                    m.receptor === receiverTelephon && m.status === 'enviado'
+                        ? { ...m, status: 'entregado' as const }
                         : m
                 );
                 return { ...prev, [receiverTelephon]: updated };
             });
             patchFocusedChat(receiverTelephon, w => updateFocusedMessages(w, m =>
-                m.Receptor === receiverTelephon && m.Status === 'enviado'
-                    ? { ...m, Status: 'entregado' as const }
+                m.receptor === receiverTelephon && m.status === 'enviado'
+                    ? { ...m, status: 'entregado' as const }
                     : m
             ));
         };
@@ -1391,50 +1391,50 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Actualizar en allChatGroups
             setAllChatGroups(prev => {
                 if (!prev[telephon]) return prev;
-                return { ...prev, [telephon]: { ...prev[telephon], ContactUsername: newUsername } };
+                return { ...prev, [telephon]: { ...prev[telephon], contactUsername: newUsername } };
             });
         };
 
         // Handler: un mensaje fue editado (por mí o por el otro participante)
         const handleEditMessage = (updatedMsg: WsHandlerMap['edit_message']) => {
-            if (!updatedMsg?.MessageID) return;
+            if (!updatedMsg?.messageID) return;
             const myTelephon = profileRef.current?.telephon;
             // Determinar en qué chat está este mensaje
-            const contactNumber = updatedMsg.SenderTelephon === myTelephon
-                ? updatedMsg.Receptor
-                : updatedMsg.SenderTelephon;
+            const contactNumber = updatedMsg.senderTelephon === myTelephon
+                ? updatedMsg.receptor
+                : updatedMsg.senderTelephon;
 
             setMessagesByChat(prev => {
                 const msgs = prev[contactNumber];
                 if (!msgs) return prev;
                 const updated = msgs.map(m =>
-                    m.MessageID === updatedMsg.MessageID
-                        ? { ...m, Message: updatedMsg.Message, Edited: true }
+                    m.messageID === updatedMsg.messageID
+                        ? { ...m, message: updatedMsg.message, edited: true }
                         : m
                 );
                 return { ...prev, [contactNumber]: updated };
             });
             patchFocusedChat(contactNumber, w => updateFocusedMessages(w, m =>
-                m.MessageID === updatedMsg.MessageID ? { ...m, Message: updatedMsg.Message, Edited: true } : m
+                m.messageID === updatedMsg.messageID ? { ...m, message: updatedMsg.message, edited: true } : m
             ));
         };
 
         // Handler: un mensaje fue eliminado para todos (por mí o por el otro participante)
         const handleDeleteMessage = (deletedMsg: WsHandlerMap['delete_message']) => {
-            if (!deletedMsg?.MessageID) return;
+            if (!deletedMsg?.messageID) return;
             const myTelephon = profileRef.current?.telephon;
             // Determinar en qué chat está este mensaje
-            const contactNumber = deletedMsg.SenderTelephon === myTelephon
-                ? deletedMsg.Receptor
-                : deletedMsg.SenderTelephon;
+            const contactNumber = deletedMsg.senderTelephon === myTelephon
+                ? deletedMsg.receptor
+                : deletedMsg.senderTelephon;
 
             setMessagesByChat(prev => {
                 const msgs = prev[contactNumber];
                 if (!msgs) return prev;
-                const updated = msgs.filter(m => m.MessageID !== deletedMsg.MessageID);
+                const updated = msgs.filter(m => m.messageID !== deletedMsg.messageID);
                 return { ...prev, [contactNumber]: updated };
             });
-            patchFocusedChat(contactNumber, w => removeFocusedMessage(w, deletedMsg.MessageID));
+            patchFocusedChat(contactNumber, w => removeFocusedMessage(w, deletedMsg.messageID));
         };
 
         // ── Group event handlers ───────────────────────────────────────────────────

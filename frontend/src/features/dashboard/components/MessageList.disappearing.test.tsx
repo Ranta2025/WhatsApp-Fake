@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import MessageList from './MessageList';
 import type { Message } from '../../../types/api';
 
-// disappearing-messages (DE6): clock icon next to the time on 1:1 bubbles with a valid ExpiresAt.
+// disappearing-messages (DE6): clock icon next to the time on 1:1 bubbles with a valid expiresAt.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,8 +21,8 @@ vi.mock('../hooks/useMessaging', () => ({
 }));
 
 const msg = (id: number, over: Partial<Message> = {}): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: 'me', Message: `m${id}`, Status: 'visto',
-    Time: '2026-01-01T10:00:00Z', Edited: false, ...over,
+    messageID: id, senderTelephon: 'B', receptor: 'me', message: `m${id}`, status: 'visto',
+    time: '2026-01-01T10:00:00Z', edited: false, ...over,
 });
 
 describe('MessageList expiry clock (1:1)', () => {
@@ -39,9 +39,9 @@ describe('MessageList expiry clock (1:1)', () => {
             focusedChat: {},
             messagesByChat: { B: [
                 msg(1),
-                msg(2, { ExpiresAt: '2026-01-02T10:00:00Z' }),
-                msg(3, { ExpiresAt: 'garbage' }),
-                msg(4, { SenderTelephon: 'me', Receptor: 'B', ExpiresAt: '2026-01-02T10:00:00Z' }),
+                msg(2, { expiresAt: '2026-01-02T10:00:00Z' }),
+                msg(3, { expiresAt: 'garbage' }),
+                msg(4, { senderTelephon: 'me', receptor: 'B', expiresAt: '2026-01-02T10:00:00Z' }),
             ] },
             profile: { telephon: 'me' },
             globalWallpaper: '', chatPaging: {}, loadOlderMessages: vi.fn(), reactToMessage: vi.fn(),
@@ -54,7 +54,7 @@ describe('MessageList expiry clock (1:1)', () => {
         document.body.innerHTML = '';
     });
 
-    it('shows the clock only on messages with a valid ExpiresAt (incoming and mine)', () => {
+    it('shows the clock only on messages with a valid expiresAt (incoming and mine)', () => {
         expect(row(1).querySelector('[data-testid="expiry-clock"]')).toBeNull();
         expect(row(2).querySelector('[aria-label="Mensaje temporal"]')).not.toBeNull();
         expect(row(3).querySelector('[data-testid="expiry-clock"]')).toBeNull();

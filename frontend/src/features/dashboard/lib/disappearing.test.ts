@@ -10,11 +10,11 @@ import { describeGroupSystemMessage } from './groupAdminEvents';
 import { createFocusedWindow } from './focusedWindow';
 
 const msg = (id: number, over: Partial<Message> = {}): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: 'me', Message: `m${id}`, Status: 'enviado',
-    Time: '2026-01-01T10:00:00Z', Edited: false, ...over,
+    messageID: id, senderTelephon: 'B', receptor: 'me', message: `m${id}`, status: 'enviado',
+    time: '2026-01-01T10:00:00Z', edited: false, ...over,
 });
 const sys = (id: number, seconds: string, over: Partial<Message> = {}): Message => msg(id, {
-    Kind: 'system', SystemEvent: 'disappearing_changed', Message: seconds, Status: 'visto', ...over,
+    kind: 'system', systemEvent: 'disappearing_changed', message: seconds, status: 'visto', ...over,
 });
 
 describe('seconds guards', () => {
@@ -57,7 +57,7 @@ describe('describeDirectSystemMessage / group case', () => {
     it('renders a 1:1 system message per viewer', () => {
         const resolve = (t: string) => (t === 'B' ? 'Bea' : undefined);
         expect(describeDirectSystemMessage(sys(5, '86400'), 'me', resolve)).toBe('Bea activó los mensajes temporales: 24 horas');
-        expect(describeDirectSystemMessage(sys(5, '0', { SenderTelephon: 'me' }), 'me', resolve))
+        expect(describeDirectSystemMessage(sys(5, '0', { senderTelephon: 'me' }), 'me', resolve))
             .toBe('Desactivaste los mensajes temporales');
         expect(describeDirectSystemMessage(sys(5, 'zzz'), 'me', resolve)).toBe('Bea cambió los mensajes temporales');
     });
@@ -92,12 +92,12 @@ describe('parseExpiresAt', () => {
 
 describe('removal reducers', () => {
     it('removeMessagesByIds drops ids, scrubs replies to them, and keeps the same array when nothing matches', () => {
-        const list = [msg(1), msg(2), msg(3, { ReplyToMessageID: 2, ReplyToTelephon: 'B', ReplyToMessage: 'm2' })];
+        const list = [msg(1), msg(2), msg(3, { replyToMessageID: 2, replyToTelephon: 'B', replyToMessage: 'm2' })];
         const out = removeMessagesByIds(list, new Set([2]));
-        expect(out.map(m => m.MessageID)).toEqual([1, 3]);
-        expect(out[1]).not.toHaveProperty('ReplyToMessageID');
-        expect(out[1]).not.toHaveProperty('ReplyToMessage');
-        expect(out[1]).not.toHaveProperty('ReplyToTelephon');
+        expect(out.map(m => m.messageID)).toEqual([1, 3]);
+        expect(out[1]).not.toHaveProperty('replyToMessageID');
+        expect(out[1]).not.toHaveProperty('replyToMessage');
+        expect(out[1]).not.toHaveProperty('replyToTelephon');
         expect(removeMessagesByIds(list, new Set([99]))).toBe(list);
         expect(removeMessagesByIds(list, new Set())).toBe(list);
     });
@@ -105,13 +105,13 @@ describe('removal reducers', () => {
     it('removeExpiredMessages uses >= (a message expiring exactly now is gone) and ignores invalid ExpiresAt', () => {
         const now = Date.parse('2026-01-01T12:00:00Z');
         const list = [
-            msg(1, { ExpiresAt: '2026-01-01T11:59:59Z' }),
-            msg(2, { ExpiresAt: '2026-01-01T12:00:00Z' }),
-            msg(3, { ExpiresAt: '2026-01-01T12:00:01Z' }),
-            msg(4, { ExpiresAt: 'garbage' }),
+            msg(1, { expiresAt: '2026-01-01T11:59:59Z' }),
+            msg(2, { expiresAt: '2026-01-01T12:00:00Z' }),
+            msg(3, { expiresAt: '2026-01-01T12:00:01Z' }),
+            msg(4, { expiresAt: 'garbage' }),
             msg(5),
         ];
-        expect(removeExpiredMessages(list, now).map(m => m.MessageID)).toEqual([3, 4, 5]);
+        expect(removeExpiredMessages(list, now).map(m => m.messageID)).toEqual([3, 4, 5]);
         expect(removeExpiredMessages([msg(5)], now)).toHaveLength(1);
         const same = [msg(5)];
         expect(removeExpiredMessages(same, now)).toBe(same);
@@ -119,16 +119,16 @@ describe('removal reducers', () => {
 
     it('never removes system messages, even with a past ExpiresAt', () => {
         const now = Date.parse('2026-01-01T12:00:00Z');
-        const list = [sys(1, '86400', { ExpiresAt: '2026-01-01T11:00:00Z' }), msg(2, { ExpiresAt: '2026-01-01T11:00:00Z' })];
+        const list = [sys(1, '86400', { expiresAt: '2026-01-01T11:00:00Z' }), msg(2, { expiresAt: '2026-01-01T11:00:00Z' })];
         const out = removeExpiredMessages(list, now);
-        expect(out.map(m => m.MessageID)).toEqual([1]);
+        expect(out.map(m => m.messageID)).toEqual([1]);
     });
 
     it('windows: same object when nothing changes, filtered messages otherwise', () => {
-        const win = createFocusedWindow([msg(1, { ExpiresAt: '2026-01-01T11:00:00Z' }), msg(2)], { hasMoreOlder: true, hasMoreNewer: false }, 2, 1);
+        const win = createFocusedWindow([msg(1, { expiresAt: '2026-01-01T11:00:00Z' }), msg(2)], { hasMoreOlder: true, hasMoreNewer: false }, 2, 1);
         const now = Date.parse('2026-01-01T12:00:00Z');
         const out = removeExpiredFromWindow(win, now);
-        expect(out.messages.map(m => m.MessageID)).toEqual([2]);
+        expect(out.messages.map(m => m.messageID)).toEqual([2]);
         expect(out.hasMoreOlder).toBe(true);
         expect(removeExpiredFromWindow(out, now)).toBe(out);
         expect(removeIdsFromWindow(out, new Set([2])).messages).toEqual([]);
@@ -138,8 +138,8 @@ describe('removal reducers', () => {
 
 describe('earliestExpiry / expiryDelay', () => {
     it('finds the earliest valid expiry across lists', () => {
-        const a = [msg(1, { ExpiresAt: '2026-01-01T12:00:10Z' }), msg(2)];
-        const b = [msg(3, { ExpiresAt: '2026-01-01T12:00:05Z' }), msg(4, { ExpiresAt: 'bad' })];
+        const a = [msg(1, { expiresAt: '2026-01-01T12:00:10Z' }), msg(2)];
+        const b = [msg(3, { expiresAt: '2026-01-01T12:00:05Z' }), msg(4, { expiresAt: 'bad' })];
         expect(earliestExpiry([a, b])).toBe(Date.parse('2026-01-01T12:00:05Z'));
         expect(earliestExpiry([[msg(1)], []])).toBeNull();
         expect(earliestExpiry([])).toBeNull();
@@ -147,15 +147,15 @@ describe('earliestExpiry / expiryDelay', () => {
 
     it('ignores entries the sweep cannot remove (non-numeric id, system) so they cannot stall the timer', () => {
         const unremovable = [
-            msg(1, { MessageID: 'tmp-1' as unknown as number, ExpiresAt: '2026-01-01T11:00:00Z' }),
-            sys(2, '86400', { ExpiresAt: '2026-01-01T11:00:00Z' }),
-            msg(3, { ExpiresAt: '2026-01-01T12:00:09Z' }),
+            msg(1, { messageID: 'tmp-1' as unknown as number, expiresAt: '2026-01-01T11:00:00Z' }),
+            sys(2, '86400', { expiresAt: '2026-01-01T11:00:00Z' }),
+            msg(3, { expiresAt: '2026-01-01T12:00:09Z' }),
         ];
         expect(earliestExpiry([unremovable])).toBe(Date.parse('2026-01-01T12:00:09Z'));
         expect(earliestExpiry([[unremovable[0]!, unremovable[1]!]])).toBeNull();
         // a later removable one still gets swept
         const now = Date.parse('2026-01-01T12:00:10Z');
-        expect(removeExpiredMessages(unremovable, now).map(m => m.MessageID)).toEqual(['tmp-1', 2]);
+        expect(removeExpiredMessages(unremovable, now).map(m => m.messageID)).toEqual(['tmp-1', 2]);
     });
 
     it('delay is never negative and capped', () => {
@@ -174,15 +174,15 @@ describe('system message exclusions', () => {
     });
 
     it('unread never counts system messages', () => {
-        const list = [msg(1), sys(2, '86400', { Status: 'enviado' }), msg(3, { Status: 'visto' }), msg(4, { SenderTelephon: 'me' })];
+        const list = [msg(1), sys(2, '86400', { status: 'enviado' }), msg(3, { status: 'visto' }), msg(4, { senderTelephon: 'me' })];
         expect(countUnreadFrom(list, 'B')).toBe(1);
         expect(hasUnreadFrom(list, 'B')).toBe(true);
-        expect(hasUnreadFrom([sys(2, '0', { Status: 'enviado' })], 'B')).toBe(false);
+        expect(hasUnreadFrom([sys(2, '0', { status: 'enviado' })], 'B')).toBe(false);
         expect(countUnreadFrom(undefined, 'B')).toBe(0);
     });
 
     it('preview is the latest non-system message', () => {
-        expect(latestPreviewable([msg(1), msg(2), sys(3, '86400')])?.MessageID).toBe(2);
+        expect(latestPreviewable([msg(1), msg(2), sys(3, '86400')])?.messageID).toBe(2);
         expect(latestPreviewable([sys(3, '0')])).toBeNull();
         expect(latestPreviewable(undefined)).toBeNull();
     });

@@ -7,9 +7,19 @@
 
 /** Minimal shape of the message being replied to (same fields the WS send uses). */
 export interface OutboxReplyRef {
-    MessageID: number;
-    SenderTelephon: string;
-    Message: string;
+    messageID: number;
+    senderTelephon: string;
+    message: string;
+}
+
+/** Fuente de un reply ref: 1:1 camel o grupo Pascal (mientras dura el corte por dominios). */
+interface ReplyRefSource {
+    MessageID?: number;
+    messageID?: number;
+    SenderTelephon?: string;
+    senderTelephon?: string;
+    Message?: string;
+    message?: string;
 }
 
 /** 1:1 chat (`target` = receiver telephon) or group (`target` = group id). */
@@ -54,10 +64,10 @@ const isNonNegativeInt = (value: unknown): value is number => typeof value === '
 function parseReplyRef(raw: unknown): OutboxReplyRef | null | undefined {
     if (raw === null || raw === undefined) return null;
     if (!isRecord(raw)) return undefined;
-    const { MessageID, SenderTelephon, Message } = raw;
-    if (!isNonNegativeInt(MessageID) || MessageID === 0) return undefined;
-    if (typeof SenderTelephon !== 'string' || typeof Message !== 'string') return undefined;
-    return { MessageID, SenderTelephon, Message };
+    const { messageID, senderTelephon, message } = raw;
+    if (!isNonNegativeInt(messageID) || messageID === 0) return undefined;
+    if (typeof senderTelephon !== 'string' || typeof message !== 'string') return undefined;
+    return { messageID, senderTelephon, message };
 }
 
 /** Runtime guard for anything read back from IndexedDB: null when the row is not a valid entry. */
@@ -76,17 +86,21 @@ export function parseOutboxEntry(raw: unknown): OutboxEntry | null {
     return null;
 }
 
-/** Reads the echoed `ClientID` of a server message, only when it is a canonical UUID. */
+/** Reads the echoed clientID of a server message (1:1 camel or group Pascal), only when it is a canonical UUID. */
 export function readClientID(message: unknown): string | null {
     if (!isRecord(message)) return null;
-    const value = message.ClientID;
+    const value = message.clientID !== undefined ? message.clientID : message.ClientID;
     return isClientID(value) ? value : null;
 }
 
 /** Strips a full message down to the reply reference stored in the outbox. */
-export function toReplyRef(message: OutboxReplyRef | null | undefined): OutboxReplyRef | null {
+export function toReplyRef(message: ReplyRefSource | null | undefined): OutboxReplyRef | null {
     if (!message) return null;
-    return { MessageID: message.MessageID, SenderTelephon: message.SenderTelephon, Message: message.Message };
+    const messageID = message.messageID !== undefined ? message.messageID : message.MessageID;
+    const senderTelephon = message.senderTelephon !== undefined ? message.senderTelephon : message.SenderTelephon;
+    const text = message.message !== undefined ? message.message : message.Message;
+    if (messageID === undefined || senderTelephon === undefined || text === undefined) return null;
+    return { messageID, senderTelephon, message: text };
 }
 
 /**

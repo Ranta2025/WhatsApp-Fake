@@ -21,8 +21,8 @@ vi.mock('../hooks/useMessaging', () => ({
 }));
 
 const msg = (id: number, over: Partial<Message> = {}): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: 'me', Message: `m${id}`, Status: 'visto',
-    Time: '2026-01-01T10:00:00Z', Edited: false, ...over,
+    messageID: id, senderTelephon: 'B', receptor: 'me', message: `m${id}`, status: 'visto',
+    time: '2026-01-01T10:00:00Z', edited: false, ...over,
 });
 
 describe('MessageList system messages (1:1)', () => {
@@ -56,7 +56,7 @@ describe('MessageList system messages (1:1)', () => {
     });
 
     it('renders the other participant notice as a pill with their name', () => {
-        mountWith([msg(1), msg(2, { Kind: 'system', SystemEvent: 'disappearing_changed', Message: '86400' })]);
+        mountWith([msg(1), msg(2, { kind: 'system', systemEvent: 'disappearing_changed', message: '86400' })]);
         expect(row(2).textContent).toBe('Bea activó los mensajes temporales: 24 horas');
         expect(row(2).querySelector('.rounded-full')).not.toBeNull();
         expect(row(2).querySelector('.rounded-2xl')).toBeNull();
@@ -64,9 +64,9 @@ describe('MessageList system messages (1:1)', () => {
 
     it('words it in second person for my own change and for turning it off', () => {
         mountWith([
-            msg(2, { Kind: 'system', SystemEvent: 'disappearing_changed', Message: '604800', SenderTelephon: 'me', Receptor: 'B' }),
-            msg(3, { Kind: 'system', SystemEvent: 'disappearing_changed', Message: '0', SenderTelephon: 'me', Receptor: 'B' }),
-            msg(4, { Kind: 'system', SystemEvent: 'disappearing_changed', Message: '0' }),
+            msg(2, { kind: 'system', systemEvent: 'disappearing_changed', message: '604800', senderTelephon: 'me', receptor: 'B' }),
+            msg(3, { kind: 'system', systemEvent: 'disappearing_changed', message: '0', senderTelephon: 'me', receptor: 'B' }),
+            msg(4, { kind: 'system', systemEvent: 'disappearing_changed', message: '0' }),
         ]);
         expect(row(2).textContent).toBe('Activaste los mensajes temporales: 7 días');
         expect(row(3).textContent).toBe('Desactivaste los mensajes temporales');
@@ -74,7 +74,7 @@ describe('MessageList system messages (1:1)', () => {
     });
 
     it('offers no reply/react/edit/delete/forward controls on a system message but keeps them on a normal one', () => {
-        mountWith([msg(1), msg(2, { Kind: 'system', SystemEvent: 'disappearing_changed', Message: '86400' })]);
+        mountWith([msg(1), msg(2, { kind: 'system', systemEvent: 'disappearing_changed', message: '86400' })]);
         expect(row(2).querySelectorAll('button')).toHaveLength(0);
         expect(row(1).querySelectorAll('button').length).toBeGreaterThan(0);
     });

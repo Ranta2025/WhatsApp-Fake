@@ -38,15 +38,15 @@ vi.mock('../../stickers/useStickerLibrary', () => ({
 }));
 
 const message = (over: Partial<Message> = {}): Message => ({
-    MessageID: 1,
-    SenderTelephon: '111',
-    Receptor: '222',
-    Message: '/stickers/basic/hola.webp',
-    MediaType: 'sticker',
-    MediaUrl: '/stickers/basic/hola.webp',
-    Status: 'enviado',
-    Time: '2026-01-01T10:00:00Z',
-    Edited: false,
+    messageID: 1,
+    senderTelephon: '111',
+    receptor: '222',
+    message: '/stickers/basic/hola.webp',
+    mediaType: 'sticker',
+    mediaUrl: '/stickers/basic/hola.webp',
+    status: 'enviado',
+    time: '2026-01-01T10:00:00Z',
+    edited: false,
     ...over,
 });
 
@@ -100,7 +100,7 @@ describe('MessageList received-sticker menu (1:1)', () => {
     });
 
     it('offers "Añadir a mis stickers" for a custom storage sticker and calls the hook', async () => {
-        render(message({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        render(message({ mediaType: 'sticker', mediaUrl: '/storage/bucket/stickers/abc.webp', message: '/storage/bucket/stickers/abc.webp' }));
         const item = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
             .find((button) => button.textContent?.includes('Añadir a mis stickers'))!;
         expect(item).toBeTruthy();
@@ -110,7 +110,7 @@ describe('MessageList received-sticker menu (1:1)', () => {
     });
 
     it('does not offer the sticker items for a non-sticker message', () => {
-        render(message({ MediaType: 'image', MediaUrl: '/storage/a.png', Message: '/storage/a.png' }));
+        render(message({ mediaType: 'image', mediaUrl: '/storage/a.png', message: '/storage/a.png' }));
         expect(menuText()).not.toContain('Añadir a favoritos');
         expect(menuText()).not.toContain('Añadir a mis stickers');
     });
@@ -130,7 +130,7 @@ describe('MessageList received-sticker menu (1:1)', () => {
 
         toast.addToast.mockClear();
         lib.saveFromMessage.mockResolvedValue({ id: 1 });
-        render(message({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        render(message({ mediaType: 'sticker', mediaUrl: '/storage/bucket/stickers/abc.webp', message: '/storage/bucket/stickers/abc.webp' }));
         await act(async () => { menuItem('Añadir a mis stickers').click(); await Promise.resolve(); });
         expect(toast.addToast).toHaveBeenCalledWith({ type: 'success', message: 'Añadido a Mis stickers' });
     });
@@ -143,7 +143,7 @@ describe('MessageList received-sticker menu (1:1)', () => {
 
         toast.addToast.mockClear();
         lib.saveFromMessage.mockResolvedValue(null);
-        render(message({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        render(message({ mediaType: 'sticker', mediaUrl: '/storage/bucket/stickers/abc.webp', message: '/storage/bucket/stickers/abc.webp' }));
         await act(async () => { menuItem('Añadir a mis stickers').click(); await Promise.resolve(); });
         expect(toast.addToast).toHaveBeenCalledWith({ type: 'error', message: 'No se pudo añadir el sticker' });
     });

@@ -114,10 +114,10 @@ describe('MessageInput sticker sending', () => {
 
     it('reply banner shows the sticker label, not the raw url', () => {
         const reply: Message = {
-            MessageID: 7, SenderTelephon: '111', Receptor: '999',
-            Message: '/stickers/basic/hola.webp', Status: 'enviado',
-            Time: '2026-01-01T10:00:00Z', Edited: false,
-            MediaType: 'sticker', MediaUrl: '/stickers/basic/hola.webp',
+            messageID: 7, senderTelephon: '111', receptor: '999',
+            message: '/stickers/basic/hola.webp', status: 'enviado',
+            time: '2026-01-01T10:00:00Z', edited: false,
+            mediaType: 'sticker', mediaUrl: '/stickers/basic/hola.webp',
         };
         setup({ replyingTo: reply });
         expect(container.textContent).toContain('✨ Sticker');
@@ -126,9 +126,9 @@ describe('MessageInput sticker sending', () => {
 
     it('RF9: a plain-text reply still shows its text in the banner', () => {
         const reply: Message = {
-            MessageID: 8, SenderTelephon: '111', Receptor: '999',
-            Message: 'texto plano', Status: 'enviado',
-            Time: '2026-01-01T10:00:00Z', Edited: false,
+            messageID: 8, senderTelephon: '111', receptor: '999',
+            message: 'texto plano', status: 'enviado',
+            time: '2026-01-01T10:00:00Z', edited: false,
         };
         setup({ replyingTo: reply });
         expect(container.textContent).toContain('texto plano');

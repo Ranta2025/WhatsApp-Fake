@@ -1,5 +1,6 @@
 import type { ReactionSummary } from '../../../types/api';
 import type { ReactionEventPayload } from '../../../types/ws';
+import { isCamelMessage, messageIdOf } from './mergeMessages';
 
 /**
  * Pure helpers for message reactions. Reactions live inside the message objects
@@ -22,10 +23,17 @@ import type { ReactionEventPayload } from '../../../types/ws';
 export type ReactionKind = 'direct' | 'group';
 
 export interface ReactionBearing {
-    MessageID: number | string;
-    Time: string;
+    MessageID?: number | string;
+    messageID?: number | string;
+    Time?: string;
+    time?: string;
     Reactions?: ReactionSummary[];
+    reactions?: ReactionSummary[];
 }
+
+/** Reactions of a direct (camel) or group (Pascal) message. */
+const bearingReactions = (m: ReactionBearing): ReactionSummary[] | undefined =>
+    m.reactions !== undefined ? m.reactions : m.Reactions;
 
 export type ReactionEvent = ReactionEventPayload;
 
@@ -123,9 +131,12 @@ function applyOther(reactions: ReactionSummary[] | undefined, previous: string, 
 }
 
 function withReactions<T extends ReactionBearing>(message: T, reactions: ReactionSummary[] | undefined): T {
-    const copy: T = { ...message };
-    if (reactions) copy.Reactions = reactions;
-    else delete copy.Reactions;
+    const copy = { ...message } as T & { reactions?: ReactionSummary[]; Reactions?: ReactionSummary[] };
+    if (isCamelMessage(message)) {
+        if (reactions) copy.reactions = reactions; else delete copy.reactions;
+    } else {
+        if (reactions) copy.Reactions = reactions; else delete copy.Reactions;
+    }
     return copy;
 }
 
@@ -133,11 +144,12 @@ function withReactions<T extends ReactionBearing>(message: T, reactions: Reactio
 function patch<T extends ReactionBearing>(
     messages: T[], id: number, fn: (r: ReactionSummary[] | undefined) => ReactionSummary[] | undefined,
 ): T[] {
-    const i = messages.findIndex(m => m.MessageID === id);
+    const i = messages.findIndex(m => messageIdOf(m) === id);
     const target = messages[i];
     if (!target) return messages;
-    const next = fn(target.Reactions);
-    if (next === target.Reactions) return messages;
+    const current = bearingReactions(target);
+    const next = fn(current);
+    if (next === current) return messages;
     const out = messages.slice();
     out[i] = withReactions(target, next);
     return out;
@@ -198,8 +210,8 @@ export function shiftPending(pending: PendingReactions, key: string, now: number
 /** Reactions of `messageID` in the first list that holds it. */
 export function reactionsOf(lists: ReadonlyArray<readonly ReactionBearing[]>, messageID: number): ReactionSummary[] | undefined {
     for (const list of lists) {
-        const found = list.find(m => m.MessageID === messageID);
-        if (found) return found.Reactions;
+        const found = list.find(m => messageIdOf(m) === messageID);
+        if (found) return bearingReactions(found);
     }
     return undefined;
 }

@@ -1,6 +1,6 @@
 // Utilidades de formato compartidas por la UI de chat.
 
-import type { Message, MediaType } from '../types/api';
+import type { MediaType } from '../types/api';
 
 /** Cualquier valor a partir del cual se puede construir un Date válido (ISO string, epoch, Date). */
 type DateInput = string | number | Date;
@@ -67,12 +67,22 @@ const MEDIA_LABELS: Record<MediaType, string> = {
     sticker: '✨ Sticker',
 };
 
+/** Campos de vista previa de un mensaje (1:1 camel o grupo Pascal). */
+export interface PreviewableMessage {
+    Message?: string;
+    message?: string;
+    MediaType?: MediaType;
+    mediaType?: MediaType;
+}
+
 /** Texto de vista previa del último mensaje */
-export const previewMessage = (msg: Pick<Message, 'Message' | 'MediaType'> | null | undefined): string => {
+export const previewMessage = (msg: PreviewableMessage | null | undefined): string => {
     if (!msg) return '';
-    const label = msg.MediaType && MEDIA_LABELS[msg.MediaType];
+    const mediaType = msg.mediaType !== undefined ? msg.mediaType : msg.MediaType;
+    const text = msg.message !== undefined ? msg.message : msg.Message;
+    const label = mediaType && MEDIA_LABELS[mediaType];
     if (label) return label;
-    return msg.Message || '';
+    return text || '';
 };
 
 /**

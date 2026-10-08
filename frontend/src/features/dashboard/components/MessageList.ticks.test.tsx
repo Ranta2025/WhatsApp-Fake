@@ -22,8 +22,8 @@ vi.mock('../hooks/useMessaging', () => ({
     }),
 }));
 
-const msg = (id: number, Status: MessageStatus, SenderTelephon = 'me'): Message => ({
-    MessageID: id, SenderTelephon, Receptor: 'B', Message: `m${id}`, Status, Time: '2026-01-01T10:00:00Z', Edited: false,
+const msg = (id: number, status: MessageStatus, senderTelephon = 'me'): Message => ({
+    messageID: id, senderTelephon, receptor: 'B', message: `m${id}`, status, time: '2026-01-01T10:00:00Z', edited: false,
 });
 
 describe('MessageList status ticks (1:1)', () => {

@@ -1,12 +1,22 @@
 import type { MediaType } from '../types/api';
 import { findBuiltinSticker } from '../features/stickers/builtinPack';
 
-/** Subconjunto de campos de un mensaje (1:1 o de grupo) que definen su media. */
+/** Subconjunto de campos de un mensaje (1:1 camel o grupo Pascal) que definen su media. */
 export interface MediaMessageFields {
     Message?: string;
+    message?: string;
     MediaUrl?: string;
+    mediaUrl?: string;
     MediaType?: MediaType;
+    mediaType?: MediaType;
 }
+
+const mediaTypeOf = (m: MediaMessageFields): MediaType | undefined =>
+    m.mediaType !== undefined ? m.mediaType : m.MediaType;
+const mediaUrlOf = (m: MediaMessageFields): string | undefined =>
+    m.mediaUrl !== undefined ? m.mediaUrl : m.MediaUrl;
+const messageTextOf = (m: MediaMessageFields): string =>
+    (m.message !== undefined ? m.message : m.Message) || '';
 
 export interface ResolvedMedia {
     mediaType: MediaType;
@@ -19,9 +29,9 @@ export interface ResolvedMedia {
  * Devuelve null si no hay nada que renderizar.
  */
 export function resolveMedia(m: MediaMessageFields): ResolvedMedia | null {
-    let mediaType: MediaType | undefined = m.MediaType;
-    let mediaUrl = m.MediaUrl;
-    const text = m.Message || '';
+    let mediaType: MediaType | undefined = mediaTypeOf(m);
+    let mediaUrl = mediaUrlOf(m);
+    const text = messageTextOf(m);
 
     if (!mediaType && text.includes('/media/')) {
         mediaUrl = text;
@@ -40,17 +50,19 @@ export function resolveMedia(m: MediaMessageFields): ResolvedMedia | null {
  * Retorna true si el mensaje no debe mostrarse como texto plano.
  */
 export function isMediaUrl(m: MediaMessageFields): boolean {
-    const text = m.Message || '';
+    const text = messageTextOf(m);
+    const mediaType = mediaTypeOf(m);
+    const mediaUrl = mediaUrlOf(m);
     // Si tiene MediaType y MediaUrl, el texto es redundante si coincide con la URL
-    if (m.MediaType && m.MediaUrl) return true;
+    if (mediaType && mediaUrl) return true;
     // Si tiene MediaType y el mensaje es la URL
-    if (m.MediaType && text.startsWith('http')) return true;
+    if (mediaType && text.startsWith('http')) return true;
     // Detectar URLs de media en el texto del mensaje
     if (text.match(/^https?:\/\/.+\/(media|upload)\/.+\.(jpg|jpeg|png|gif|webp|mp4|webm|ogg|mp3|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt)(\?.*)?$/i)) return true;
     // Detectar rutas de media del backend (/media/images/, /media/audio/, etc.)
     if (text.match(/^https?:\/\/.+\/media\/(images|audio|videos|docs)\//i)) return true;
     // Detectar si el texto es exactamente una URL y hay media renderizada
-    if (m.MediaType && text.trim() === (m.MediaUrl || '').trim()) return true;
+    if (mediaType && text.trim() === (mediaUrl || '').trim()) return true;
     return false;
 }
 

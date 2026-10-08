@@ -7,7 +7,7 @@ import { outboxItemsFor, type OutboxItem } from '../../outbox/outboxTypes';
 
 // PW9: own text messages still in the outbox render after the loaded list, with the
 // pending clock or a minimal "No enviado" mark, filtered to the open chat/group and
-// never duplicating a message the server already returned (same ClientID).
+// never duplicating a message the server already returned (same clientID).
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,7 +17,7 @@ const C = '33333333-3333-4333-8333-333333333333';
 
 const items: OutboxItem[] = [
     { state: 'pending', entry: { clientID: A, kind: 'direct', target: '222', text: 'hola', replyTo: null, createdAt: 1, attempts: 0 } },
-    { state: 'failed', entry: { clientID: B, kind: 'direct', target: '222', text: 'falló', replyTo: { MessageID: 4, SenderTelephon: '222', Message: 'antes' }, createdAt: 2, attempts: 1 } },
+    { state: 'failed', entry: { clientID: B, kind: 'direct', target: '222', text: 'falló', replyTo: { messageID: 4, senderTelephon: '222', message: 'antes' }, createdAt: 2, attempts: 1 } },
     { state: 'pending', entry: { clientID: C, kind: 'group', target: 9, text: 'grupo', replyTo: null, createdAt: 3, attempts: 0 } },
 ];
 
@@ -28,8 +28,8 @@ describe('outboxItemsFor', () => {
         expect(outboxItemsFor(items, { kind: 'direct', target: '333' }, [])).toEqual([]);
     });
 
-    it('hides an item whose ClientID is already in the loaded messages', () => {
-        expect(outboxItemsFor(items, { kind: 'direct', target: '222' }, [{ ClientID: A }]).map(i => i.entry.clientID)).toEqual([B]);
+    it('hides an item whose clientID is already in the loaded messages', () => {
+        expect(outboxItemsFor(items, { kind: 'direct', target: '222' }, [{ clientID: A }]).map(i => i.entry.clientID)).toEqual([B]);
     });
 });
 

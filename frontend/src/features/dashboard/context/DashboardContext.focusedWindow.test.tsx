@@ -52,13 +52,13 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const chatMsg = (id: number): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: '111', Message: `m${id}`, Status: 'visto', Time: iso(id), Edited: false,
+    messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
 });
 const groupMsg = (id: number): GroupMessageResponse => ({
     MessageID: id, GroupID: 9, SenderTelephon: 'B', SenderUsername: 'bea', Message: `g${id}`, Time: iso(id), Edited: false,
 });
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-const ids = (list: ReadonlyArray<{ MessageID: number | string }> | undefined) => (list ?? []).map(m => m.MessageID);
+const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
 const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { isAxiosError: true, response: { status } });
 const contact = (n: string): ContactChat => ({ telephon: n, contactName: n, username: n } as ContactChat);
 
@@ -329,25 +329,25 @@ describe('DashboardProvider detached windows', () => {
             await mount();
             await act(async () => { await ctx!.openMessageAt({ kind: 'chat', key: 'B' }, 50); });
 
-            act(() => { handlerFor<Message>('message')({ ...chatMsg(500), SenderTelephon: 'B' }); });
+            act(() => { handlerFor<Message>('message')({ ...chatMsg(500), senderTelephon: 'B' }); });
             expect(ctx!.focusedChat['B']).toBeDefined();
 
-            act(() => { handlerFor<Message>('message')({ ...chatMsg(501), SenderTelephon: '111', Receptor: 'B' }); });
+            act(() => { handlerFor<Message>('message')({ ...chatMsg(501), senderTelephon: '111', receptor: 'B' }); });
             expect(ctx!.focusedChat['B']).toBeUndefined();
             expect(ids(ctx!.messagesByChat['B'])).toContain(501);
         });
 
         it('edits, deletions and status changes reach the detached window too', async () => {
-            const mine = (id: number, status: Message['Status']): Message => ({ ...chatMsg(id), SenderTelephon: '111', Receptor: 'B', Status: status });
+            const mine = (id: number, status: Message['status']): Message => ({ ...chatMsg(id), senderTelephon: '111', receptor: 'B', status: status });
             chatHandler = () => ({ data: [chatMsg(41), mine(42, 'enviado'), mine(43, 'entregado')], headers: {} });
             await mount();
             await act(async () => { await ctx!.openMessageAt({ kind: 'chat', key: 'B' }, 41); });
 
-            act(() => { handlerFor<Message>('edit_message')({ ...chatMsg(41), Message: 'editado' }); });
-            expect(fc().messages[0]).toMatchObject({ Message: 'editado', Edited: true });
+            act(() => { handlerFor<Message>('edit_message')({ ...chatMsg(41), message: 'editado' }); });
+            expect(fc().messages[0]).toMatchObject({ message: 'editado', edited: true });
 
             act(() => { handlerFor<{ from: string }>('read')({ from: 'B' }); });
-            expect(fc().messages.filter(m => m.Receptor === 'B').map(m => m.Status)).toEqual(['visto', 'visto']);
+            expect(fc().messages.filter(m => m.receptor === 'B').map(m => m.status)).toEqual(['visto', 'visto']);
 
             act(() => { handlerFor<Message>('delete_message')(chatMsg(43)); });
             expect(ids(fc().messages)).toEqual([41, 42]);

@@ -1,17 +1,58 @@
 /**
  * Merge helpers for paginated message history (1:1 and group).
  *
- * Entries are identified by `MessageID`. Real backend messages carry a numeric
- * id (used as the pagination cursor); any malformed/legacy entry with a
+ * Entries are identified by their message id. Real backend messages carry a
+ * numeric id (used as the pagination cursor); any malformed/legacy entry with a
  * non-numeric id is never a cursor.
+ *
+ * Casing transition (AC4): 1:1 messages use camelCase keys (`messageID`, `time`,
+ * `reactions`) while group messages still use PascalCase (`MessageID`, `Time`,
+ * `Reactions`) until AC5. These helpers are shared by both domains, so they read
+ * through `messageIdOf`/`messageTimeOf` and accept either casing. The camel
+ * accessors collapse to a single casing once AC5 lands.
  */
 
 import type { ReactionSummary } from '../../../types/api';
 
 export interface MergeableMessage {
-    MessageID: number | string;
-    Time: string;
+    MessageID?: number | string;
+    messageID?: number | string;
+    Time?: string;
+    time?: string;
 }
+
+/** Message id of a direct (camel) or group (Pascal) entry. */
+export const messageIdOf = (m: MergeableMessage): number | string | undefined =>
+    m.messageID !== undefined ? m.messageID : m.MessageID;
+
+/** Timestamp of a direct (camel) or group (Pascal) entry. */
+export const messageTimeOf = (m: MergeableMessage): string | undefined =>
+    m.time !== undefined ? m.time : m.Time;
+
+/** True when the entry carries the camelCase (1:1) shape. */
+export const isCamelMessage = (m: MergeableMessage): boolean => m.messageID !== undefined;
+
+type ReactionsCarrier = { reactions?: ReactionSummary[]; Reactions?: ReactionSummary[] };
+
+/** Reactions of a direct (camel) or group (Pascal) entry. */
+export const messageReactionsOf = (m: MergeableMessage): ReactionSummary[] | undefined => {
+    const carrier = m as MergeableMessage & ReactionsCarrier;
+    return carrier.reactions !== undefined ? carrier.reactions : carrier.Reactions;
+};
+
+/** Copy of `m` with its Reactions replaced/removed on the matching casing key. */
+export const withMessageReactions = <T extends MergeableMessage>(
+    m: T,
+    reactions: ReactionSummary[] | undefined,
+): T => {
+    const copy = { ...m } as T & ReactionsCarrier;
+    if (isCamelMessage(m)) {
+        if (reactions) copy.reactions = reactions; else delete copy.reactions;
+    } else {
+        if (reactions) copy.Reactions = reactions; else delete copy.Reactions;
+    }
+    return copy as T;
+};
 
 /** Local paging state for one chat/group. */
 export interface PagingState {
@@ -23,13 +64,15 @@ export interface PagingState {
 
 export const DEFAULT_PAGING: PagingState = { hasMore: false, loadingOlder: false, olderLoaded: false };
 
-const isRealId = (id: number | string): id is number => typeof id === 'number' && Number.isFinite(id);
+const isRealId = (id: number | string | undefined): id is number => typeof id === 'number' && Number.isFinite(id);
 
 const compareChronological = (a: MergeableMessage, b: MergeableMessage): number => {
-    const ta = Date.parse(a.Time);
-    const tb = Date.parse(b.Time);
+    const ta = Date.parse(messageTimeOf(a) ?? '');
+    const tb = Date.parse(messageTimeOf(b) ?? '');
     if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
-    if (isRealId(a.MessageID) && isRealId(b.MessageID)) return a.MessageID - b.MessageID;
+    const ia = messageIdOf(a);
+    const ib = messageIdOf(b);
+    if (isRealId(ia) && isRealId(ib)) return ia - ib;
     return 0;
 };
 
@@ -38,8 +81,11 @@ const dedupeAndSort = <T extends MergeableMessage>(list: T[]): T[] => {
     const seen = new Set<number | string>();
     const unique: T[] = [];
     for (const item of list) {
-        if (seen.has(item.MessageID)) continue;
-        seen.add(item.MessageID);
+        const id = messageIdOf(item);
+        if (id !== undefined) {
+            if (seen.has(id)) continue;
+            seen.add(id);
+        }
         unique.push(item);
     }
     return unique.sort(compareChronological);
@@ -50,7 +96,8 @@ export function oldestRealMessageId(list: readonly MergeableMessage[] | undefine
     if (!list) return null;
     let oldest: number | null = null;
     for (const m of list) {
-        if (isRealId(m.MessageID) && (oldest === null || m.MessageID < oldest)) oldest = m.MessageID;
+        const id = messageIdOf(m);
+        if (isRealId(id) && (oldest === null || id < oldest)) oldest = id;
     }
     return oldest;
 }
@@ -60,7 +107,8 @@ export function newestRealMessageId(list: readonly MergeableMessage[] | undefine
     if (!list) return null;
     let newest: number | null = null;
     for (const m of list) {
-        if (isRealId(m.MessageID) && (newest === null || m.MessageID > newest)) newest = m.MessageID;
+        const id = messageIdOf(m);
+        if (isRealId(id) && (newest === null || id > newest)) newest = id;
     }
     return newest;
 }
@@ -84,17 +132,15 @@ const sameReactions = (a: readonly ReactionSummary[] | undefined, b: readonly Re
  * a refetch. Same objects/array when nothing differs.
  */
 export function adoptServerReactions<T extends MergeableMessage>(loaded: readonly T[], incoming: readonly T[]): T[] {
-    const fresh = new Map<number | string, T>();
-    for (const m of incoming) fresh.set(m.MessageID, m);
+    const fresh = new Map<number | string | undefined, T>();
+    for (const m of incoming) fresh.set(messageIdOf(m), m);
     return loaded.map(m => {
-        const server = fresh.get(m.MessageID);
+        const server = fresh.get(messageIdOf(m));
         if (!server) return m;
-        const current = (m as T & { Reactions?: ReactionSummary[] }).Reactions;
-        const next = (server as T & { Reactions?: ReactionSummary[] }).Reactions;
+        const current = messageReactionsOf(m);
+        const next = messageReactionsOf(server);
         if (sameReactions(current, next)) return m;
-        const copy = { ...m } as T & { Reactions?: ReactionSummary[] };
-        if (next) copy.Reactions = next; else delete copy.Reactions;
-        return copy;
+        return withMessageReactions(m, next);
     });
 }
 
@@ -120,7 +166,7 @@ export function isContiguousWindow(
     if (!prev || prev.length === 0 || fresh.length === 0 || !windowHasMore) return true;
     const freshOldestId = oldestRealMessageId(fresh);
     if (freshOldestId === null) return true;
-    return prev.some(m => m.MessageID === freshOldestId);
+    return prev.some(m => messageIdOf(m) === freshOldestId);
 }
 
 /**
@@ -148,15 +194,17 @@ export function mergeLatestWindow<T extends MergeableMessage>(
     if (freshOldestId === null || !prev || prev.length === 0) return dedupeAndSort([...fresh]);
 
     const freshNewestId = newestRealMessageId(fresh);
-    const freshTimes = fresh.map(m => Date.parse(m.Time)).filter(Number.isFinite);
+    const freshTimes = fresh.map(m => Date.parse(messageTimeOf(m) ?? '')).filter(Number.isFinite);
     const freshOldestTime = Math.min(...freshTimes);
     const freshNewestTime = Math.max(...freshTimes);
-    const isOlderThanWindow = (m: T): boolean => (
-        isRealId(m.MessageID) ? m.MessageID < freshOldestId : Date.parse(m.Time) < freshOldestTime
-    );
+    const isOlderThanWindow = (m: T): boolean => {
+        const id = messageIdOf(m);
+        return isRealId(id) ? id < freshOldestId : Date.parse(messageTimeOf(m) ?? '') < freshOldestTime;
+    };
     const isNewerThanWindow = (m: T): boolean => {
-        if (isRealId(m.MessageID)) return freshNewestId !== null && m.MessageID > freshNewestId;
-        const t = Date.parse(m.Time);
+        const id = messageIdOf(m);
+        if (isRealId(id)) return freshNewestId !== null && id > freshNewestId;
+        const t = Date.parse(messageTimeOf(m) ?? '');
         return Number.isFinite(t) && t > freshNewestTime;
     };
 

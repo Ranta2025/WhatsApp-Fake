@@ -86,7 +86,7 @@ func TestHandlerSetChatDisappearing_ChangedEnvelopeAndWS(t *testing.T) {
 	assert.Equal(t, "+ana", out["byTelephon"])
 	sm, ok := out["systemMessage"].(map[string]interface{})
 	require.True(t, ok)
-	assert.EqualValues(t, 8, sm["MessageID"])
+	assert.EqualValues(t, 8, sm["messageID"])
 
 	// Ambos usuarios reciben el evento; cada uno con la clave del OTRO.
 	pAna, okA := findEvent(n, "disappearing_changed", "+ana")

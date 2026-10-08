@@ -25,15 +25,15 @@ vi.mock('../hooks/useMessaging', () => ({
 }));
 
 const stickerMsg = (over: Partial<Message> = {}): Message => ({
-    MessageID: 1,
-    SenderTelephon: '111',
-    Receptor: '222',
-    Message: '/stickers/basic/hola.webp',
-    MediaType: 'sticker',
-    MediaUrl: '/stickers/basic/hola.webp',
-    Status: 'enviado',
-    Time: '2026-01-01T10:00:00Z',
-    Edited: false,
+    messageID: 1,
+    senderTelephon: '111',
+    receptor: '222',
+    message: '/stickers/basic/hola.webp',
+    mediaType: 'sticker',
+    mediaUrl: '/stickers/basic/hola.webp',
+    status: 'enviado',
+    time: '2026-01-01T10:00:00Z',
+    edited: false,
     ...over,
 });
 
@@ -99,7 +99,7 @@ describe('MessageList sticker rendering (1:1)', () => {
     });
 
     it('control positivo: una burbuja no-sticker sí lleva fondo', () => {
-        render(stickerMsg({ MediaType: 'image', MediaUrl: '/storage/a.png', Message: '/storage/a.png' }));
+        render(stickerMsg({ mediaType: 'image', mediaUrl: '/storage/a.png', message: '/storage/a.png' }));
         const img = container.querySelector('img') as HTMLImageElement;
         const bubble = findBubble(img);
         expect(bubble).not.toBeNull();
@@ -114,7 +114,7 @@ describe('MessageList sticker rendering (1:1)', () => {
     });
 
     it('las reacciones siguen funcionando en sticker messages', () => {
-        render(stickerMsg({ Reactions: [{ Emoji: '👍', Count: 2, Mine: true }] }));
+        render(stickerMsg({ reactions: [{ Emoji: '👍', Count: 2, Mine: true }] }));
         const chip = Array.from(container.querySelectorAll<HTMLElement>('button'))
             .find(b => b.getAttribute('aria-label') === '👍 2, reaccionaste');
         expect(chip).toBeTruthy();
@@ -124,9 +124,9 @@ describe('MessageList sticker rendering (1:1)', () => {
 
     it('la cita de respuesta a un sticker muestra la etiqueta, no la URL', () => {
         render(stickerMsg({
-            ReplyToMessageID: 0,
-            ReplyToTelephon: '222',
-            ReplyToMessage: '/stickers/basic/hola.webp',
+            replyToMessageID: 0,
+            replyToTelephon: '222',
+            replyToMessage: '/stickers/basic/hola.webp',
         }));
         expect(container.textContent).toContain('✨ Sticker');
         expect(container.textContent).not.toContain('/stickers/basic/hola.webp');

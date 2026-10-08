@@ -9,7 +9,7 @@ import type { DisappearingChangedPayload, MessagesExpiredPayload } from '../../.
 // disappearing-messages (DE5): `disappearing_changed` updates the per-chat / per-group timer and
 // appends the system message once (WS echo + REST result share one path); `messages_expired`
 // removes ids from messagesByChat, groupMessages and the detached windows; a single local timer
-// removes messages whose ExpiresAt passed; system messages never count as unread.
+// removes messages whose expiresAt passed; system messages never count as unread.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,18 +65,18 @@ const T0 = Date.parse('2026-01-01T12:00:00Z');
 const at = (ms: number) => new Date(T0 + ms).toISOString();
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const chatMsg = (id: number, over: Partial<Message> = {}): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: '111', Message: `m${id}`, Status: 'visto', Time: iso(id), Edited: false, ...over,
+    messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false, ...over,
 });
 const groupMsg = (id: number, over: Partial<GroupMessageResponse> = {}): GroupMessageResponse => ({
     MessageID: id, GroupID: 9, SenderTelephon: 'B', SenderUsername: 'bea', Message: `g${id}`, Time: iso(id), Edited: false, ...over,
 });
 const directSys = (id: number, seconds: number, sender = '111'): Message => chatMsg(id, {
-    SenderTelephon: sender, Receptor: sender === '111' ? 'B' : '111', Message: String(seconds), Kind: 'system', SystemEvent: 'disappearing_changed',
+    senderTelephon: sender, receptor: sender === '111' ? 'B' : '111', message: String(seconds), kind: 'system', systemEvent: 'disappearing_changed',
 });
 const groupSys = (id: number, seconds: number): GroupMessageResponse => groupMsg(id, {
     SenderTelephon: '111', SenderUsername: 'ana', Message: String(seconds), Kind: 'system', SystemEvent: 'disappearing_changed',
 });
-const ids = (list: ReadonlyArray<{ MessageID: number | string }> | undefined) => (list ?? []).map(m => m.MessageID);
+const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const contact = (n: string): ContactChat => ({ telephon: n, contactName: n, username: n } as ContactChat);
 const group = (over: Partial<SelectedGroup> = {}): SelectedGroup => ({
@@ -152,8 +152,8 @@ describe('DashboardProvider disappearing messages', () => {
     describe('chat timer state', () => {
         it('seeds the per-chat timer from the chats list (absent = 0) and exposes it for the selected chat', async () => {
             chatsPayload = [
-                { ContactTelephon: 'B', ContactUsername: 'bea', ContactName: 'Bea', ContactAvatarUrl: '', IsContact: true, Messages: [], DisappearSeconds: 604800 },
-                { ContactTelephon: 'C', ContactUsername: 'carl', ContactName: 'Carl', ContactAvatarUrl: '', IsContact: true, Messages: [] },
+                { contactTelephon: 'B', contactUsername: 'bea', contactName: 'Bea', contactAvatarUrl: '', isContact: true, messages: [], disappearSeconds: 604800 },
+                { contactTelephon: 'C', contactUsername: 'carl', contactName: 'Carl', contactAvatarUrl: '', isContact: true, messages: [] },
             ];
             await mount();
             expect(ctx!.chatDisappear).toEqual({ B: 604800, C: 0 });
@@ -293,12 +293,12 @@ describe('DashboardProvider disappearing messages', () => {
         it('scrubs the quote of a reply to an expired message', async () => {
             await seed();
             await act(async () => {
-                ctx!.setMessagesByChat({ B: [chatMsg(5), chatMsg(6, { ReplyToMessageID: 5, ReplyToTelephon: 'B', ReplyToMessage: 'm5' })] });
+                ctx!.setMessagesByChat({ B: [chatMsg(5), chatMsg(6, { replyToMessageID: 5, replyToTelephon: 'B', replyToMessage: 'm5' })] });
             });
             emitExpired({ kind: 'direct', key: 'B', messageIDs: [5] });
             expect(ctx!.messagesByChat['B']).toHaveLength(1);
-            expect(ctx!.messagesByChat['B']![0]!.ReplyToMessage).toBeUndefined();
-            expect(ctx!.messagesByChat['B']![0]!.ReplyToMessageID).toBeUndefined();
+            expect(ctx!.messagesByChat['B']![0]!.replyToMessage).toBeUndefined();
+            expect(ctx!.messagesByChat['B']![0]!.replyToMessageID).toBeUndefined();
         });
 
         it('ignores malformed payloads and unknown chats', async () => {
@@ -317,10 +317,10 @@ describe('DashboardProvider disappearing messages', () => {
             await mount();
         };
 
-        it('removes a message at its ExpiresAt from every list, only then, and re-arms for the next one', async () => {
+        it('removes a message at its expiresAt from every list, only then, and re-arms for the next one', async () => {
             await mountFake();
             await act(async () => {
-                ctx!.setMessagesByChat({ B: [chatMsg(5), chatMsg(6, { ExpiresAt: at(5000) }), chatMsg(7, { ExpiresAt: at(60_000) })] });
+                ctx!.setMessagesByChat({ B: [chatMsg(5), chatMsg(6, { expiresAt: at(5000) }), chatMsg(7, { expiresAt: at(60_000) })] });
                 ctx!.setGroupMessages({ 9: [groupMsg(15, { ExpiresAt: at(5000) }), groupMsg(16)] });
             });
             act(() => { vi.advanceTimersByTime(4999); });
@@ -338,7 +338,7 @@ describe('DashboardProvider disappearing messages', () => {
             mockGet.mockImplementation((url: string, config?: GetConfig) => {
                 if (url === '/api/v1/chat/B' && config?.params?.around) {
                     return Promise.resolve({
-                        data: [chatMsg(40), chatMsg(41, { ExpiresAt: at(3000) })],
+                        data: [chatMsg(40), chatMsg(41, { expiresAt: at(3000) })],
                         headers: { 'x-has-more-older': 'false', 'x-has-more-newer': 'false' },
                     });
                 }
@@ -351,11 +351,11 @@ describe('DashboardProvider disappearing messages', () => {
             expect(ids(ctx!.focusedChat['B']!.messages)).toEqual([40]);
         });
 
-        it('keeps far-future and invalid-ExpiresAt messages, and re-arms after the capped delay', async () => {
+        it('keeps far-future and invalid-expiresAt messages, and re-arms after the capped delay', async () => {
             await mountFake();
             const threeHours = 3 * 60 * 60 * 1000;
             await act(async () => {
-                ctx!.setMessagesByChat({ B: [chatMsg(5, { ExpiresAt: at(threeHours) }), chatMsg(6, { ExpiresAt: 'garbage' }), chatMsg(7)] });
+                ctx!.setMessagesByChat({ B: [chatMsg(5, { expiresAt: at(threeHours) }), chatMsg(6, { expiresAt: 'garbage' }), chatMsg(7)] });
             });
             act(() => { vi.advanceTimersByTime(60 * 60 * 1000); });
             expect(ids(ctx!.messagesByChat['B'])).toEqual([5, 6, 7]);
@@ -368,15 +368,15 @@ describe('DashboardProvider disappearing messages', () => {
 
         it('a message that arrives later with a nearer expiry re-arms the single timer', async () => {
             await mountFake();
-            await act(async () => { ctx!.setMessagesByChat({ B: [chatMsg(5, { ExpiresAt: at(100_000) })] }); });
-            await act(async () => { ctx!.setMessagesByChat({ B: [chatMsg(5, { ExpiresAt: at(100_000) }), chatMsg(6, { ExpiresAt: at(2000) })] }); });
+            await act(async () => { ctx!.setMessagesByChat({ B: [chatMsg(5, { expiresAt: at(100_000) })] }); });
+            await act(async () => { ctx!.setMessagesByChat({ B: [chatMsg(5, { expiresAt: at(100_000) }), chatMsg(6, { expiresAt: at(2000) })] }); });
             act(() => { vi.advanceTimersByTime(2000); });
             expect(ids(ctx!.messagesByChat['B'])).toEqual([5]);
         });
 
         it('never expires system messages', async () => {
             await mountFake();
-            await act(async () => { ctx!.setMessagesByChat({ B: [{ ...directSys(8, 86400), ExpiresAt: at(-60_000) }, chatMsg(9)] }); });
+            await act(async () => { ctx!.setMessagesByChat({ B: [{ ...directSys(8, 86400), expiresAt: at(-60_000) }, chatMsg(9)] }); });
             act(() => { vi.advanceTimersByTime(24 * 60 * 60 * 1000); });
             expect(ids(ctx!.messagesByChat['B'])).toEqual([8, 9]);
         });
@@ -387,10 +387,10 @@ describe('DashboardProvider disappearing messages', () => {
             await seed();
             await act(async () => {
                 ctx!.setMessagesByChat({ B: [chatMsg(5), directSys(8, 86400, 'B')] });
-                ctx!.setMessagesByChat(prev => ({ ...prev, B: prev['B']!.map(m => (m.Kind === 'system' ? { ...m, Status: 'enviado' as const } : m)) }));
+                ctx!.setMessagesByChat(prev => ({ ...prev, B: prev['B']!.map(m => (m.kind === 'system' ? { ...m, status: 'enviado' as const } : m)) }));
             });
             act(() => { ctx!.markAsRead('B'); });
-            expect(ctx!.messagesByChat['B']!.find(m => m.Kind === 'system')!.Status).toBe('enviado');
+            expect(ctx!.messagesByChat['B']!.find(m => m.kind === 'system')!.status).toBe('enviado');
         });
     });
 });

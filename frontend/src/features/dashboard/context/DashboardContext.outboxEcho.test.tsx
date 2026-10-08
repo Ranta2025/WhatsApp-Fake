@@ -8,7 +8,7 @@ import { createOutboxStore } from '../../outbox/outboxStore';
 import type { Message } from '../../../types/api';
 
 // fix/outbox-sender-echo RED reproduction (context level):
-// A live sender echo (MessageID 101) inserted by the WS `message` handler is
+// A live sender echo (messageID 101) inserted by the WS `message` handler is
 // dropped when a stale /api/v1/chats refetch resolves afterwards with a short
 // window (90..100). `fetchAllChats` derives hasMore from `fresh.length >= 200`,
 // so an 11-message window is treated as the complete history and
@@ -64,10 +64,10 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 1, n)).toISOString();
 const CID = '0b7f3c1e-2d4a-4f6b-9c8d-1a2b3c4d5e6f';
 const chatMsg = (id: number): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: '111', Message: `m${id}`, Status: 'visto', Time: iso(id), Edited: false,
+    messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
 });
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-const ids = (list: ReadonlyArray<{ MessageID: number | string }> | undefined) => (list ?? []).map(m => m.MessageID);
+const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
 
 let container: HTMLDivElement;
 let root: Root;
@@ -94,8 +94,8 @@ beforeEach(async () => {
             return new Promise((resolve) => {
                 releaseChats = () => resolve({
                     data: [{
-                        ContactTelephon: '222', ContactUsername: 'bea', ContactName: 'Bea', ContactAvatarUrl: '',
-                        IsContact: true, Messages: range(90, 100).map(chatMsg),
+                        contactTelephon: '222', contactUsername: 'bea', contactName: 'Bea', contactAvatarUrl: '',
+                        isContact: true, messages: range(90, 100).map(chatMsg),
                     }],
                 });
             });
@@ -130,7 +130,7 @@ describe('DashboardContext sender echo vs stale full-history window', () => {
 
         // The sender's own echo (111 -> 222) arrives live and is inserted.
         await emit('message', {
-            MessageID: 101, SenderTelephon: '111', Receptor: '222', Message: 'echo', Status: 'enviado', Time: iso(101), Edited: false,
+            messageID: 101, senderTelephon: '111', receptor: '222', message: 'echo', status: 'enviado', time: iso(101), edited: false,
         });
         expect(ids(latest.messagesByChat['222'])).toContain(101);
 
@@ -166,7 +166,7 @@ describe('DashboardContext sender echo vs stale full-history window', () => {
         await act(async () => { await vi.waitFor(() => expect(latest.outboxItems.map(i => i.entry.clientID)).toEqual([CID])); });
 
         await emit('message', {
-            MessageID: 101, SenderTelephon: '111', Receptor: '222', Message: 'eco', Status: 'enviado', Time: iso(101), Edited: false, ClientID: CID,
+            messageID: 101, senderTelephon: '111', receptor: '222', message: 'eco', status: 'enviado', time: iso(101), edited: false, clientID: CID,
         });
 
         // RED: the replayed branch only reloaded; the echo was never appended.

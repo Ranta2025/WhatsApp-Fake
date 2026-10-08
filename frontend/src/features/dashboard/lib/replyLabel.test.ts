@@ -14,31 +14,31 @@ import { replySenderLabel } from './replyLabel';
 // loads, which must not be mistaken for "me".
 describe('replySenderLabel (1:1)', () => {
     it('devuelve "ti mismo" cuando el remitente soy yo', () => {
-        expect(replySenderLabel({ SenderTelephon: '111' }, '111', { contactName: 'Ana', username: 'ana' })).toBe('ti mismo');
+        expect(replySenderLabel({ senderTelephon: '111' }, '111', { contactName: 'Ana', username: 'ana' })).toBe('ti mismo');
     });
 
     it('usa el ContactName del contacto seleccionado cuando el remitente es otro', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: 'Ana', username: 'ana' })).toBe('Ana');
+        expect(replySenderLabel({ senderTelephon: '222' }, '111', { contactName: 'Ana', username: 'ana' })).toBe('Ana');
     });
 
     it('cae a Username si el contacto no tiene ContactName', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: null, username: 'ana' })).toBe('ana');
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: undefined, username: 'ana' })).toBe('ana');
+        expect(replySenderLabel({ senderTelephon: '222' }, '111', { contactName: null, username: 'ana' })).toBe('ana');
+        expect(replySenderLabel({ senderTelephon: '222' }, '111', { contactName: undefined, username: 'ana' })).toBe('ana');
     });
 
     it('cae a "mensaje" si no hay ContactName ni Username', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: null, username: '' })).toBe('mensaje');
+        expect(replySenderLabel({ senderTelephon: '222' }, '111', { contactName: null, username: '' })).toBe('mensaje');
     });
 
     it('cae a "mensaje" si no hay chat seleccionado', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', null)).toBe('mensaje');
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', undefined)).toBe('mensaje');
+        expect(replySenderLabel({ senderTelephon: '222' }, '111', null)).toBe('mensaje');
+        expect(replySenderLabel({ senderTelephon: '222' }, '111', undefined)).toBe('mensaje');
     });
 
-    it('no dice "ti mismo" cuando myTelephon es undefined y el mensaje no trae SenderTelephon', () => {
-        // profile may still be loading; SenderTelephon can be missing on
+    it('no dice "ti mismo" cuando myTelephon es undefined y el mensaje no trae senderTelephon', () => {
+        // profile may still be loading; senderTelephon can be missing on
         // untrusted network data — the two undefineds must not compare equal.
-        const sender = {} as { SenderTelephon: string };
+        const sender = {} as { senderTelephon: string };
         expect(replySenderLabel(sender, undefined, { contactName: 'Ana', username: 'ana' })).toBe('Ana');
     });
 });
@@ -50,18 +50,18 @@ describe('replySenderLabel (group)', () => {
     ];
 
     it('resuelve el nombre desde la lista de miembros', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', null, members)).toBe('Bob');
+        expect(replySenderLabel({ senderTelephon: '222' }, '111', null, members)).toBe('Bob');
     });
 
     it('cae al Username del miembro si no tiene ContactName', () => {
-        expect(replySenderLabel({ SenderTelephon: '333' }, '111', null, members)).toBe('carol');
+        expect(replySenderLabel({ senderTelephon: '333' }, '111', null, members)).toBe('carol');
     });
 
     it('cae al teléfono si el remitente no está en la lista de miembros', () => {
-        expect(replySenderLabel({ SenderTelephon: '999' }, '111', null, members)).toBe('999');
+        expect(replySenderLabel({ senderTelephon: '999' }, '111', null, members)).toBe('999');
     });
 
     it('devuelve "ti mismo" para mis propios mensajes en un grupo', () => {
-        expect(replySenderLabel({ SenderTelephon: '111' }, '111', null, members)).toBe('ti mismo');
+        expect(replySenderLabel({ senderTelephon: '111' }, '111', null, members)).toBe('ti mismo');
     });
 });

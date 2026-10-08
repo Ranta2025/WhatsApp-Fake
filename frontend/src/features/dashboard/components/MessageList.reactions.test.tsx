@@ -28,8 +28,8 @@ vi.mock('./reactions/emojiPickerLoader', () => ({
 }));
 
 const msg = (id: number, over: Partial<Message> = {}): Message => ({
-    MessageID: id, SenderTelephon: 'B', Receptor: 'me', Message: `m${id}`, Status: 'visto',
-    Time: '2026-01-01T10:00:00Z', Edited: false, ...over,
+    messageID: id, senderTelephon: 'B', receptor: 'me', message: `m${id}`, status: 'visto',
+    time: '2026-01-01T10:00:00Z', edited: false, ...over,
 });
 
 describe('MessageList reactions (1:1)', () => {
@@ -44,7 +44,7 @@ describe('MessageList reactions (1:1)', () => {
         dash.value = {
             selected: { telephon: 'B', username: 'bea' },
             focusedChat: {},
-            messagesByChat: { B: [msg(1, { Reactions: [{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '❤️', Count: 1, Mine: false }] }), msg(2)] },
+            messagesByChat: { B: [msg(1, { reactions: [{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '❤️', Count: 1, Mine: false }] }), msg(2)] },
             profile: { telephon: 'me' },
             globalWallpaper: '',
             chatPaging: {},

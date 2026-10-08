@@ -18,8 +18,8 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseMessaging = vi.mocked(useMessaging);
 
 const msg = (id: number): Message => ({
-    MessageID: id, SenderTelephon: '222', Receptor: '111', Message: `m${id}`, Status: 'enviado',
-    Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: id, senderTelephon: '222', receptor: '111', message: `m${id}`, status: 'enviado',
+    time: '2026-01-01T10:00:00Z', edited: false,
 });
 
 describe('MessageList infinite scroll up (1:1)', () => {

@@ -7,7 +7,7 @@ import type { ContactChat } from '../../../types/api';
 // ya existe un historial de chat para él en `allChatGroups`. Antes de
 // extraer esta función, DashboardContext.jsx hacía
 // `contact || allChatGroups[telephon] || {...}` directamente: una entrada
-// de `allChatGroups` no tiene campo `telephon` (tiene `ContactTelephon`), así
+// de `allChatGroups` no tiene campo `telephon` (tiene `contactTelephon`), así
 // que `selected.telephon` quedaba `undefined` y rompía todas las comparaciones
 // posteriores (p.ej. "¿el chat abierto es este remitente?").
 const makeContact = (overrides: Partial<ContactChat> = {}): ContactChat => ({
@@ -22,10 +22,10 @@ const makeContact = (overrides: Partial<ContactChat> = {}): ContactChat => ({
 });
 
 const makeGroupEntry = (overrides: Partial<DashboardChatGroupEntry> = {}): DashboardChatGroupEntry => ({
-    ContactTelephon: '222',
-    ContactUsername: 'group-user',
-    ContactName: 'Group Contact Name',
-    IsContact: false,
+    contactTelephon: '222',
+    contactUsername: 'group-user',
+    contactName: 'Group Contact Name',
+    isContact: false,
     ...overrides,
 });
 
@@ -37,7 +37,7 @@ describe('resolveChatTarget', () => {
     });
 
     it('builds a telephon-bearing target from allChatGroups when there is no contact match', () => {
-        const group = makeGroupEntry({ ContactUsername: 'group-user', ContactName: 'Group Contact Name' });
+        const group = makeGroupEntry({ contactUsername: 'group-user', contactName: 'Group Contact Name' });
         const result = resolveChatTarget('222', [], { '222': group });
 
         expect(result.telephon).toBe('222');
@@ -66,7 +66,7 @@ describe('resolveChatTarget', () => {
         const contact = makeContact({ telephon: '111', contactName: 'Contact Name' });
         expect(resolveChatTarget('111', [contact], {}, 'Fallback').contactName).toBe('Contact Name');
 
-        const group = makeGroupEntry({ ContactName: 'Group Contact Name' });
+        const group = makeGroupEntry({ contactName: 'Group Contact Name' });
         expect(resolveChatTarget('222', [], { '222': group }, 'Fallback').contactName).toBe('Group Contact Name');
     });
 });

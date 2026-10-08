@@ -20,8 +20,8 @@ vi.mock('../api/searchApi', () => ({ searchAll: vi.fn() }));
 const mockUseDashboard = vi.mocked(useDashboard);
 
 const msg = (id: number, from: string): Message => ({
-    MessageID: id, SenderTelephon: from, Receptor: '111', Message: `hola ${id}`, Status: 'entregado',
-    Time: `2026-01-01T10:0${id}:00Z`, Edited: false,
+    messageID: id, senderTelephon: from, receptor: '111', message: `hola ${id}`, status: 'entregado',
+    time: `2026-01-01T10:0${id}:00Z`, edited: false,
 });
 const groupRow = (id: number, name: string) => ({
     ID: id, Name: name, CreatorTelephon: '111', MemberCount: 2, UserRole: 'member', CreatedAt: '2026-01-01T00:00:00Z',

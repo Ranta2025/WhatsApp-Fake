@@ -184,8 +184,8 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                     group,
                     last,
                     unread,
-                    name: contact?.contactName || group?.ContactName || group?.ContactUsername || number,
-                    lastTime: last?.Time ? new Date(last.Time).getTime() : 0,
+                    name: contact?.contactName || group?.contactName || group?.contactUsername || number,
+                    lastTime: last?.time ? new Date(last.time).getTime() : 0,
                 };
             })
             .filter(chat => !query || chat.name.toLowerCase().includes(query) || chat.number.includes(query))
@@ -211,8 +211,8 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
     const openChat = (chat: ChatEntry) => {
         setSelected(chat.contact || {
             telephon: chat.number,
-            username: chat.group?.ContactUsername || chat.number,
-            contactName: chat.group?.ContactName || null,
+            username: chat.group?.contactUsername || chat.number,
+            contactName: chat.group?.contactName || null,
             status: 'unknown',
         });
     };
@@ -223,8 +223,8 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
             const group = allChatGroups[chat.key];
             setSelected(contactByNumber.get(chat.key) || {
                 telephon: chat.key,
-                username: group?.ContactUsername || chat.name,
-                contactName: group?.ContactName || null,
+                username: group?.contactUsername || chat.name,
+                contactName: group?.contactName || null,
                 status: 'unknown',
             });
             void openMessageAt({ kind: 'chat', key: chat.key }, messageID);
@@ -349,11 +349,11 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                                         onClick={() => openChat(chat)}
                                         avatar={<Avatar src={avatarMap[chat.number]} name={chat.name} size="lg" online={onlineUsers.has(chat.number)} />}
                                         title={chat.name}
-                                        badge={chat.group && !chat.group.IsContact && !chat.contact && (
+                                        badge={chat.group && !chat.group.isContact && !chat.contact && (
                                             <span className="text-[10px] font-medium bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded-md">nuevo</span>
                                         )}
                                         subtitle={chat.last ? previewMessage(chat.last) : 'Toca para empezar a chatear'}
-                                        meta={chat.last ? formatChatTimestamp(chat.last.Time) : ''}
+                                        meta={chat.last ? formatChatTimestamp(chat.last.time) : ''}
                                         unread={chat.unread}
                                         muted={isMuted({ kind: 'direct', key: chat.number })}
                                     />

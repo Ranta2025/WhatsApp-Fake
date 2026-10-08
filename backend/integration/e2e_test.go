@@ -163,8 +163,8 @@ func TestE2E(t *testing.T) {
 	// Chat 1:1 en tiempo real
 	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "chat", "payload": map[string]string{"receptor": bob.Telephon, "message": "hola bob"}}))
 	ev := waitFor(t, wsBob, "chat")
-	assert.Equal(t, "hola bob", ev["payload"].(map[string]interface{})["Message"])
-	assert.Equal(t, "entregado", ev["payload"].(map[string]interface{})["Status"])
+	assert.Equal(t, "hola bob", ev["payload"].(map[string]interface{})["message"])
+	assert.Equal(t, "entregado", ev["payload"].(map[string]interface{})["status"])
 
 	// URL peligrosa rechazada
 	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "chat", "payload": map[string]string{"receptor": bob.Telephon, "message": "x", "mediaUrl": "javascript:alert(1)", "mediaType": "document"}}))

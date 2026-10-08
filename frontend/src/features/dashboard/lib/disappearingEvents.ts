@@ -27,21 +27,21 @@ const asNonEmptyString = (value: unknown): string | undefined =>
 
 /** Validates a persisted 1:1 system message; undefined when absent, null or malformed. */
 export function parseDirectSystemMessage(raw: unknown): Message | undefined {
-    if (!isRecord(raw) || raw.Kind !== 'system') return undefined;
-    const messageID = asPositiveInt(raw.MessageID);
-    const sender = asNonEmptyString(raw.SenderTelephon);
-    if (messageID === undefined || sender === undefined || typeof raw.Receptor !== 'string') return undefined;
+    if (!isRecord(raw) || raw.kind !== 'system') return undefined;
+    const messageID = asPositiveInt(raw.messageID);
+    const sender = asNonEmptyString(raw.senderTelephon);
+    if (messageID === undefined || sender === undefined || typeof raw.receptor !== 'string') return undefined;
     return {
-        MessageID: messageID,
-        SenderTelephon: sender,
-        Receptor: raw.Receptor,
-        Message: typeof raw.Message === 'string' ? raw.Message : '',
+        messageID,
+        senderTelephon: sender,
+        receptor: raw.receptor,
+        message: typeof raw.message === 'string' ? raw.message : '',
         // System messages are stored as seen: they never count as unread/pending.
-        Status: 'visto',
-        Time: typeof raw.Time === 'string' ? raw.Time : '',
-        Edited: false,
-        Kind: 'system',
-        ...(raw.SystemEvent === 'disappearing_changed' ? { SystemEvent: 'disappearing_changed' as const } : {}),
+        status: 'visto',
+        time: typeof raw.time === 'string' ? raw.time : '',
+        edited: false,
+        kind: 'system',
+        ...(raw.systemEvent === 'disappearing_changed' ? { systemEvent: 'disappearing_changed' as const } : {}),
     };
 }
 

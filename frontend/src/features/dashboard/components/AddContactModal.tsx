@@ -92,10 +92,10 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
                 setAllChatGroups(prev => ({
                     ...prev,
                     // Si `prev[n]` todavía no existía (contacto sin chat previo), el
-                    // spread deja `ContactTelephon`/`ContactUsername` ausentes —
+                    // spread deja `contactTelephon`/`contactUsername` ausentes —
                     // mismo comportamiento que la versión JS (objeto parcial en ese
                     // caso raro); cast único y documentado, no se inventan datos.
-                    [n]: { ...prev[n], IsContact: true, ContactName: cn } as DashboardChatGroupEntry
+                    [n]: { ...prev[n], isContact: true, contactName: cn } as DashboardChatGroupEntry
                 }));
                 
                 setAddMsg('Contacto creado exitosamente');

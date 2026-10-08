@@ -5,7 +5,7 @@
 
 /** Remitente del mensaje al que se responde (solo el campo que realmente existe). */
 export interface ReplySender {
-    SenderTelephon: string;
+    senderTelephon: string;
 }
 
 /** Fuente de nombre para un chat 1:1 (`selected` o un contacto). */
@@ -39,12 +39,12 @@ export function replySenderLabel(
     selected: ReplyNameSource | null | undefined,
     members?: readonly ReplyGroupMember[],
 ): string {
-    if (myTelephon && replyingTo.SenderTelephon === myTelephon) return 'ti mismo';
+    if (myTelephon && replyingTo.senderTelephon === myTelephon) return 'ti mismo';
 
     if (members) {
-        const member = members.find((m) => m.Telephon === replyingTo.SenderTelephon);
-        if (member) return member.ContactName || member.Username || replyingTo.SenderTelephon || 'mensaje';
-        return replyingTo.SenderTelephon || 'mensaje';
+        const member = members.find((m) => m.Telephon === replyingTo.senderTelephon);
+        if (member) return member.ContactName || member.Username || replyingTo.senderTelephon || 'mensaje';
+        return replyingTo.senderTelephon || 'mensaje';
     }
 
     return selected?.contactName || selected?.username || 'mensaje';

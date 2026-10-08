@@ -30,9 +30,9 @@ import type { Message } from '../../../types/api';
  */
 
 /**
- * `Message` (types/api.ts) solo tiene `Time` (requerido) — `Timestamp` no
- * existe en el contrato del backend; el fallback `m.Time || m.Timestamp` es
- * código muerto preexistente (`Time` siempre está presente), documentado en
+ * `Message` (types/api.ts) solo tiene `time` (requerido) — `Timestamp` no
+ * existe en el contrato del backend; el fallback `m.time || m.Timestamp` es
+ * código muerto preexistente (`time` siempre está presente), documentado en
  * vez de removido sin test (mismo criterio que CallHistory/MediaUploadMenu).
  */
 type MessageWithLegacyTimestamp = Message & { Timestamp?: string };
@@ -147,8 +147,8 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
     useLoadOlderOnScroll({
         containerRef: messagesContainerRef,
         chatKey: selectedNumber,
-        firstKey: currentMessages?.[0]?.MessageID,
-        lastKey: pendingItems.at(-1)?.entry.clientID ?? currentMessages?.[currentMessages.length - 1]?.MessageID,
+        firstKey: currentMessages?.[0]?.messageID,
+        lastKey: pendingItems.at(-1)?.entry.clientID ?? currentMessages?.[currentMessages.length - 1]?.messageID,
         hasMore: focused ? focused.hasMoreOlder : (paging?.hasMore ?? false),
         loadingOlder: focused ? focused.loadingOlder : (paging?.loadingOlder ?? false),
         loadOlder,
@@ -173,7 +173,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
         let currentGroup: MessageGroup | null = null;
 
         messages.forEach((m) => {
-            const date = new Date(m.Time || m.Timestamp || '');
+            const date = new Date(m.time || m.Timestamp || '');
             const dayKey = date.toDateString();
 
             if (!currentGroup || currentGroup.date !== dayKey) {
@@ -229,30 +229,30 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                             // Avisos de sistema (p. ej. mensajes temporales): píldora centrada, sin burbuja ni acciones.
                             if (isSystemDirectMessage(m)) {
                                 return (
-                                    <div key={m.MessageID} data-message-id={m.MessageID} data-system-message="true" className="flex justify-center py-1 px-4">
+                                    <div key={m.messageID} data-message-id={m.messageID} data-system-message="true" className="flex justify-center py-1 px-4">
                                         <span className="bg-chip backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full text-center">
                                             {describeDirectSystemMessage(m, profile?.telephon, resolveSystemName)}
                                         </span>
                                     </div>
                                 );
                             }
-                            const isMine = m.SenderTelephon === profile?.telephon;
-                            const isSticker = m.MediaType === 'sticker';
-                            const stickerUrl = isSticker ? (m.MediaUrl || m.Message || '').trim() : '';
+                            const isMine = m.senderTelephon === profile?.telephon;
+                            const isSticker = m.mediaType === 'sticker';
+                            const stickerUrl = isSticker ? (m.mediaUrl || m.message || '').trim() : '';
                             const builtinSticker = stickerUrl ? findBuiltinSticker(stickerUrl) : undefined;
                             const isCustomSticker = isSticker && !builtinSticker && stickerUrl.startsWith('/storage/');
-                            const isMenuOpen = messageMenuOpen === m.MessageID;
-                            const time = formatTime(m.Time || m.Timestamp || '');
-                            const reactionTarget: ReactionTarget = { kind: 'direct', messageID: m.MessageID };
-                            const myReaction = m.Reactions?.find(r => r.Mine)?.Emoji;
+                            const isMenuOpen = messageMenuOpen === m.messageID;
+                            const time = formatTime(m.time || m.Timestamp || '');
+                            const reactionTarget: ReactionTarget = { kind: 'direct', messageID: m.messageID };
+                            const myReaction = m.reactions?.find(r => r.Mine)?.Emoji;
 
                             return (
                                 <div 
-                                    key={m.MessageID} 
-                                    data-message-id={m.MessageID}
+                                    key={m.messageID} 
+                                    data-message-id={m.messageID}
                                     className={`group flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 animate-slide-up`}
                                 >
-                                    <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`} {...bindLongPress(m.MessageID)}>
+                                    <div className={`relative max-w-[85%] sm:max-w-[70%] group/bubble`} {...bindLongPress(m.messageID)}>
                                         {/* Disparador del menú: revelado con hover como antes, pero ya NO
                                             envuelve al menú (ver T4: R2 — antes, al dejar de hacer hover, todo
                                             el contenedor (disparador + menú abierto) se volvía invisible por
@@ -262,17 +262,17 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                             <ReactionTrigger
                                                 currentEmoji={myReaction}
                                                 onSelect={(emoji) => reactToMessage(reactionTarget, emoji)}
-                                                onMore={() => setFullPickerFor(m.MessageID)}
+                                                onMore={() => setFullPickerFor(m.messageID)}
                                                 align={isMine ? 'left' : 'right'}
                                             />
                                             <button
                                                 ref={(el: HTMLButtonElement | null) => {
                                                     // R3-refmap-unbounded: liberar la entrada al desmontarse
                                                     // (el === null), en vez de dejarla colgada para siempre.
-                                                    if (el) getMenuTriggerRef(m.MessageID).current = el;
-                                                    else getMenuTriggerRef.release(m.MessageID);
+                                                    if (el) getMenuTriggerRef(m.messageID).current = el;
+                                                    else getMenuTriggerRef.release(m.messageID);
                                                 }}
-                                                onClick={() => setMessageMenuOpen(isMenuOpen ? null : m.MessageID)}
+                                                onClick={() => setMessageMenuOpen(isMenuOpen ? null : m.messageID)}
                                                 className="p-1.5 glass rounded-full text-slate-400 hover:text-fg transition-all shadow-lg"
                                                 aria-label="Opciones"
                                             >
@@ -288,14 +288,14 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                         <Popover
                                             open={isMenuOpen}
                                             onClose={() => setMessageMenuOpen(null)}
-                                            anchorRef={getMenuTriggerRef(m.MessageID)}
+                                            anchorRef={getMenuTriggerRef(m.messageID)}
                                             align={isMine ? 'left' : 'right'}
                                             className="w-60 p-1 bg-slate-800 border border-fg/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
                                         >
                                             <ReactionPicker
                                                 currentEmoji={myReaction}
                                                 onSelect={(emoji) => { reactToMessage(reactionTarget, emoji); setMessageMenuOpen(null); }}
-                                                onMore={() => { setMessageMenuOpen(null); setFullPickerFor(m.MessageID); }}
+                                                onMore={() => { setMessageMenuOpen(null); setFullPickerFor(m.messageID); }}
                                             />
                                             <div className="my-1 h-px bg-fg/10" />
                                             <button onClick={() => { handleReplyToMessage(m); setMessageMenuOpen(null); }} className="w-full px-3 py-2 rounded-lg text-left text-[13px] font-medium text-slate-200 hover:bg-fg/[0.06] transition-colors flex items-center gap-2.5">
@@ -343,10 +343,10 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                                 : `px-3.5 py-2 rounded-2xl shadow-md ${isMine ? 'bg-indigo-700 text-on-accent rounded-br-md' : 'bg-slate-800 text-slate-100 rounded-bl-md'}`
                                         }>
                                             {/* Respuesta */}
-                                            {m.ReplyToMessage && (
+                                            {m.replyToMessage && (
                                                 <div className={`mb-1.5 px-2.5 py-1.5 rounded-lg border-l-[3px] ${isMine ? 'bg-black/15 border-on-accent/40' : 'bg-quote border-indigo-400'} text-[12px] ${isMine ? 'text-on-accent/80' : 'text-fg/80'} line-clamp-2`}>
                                                     <div className={`font-semibold text-[11px] mb-0.5 ${isMine ? 'text-on-accent/90' : 'text-indigo-300'}`}>Respuesta</div>
-                                                    {replyPreviewText(m.ReplyToMessage)}
+                                                    {replyPreviewText(m.replyToMessage)}
                                                 </div>
                                             )}
 
@@ -354,9 +354,9 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                             <MediaContent message={m} isMine={isMine} />
 
                                             {/* Texto del mensaje - Ocultar si es una URL de media */}
-                                            {m.Message && !isMediaUrl(m) && (
+                                            {m.message && !isMediaUrl(m) && (
                                                 <div className="text-[14.5px] leading-snug break-words whitespace-pre-wrap">
-                                                    {editingMessageId === m.MessageID ? (
+                                                    {editingMessageId === m.messageID ? (
                                                         <div className="flex flex-col gap-2 min-w-[200px]">
                                                             <textarea 
                                                                 autoFocus
@@ -370,7 +370,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                                                 <button onClick={handleEditMessageSave} className="px-2 py-1 bg-on-accent/20 rounded-md text-[10px] font-bold uppercase tracking-widest">Guardar</button>
                                                             </div>
                                                         </div>
-                                                    ) : <HighlightedText text={m.Message} query={searchQuery} />}
+                                                    ) : <HighlightedText text={m.message} query={searchQuery} />}
                                                 </div>
                                             )}
 
@@ -378,25 +378,25 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                             {isSticker ? (
                                                 <div className="mt-1 flex justify-end">
                                                     <div className="flex items-center gap-1 rounded-full bg-chip-strong px-2 py-0.5 text-[10px] text-pill-fg">
-                                                        <ExpiryClock expiresAt={m.ExpiresAt} />
-                                                        <span>{m.Edited && 'editado · '}{time}</span>
-                                                        {isMine && <MessageTicks status={m.Status} />}
+                                                        <ExpiryClock expiresAt={m.expiresAt} />
+                                                        <span>{m.edited && 'editado · '}{time}</span>
+                                                        {isMine && <MessageTicks status={m.status} />}
                                                     </div>
                                                 </div>
                                             ) : (
                                                 <div className="mt-0.5 -mb-0.5 flex items-center justify-end gap-1">
-                                                    <span className={isMine ? 'text-on-accent/60' : 'text-slate-400'}><ExpiryClock expiresAt={m.ExpiresAt} /></span>
+                                                    <span className={isMine ? 'text-on-accent/60' : 'text-slate-400'}><ExpiryClock expiresAt={m.expiresAt} /></span>
                                                     <span className={`text-[11px] ${isMine ? 'text-on-accent/60' : 'text-slate-400'}`}>
-                                                        {m.Edited && 'editado · '}{time}
+                                                        {m.edited && 'editado · '}{time}
                                                     </span>
-                                                    {isMine && <MessageTicks status={m.Status} />}
+                                                    {isMine && <MessageTicks status={m.status} />}
                                                 </div>
                                             )}
                                         </div>
                                         <ReactionChips
-                                            reactions={m.Reactions}
+                                            reactions={m.reactions}
                                             onToggle={(emoji) => reactToMessage(reactionTarget, emoji)}
-                                            onShowWho={() => setWhoFor(m.MessageID)}
+                                            onShowWho={() => setWhoFor(m.messageID)}
                                             align={isMine ? 'end' : 'start'}
                                         />
                                     </div>

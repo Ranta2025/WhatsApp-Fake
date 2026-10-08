@@ -8,7 +8,7 @@ import {
     getGroupWindowAround, getGroupAfter, getGroupBefore,
 } from './historyApi';
 
-const chat = (id: number) => ({ MessageID: id, SenderTelephon: 'B', Receptor: 'A', Message: `m${id}`, Status: 'visto', Time: '2026-01-01T00:00:00Z', Edited: false });
+const chat = (id: number) => ({ messageID: id, senderTelephon: 'B', receptor: 'A', message: `m${id}`, status: 'visto', time: '2026-01-01T00:00:00Z', edited: false });
 const grp = (id: number) => ({ MessageID: id, GroupID: 7, SenderTelephon: 'B', SenderUsername: 'b', Message: `g${id}`, Time: '2026-01-01T00:00:00Z', Edited: false });
 
 beforeEach(() => { mockApi.get.mockReset(); });
@@ -21,7 +21,7 @@ describe('1:1 windows', () => {
         });
         const out = await getChatWindowAround('B', 5, 30);
         expect(mockApi.get).toHaveBeenCalledWith('/api/v1/chat/B', { params: { around: 5, limit: 30 } });
-        expect(out.messages.map(m => m.MessageID)).toEqual([4, 5]);
+        expect(out.messages.map(m => m.messageID)).toEqual([4, 5]);
         expect(out.hasMoreOlder).toBe(false);
         expect(out.hasMoreNewer).toBe(true);
     });
@@ -38,7 +38,7 @@ describe('1:1 windows', () => {
         mockApi.get.mockResolvedValue({ data: [chat(6)], headers: { 'x-has-more-newer': 'false' } });
         const out = await getChatAfter('B', 5, 25);
         expect(mockApi.get).toHaveBeenCalledWith('/api/v1/chat/B', { params: { after: 5, limit: 25 } });
-        expect(out).toEqual({ messages: [expect.objectContaining({ MessageID: 6 })], hasMoreNewer: false });
+        expect(out).toEqual({ messages: [expect.objectContaining({ messageID: 6 })], hasMoreNewer: false });
     });
 
     it('before: GET ?before&limit with X-Has-More', async () => {

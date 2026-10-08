@@ -7,10 +7,10 @@ import type { ContactChat, ContactStatus } from '../../../types/api';
  * `ContactAvatarUrl` (va a `avatarMap`) ni `Messages` (va a `messagesByChat`).
  */
 export interface DashboardChatGroupEntry {
-    ContactTelephon: string;
-    ContactUsername: string;
-    ContactName: string;
-    IsContact: boolean;
+    contactTelephon: string;
+    contactUsername: string;
+    contactName: string;
+    isContact: boolean;
 }
 
 /**
@@ -48,8 +48,8 @@ export function resolveChatTarget(
     if (group) {
         return {
             telephon,
-            username: group.ContactUsername || telephon,
-            contactName: group.ContactName || null,
+            username: group.contactUsername || telephon,
+            contactName: group.contactName || null,
             status: 'unknown',
         };
     }

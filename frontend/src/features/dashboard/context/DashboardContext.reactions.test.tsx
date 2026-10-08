@@ -59,9 +59,9 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const chip = (Emoji: string, Count = 1, Mine = false): ReactionSummary => ({ Emoji, Count, Mine });
-const chatMsg = (id: number, Reactions?: ReactionSummary[]): Message => ({
-    MessageID: id, SenderTelephon: '111', Receptor: 'B', Message: `m${id}`, Status: 'visto', Time: iso(id), Edited: false,
-    ...(Reactions ? { Reactions } : {}),
+const chatMsg = (id: number, reactions?: ReactionSummary[]): Message => ({
+    messageID: id, senderTelephon: '111', receptor: 'B', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
+    ...(reactions ? { reactions } : {}),
 });
 const groupMsg = (id: number, Reactions?: ReactionSummary[]): GroupMessageResponse => ({
     MessageID: id, GroupID: 9, SenderTelephon: '111', SenderUsername: 'ana', Message: `g${id}`, Time: iso(id), Edited: false,
@@ -136,8 +136,8 @@ describe('DashboardProvider reactions', () => {
         it('applies a 1:1 reaction to messagesByChat', async () => {
             await seed();
             emitReaction(direct());
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍')]);
-            expect(ctx!.messagesByChat['B']?.[1]?.Reactions).toBeUndefined();
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍')]);
+            expect(ctx!.messagesByChat['B']?.[1]?.reactions).toBeUndefined();
         });
 
         it('applies a group reaction to groupMessages', async () => {
@@ -150,9 +150,9 @@ describe('DashboardProvider reactions', () => {
             await seed();
             emitReaction(direct());
             emitReaction(direct({ emoji: '😂', previousEmoji: '👍' }));
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('😂')]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('😂')]);
             emitReaction(direct({ emoji: '', previousEmoji: '😂' }));
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toBeUndefined();
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toBeUndefined();
         });
 
         it('also updates the detached windows (1:1 and group)', async () => {
@@ -171,14 +171,14 @@ describe('DashboardProvider reactions', () => {
             });
             await act(async () => { await ctx!.openMessageAt({ kind: 'chat', key: 'B' }, 5); });
             await act(async () => { await ctx!.openMessageAt({ kind: 'group', id: 9 }, 7); });
-            expect(ctx!.focusedChat['B']?.messages[0]?.Reactions).toBeUndefined();
+            expect(ctx!.focusedChat['B']?.messages[0]?.reactions).toBeUndefined();
 
             emitReaction(direct());
             emitReaction(inGroup());
 
-            expect(ctx!.focusedChat['B']?.messages[0]?.Reactions).toEqual([chip('👍')]);
+            expect(ctx!.focusedChat['B']?.messages[0]?.reactions).toEqual([chip('👍')]);
             expect(ctx!.focusedGroup[9]?.messages[0]?.Reactions).toEqual([chip('❤️')]);
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍')]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍')]);
         });
 
         it('ignores malformed payloads and unknown messages without throwing', async () => {
@@ -195,7 +195,7 @@ describe('DashboardProvider reactions', () => {
             await seed();
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
             expect(mockSendReaction).toHaveBeenCalledWith('direct', 5, '👍', undefined);
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍', 1, true)]);
         });
 
         it('tapping my current emoji removes it (sends the empty emoji)', async () => {
@@ -203,7 +203,7 @@ describe('DashboardProvider reactions', () => {
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
             expect(mockSendReaction).toHaveBeenLastCalledWith('direct', 5, '', undefined);
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toBeUndefined();
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toBeUndefined();
         });
 
         it('group reactions carry the groupID', async () => {
@@ -217,18 +217,18 @@ describe('DashboardProvider reactions', () => {
             await seed();
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
             emitReaction(direct({ telephon: '111', username: 'ana', authorTelephon: 'B' }));
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍', 1, true)]);
         });
 
         it('rolls back to the pre-send reactions on a WS error with react context', async () => {
             await seed();
             await act(async () => { ctx!.setMessagesByChat({ B: [chatMsg(5, [chip('❤️', 2, true)])] }); });
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('❤️', 1), chip('👍', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('❤️', 1), chip('👍', 1, true)]);
 
             emitError({ type: 'error', error: 'sin permiso', context: { action: 'react', kind: 'direct', messageID: 5, status: 403 } });
 
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('❤️', 2, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('❤️', 2, true)]);
             expect(ctx!.toasts.at(-1)?.type).toBe('error');
         });
 
@@ -244,7 +244,7 @@ describe('DashboardProvider reactions', () => {
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '😂'); });
             emitError({ type: 'error', error: 'x', context: { action: 'react', kind: 'direct', messageID: 5, status: 429 } });
-            expect(ctx!.messagesByChat['B']?.[0]).not.toHaveProperty('Reactions');
+            expect(ctx!.messagesByChat['B']?.[0]).not.toHaveProperty('reactions');
         });
 
         it('ignores errors without react context and errors after the echo confirmed the change', async () => {
@@ -252,11 +252,11 @@ describe('DashboardProvider reactions', () => {
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
             emitError({ type: 'error', error: 'otra cosa' });
             emitError({ type: 'error', error: 'x', context: { action: 'chat', kind: 'direct', messageID: 5 } });
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍', 1, true)]);
 
             emitReaction(direct({ telephon: '111', username: 'ana', authorTelephon: 'B' }));
             emitError({ type: 'error', error: 'x', context: { action: 'react', kind: 'direct', messageID: 5, status: 500 } });
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍', 1, true)]);
         });
 
         const mine = (emoji: string) => direct({ telephon: '111', username: 'ana', authorTelephon: 'B', emoji });
@@ -269,7 +269,7 @@ describe('DashboardProvider reactions', () => {
             tap('😂');
             emitReaction(mine('👍'));
             reactError();
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍', 1, true)]);
             expect(ctx!.toasts.at(-1)?.type).toBe('error');
         });
 
@@ -279,7 +279,7 @@ describe('DashboardProvider reactions', () => {
             tap('😂');
             reactError();
             emitReaction(mine('😂'));
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('😂', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('😂', 1, true)]);
         });
 
         it('rollback reverses only my change and keeps concurrent changes from others', async () => {
@@ -289,7 +289,7 @@ describe('DashboardProvider reactions', () => {
             emitReaction(direct({ telephon: 'C', emoji: '😂' }));
             emitReaction(direct({ telephon: 'D', emoji: '❤️', previousEmoji: '' }));
             reactError();
-            const reactions = ctx!.messagesByChat['B']?.[0]?.Reactions ?? [];
+            const reactions = ctx!.messagesByChat['B']?.[0]?.reactions ?? [];
             expect(reactions).toHaveLength(2);
             expect(reactions).toContainEqual(chip('❤️', 2));
             expect(reactions).toContainEqual(chip('😂', 1));
@@ -303,7 +303,7 @@ describe('DashboardProvider reactions', () => {
             tap('😂');
             emitReaction(mine('😂'));
             reactError(); // stray error: nothing is pending anymore
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('😂', 1, true)]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('😂', 1, true)]);
         });
 
         it('drops pending entries older than 15s', async () => {
@@ -313,7 +313,7 @@ describe('DashboardProvider reactions', () => {
                 tap('👍');
                 vi.setSystemTime(Date.now() + 16_000);
                 reactError();
-                expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+                expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍', 1, true)]);
             } finally {
                 vi.useRealTimers();
             }
@@ -323,7 +323,7 @@ describe('DashboardProvider reactions', () => {
             await seed();
             mockSendReaction.mockReturnValueOnce(false);
             act(() => { ctx!.reactToMessage({ kind: 'direct', messageID: 5 }, '👍'); });
-            expect(ctx!.messagesByChat['B']?.[0]).not.toHaveProperty('Reactions');
+            expect(ctx!.messagesByChat['B']?.[0]).not.toHaveProperty('reactions');
             expect(ctx!.toasts.at(-1)?.type).toBe('error');
         });
     });
@@ -371,7 +371,7 @@ describe('DashboardProvider reactions', () => {
             await act(async () => { ctx!.setSelected({ ...contact('B', 'Bea'), telephon: 'B' } as never); });
             emitReaction(direct());
             expect(toastMessages()).toEqual([]);
-            expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍')]);
+            expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍')]);
         });
 
         it('does not notify when that group is open, but notifies for another group', async () => {
