@@ -127,7 +127,7 @@ func (hd *HandlerStatus) HandlerMarkStatusViewed() gin.HandlerFunc {
 			if msg, marshalErr := json.Marshal(map[string]interface{}{
 				"type": "status_viewed",
 				"payload": map[string]interface{}{
-					"statusId":  statusID.(uint),
+					"statusID":  statusID.(uint),
 					"viewer":    viewer,
 					"viewedAt":  viewer.ViewedAt,
 					"viewCount": viewCount,
@@ -182,7 +182,7 @@ func (hd *HandlerStatus) HandlerDeleteStatus() gin.HandlerFunc {
 			"type": "status_deleted",
 			"payload": map[string]interface{}{
 				"ownerTelephon": telephon.(string),
-				"statusId":      statusID.(uint),
+				"statusID":      statusID.(uint),
 			},
 		}); marshalErr == nil {
 			hd.broadcastStatusWS(mutualTelephons, msg)

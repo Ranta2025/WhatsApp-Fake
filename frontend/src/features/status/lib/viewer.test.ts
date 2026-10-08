@@ -63,7 +63,7 @@ describe('resetViewerStateForStatusChange', () => {
     it('reanuda incluso si el estado previo había quedado pausado a propósito tras un borrado exitoso (R3-delete-success-leaves-viewer-paused)', () => {
         // handleDelete deja paused=true tras un borrado exitoso a propósito
         // (shouldResumeClockAfterDeleteAttempt devuelve false ahí); es este
-        // reset -- disparado por el cambio de currentStatus.ID que sigue al
+        // reset -- disparado por el cambio de currentStatus.id que sigue al
         // borrado -- el que debe reanudarlo, no handleDelete.
         const resumesByItself = shouldResumeClockAfterDeleteAttempt({ confirmed: true, deleteSucceeded: true });
         expect(resumesByItself).toBe(false);

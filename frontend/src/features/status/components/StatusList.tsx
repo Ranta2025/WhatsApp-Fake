@@ -17,19 +17,19 @@ interface ContactRowProps {
 }
 
 const ContactRow = ({ group, onOpen }: ContactRowProps) => {
-    const name = group.ContactName || group.Username || group.Telephon;
-    const segments = group.Statuses.map(s => s.Viewed);
+    const name = group.contactName || group.username || group.telephon;
+    const segments = group.statuses.map(s => s.viewed);
     return (
         <button
-            onClick={() => onOpen(group.Telephon)}
+            onClick={() => onOpen(group.telephon)}
             className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-fg/[0.04] transition-colors"
         >
             <StatusRing segments={segments} size={52}>
-                <Avatar src={group.AvatarUrl} name={name} size="lg" />
+                <Avatar src={group.avatarUrl} name={name} size="lg" />
             </StatusRing>
             <div className="flex-1 min-w-0">
                 <div className="font-semibold text-[15px] text-slate-100 truncate">{name}</div>
-                <div className="text-[13px] text-slate-400 truncate">{formatStatusTimestamp(group.LastUpdated)}</div>
+                <div className="text-[13px] text-slate-400 truncate">{formatStatusTimestamp(group.lastUpdated)}</div>
             </div>
         </button>
     );
@@ -43,10 +43,10 @@ const StatusList = () => {
     const { feed, loading, openComposer, openMyViewer, openContactViewer } = useStatus();
     const { myAvatar, profile } = useDashboard();
 
-    const mine = feed.Mine || [];
-    const contacts = feed.Contacts || [];
-    const recientes = contacts.filter(g => !g.AllViewed);
-    const vistos = contacts.filter(g => g.AllViewed);
+    const mine = feed.mine || [];
+    const contacts = feed.contacts || [];
+    const recientes = contacts.filter(g => !g.allViewed);
+    const vistos = contacts.filter(g => g.allViewed);
 
     const lastMine = mine.length > 0 ? mine[mine.length - 1] : null;
     const mineSegments = mine.map(() => true); // los propios no distinguen visto/no-visto para el dueño
@@ -83,7 +83,7 @@ const StatusList = () => {
                 >
                     <div className="font-semibold text-[15px] text-slate-100">Mi estado</div>
                     <div className="text-[13px] text-slate-400 truncate">
-                        {lastMine ? formatStatusTimestamp(lastMine.CreatedAt) : 'Toca para añadir una actualización de estado'}
+                        {lastMine ? formatStatusTimestamp(lastMine.createdAt) : 'Toca para añadir una actualización de estado'}
                     </div>
                 </button>
             </div>
@@ -97,7 +97,7 @@ const StatusList = () => {
                     <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Recientes</div>
                     <div className="space-y-0.5">
                         {recientes.map(g => (
-                            <ContactRow key={g.Telephon} group={g} onOpen={openContactViewer} />
+                            <ContactRow key={g.telephon} group={g} onOpen={openContactViewer} />
                         ))}
                     </div>
                 </div>
@@ -108,7 +108,7 @@ const StatusList = () => {
                     <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Vistos</div>
                     <div className="space-y-0.5">
                         {vistos.map(g => (
-                            <ContactRow key={g.Telephon} group={g} onOpen={openContactViewer} />
+                            <ContactRow key={g.telephon} group={g} onOpen={openContactViewer} />
                         ))}
                     </div>
                 </div>

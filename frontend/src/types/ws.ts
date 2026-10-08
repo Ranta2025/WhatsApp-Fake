@@ -244,18 +244,17 @@ export interface WsStatusNew {
 }
 
 /**
- * Casing mixto intencional: las claves del payload son camelCase, pero
- * `viewer` reutiliza StatusViewer (PascalCase). `viewedAt` está duplicado
- * también dentro de `viewer.ViewedAt`.
+ * `viewer` reutiliza StatusViewer (camelCase desde AC6). `viewedAt` está
+ * duplicado también dentro de `viewer.viewedAt`.
  */
 export interface WsStatusViewed {
   type: 'status_viewed';
-  payload: { statusId: number; viewer: StatusViewer; viewedAt: string; viewCount: number };
+  payload: { statusID: number; viewer: StatusViewer; viewedAt: string; viewCount: number };
 }
 
 export interface WsStatusDeleted {
   type: 'status_deleted';
-  payload: { ownerTelephon: string; statusId: number };
+  payload: { ownerTelephon: string; statusID: number };
 }
 
 /**

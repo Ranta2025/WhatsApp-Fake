@@ -141,9 +141,9 @@ describe('wsManager dispatch (remapped listener contract)', () => {
         const handler = vi.fn();
         wsManager.on('status_deleted', handler);
 
-        emit(socket, { type: 'status_deleted', payload: { ownerTelephon: '111', statusId: 5 } });
+        emit(socket, { type: 'status_deleted', payload: { ownerTelephon: '111', statusID: 5 } });
 
-        expect(handler).toHaveBeenCalledWith({ ownerTelephon: '111', statusId: 5 });
+        expect(handler).toHaveBeenCalledWith({ ownerTelephon: '111', statusID: 5 });
         wsManager.disconnect();
     });
 

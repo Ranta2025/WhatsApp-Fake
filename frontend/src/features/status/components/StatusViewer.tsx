@@ -57,12 +57,12 @@ const ViewersSheet = ({ viewers, onClose }: ViewersSheetProps) => (
                     <p className="text-center text-sm text-slate-500 py-6">Todavía nadie vio este estado</p>
                 ) : (
                     viewers.map(v => (
-                        <div key={v.Telephon} className="flex items-center gap-3 px-2 py-2">
-                            <Avatar src={v.AvatarUrl} name={v.Username} size="sm" />
+                        <div key={v.telephon} className="flex items-center gap-3 px-2 py-2">
+                            <Avatar src={v.avatarUrl} name={v.username} size="sm" />
                             <div className="flex-1 min-w-0">
-                                <div className="text-sm text-slate-100 truncate">{v.Username}</div>
+                                <div className="text-sm text-slate-100 truncate">{v.username}</div>
                             </div>
-                            <span className="text-xs text-slate-500 flex-shrink-0">{formatStatusTimestamp(v.ViewedAt)}</span>
+                            <span className="text-xs text-slate-500 flex-shrink-0">{formatStatusTimestamp(v.viewedAt)}</span>
                         </div>
                     ))
                 )}
@@ -100,8 +100,8 @@ export default function StatusViewer() {
 
     const ownerName = isMine
         ? (profile?.username || 'Mi estado')
-        : (currentOwner?.ContactName || currentOwner?.Username || currentOwner?.Telephon || '');
-    const ownerAvatar = isMine ? myAvatar : currentOwner?.AvatarUrl;
+        : (currentOwner?.contactName || currentOwner?.username || currentOwner?.telephon || '');
+    const ownerAvatar = isMine ? myAvatar : currentOwner?.avatarUrl;
 
     // Bloquear scroll de fondo, enfocar el overlay y permitir Escape para cerrar.
     useEffect(() => {
@@ -135,7 +135,7 @@ export default function StatusViewer() {
         if (!currentStatus || isMine || !viewerKey) return;
         viewStatus(currentStatus, viewerKey.telephon, false);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de estado mostrado
-    }, [currentStatus?.ID]);
+    }, [currentStatus?.id]);
 
     // R3-viewer-stale-pause: el componente no se desmonta al cerrar el visor
     // (solo retorna null), así que "paused" y "showViewers" sobreviven entre
@@ -164,7 +164,7 @@ export default function StatusViewer() {
         elapsedRef.current = next.elapsed;
         setProgress(next.progress);
         durationRef.current = next.durationMs;
-    }, [currentStatus?.ID]);
+    }, [currentStatus?.id]);
 
     const advance = useCallback(() => {
         elapsedRef.current = 0;
@@ -172,7 +172,7 @@ export default function StatusViewer() {
         goNext();
     }, [goNext]);
 
-    const isVideo = currentStatus?.Type === 'video';
+    const isVideo = currentStatus?.type === 'video';
 
     // Reloj de avance automático para texto/imagen (pausable). El video NO usa
     // este reloj de pared: tiene su propio efecto más abajo que sigue el
@@ -234,7 +234,7 @@ export default function StatusViewer() {
         if (!video) return;
         if (paused || showViewers) video.pause();
         else video.play().catch(() => {}); // autoplay puede rechazar la promesa; no es un error a reportar
-    }, [isVideo, paused, showViewers, currentStatus?.ID]);
+    }, [isVideo, paused, showViewers, currentStatus?.id]);
 
     if (!isOpen || !currentStatus) return null;
 
@@ -252,7 +252,7 @@ export default function StatusViewer() {
     const openViewers = async () => {
         setPaused(true);
         setShowViewers(true);
-        await fetchViewers(currentStatus.ID);
+        await fetchViewers(currentStatus.id);
     };
 
     const closeViewers = () => {
@@ -277,7 +277,7 @@ export default function StatusViewer() {
 
         let deleteSucceeded = false;
         try {
-            await removeMyStatus(currentStatus.ID);
+            await removeMyStatus(currentStatus.id);
             deleteSucceeded = true;
         } catch (err) {
             console.error('Error al eliminar el estado:', err);
@@ -290,7 +290,7 @@ export default function StatusViewer() {
         // sin que un reloj recién reanudado dispare un avance/skip adicional.
     };
 
-    const viewers = viewersByStatusId[currentStatus.ID] || [];
+    const viewers = viewersByStatusId[currentStatus.id] || [];
 
     const content = (
         <div
@@ -308,7 +308,7 @@ export default function StatusViewer() {
             {/* Barras de progreso */}
             <div className="flex gap-1 px-3 pt-3 flex-shrink-0">
                 {currentStatuses.map((s, i) => (
-                    <div key={s.ID} className="flex-1 h-0.5 rounded-full bg-white/25 overflow-hidden">{/* theme-ok */}
+                    <div key={s.id} className="flex-1 h-0.5 rounded-full bg-white/25 overflow-hidden">{/* theme-ok */}
                         <div
                             className="h-full bg-white" // theme-ok
                             style={{ width: `${i < statusIndex ? 100 : i === statusIndex ? progress : 0}%` }}
@@ -322,7 +322,7 @@ export default function StatusViewer() {
                 <Avatar src={ownerAvatar} name={ownerName} size="sm" />
                 <div className="flex-1 min-w-0">
                     <div className="text-white font-semibold text-sm truncate">{ownerName}</div>{/* theme-ok */}
-                    <div className="text-white/60 text-xs">{formatStatusTimestamp(currentStatus.CreatedAt)}</div>{/* theme-ok */}
+                    <div className="text-white/60 text-xs">{formatStatusTimestamp(currentStatus.createdAt)}</div>{/* theme-ok */}
                 </div>
                 <button
                     onClick={closeViewer}
@@ -335,27 +335,27 @@ export default function StatusViewer() {
 
             {/* Contenido + tap zones */}
             <div className="relative flex-1 flex items-center justify-center overflow-hidden" onClick={handleTap}>
-                {currentStatus.Type === 'text' && (
+                {currentStatus.type === 'text' && (
                     <div
                         className="absolute inset-0 flex items-center justify-center p-8"
-                        style={{ backgroundColor: currentStatus.BackgroundColor || '#128C7E' }}
+                        style={{ backgroundColor: currentStatus.backgroundColor || '#128C7E' }}
                     >
                         <p className="text-white text-2xl sm:text-3xl font-medium text-center break-words max-w-2xl">{/* theme-ok */}
-                            {currentStatus.Text}
+                            {currentStatus.text}
                         </p>
                     </div>
                 )}
-                {currentStatus.Type === 'image' && (
+                {currentStatus.type === 'image' && (
                     <img
-                        src={currentStatus.MediaUrl}
-                        alt={currentStatus.Caption || 'Estado'}
+                        src={currentStatus.mediaUrl}
+                        alt={currentStatus.caption || 'Estado'}
                         className="max-w-full max-h-full object-contain"
                     />
                 )}
-                {currentStatus.Type === 'video' && (
+                {currentStatus.type === 'video' && (
                     <video
                         ref={videoRef}
-                        src={currentStatus.MediaUrl}
+                        src={currentStatus.mediaUrl}
                         className="max-w-full max-h-full object-contain"
                         autoPlay
                         muted
@@ -365,10 +365,10 @@ export default function StatusViewer() {
             </div>
 
             {/* Leyenda */}
-            {currentStatus.Caption && currentStatus.Type !== 'text' && (
+            {currentStatus.caption && currentStatus.type !== 'text' && (
                 <div className="px-4 pb-3 flex-shrink-0">
                     <p className="text-white text-sm text-center bg-black/40 rounded-xl px-3 py-2 inline-block max-w-full">{/* theme-ok */}
-                        {currentStatus.Caption}
+                        {currentStatus.caption}
                     </p>
                 </div>
             )}
@@ -382,7 +382,7 @@ export default function StatusViewer() {
                         aria-label="Ver quién vio este estado"
                     >
                         <EyeIcon />
-                        {currentStatus.ViewCount ?? 0}
+                        {currentStatus.viewCount ?? 0}
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(); }}

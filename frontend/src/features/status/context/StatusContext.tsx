@@ -69,7 +69,7 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
     const { user, sidebarView } = useDashboard();
     const { isConnected, on, off } = useWebSocket();
 
-    const [feed, setFeed] = useState<StatusFeed>({ Mine: [], Contacts: [] });
+    const [feed, setFeed] = useState<StatusFeed>({ mine: [], contacts: [] });
     const [loading, setLoading] = useState(false);
     const [feedError, setFeedError] = useState<unknown>(null);
     const [viewersByStatusId, setViewersByStatusId] = useState<Record<number, StatusViewer[]>>({});
@@ -85,7 +85,7 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
             // El cuerpo puede llegar vacío/null; `data?.` restaura la tolerancia
             // de la versión JS en vez de asumir StatusFeed no-nulo.
             const { data } = await getStatusFeed();
-            setFeed({ Mine: data?.Mine || [], Contacts: sortContacts(data?.Contacts || []) });
+            setFeed({ mine: data?.mine || [], contacts: sortContacts(data?.contacts || []) });
             setFeedError(null);
         } catch (err) {
             console.error('Error al obtener el feed de estados:', err);
@@ -115,7 +115,7 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
             if (!payload?.status) return;
             // El contrato (ws.ts) garantiza `owner`, pero el runtime no lo
             // valida (R3-status-new-owner-fallback-unproved) — sin
-            // `owner.Telephon` no hay grupo al que agregar el estado;
+            // `owner.telephon` no hay grupo al que agregar el estado;
             // `applyStatusNew` ignora el evento (no cambia el feed) en vez de
             // crear un grupo fantasma con teléfono vacío.
             setFeed(prev => applyStatusNew(prev, payload.owner, payload.status));
@@ -123,19 +123,19 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
 
         const handleStatusDeleted = (payload: WsHandlerMap['status_deleted']) => {
             if (!payload) return;
-            setFeed(prev => applyStatusDeleted(prev, payload.ownerTelephon, payload.statusId));
+            setFeed(prev => applyStatusDeleted(prev, payload.ownerTelephon, payload.statusID));
         };
 
         const handleStatusViewed = (payload: WsHandlerMap['status_viewed']) => {
-            if (!payload?.statusId) return;
+            if (!payload?.statusID) return;
             setFeed(prev => applyStatusViewedForOwner(prev, payload));
             setViewersByStatusId(prev => {
-                const existing = prev[payload.statusId];
+                const existing = prev[payload.statusID];
                 if (!existing) return prev; // aún no se consultó la lista de vistos, nada que actualizar
-                if (payload.viewer?.Telephon && existing.some(v => v.Telephon === payload.viewer.Telephon)) return prev;
+                if (payload.viewer?.telephon && existing.some(v => v.telephon === payload.viewer.telephon)) return prev;
                 return {
                     ...prev,
-                    [payload.statusId]: [...existing, { ...payload.viewer, ViewedAt: payload.viewedAt }],
+                    [payload.statusID]: [...existing, { ...payload.viewer, viewedAt: payload.viewedAt }],
                 };
             });
         };
@@ -154,21 +154,21 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
 
     const publishStatus = useCallback(async (body: StatusCreateRequest) => {
         const { data } = await createStatus(body);
-        setFeed(prev => ({ ...prev, Mine: [...(prev.Mine || []), data.status] }));
+        setFeed(prev => ({ ...prev, mine: [...(prev.mine || []), data.status] }));
         return data.status;
     }, []);
 
     const viewStatus = useCallback((status: StatusItem, ownerTelephon: string, isMine: boolean) => {
-        if (isMine || !status || status.Viewed) return;
+        if (isMine || !status || status.viewed) return;
         setFeed(prev => {
-            const contacts = (prev.Contacts || []).map(g => {
-                if (g.Telephon !== ownerTelephon) return g;
-                const Statuses = g.Statuses.map(s => s.ID === status.ID ? { ...s, Viewed: true } : s);
-                return { ...g, Statuses, AllViewed: Statuses.every(s => s.Viewed) };
+            const contacts = (prev.contacts || []).map(g => {
+                if (g.telephon !== ownerTelephon) return g;
+                const statuses = g.statuses.map(s => s.id === status.id ? { ...s, viewed: true } : s);
+                return { ...g, statuses, allViewed: statuses.every(s => s.viewed) };
             });
-            return { ...prev, Contacts: sortContacts(contacts) };
+            return { ...prev, contacts: sortContacts(contacts) };
         });
-        markStatusViewed(status.ID).catch(err => console.error('Error al marcar estado como visto:', err));
+        markStatusViewed(status.id).catch(err => console.error('Error al marcar estado como visto:', err));
     }, []);
 
     const fetchViewers = useCallback(async (statusId: number): Promise<StatusViewer[]> => {
@@ -185,7 +185,7 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
 
     const removeMyStatus = useCallback(async (statusId: number) => {
         await deleteStatus(statusId);
-        setFeed(prev => ({ ...prev, Mine: (prev.Mine || []).filter(s => s.ID !== statusId) }));
+        setFeed(prev => ({ ...prev, mine: (prev.mine || []).filter(s => s.id !== statusId) }));
         // El viewer se cierra solo si ese era el último estado (ver efecto de
         // reajuste de statusIndex más abajo); si quedan otros, se recoloca.
     }, []);
@@ -196,41 +196,41 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
     const closeComposer = useCallback(() => setComposerOpen(false), []);
 
     const openMyViewer = useCallback(() => {
-        if (!feed.Mine.length) {
+        if (!feed.mine.length) {
             setComposerOpen(true);
             return;
         }
         setViewerKey({ mode: 'mine' });
         setStatusIndex(0);
-    }, [feed.Mine]);
+    }, [feed.mine]);
 
-    // Orden de feed.Contacts congelado al abrir el visor (ver R3-goNext-reorder):
+    // Orden de feed.contacts congelado al abrir el visor (ver R3-goNext-reorder):
     // goNext navega sobre esta copia estable en vez del array en vivo, que puede
-    // reordenarse (AllViewed se manda al final) justo al marcar como visto el
+    // reordenarse (allViewed se manda al final) justo al marcar como visto el
     // último estado del propio grupo que se está mostrando.
     const contactOrderSnapshotRef = useRef<string[]>([]);
 
     const openContactViewer = useCallback((telephon: string) => {
-        const group = feed.Contacts.find(g => g.Telephon === telephon);
+        const group = feed.contacts.find(g => g.telephon === telephon);
         if (!group) return;
-        contactOrderSnapshotRef.current = feed.Contacts.map(g => g.Telephon);
-        const firstUnseen = group.Statuses.findIndex(s => !s.Viewed);
+        contactOrderSnapshotRef.current = feed.contacts.map(g => g.telephon);
+        const firstUnseen = group.statuses.findIndex(s => !s.viewed);
         setViewerKey({ mode: 'contact', telephon });
         setStatusIndex(firstUnseen === -1 ? 0 : firstUnseen);
-    }, [feed.Contacts]);
+    }, [feed.contacts]);
 
     const closeViewer = useCallback(() => setViewerKey(null), []);
 
     const currentStatuses = useMemo((): StatusItem[] => {
         if (!viewerKey) return [];
-        if (viewerKey.mode === 'mine') return feed.Mine;
-        return feed.Contacts.find(g => g.Telephon === viewerKey.telephon)?.Statuses || [];
+        if (viewerKey.mode === 'mine') return feed.mine;
+        return feed.contacts.find(g => g.telephon === viewerKey.telephon)?.statuses || [];
     }, [viewerKey, feed]);
 
     const currentOwner = useMemo((): StatusContactGroup | null => {
         if (!viewerKey) return null;
         if (viewerKey.mode === 'mine') return null; // el consumidor usa profile/myAvatar
-        return feed.Contacts.find(g => g.Telephon === viewerKey.telephon) || null;
+        return feed.contacts.find(g => g.telephon === viewerKey.telephon) || null;
     }, [viewerKey, feed]);
 
     // Si el estado actual desaparece (p. ej. se borró), cerrar o reajustar el índice.
@@ -255,14 +255,14 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
             closeViewer();
             return;
         }
-        const target = nextTarget(contactOrderSnapshotRef.current, contactsByTelephon(feed.Contacts), viewerKey.telephon);
+        const target = nextTarget(contactOrderSnapshotRef.current, contactsByTelephon(feed.contacts), viewerKey.telephon);
         if (!target) {
             closeViewer();
             return;
         }
         setViewerKey({ mode: 'contact', telephon: target.telephon });
         setStatusIndex(target.statusIndex);
-    }, [viewerKey, statusIndex, currentStatuses, feed.Contacts, closeViewer]);
+    }, [viewerKey, statusIndex, currentStatuses, feed.contacts, closeViewer]);
 
     const goPrev = useCallback(() => {
         if (!viewerKey) return;
@@ -271,16 +271,16 @@ export const StatusProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
         if (viewerKey.mode === 'mine') return;
-        const idx = feed.Contacts.findIndex(g => g.Telephon === viewerKey.telephon);
+        const idx = feed.contacts.findIndex(g => g.telephon === viewerKey.telephon);
         if (idx > 0) {
-            const prevGroup = feed.Contacts[idx - 1];
+            const prevGroup = feed.contacts[idx - 1];
             if (!prevGroup) return;
-            setViewerKey({ mode: 'contact', telephon: prevGroup.Telephon });
-            setStatusIndex(Math.max(prevGroup.Statuses.length - 1, 0));
+            setViewerKey({ mode: 'contact', telephon: prevGroup.telephon });
+            setStatusIndex(Math.max(prevGroup.statuses.length - 1, 0));
         }
-    }, [viewerKey, statusIndex, feed.Contacts]);
+    }, [viewerKey, statusIndex, feed.contacts]);
 
-    const hasUnseen = useMemo(() => feed.Contacts.some(g => !g.AllViewed), [feed.Contacts]);
+    const hasUnseen = useMemo(() => feed.contacts.some(g => !g.allViewed), [feed.contacts]);
 
     const value: StatusContextValue = {
         feed,

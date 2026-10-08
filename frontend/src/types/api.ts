@@ -1,9 +1,9 @@
 // Tipos REST derivados a mano del backend (backend/schemas/*.go,
 // backend/models/*.go). La API sigue mezclando casings mientras avanza el
-// corte a camelCase (AC3 migró user/auth/contactos; AC4 el chat 1:1; los
-// schemas de grupo/estado siguen en PascalCase): esto refleja fielmente el
-// contrato real del backend, no es un error de tipado. Cada dominio se migra
-// en su propio corte.
+// corte a camelCase (AC3 migró user/auth/contactos; AC4 el chat 1:1; AC5 los
+// grupos; AC6 los estados; quedan los leftovers de AC7 en snake_case): esto
+// refleja fielmente el contrato real del backend, no es un error de tipado.
+// Cada dominio se migra en su propio corte.
 
 // ─────────────────────────────────────────────────────────────────────────
 // Enums (string literal unions), verificados contra el código Go real
@@ -267,44 +267,44 @@ export interface CallLogResponse {
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface StatusItem {
-  ID: number;
-  Type: StatusType;
-  Text?: string;
-  /** "#RRGGBB", solo aplica a Type === 'text'. */
-  BackgroundColor?: string;
-  MediaUrl?: string;
-  Caption?: string;
-  CreatedAt: string;
-  ExpiresAt: string;
-  Viewed: boolean;
-  /** Solo tiene sentido en "Mine" (siempre 0 en estados de contactos). */
-  ViewCount: number;
+  id: number;
+  type: StatusType;
+  text?: string;
+  /** "#RRGGBB", solo aplica a type === 'text'. */
+  backgroundColor?: string;
+  mediaUrl?: string;
+  caption?: string;
+  createdAt: string;
+  expiresAt: string;
+  viewed: boolean;
+  /** Solo tiene sentido en "mine" (siempre 0 en estados de contactos). */
+  viewCount: number;
 }
 
 export interface StatusOwnerBrief {
-  Telephon: string;
-  Username: string;
-  ContactName?: string;
-  AvatarUrl?: string;
+  telephon: string;
+  username: string;
+  contactName?: string;
+  avatarUrl?: string;
 }
 
 export interface StatusContactGroup extends StatusOwnerBrief {
-  Statuses: StatusItem[];
-  AllViewed: boolean;
-  LastUpdated: string;
+  statuses: StatusItem[];
+  allViewed: boolean;
+  lastUpdated: string;
 }
 
 /** GET /api/v1/status */
 export interface StatusFeed {
-  Mine: StatusItem[];
-  Contacts: StatusContactGroup[];
+  mine: StatusItem[];
+  contacts: StatusContactGroup[];
 }
 
 export interface StatusViewer {
-  Telephon: string;
-  Username: string;
-  AvatarUrl?: string;
-  ViewedAt: string;
+  telephon: string;
+  username: string;
+  avatarUrl?: string;
+  viewedAt: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

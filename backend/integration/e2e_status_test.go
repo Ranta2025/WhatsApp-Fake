@@ -77,18 +77,18 @@ func TestE2EStatusMutualVisibility(t *testing.T) {
 	// Alice publica un estado de texto.
 	code, created := ca.do("POST", "/api/v1/status", map[string]interface{}{"type": "text", "text": "hola mutuos"})
 	require.Equal(t, 200, code, created)
-	statusID := int(created["status"].(map[string]interface{})["ID"].(float64))
+	statusID := int(created["status"].(map[string]interface{})["id"].(float64))
 
 	t.Run("mutual contact sees the status in feed", func(t *testing.T) {
 		code, feed := cb.do("GET", "/api/v1/status", nil)
 		require.Equal(t, 200, code)
-		contacts, _ := feed["Contacts"].([]interface{})
+		contacts, _ := feed["contacts"].([]interface{})
 		found := false
 		for _, raw := range contacts {
 			group := raw.(map[string]interface{})
-			if group["Telephon"] == alice.Telephon {
+			if group["telephon"] == alice.Telephon {
 				found = true
-				statuses := group["Statuses"].([]interface{})
+				statuses := group["statuses"].([]interface{})
 				require.Len(t, statuses, 1)
 			}
 		}
@@ -98,10 +98,10 @@ func TestE2EStatusMutualVisibility(t *testing.T) {
 	t.Run("one-directional contact does not see it and gets 403 on view", func(t *testing.T) {
 		code, feed := cc.do("GET", "/api/v1/status", nil)
 		require.Equal(t, 200, code)
-		contacts, _ := feed["Contacts"].([]interface{})
+		contacts, _ := feed["contacts"].([]interface{})
 		for _, raw := range contacts {
 			group := raw.(map[string]interface{})
-			require.NotEqual(t, alice.Telephon, group["Telephon"], "carol (unidireccional) NO debe ver el estado de alice")
+			require.NotEqual(t, alice.Telephon, group["telephon"], "carol (unidireccional) NO debe ver el estado de alice")
 		}
 
 		code, _ = cc.do("POST", fmt.Sprintf("/api/v1/status/%d/view", statusID), nil)
@@ -119,6 +119,6 @@ func TestE2EStatusMutualVisibility(t *testing.T) {
 		viewers := viewersResp["viewers"].([]interface{})
 		require.Len(t, viewers, 1, "la vista duplicada no debe generar una segunda entrada")
 		assert_ := viewers[0].(map[string]interface{})
-		require.Equal(t, bob.Telephon, assert_["Telephon"])
+		require.Equal(t, bob.Telephon, assert_["telephon"])
 	})
 }

@@ -13,12 +13,10 @@
 //
 // Scope / known gaps (documented, not asserted here):
 //   - Only struct-based payloads are walked. Hand-built map[string]any payloads
-//     are invisible to reflection. Today those carry non-camel keys that this
-//     test cannot see:
-//     websocket/message_handlers.go  group_delete_message {MessageID, GroupID}
-//     handlers/handlerStatus.go      status_viewed {statusId}, status_deleted {statusId}
-//     The api-casing tasks must rename those by hand; a future task can add a
-//     static check when the maps are converted to structs.
+//     are invisible to reflection; the domain tasks renamed those by hand
+//     (group_delete_message, status_viewed/status_deleted), so today none carry
+//     a non-camel key. A future task can add a static check when the maps are
+//     converted to structs.
 //   - Promoted fields from anonymous embedded structs declared OUTSIDE the
 //     backend packages (for example gorm.Model) are skipped: they are not part
 //     of the app JSON contract.
@@ -50,34 +48,6 @@ import (
 // allowlist maps a still-non-camel JSON key to the api-casing domain that owns
 // its rename. It MUST become empty by the end of the cutover.
 var allowlist = map[string]string{
-	// Shared keys re-homed to AC6 after AC5 renamed its own emitters: the AC5
-	// group schemas no longer emit them, but StatusItem emits ID/CreatedAt/
-	// MediaUrl/ExpiresAt, StatusOwnerBrief/StatusViewer emit Telephon/Username/
-	// ContactName/AvatarUrl and StatusFeed emits Mine. They stay allowlisted
-	// until AC6 lands (their last owner).
-	"Username":    "AC6-status",
-	"Telephon":    "AC6-status",
-	"ContactName": "AC6-status",
-	"Mine":        "AC6-status",
-	"ID":          "AC6-status",
-	"CreatedAt":   "AC6-status",
-	"MediaUrl":    "AC6-status",
-	"ExpiresAt":   "AC6-status",
-	"AvatarUrl":   "AC6-status",
-
-	// AC6 status (Status* schemas + status_* WS).
-	"Type":            "AC6-status",
-	"Text":            "AC6-status",
-	"BackgroundColor": "AC6-status",
-	"Caption":         "AC6-status",
-	"Viewed":          "AC6-status",
-	"ViewCount":       "AC6-status",
-	"AllViewed":       "AC6-status",
-	"LastUpdated":     "AC6-status",
-	"Statuses":        "AC6-status",
-	"Contacts":        "AC6-status",
-	"ViewedAt":        "AC6-status",
-
 	// AC7 leftovers (bug-report request body).
 	"user_email":  "AC7-leftovers",
 	"screen_size": "AC7-leftovers",

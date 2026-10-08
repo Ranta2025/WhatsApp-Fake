@@ -15,7 +15,7 @@ export const createStatus = (
 
 /**
  * Obtiene el feed de estados: los propios y los de contactos mutuos.
- * Returns StatusFeed ({ Mine: StatusItem[], Contacts: StatusContactGroup[] })
+ * Returns StatusFeed ({ mine: StatusItem[], contacts: StatusContactGroup[] })
  */
 export const getStatusFeed = (): Promise<AxiosResponse<StatusFeed>> =>
     api.get<StatusFeed>('/api/v1/status');
