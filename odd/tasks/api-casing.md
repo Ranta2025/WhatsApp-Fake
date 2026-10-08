@@ -80,7 +80,8 @@ Contract-test design:
 - [x] AC5 Domain groups (`Group*` schemas, `group_*` WS events, receipts, admin/settings, `GroupChatWindow.tsx`, `groupApi.ts`). Matrix green. One commit. Route: delegated.
 - [x] AC6 Domain status (`Status*`, `status_*` events, `statusApi.ts`). Matrix green. One commit. Route: delegated.
 - [x] AC7 Leftovers: bug-report (`user_email`, `screen_size`), calls, media, search, push/mute endpoints; inventory allowlist empty; `docs/API_CONTRACT.md` (rules + old -> new table). Route: delegated.
-- [ ] AC10 Close: full matrix twice, doc + mirror.
+- [x] AC10 Close: full matrix twice, doc + mirror. Pass 2 (a5f40af): go ok, frontend 1388/build ok, integration ok (94s), e2e 44/1 skipped/1 failed = same known stickers-full:168 flake (passed alone 9.1s). CLOSED 2026-10-0x.
+- RDD close-out: assess `a9282dc --committed-only` = medium / slice_budget_reached (7642 lines, 212 paths). Outcome: **unavailable** — START would deterministically hit `lens_context_budget_exceeded` (proven at 3723 and 1500 lines; no authority would be created). Chained smaller candidates contradict the authorized one-commit-per-domain plan, so no START attempted; verification of record is the per-domain full matrix (each domain: go + frontend + integration + e2e green). Delivery per ordinary repository policy + user merge order.
 
 ## Acceptance criteria
 - Every JSON key emitted by the API and WS is camelCase by the end; no snake_case or PascalCase remains (checked by the inventory test).
