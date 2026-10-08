@@ -67,7 +67,7 @@ const groupMsg = (id: number, Reactions?: ReactionSummary[]): GroupMessageRespon
     MessageID: id, GroupID: 9, SenderTelephon: '111', SenderUsername: 'ana', Message: `g${id}`, Time: iso(id), Edited: false,
     ...(Reactions ? { Reactions } : {}),
 });
-const contact = (n: string, name: string): ContactChat => ({ Number: n, ContactName: name, Username: n } as ContactChat);
+const contact = (n: string, name: string): ContactChat => ({ telephon: n, contactName: name, username: n } as ContactChat);
 const group = (): SelectedGroup => ({
     ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
     OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
@@ -99,7 +99,7 @@ describe('DashboardProvider reactions', () => {
         vi.clearAllMocks();
         vi.spyOn(console, 'error').mockImplementation(() => {});
         mockGet.mockImplementation((url: string) => {
-            if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+            if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
             if (url.startsWith('/api/v1/chat/')) return Promise.resolve({ data: [], headers: {} });
             return Promise.resolve({ data: null });
         });
@@ -368,7 +368,7 @@ describe('DashboardProvider reactions', () => {
 
         it('does not notify when that 1:1 chat is open', async () => {
             await seed();
-            await act(async () => { ctx!.setSelected({ ...contact('B', 'Bea'), Number: 'B' } as never); });
+            await act(async () => { ctx!.setSelected({ ...contact('B', 'Bea'), telephon: 'B' } as never); });
             emitReaction(direct());
             expect(toastMessages()).toEqual([]);
             expect(ctx!.messagesByChat['B']?.[0]?.Reactions).toEqual([chip('👍')]);
@@ -385,7 +385,7 @@ describe('DashboardProvider reactions', () => {
 
         it('notifies for a different open chat', async () => {
             await seed();
-            await act(async () => { ctx!.setSelected({ ...contact('C', 'Carl'), Number: 'C' } as never); });
+            await act(async () => { ctx!.setSelected({ ...contact('C', 'Carl'), telephon: 'C' } as never); });
             emitReaction(direct());
             expect(toastMessages()).toEqual(['Bea reaccionó 👍 a: hola']);
         });

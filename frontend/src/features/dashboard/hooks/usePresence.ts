@@ -40,9 +40,9 @@ export const usePresence = (): void => {
             }
         };
 
-        const handleUserOffline = (payload: { telephon: string; username: string; last_seen: string }) => {
+        const handleUserOffline = (payload: { telephon: string; username: string; lastSeen: string }) => {
             if (payload?.telephon) {
-                const { telephon, last_seen } = payload;
+                const { telephon, lastSeen } = payload;
                 // Debounce: no marcar offline de inmediato, esperar por si se reconecta
                 const existing = offlineTimers.current.get(telephon);
                 if (existing !== undefined) {
@@ -55,8 +55,8 @@ export const usePresence = (): void => {
                         next.delete(telephon);
                         return next;
                     });
-                    if (last_seen) {
-                        setLastSeenMap(prev => ({ ...prev, [telephon]: last_seen }));
+                    if (lastSeen) {
+                        setLastSeenMap(prev => ({ ...prev, [telephon]: lastSeen }));
                     }
                 }, OFFLINE_DEBOUNCE_MS));
             }

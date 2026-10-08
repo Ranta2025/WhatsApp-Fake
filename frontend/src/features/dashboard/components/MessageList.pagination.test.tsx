@@ -29,12 +29,12 @@ describe('MessageList infinite scroll up (1:1)', () => {
 
     const renderWith = (paging: PagingState | undefined, messages: Message[] = [msg(5), msg(6)]) => {
         mockUseDashboard.mockReturnValue({
-            selected: { Number: '222' },
+            selected: { telephon: '222' },
             focusedChat: {},
             messagesByChat: { '222': messages },
             chatPaging: paging ? { '222': paging } : {},
             loadOlderMessages,
-            profile: { Telephon: '111' },
+            profile: { telephon: '111' },
             globalWallpaper: null,
         } as unknown as DashboardContextValue);
         act(() => { root.render(<MessageList />); });

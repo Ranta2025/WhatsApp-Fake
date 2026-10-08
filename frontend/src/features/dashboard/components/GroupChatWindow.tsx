@@ -462,11 +462,11 @@ const AddMembersModal = ({ isOpen, onClose, group }: AddMembersModalProps) => {
 
     const existingMembers = new Set((group?.Members || []).map(m => m.Telephon));
     const candidates = contacts.filter(c =>
-        c.Status === 'accepted' &&
-        !existingMembers.has(c.Number) &&
-        ((c.ContactName||'').toLowerCase().includes(search.toLowerCase()) ||
-         (c.Username||'').toLowerCase().includes(search.toLowerCase()) ||
-         c.Number.includes(search))
+        c.status === 'accepted' &&
+        !existingMembers.has(c.telephon) &&
+        ((c.contactName||'').toLowerCase().includes(search.toLowerCase()) ||
+         (c.username||'').toLowerCase().includes(search.toLowerCase()) ||
+         c.telephon.includes(search))
     );
 
     const toggle = (num: string) => setSelected(prev => {
@@ -516,17 +516,17 @@ const AddMembersModal = ({ isOpen, onClose, group }: AddMembersModalProps) => {
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-1">
                     {candidates.map(c => (
-                        <button key={c.Number} type="button" onClick={() => toggle(c.Number)}
-                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left ${selected.has(c.Number) ? 'bg-indigo-600/20' : 'hover:bg-fg/5'}`}>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${selected.has(c.Number) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-600'}`}>
-                                {selected.has(c.Number) && <svg className="w-3 h-3 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                        <button key={c.telephon} type="button" onClick={() => toggle(c.telephon)}
+                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left ${selected.has(c.telephon) ? 'bg-indigo-600/20' : 'hover:bg-fg/5'}`}>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${selected.has(c.telephon) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-600'}`}>
+                                {selected.has(c.telephon) && <svg className="w-3 h-3 text-on-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                             </div>
                             <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center text-sm font-semibold text-fg overflow-hidden flex-shrink-0">
-                                {(c.ContactName || c.Username)?.charAt(0)?.toUpperCase()}
+                                {(c.contactName || c.username)?.charAt(0)?.toUpperCase()}
                             </div>
                             <div className="flex-1 overflow-hidden">
-                                <div className="font-medium text-slate-100 truncate text-sm">{c.ContactName || c.Username}</div>
-                                <div className="text-xs text-slate-500 truncate">{c.Number}</div>
+                                <div className="font-medium text-slate-100 truncate text-sm">{c.contactName || c.username}</div>
+                                <div className="text-xs text-slate-500 truncate">{c.telephon}</div>
                             </div>
                         </button>
                     ))}
@@ -720,7 +720,7 @@ const GroupChatWindowInner = () => {
         }
     };
 
-    const myTelephon = profile?.Telephon;
+    const myTelephon = profile?.telephon;
     const liveMessages = selectedGroup ? groupMessages[selectedGroup.ID] : undefined;
     // Ventana desprendida (abierta desde una búsqueda): se muestra en lugar de los últimos mensajes.
     const focused = selectedGroup ? focusedGroup[selectedGroup.ID] : undefined;
@@ -1176,7 +1176,7 @@ const GroupChatWindowInner = () => {
                                     selectedGroup.Members.map((m) => {
                                         const isSelf     = m.Telephon === myTelephon;
                                         const isOpen     = memberMenuOpen === m.Telephon;
-                                        const isContact  = contacts.some(c => c.Number === m.Telephon && c.Status === 'accepted');
+                                        const isContact  = contacts.some(c => c.telephon === m.Telephon && c.status === 'accepted');
                                         const displayName = isSelf ? 'Tú' : (m.ContactName || ('~' + m.Username));
                                         return (
                                             <div key={m.Telephon} className="relative">
@@ -1220,7 +1220,7 @@ const GroupChatWindowInner = () => {
                                                     className="bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[190px]"
                                                 >
                                                     <button
-                                                        onClick={() => { setSelected({ Number: m.Telephon, Username: m.Username, ContactName: m.ContactName || '', Status: 'unknown' }); setShowMembers(false); setMemberMenuOpen(null); }}
+                                                        onClick={() => { setSelected({ telephon: m.Telephon, username: m.Username, contactName: m.ContactName || '', status: 'unknown' }); setShowMembers(false); setMemberMenuOpen(null); }}
                                                         className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />

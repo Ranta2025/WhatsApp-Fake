@@ -118,9 +118,9 @@ func TestE2EReactions(t *testing.T) {
 	}
 	ca, cb, cc := login(alice), login(bob), login(carol)
 
-	code, _ := cb.do("POST", "/api/v1/contact", map[string]string{"number": alice.Telephon, "contact_name": "Alice"})
+	code, _ := cb.do("POST", "/api/v1/contact", map[string]string{"telephon": alice.Telephon, "contactName": "Alice"})
 	require.Equal(t, 201, code)
-	code, _ = ca.do("POST", "/api/v1/contact", map[string]string{"number": bob.Telephon, "contact_name": "Bob"})
+	code, _ = ca.do("POST", "/api/v1/contact", map[string]string{"telephon": bob.Telephon, "contactName": "Bob"})
 	require.Equal(t, 201, code)
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "Reacciones", "members": []string{bob.Telephon}})
 	require.Equal(t, 201, code, grp)

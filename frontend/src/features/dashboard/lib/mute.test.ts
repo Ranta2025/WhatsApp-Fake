@@ -44,6 +44,13 @@ describe('parseMuteFields', () => {
         expect(parseMuteFields('x')).toEqual({});
     });
 
+    it('reads the AC3 camelCase contact keys (muted/mutedUntil) as well as the legacy PascalCase', () => {
+        expect(parseMuteFields({ muted: true, mutedUntil: at(1000) })).toEqual({ Muted: true, MutedUntil: at(1000) });
+        expect(parseMuteFields({ muted: true })).toEqual({ Muted: true });
+        expect(parseMuteFields({ muted: false, mutedUntil: at(1000) })).toEqual({});
+        expect(parseMuteFields({ muted: 'yes' })).toEqual({});
+    });
+
     it('a malformed MutedUntil with Muted:true is NOT muted and warns (never silently "always")', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         expect(parseMuteFields({ Muted: true, MutedUntil: 'garbage' })).toEqual({});

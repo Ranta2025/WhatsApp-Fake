@@ -255,8 +255,8 @@ const DashboardContent = () => {
                 <Suspense fallback={<div className="fixed inset-0 z-call bg-black/80 flex items-center justify-center text-on-accent">Conectando llamada...</div>}>
                     <CallRoom
                         roomID={callState.roomID}
-                        userID={user?.telephon || profile?.Telephon}
-                        userName={user?.username || profile?.Username}
+                        userID={user?.telephon || profile?.telephon}
+                        userName={user?.username || profile?.username}
                         callType={callState.callType}
                         onCallEnd={handleEndCall}
                     />

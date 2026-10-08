@@ -14,20 +14,20 @@ import { replySenderLabel } from './replyLabel';
 // loads, which must not be mistaken for "me".
 describe('replySenderLabel (1:1)', () => {
     it('devuelve "ti mismo" cuando el remitente soy yo', () => {
-        expect(replySenderLabel({ SenderTelephon: '111' }, '111', { ContactName: 'Ana', Username: 'ana' })).toBe('ti mismo');
+        expect(replySenderLabel({ SenderTelephon: '111' }, '111', { contactName: 'Ana', username: 'ana' })).toBe('ti mismo');
     });
 
     it('usa el ContactName del contacto seleccionado cuando el remitente es otro', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { ContactName: 'Ana', Username: 'ana' })).toBe('Ana');
+        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: 'Ana', username: 'ana' })).toBe('Ana');
     });
 
     it('cae a Username si el contacto no tiene ContactName', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { ContactName: null, Username: 'ana' })).toBe('ana');
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { ContactName: undefined, Username: 'ana' })).toBe('ana');
+        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: null, username: 'ana' })).toBe('ana');
+        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: undefined, username: 'ana' })).toBe('ana');
     });
 
     it('cae a "mensaje" si no hay ContactName ni Username', () => {
-        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { ContactName: null, Username: '' })).toBe('mensaje');
+        expect(replySenderLabel({ SenderTelephon: '222' }, '111', { contactName: null, username: '' })).toBe('mensaje');
     });
 
     it('cae a "mensaje" si no hay chat seleccionado', () => {
@@ -39,7 +39,7 @@ describe('replySenderLabel (1:1)', () => {
         // profile may still be loading; SenderTelephon can be missing on
         // untrusted network data — the two undefineds must not compare equal.
         const sender = {} as { SenderTelephon: string };
-        expect(replySenderLabel(sender, undefined, { ContactName: 'Ana', Username: 'ana' })).toBe('Ana');
+        expect(replySenderLabel(sender, undefined, { contactName: 'Ana', username: 'ana' })).toBe('Ana');
     });
 });
 

@@ -45,7 +45,7 @@ describe('GroupChatWindow in-chat search', () => {
             selectedGroup: { ID: 9, Name: 'Equipo', MemberCount: 3, UserRole: over.role ?? 'member', Members: [] },
             setSelectedGroup: vi.fn(), groupMessages: { 9: [msg(100), msg(101)] }, setGroupMessages: vi.fn(),
             fetchGroupMessages: vi.fn(), fetchGroupDetail: vi.fn(), groupPaging: {}, loadOlderGroupMessages: vi.fn(),
-            typingUsers: new Set(), profile: { Telephon: '111' }, contacts: [], setSelected: vi.fn(),
+            typingUsers: new Set(), profile: { telephon: '111' }, contacts: [], setSelected: vi.fn(),
             avatarMap: {}, myAvatar: '', setGroups: vi.fn(), addToast: vi.fn(), globalWallpaper: null,
             groupReceipts: {}, focusedGroup: over.focusedGroup ?? {},
             openMessageAt, returnToLatest, loadOlderFocused, loadNewerFocused,

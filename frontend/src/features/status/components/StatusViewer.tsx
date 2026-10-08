@@ -99,7 +99,7 @@ export default function StatusViewer() {
     const currentStatus = currentStatuses[statusIndex] || null;
 
     const ownerName = isMine
-        ? (profile?.Username || 'Mi estado')
+        ? (profile?.username || 'Mi estado')
         : (currentOwner?.ContactName || currentOwner?.Username || currentOwner?.Telephon || '');
     const ownerAvatar = isMine ? myAvatar : currentOwner?.AvatarUrl;
 

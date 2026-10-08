@@ -22,7 +22,7 @@ describe('toUser', () => {
     });
 
     it('maps a real UserGet body', () => {
-        expect(toUser({ Username: 'ana', Telephon: '5551234', avatar_url: 'x.png' }))
+        expect(toUser({ username: 'ana', telephon: '5551234', avatarUrl: 'x.png' }))
             .toEqual({ username: 'ana', telephon: '5551234', avatar: 'x.png' });
     });
 });

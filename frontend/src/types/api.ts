@@ -1,9 +1,9 @@
 // Tipos REST derivados a mano del backend (backend/schemas/*.go,
-// backend/models/*.go). La API mezcla casings a propósito (PascalCase en
-// los schemas de chat/grupo/estado, camelCase en llamadas y en los bodies de
-// petición, snake_case en avatar/wallpaper/last_seen): esto refleja
-// fielmente esa inconsistencia real del backend, no es un error de tipado.
-// No se migra el backend; los tipos documentan el contrato tal como es.
+// backend/models/*.go). La API sigue mezclando casings mientras avanza el
+// corte a camelCase (AC3 ya migró user/auth/contactos a camelCase; los
+// schemas de chat/grupo/estado siguen en PascalCase): esto refleja
+// fielmente el contrato real del backend, no es un error de tipado.
+// Cada dominio se migra en su propio corte.
 
 // ─────────────────────────────────────────────────────────────────────────
 // Enums (string literal unions), verificados contra el código Go real
@@ -51,37 +51,36 @@ export type MessageKind = 'system';
 export type DisappearSeconds = 0 | 86400 | 604800 | 7776000;
 
 // ─────────────────────────────────────────────────────────────────────────
-// User / perfil — backend/schemas/schemauser.go UserGet (mixed casing:
-// Username/Telephon/Gmail sin json tag → PascalCase; avatar/wallpaper con
-// tag explícito → snake_case).
+// User / perfil — backend/schemas/schemauser.go UserGet (camelCase tras el
+// corte AC3: username/telephon/email/avatarUrl/wallpaperUrl).
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface UserGet {
-  Username: string;
-  Telephon: string;
-  Gmail: string;
-  avatar_url: string;
-  wallpaper_url: string;
+  username: string;
+  telephon: string;
+  email: string;
+  avatarUrl: string;
+  wallpaperUrl: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Contactos — backend/models/contact.go ContactChat (sin json tag →
-// PascalCase; LastSeen/avatar/wallpaper con tag → snake_case).
+// Contactos — backend/models/contact.go ContactChat (camelCase tras el corte
+// AC3: username/telephon/status/contactName/lastSeen/avatarUrl/wallpaperUrl).
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface ContactChat {
-  Username: string;
-  Number: string;
-  Status: ContactStatus;
-  ContactName: string;
+  username: string;
+  telephon: string;
+  status: ContactStatus;
+  contactName: string;
   /** Puede ser null (nunca visto / offline); no tiene omitempty, así que siempre está presente. */
-  last_seen: string | null;
-  avatar_url: string;
-  wallpaper_url: string;
-  /** Silencio por chat (omitempty): ausente = no silenciado; true sin MutedUntil = "Siempre". */
-  Muted?: boolean;
-  /** RFC 3339 UTC; el cliente trata `MutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
-  MutedUntil?: string;
+  lastSeen: string | null;
+  avatarUrl: string;
+  wallpaperUrl: string;
+  /** Silencio por chat (omitempty): ausente = no silenciado; true sin mutedUntil = "Siempre". */
+  muted?: boolean;
+  /** RFC 3339 UTC; el cliente trata `mutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
+  mutedUntil?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -330,13 +329,13 @@ export interface UserLoginRequest {
 }
 
 export interface ContactAddRequest {
-  number: string;
-  contact_name: string;
+  telephon: string;
+  contactName: string;
 }
 
 export interface GetContactPutRequest {
-  number: string;
-  contact_name: string;
+  telephon: string;
+  contactName: string;
 }
 
 export interface MessageSendRequest {

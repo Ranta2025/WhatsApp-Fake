@@ -87,8 +87,8 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
         window.dispatchEvent(new CustomEvent('chat-wallpaper-changed', { detail: newWps }));
     };
 
-    const avatarUrl = avatarMap[selected.Number];
-    const displayName = selected.ContactName || selected.Username;
+    const avatarUrl = avatarMap[selected.telephon];
+    const displayName = selected.contactName || selected.username;
 
     return (
         <div className="fixed inset-0 lg:static lg:w-80 bg-slate-900/95 lg:border-l border-fg/10 flex flex-col h-full z-modal shadow-2xl transition-all duration-300">
@@ -124,7 +124,7 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                             </svg>
                         </div>
                     )}
-                    {isContactOnline(selected.Number) && (
+                    {isContactOnline(selected.telephon) && (
                         <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-4 border-slate-900"></div>
                     )}
                 </div>
@@ -133,16 +133,16 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                     {displayName}
                 </h2>
                 <p className="text-indigo-300 mb-6 text-center">
-                    {selected.Number}
+                    {selected.telephon}
                 </p>
 
                 <div className="w-full space-y-4">
                     <div className="bg-fg/5 rounded-xl p-4 border border-fg/5">
                         <div className="text-xs text-indigo-300/70 mb-1 uppercase tracking-wider font-semibold">Estado</div>
                         <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${isContactOnline(selected.Number) ? 'bg-green-500' : 'bg-slate-500'}`}></span>
+                            <span className={`w-2 h-2 rounded-full ${isContactOnline(selected.telephon) ? 'bg-green-500' : 'bg-slate-500'}`}></span>
                             <span className="text-fg font-medium">
-                                {isContactOnline(selected.Number) ? 'En línea' : (getLastSeenText(selected.Number) || 'Desconectado')}
+                                {isContactOnline(selected.telephon) ? 'En línea' : (getLastSeenText(selected.telephon) || 'Desconectado')}
                             </span>
                         </div>
                     </div>
@@ -177,10 +177,10 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
 
                     <div className="bg-fg/5 rounded-xl p-4 border border-fg/5">
                         <div className="text-xs text-indigo-300/70 mb-3 uppercase tracking-wider font-semibold">Fondo de este chat</div>
-                        {chatWallpapers[selected.Number] ? (
+                        {chatWallpapers[selected.telephon] ? (
                             <div className="relative rounded-xl overflow-hidden h-28 mb-2">
                                 <img
-                                    src={chatWallpapers[selected.Number]}
+                                    src={chatWallpapers[selected.telephon]}
                                     alt="Fondo del chat"
                                     className="w-full h-full object-cover"
                                 />
@@ -190,11 +190,11 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
                                         {uploadingWallpaper ? 'Subiendo...' : 'Cambiar'}
-                                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleContactWallpaperUpload(e, selected.Number)} disabled={uploadingWallpaper} />
+                                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleContactWallpaperUpload(e, selected.telephon)} disabled={uploadingWallpaper} />
                                     </label>
                                     <button
                                         type="button"
-                                        onClick={() => handleRemoveContactWallpaper(selected.Number)}
+                                        onClick={() => handleRemoveContactWallpaper(selected.telephon)}
                                         className="flex items-center gap-1 text-xs text-red-300 bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors"
                                     >
                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -219,10 +219,10 @@ const ContactDetails = ({ isOpen, onClose, onStartCall, setViewImage }: ContactD
                                         <span className="text-xs text-indigo-300">Poner fondo a este chat</span>
                                     </>
                                 )}
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleContactWallpaperUpload(e, selected.Number)} disabled={uploadingWallpaper} />
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleContactWallpaperUpload(e, selected.telephon)} disabled={uploadingWallpaper} />
                             </label>
                         )}
-                        {!chatWallpapers[selected.Number] && globalWallpaper && (
+                        {!chatWallpapers[selected.telephon] && globalWallpaper && (
                             <p className="text-xs text-indigo-300/50 mt-2 text-center">Usando fondo global</p>
                         )}
                     </div>

@@ -35,7 +35,7 @@ describe('MessageList expiry clock (1:1)', () => {
         document.body.appendChild(container);
         root = createRoot(container);
         dash.value = {
-            selected: { Number: 'B', Username: 'bea', ContactName: 'Bea' },
+            selected: { telephon: 'B', username: 'bea', contactName: 'Bea' },
             focusedChat: {},
             messagesByChat: { B: [
                 msg(1),
@@ -43,7 +43,7 @@ describe('MessageList expiry clock (1:1)', () => {
                 msg(3, { ExpiresAt: 'garbage' }),
                 msg(4, { SenderTelephon: 'me', Receptor: 'B', ExpiresAt: '2026-01-02T10:00:00Z' }),
             ] },
-            profile: { Telephon: 'me' },
+            profile: { telephon: 'me' },
             globalWallpaper: '', chatPaging: {}, loadOlderMessages: vi.fn(), reactToMessage: vi.fn(),
         };
         act(() => { root.render(<MessageList />); });

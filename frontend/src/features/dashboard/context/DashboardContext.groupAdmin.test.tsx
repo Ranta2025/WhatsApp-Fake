@@ -109,7 +109,7 @@ describe('DashboardProvider group admin events', () => {
         });
     };
     const asUser = async (telephon: string) => {
-        await act(async () => { ctx!.setProfile({ Username: 'me', Telephon: telephon, Gmail: '', avatar_url: '', wallpaper_url: '' }); });
+        await act(async () => { ctx!.setProfile({ username: 'me', telephon: telephon, email: '', avatarUrl: '', wallpaperUrl: '' }); });
     };
     const openGroup = async () => {
         await act(async () => { ctx!.setSelectedGroup(selected()); });

@@ -32,10 +32,10 @@ describe('MessageList status ticks (1:1)', () => {
 
     beforeEach(() => {
         dash.value = {
-            selected: { Number: 'B', Username: 'bea' },
+            selected: { telephon: 'B', username: 'bea' },
             focusedChat: {},
             messagesByChat: { B: [msg(1, 'enviado'), msg(2, 'entregado'), msg(3, 'visto'), msg(4, 'visto', 'B')] },
-            profile: { Telephon: 'me' },
+            profile: { telephon: 'me' },
             globalWallpaper: '',
             chatPaging: {},
             loadOlderMessages: vi.fn(),

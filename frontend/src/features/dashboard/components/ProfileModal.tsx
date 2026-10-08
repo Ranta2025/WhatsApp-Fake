@@ -61,7 +61,7 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
             const { data } = await api.post<MediaUploadResult>('/api/v1/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            await api.put('/api/v1/profile/wallpaper', { wallpaper_url: data.url });
+            await api.put('/api/v1/profile/wallpaper', { wallpaperUrl: data.url });
             setGlobalWallpaper(data.url);
         } catch (err) {
             console.error('Error uploading wallpaper:', err);
@@ -74,7 +74,7 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
     const handleRemoveGlobalWallpaper = async () => {
         setUploadingWallpaper(true);
         try {
-            await api.put('/api/v1/profile/wallpaper', { wallpaper_url: "" });
+            await api.put('/api/v1/profile/wallpaper', { wallpaperUrl: "" });
             setGlobalWallpaper("");
         } catch (err) {
             console.error('Error removing wallpaper:', err);
@@ -112,10 +112,10 @@ const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 const avatarUrl = uploadData.url;
-                await api.put<unknown>('/api/v1/profile/avatar', { avatar_url: avatarUrl });
+                await api.put<unknown>('/api/v1/profile/avatar', { avatarUrl: avatarUrl });
                 setMyAvatar(avatarUrl);
             } else if (photoRemoved) {
-                await api.put<unknown>('/api/v1/profile/avatar', { avatar_url: "" });
+                await api.put<unknown>('/api/v1/profile/avatar', { avatarUrl: "" });
                 setMyAvatar("");
             }
 

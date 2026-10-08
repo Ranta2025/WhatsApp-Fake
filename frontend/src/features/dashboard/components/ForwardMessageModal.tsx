@@ -53,8 +53,8 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
     };
 
     const filteredContacts = (contacts || []).filter(c => {
-        const name = (c.ContactName || c.Username || '').toLowerCase();
-        const number = (c.Number || '').toLowerCase();
+        const name = (c.contactName || c.username || '').toLowerCase();
+        const number = (c.telephon || '').toLowerCase();
         const q = search.toLowerCase();
         return name.includes(q) || number.includes(q);
     });
@@ -112,14 +112,14 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
                         <p className="text-center text-slate-500 text-sm py-8">No se encontraron contactos</p>
                     ) : (
                         filteredContacts.map(contact => {
-                            const isSelected = selected.includes(contact.Number);
+                            const isSelected = selected.includes(contact.telephon);
                             const isDisabled = selected.length >= MAX_CONTACTS && !isSelected;
-                            const displayName = contact.ContactName || contact.Username || contact.Number;
+                            const displayName = contact.contactName || contact.username || contact.telephon;
 
                             return (
                                 <button
-                                    key={contact.Number}
-                                    onClick={() => !isDisabled && toggleContact(contact.Number)}
+                                    key={contact.telephon}
+                                    onClick={() => !isDisabled && toggleContact(contact.telephon)}
                                     disabled={isDisabled}
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left ${
                                         isDisabled
@@ -131,9 +131,9 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
                                 >
                                     {/* Avatar */}
                                     <div className="relative w-10 h-10 flex-shrink-0">
-                                        {avatarMap?.[contact.Number] ? (
+                                        {avatarMap?.[contact.telephon] ? (
                                             <img
-                                                src={avatarMap[contact.Number]}
+                                                src={avatarMap[contact.telephon]}
                                                 alt={displayName}
                                                 className="w-10 h-10 rounded-full object-cover"
                                             />
@@ -147,7 +147,7 @@ const ForwardMessageModal = ({ isOpen, onClose, onForward, message }: ForwardMes
                                     {/* Name */}
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium text-slate-100 truncate">{displayName}</p>
-                                        <p className="text-xs text-slate-500 truncate">{contact.Number}</p>
+                                        <p className="text-xs text-slate-500 truncate">{contact.telephon}</p>
                                     </div>
 
                                     {/* Checkbox */}

@@ -26,9 +26,9 @@ func TestMiddlewareRegister_BindErrorsAreFieldSpecific(t *testing.T) {
 		body string
 		want string
 	}{
-		{"email invalido", `{"username":"usuario1","email":"no-es-email","numero":"+5355123456","password":"Abcdef12!"}`, "El email no es válido"},
-		{"telefono invalido", `{"username":"usuario1","email":"a@b.com","numero":"5355123456","password":"Abcdef12!"}`, "El número de teléfono no es válido (formato internacional, ej: +5355123456)"},
-		{"campo ausente", `{"username":"usuario1","numero":"+5355123456","password":"Abcdef12!"}`, "Complete todos los campos"},
+		{"email invalido", `{"username":"usuario1","email":"no-es-email","telephon":"+5355123456","password":"Abcdef12!"}`, "El email no es válido"},
+		{"telefono invalido", `{"username":"usuario1","email":"a@b.com","telephon":"5355123456","password":"Abcdef12!"}`, "El número de teléfono no es válido (formato internacional, ej: +5355123456)"},
+		{"campo ausente", `{"username":"usuario1","telephon":"+5355123456","password":"Abcdef12!"}`, "Complete todos los campos"},
 		{"json malformado", `{"username":`, "Complete todos los campos"},
 	}
 	for _, tc := range cases {

@@ -97,10 +97,10 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 	// Contactos: Ana con Luis/Marta/Dave (crear y añadir); Marta con Dave para
 	// que su intento de añadir sea válido salvo por la restricción del grupo.
 	for _, c := range []models.UserDataBase{luis, marta, dave} {
-		code, body := ca.do("POST", "/api/v1/contact", map[string]string{"number": c.Telephon, "contact_name": c.Username})
+		code, body := ca.do("POST", "/api/v1/contact", map[string]string{"telephon": c.Telephon, "contactName": c.Username})
 		require.Equal(t, 201, code, body)
 	}
-	code, body := cm.do("POST", "/api/v1/contact", map[string]string{"number": dave.Telephon, "contact_name": dave.Username})
+	code, body := cm.do("POST", "/api/v1/contact", map[string]string{"telephon": dave.Telephon, "contactName": dave.Username})
 	require.Equal(t, 201, code, body)
 
 	var wsAna, wsLuis, wsMarta *websocket.Conn

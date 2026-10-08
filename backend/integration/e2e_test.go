@@ -137,9 +137,9 @@ func TestE2E(t *testing.T) {
 
 	code, me := ca.do("GET", "/api/v1/user", nil)
 	require.Equal(t, 200, code)
-	assert.Equal(t, alice.Telephon, me["Telephon"])
+	assert.Equal(t, alice.Telephon, me["telephon"])
 
-	code, _ = ca.do("POST", "/api/v1/contact", map[string]string{"number": bob.Telephon, "contact_name": "Bob"})
+	code, _ = ca.do("POST", "/api/v1/contact", map[string]string{"telephon": bob.Telephon, "contactName": "Bob"})
 	require.Equal(t, 201, code)
 
 	// Bob abre el WS con ticket (flujo cross-domain), Alice con cookie

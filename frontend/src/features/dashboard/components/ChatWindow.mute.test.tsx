@@ -30,10 +30,10 @@ describe('ChatWindow mute menu', () => {
 
     const renderChat = (muted: boolean) => {
         mockUseDashboard.mockReturnValue({
-            selected: { Number: '222', ContactName: 'Luis', Username: 'luis' },
+            selected: { telephon: '222', contactName: 'Luis', username: 'luis' },
             setSelected: vi.fn(), isConnected: true, avatarMap: {}, onlineUsers: new Set(), typingUsers: new Set(),
-            lastSeenMap: {}, setMessagesByChat: vi.fn(), contacts: [{ Number: '222' }], addToast: vi.fn(),
-            messagesByChat: { '222': [] }, fetchChatMessages: vi.fn(), profile: { Telephon: '111' },
+            lastSeenMap: {}, setMessagesByChat: vi.fn(), contacts: [{ telephon: '222' }], addToast: vi.fn(),
+            messagesByChat: { '222': [] }, fetchChatMessages: vi.fn(), profile: { telephon: '111' },
             allChatGroups: {}, markAsRead: vi.fn(), focusedChat: {}, openMessageAt: vi.fn(), returnToLatest: vi.fn(),
             selectedDisappearSeconds: 0,
             isMuted: (t: MuteTarget) => muted && t.kind === 'direct' && t.key === '222',

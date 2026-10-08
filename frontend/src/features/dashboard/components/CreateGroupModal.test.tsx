@@ -19,13 +19,13 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockCreateGroup = vi.mocked(createGroup);
 
 const makeContact = (): ContactChat => ({
-    Username: 'member-one',
-    Number: '123',
-    Status: 'accepted',
-    ContactName: 'Member One',
-    last_seen: null,
-    avatar_url: '',
-    wallpaper_url: '',
+    username: 'member-one',
+    telephon: '123',
+    status: 'accepted',
+    contactName: 'Member One',
+    lastSeen: null,
+    avatarUrl: '',
+    wallpaperUrl: '',
 });
 
 const setInputValue = (el: HTMLInputElement, value: string) => {

@@ -42,14 +42,14 @@ describe('Sidebar global message search', () => {
     const setSidebarOpen = vi.fn();
     const openMessageAt = vi.fn();
     const addToast = vi.fn();
-    const luis = { Number: '222', ContactName: 'Luis Alias', Username: 'luis', Status: 'accepted' };
+    const luis = { telephon: '222', contactName: 'Luis Alias', username: 'luis', status: 'accepted' };
     const groupEquipo = { ID: 9, Name: 'Equipo demo', MemberCount: 3, UserRole: 'member' };
 
     const renderSidebar = (over: Record<string, unknown> = {}) => {
         mockUseDashboard.mockReturnValue({
             contacts: [luis], onlineUsers: new Set(), selected: null, setSelected,
             sidebarView: 'chats', setSidebarView: vi.fn(), setSidebarOpen,
-            lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { Telephon: '111' },
+            lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { telephon: '111' },
             messagesByChat: {}, allChatGroups: {}, logout: vi.fn(),
             groups: [groupEquipo], selectedGroup: null, setSelectedGroup,
             openMessageAt, addToast, isMuted: () => false,
@@ -136,7 +136,7 @@ describe('Sidebar global message search', () => {
         renderSidebar({ contacts: [] });
         await type('cancion');
         act(() => { (container.querySelector('button[data-result-id="11"]') as HTMLButtonElement).click(); });
-        expect(setSelected).toHaveBeenCalledWith(expect.objectContaining({ Number: '222', Status: 'unknown' }));
+        expect(setSelected).toHaveBeenCalledWith(expect.objectContaining({ telephon: '222', status: 'unknown' }));
         expect(openMessageAt).toHaveBeenCalledWith({ kind: 'chat', key: '222' }, 11);
     });
 

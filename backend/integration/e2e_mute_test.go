@@ -121,7 +121,7 @@ func TestE2EChatMute(t *testing.T) {
 		assert.Equal(t, 401, code, r.method+" "+r.path)
 	}
 
-	code, body := ca.do("POST", "/api/v1/contact", map[string]string{"number": luis.Telephon, "contact_name": "Luis"})
+	code, body := ca.do("POST", "/api/v1/contact", map[string]string{"telephon": luis.Telephon, "contactName": "Luis"})
 	require.Equal(t, 201, code, body)
 	// Un mensaje para que el 1:1 aparezca también en GET chats.
 	require.NoError(t, db.Create(&models.Message{IdUser: luis.ID, IdReceptor: ana.ID, Message: "hola", Status: "enviado", Time: time.Now()}).Error)
@@ -132,9 +132,9 @@ func TestE2EChatMute(t *testing.T) {
 		assert.Equal(t, true, body["muted"])
 		until := e2eAssertMutedUntil(t, body["mutedUntil"], 8*time.Hour)
 
-		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "Number", luis.Telephon)
-		assert.Equal(t, true, contact["Muted"])
-		assert.Equal(t, until, contact["MutedUntil"])
+		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "telephon", luis.Telephon)
+		assert.Equal(t, true, contact["muted"])
+		assert.Equal(t, until, contact["mutedUntil"])
 		chat := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/chats"), "ContactTelephon", luis.Telephon)
 		assert.Equal(t, true, chat["Muted"])
 		assert.Equal(t, until, chat["MutedUntil"])
@@ -148,9 +148,9 @@ func TestE2EChatMute(t *testing.T) {
 		assert.True(t, present, "mutedUntil presente")
 		assert.Nil(t, v)
 
-		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "Number", luis.Telephon)
-		assert.Equal(t, true, contact["Muted"])
-		assert.NotContains(t, contact, "MutedUntil")
+		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "telephon", luis.Telephon)
+		assert.Equal(t, true, contact["muted"])
+		assert.NotContains(t, contact, "mutedUntil")
 	})
 
 	t.Run("duración inválida y chat inexistente", func(t *testing.T) {
@@ -164,8 +164,8 @@ func TestE2EChatMute(t *testing.T) {
 		code, body := ca.do("PUT", chatMute, map[string]string{"duration": "8h"})
 		require.Equal(t, 200, code, body)
 		require.NoError(t, db.Exec(`UPDATE chat_mutes SET muted_until = now() - interval '1 minute' WHERE user_id = ?`, ana.ID).Error)
-		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "Number", luis.Telephon)
-		assert.NotContains(t, contact, "Muted")
+		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "telephon", luis.Telephon)
+		assert.NotContains(t, contact, "muted")
 	})
 
 	t.Run("quitar el silencio del 1:1 es idempotente", func(t *testing.T) {
@@ -173,9 +173,9 @@ func TestE2EChatMute(t *testing.T) {
 		require.Equal(t, 200, code, body)
 		assert.Equal(t, 204, ca.raw("DELETE", chatMute).status)
 		assert.Equal(t, 204, ca.raw("DELETE", chatMute).status)
-		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "Number", luis.Telephon)
-		assert.NotContains(t, contact, "Muted")
-		assert.NotContains(t, contact, "MutedUntil")
+		contact := e2eListEntry(t, e2eGetArray(t, ca, "/api/v1/contact"), "telephon", luis.Telephon)
+		assert.NotContains(t, contact, "muted")
+		assert.NotContains(t, contact, "mutedUntil")
 	})
 
 	t.Run("grupo: silenciar, para siempre, no miembro y quitar", func(t *testing.T) {

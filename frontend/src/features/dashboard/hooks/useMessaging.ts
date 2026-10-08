@@ -79,7 +79,7 @@ const useMessagingInternal = (): UseMessagingResult => {
 
         // Text goes through the outbox (PW9): always a clientID, queued while offline.
         if (!mediaType) {
-            const target = selected.Number;
+            const target = selected.telephon;
             sendText({ kind: 'direct', target, text, replyTo: toReplyRef(replyingTo) })
                 .then(result => {
                     if (result === 'unavailable') addToast({ type: 'error', message: 'No hay conexión con el servidor' });
@@ -100,10 +100,10 @@ const useMessagingInternal = (): UseMessagingResult => {
         }
 
         try {
-            sendMessage(selected.Number, text, replyingTo, mediaType);
+            sendMessage(selected.telephon, text, replyingTo, mediaType);
 
             // Limpiar estados
-            setDrafts(prev => ({ ...prev, [selected.Number]: '' }));
+            setDrafts(prev => ({ ...prev, [selected.telephon]: '' }));
             setReplyingTo(null);
         } catch (err) {
             console.error('Error sending message:', err);
@@ -126,7 +126,7 @@ const useMessagingInternal = (): UseMessagingResult => {
 
         try {
             if (isConnected) {
-                sendEditMessage(editingMessageId, selected.Number, editingMessageText);
+                sendEditMessage(editingMessageId, selected.telephon, editingMessageText);
                 setEditingMessageId(null);
                 setEditingMessageText('');
             } else {
@@ -149,7 +149,7 @@ const useMessagingInternal = (): UseMessagingResult => {
         try {
             if (forEveryone) {
                 if (isConnected) {
-                    sendDeleteMessage(message.MessageID, selected.Number);
+                    sendDeleteMessage(message.MessageID, selected.telephon);
                 } else {
                     addToast({ type: 'error', message: 'Sin conexión' });
                 }
@@ -157,9 +157,9 @@ const useMessagingInternal = (): UseMessagingResult => {
                 await api.delete(`/api/v1/message/${message.MessageID}/me`);
                 setMessagesByChat((prev) => {
                     const updated = { ...prev };
-                    const chatMessages = updated[selected.Number];
+                    const chatMessages = updated[selected.telephon];
                     if (chatMessages) {
-                        updated[selected.Number] = chatMessages.filter(m => m.MessageID !== message.MessageID);
+                        updated[selected.telephon] = chatMessages.filter(m => m.MessageID !== message.MessageID);
                     }
                     return updated;
                 });
@@ -222,7 +222,7 @@ const useMessagingInternal = (): UseMessagingResult => {
 
     const handleTyping = useCallback(() => {
         if (selected && isConnected) {
-            sendTypingIndicator(selected.Number);
+            sendTypingIndicator(selected.telephon);
         }
     }, [selected, isConnected, sendTypingIndicator]);
 

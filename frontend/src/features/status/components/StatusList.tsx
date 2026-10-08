@@ -63,10 +63,10 @@ const StatusList = () => {
                     >
                         {mine.length > 0 ? (
                             <StatusRing segments={mineSegments} size={52} solid="#6366f1">
-                                <Avatar src={myAvatar} name={profile?.Username} size="lg" />
+                                <Avatar src={myAvatar} name={profile?.username} size="lg" />
                             </StatusRing>
                         ) : (
-                            <Avatar src={myAvatar} name={profile?.Username} size="lg" />
+                            <Avatar src={myAvatar} name={profile?.username} size="lg" />
                         )}
                     </button>
                     <button

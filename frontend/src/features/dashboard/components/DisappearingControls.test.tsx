@@ -28,7 +28,7 @@ describe('DisappearingControls', () => {
 
     const dash = (over: Record<string, unknown>) => {
         mockUseDashboard.mockReturnValue({
-            selected: { Number: '222', ContactName: 'Luis', Username: 'luis' },
+            selected: { telephon: '222', contactName: 'Luis', username: 'luis' },
             selectedGroup: null,
             selectedDisappearSeconds: 0,
             setChatDisappearing, setGroupDisappearing,
@@ -73,7 +73,7 @@ describe('DisappearingControls', () => {
         mount(<ChatDisappearingSection />);
         await choose('86400');
         expect(select()!.disabled).toBe(true);
-        dash({ selected: { Number: '333', ContactName: 'Ana', Username: 'ana' } });
+        dash({ selected: { telephon: '333', contactName: 'Ana', username: 'ana' } });
         mount(<ChatDisappearingSection />);
         expect(select()!.disabled).toBe(false);
     });

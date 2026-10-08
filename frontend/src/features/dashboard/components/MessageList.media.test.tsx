@@ -36,12 +36,12 @@ describe('MessageList media rendering (1:1)', () => {
 
     const renderWith = (message: Message) => {
         mockUseDashboard.mockReturnValue({
-            selected: { Number: '222' },
+            selected: { telephon: '222' },
             focusedChat: {},
             messagesByChat: { '222': [message] },
             chatPaging: {},
             loadOlderMessages: vi.fn(),
-            profile: { Telephon: '111' },
+            profile: { telephon: '111' },
             globalWallpaper: null,
         } as unknown as DashboardContextValue);
         act(() => { root.render(<MessageList />); });

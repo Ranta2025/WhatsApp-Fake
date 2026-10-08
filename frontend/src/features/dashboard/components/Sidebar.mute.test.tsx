@@ -34,12 +34,12 @@ describe('Sidebar muted icon', () => {
     const renderView = (view: SidebarView) => {
         mockUseDashboard.mockReturnValue({
             contacts: [
-                { Number: '222', ContactName: 'Luis', Username: 'luis', Status: 'accepted' },
-                { Number: '333', ContactName: 'Marta', Username: 'marta', Status: 'accepted' },
+                { telephon: '222', contactName: 'Luis', username: 'luis', status: 'accepted' },
+                { telephon: '333', contactName: 'Marta', username: 'marta', status: 'accepted' },
             ],
             onlineUsers: new Set(), selected: null, setSelected: vi.fn(),
             sidebarView: view, setSidebarView: vi.fn(), setSidebarOpen: vi.fn(),
-            lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { Telephon: '111' },
+            lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { telephon: '111' },
             messagesByChat: { '222': [msg(1, '222'), msg(2, '222')], '333': [msg(3, '333')] }, allChatGroups: {}, logout: vi.fn(),
             groups: [groupRow(9, 'Equipo'), groupRow(10, 'Familia')], selectedGroup: null, setSelectedGroup: vi.fn(),
             openMessageAt: vi.fn(), addToast: vi.fn(),

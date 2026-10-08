@@ -214,9 +214,9 @@ func TestHandlerContactsCarriesMuteFields(t *testing.T) {
 	var got []map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	require.Len(t, got, 2)
-	assert.Equal(t, true, got[0]["Muted"])
-	assert.NotContains(t, got[0], "MutedUntil")
-	assert.NotContains(t, got[1], "Muted")
+	assert.Equal(t, true, got[0]["muted"])
+	assert.NotContains(t, got[0], "mutedUntil")
+	assert.NotContains(t, got[1], "muted")
 }
 
 type listGroupService struct {

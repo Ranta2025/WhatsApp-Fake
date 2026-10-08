@@ -31,10 +31,10 @@ describe('MessageList system messages (1:1)', () => {
 
     const mountWith = (messages: Message[]) => {
         dash.value = {
-            selected: { Number: 'B', Username: 'bea', ContactName: 'Bea' },
+            selected: { telephon: 'B', username: 'bea', contactName: 'Bea' },
             focusedChat: {},
             messagesByChat: { B: messages },
-            profile: { Telephon: 'me' },
+            profile: { telephon: 'me' },
             globalWallpaper: '',
             chatPaging: {},
             loadOlderMessages: vi.fn(),

@@ -10,7 +10,7 @@ type User struct {
 	gorm.Model
 	Username string `gorm:"size:30;unique" json:"username" binding:"required"`
 	Gmail    string `gorm:"unique" json:"email" binding:"required,email"`
-	Telephon string `gorm:"unique;size:20" json:"numero" binding:"required,e164"`
+	Telephon string `gorm:"unique;size:20" json:"telephon" binding:"required,e164"`
 }
 
 type UserDataBase struct {
@@ -18,9 +18,9 @@ type UserDataBase struct {
 	Password     string     `gorm:"size:100" json:"password" binding:"required"`
 	Activo       bool       `gorm:"default:false"`
 	Bloqueado    bool       `gorm:"default:false"`
-	LastSeen     *time.Time `gorm:"column:last_seen" json:"last_seen"`
-	AvatarUrl    string     `gorm:"size:500" json:"avatar_url"`
-	WallpaperUrl string     `gorm:"size:500" json:"wallpaper_url"`
+	LastSeen     *time.Time `gorm:"column:last_seen" json:"lastSeen"`
+	AvatarUrl    string     `gorm:"size:500" json:"avatarUrl"`
+	WallpaperUrl string     `gorm:"size:500" json:"wallpaperUrl"`
 	// PushPreviewDisabled=true hace que las notificaciones push de este usuario
 	// lleven un cuerpo genérico, sin el texto del mensaje. El valor cero
 	// (false = preview activada) evita migrar las filas existentes.

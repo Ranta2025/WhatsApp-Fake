@@ -31,10 +31,10 @@ describe('Sidebar system messages', () => {
 
     const renderWith = (messages: Message[]) => {
         mockUseDashboard.mockReturnValue({
-            contacts: [{ Number: '222', ContactName: 'Luis', Username: 'luis', Status: 'accepted' }],
+            contacts: [{ telephon: '222', contactName: 'Luis', username: 'luis', status: 'accepted' }],
             onlineUsers: new Set(), selected: null, setSelected: vi.fn(),
             sidebarView: 'chats', setSidebarView: vi.fn(), setSidebarOpen: vi.fn(),
-            lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { Telephon: '111' },
+            lastSeenMap: {}, avatarMap: {}, isConnected: true, myAvatar: '', profile: { telephon: '111' },
             messagesByChat: { '222': messages }, allChatGroups: {}, logout: vi.fn(),
             groups: [], selectedGroup: null, setSelectedGroup: vi.fn(),
             openMessageAt: vi.fn(), addToast: vi.fn(), isMuted: () => false,

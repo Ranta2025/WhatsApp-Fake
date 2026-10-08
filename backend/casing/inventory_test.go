@@ -17,7 +17,6 @@
 //     test cannot see:
 //     websocket/message_handlers.go  group_delete_message {MessageID, GroupID}
 //     handlers/handlerStatus.go      status_viewed {statusId}, status_deleted {statusId}
-//     websocket/hub.go               offline {last_seen}
 //     The api-casing tasks must rename those by hand; a future task can add a
 //     static check when the maps are converted to structs.
 //   - Promoted fields from anonymous embedded structs declared OUTSIDE the
@@ -51,15 +50,14 @@ import (
 // allowlist maps a still-non-camel JSON key to the api-casing domain that owns
 // its rename. It MUST become empty by the end of the cutover.
 var allowlist = map[string]string{
-	// AC3 user/auth/contacts.
-	"Gmail":         "AC3-user",
-	"Username":      "AC3-user",
-	"Telephon":      "AC3-user",
-	"avatar_url":    "AC3-user",
-	"wallpaper_url": "AC3-user",
-	"Number":        "AC3-contacts",
-	"last_seen":     "AC3-contacts",
-	"contact_name":  "AC3-contacts",
+	// Shared keys: after AC3 renamed its own emitters these are still emitted by
+	// later domains, so they stay allowlisted until the last owner lands.
+	//   Username/Telephon -> AC5 GroupMemberResponse, AC6 StatusOwnerBrief/Viewer
+	//   Muted/MutedUntil  -> AC4 ChatGroup, AC5 GroupResponse
+	"Username":   "AC5-groups/AC6-status",
+	"Telephon":   "AC5-groups/AC6-status",
+	"Muted":      "AC4-chat/AC5-groups",
+	"MutedUntil": "AC4-chat/AC5-groups",
 
 	// AC4 chat 1:1 (Message, ChatGroup, reactions).
 	"Message":          "AC4-chat",
@@ -86,8 +84,6 @@ var allowlist = map[string]string{
 	"IsContact":        "AC4-chat",
 	"Messages":         "AC4-chat",
 	"DisappearSeconds": "AC4-chat",
-	"Muted":            "AC4-chat",
-	"MutedUntil":       "AC4-chat",
 	"Emoji":            "AC4-chat",
 	"Count":            "AC4-chat",
 	"Mine":             "AC4-chat",

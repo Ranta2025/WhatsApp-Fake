@@ -61,12 +61,12 @@ describe('MessageList received-sticker menu (1:1)', () => {
     const render = (msg: Message, menuOpen: number | null = 1) => {
         messaging.menuOpen = menuOpen;
         dash.value = {
-            selected: { Number: '222' },
+            selected: { telephon: '222' },
             focusedChat: {},
             messagesByChat: { '222': [msg] },
             chatPaging: {},
             loadOlderMessages: vi.fn(),
-            profile: { Telephon: '111' },
+            profile: { telephon: '111' },
             globalWallpaper: null,
             reactToMessage: vi.fn(),
             addToast: toast.addToast,

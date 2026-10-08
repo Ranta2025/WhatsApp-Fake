@@ -115,7 +115,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
 
     // Scroll: al fondo al abrir un chat o cuando llega un mensaje nuevo al final de
     // ESTE chat; al llegar arriba se cargan mensajes anteriores sin saltar la vista.
-    const selectedNumber = selected?.Number;
+    const selectedNumber = selected?.telephon;
     const liveMessages = selectedNumber ? messagesByChat[selectedNumber] : undefined;
     const paging = selectedNumber ? chatPaging[selectedNumber] : undefined;
     // Ventana desprendida (abierta desde una búsqueda): se muestra en lugar de los últimos mensajes.
@@ -189,11 +189,11 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
     if (!selected) return null;
 
     const resolveSystemName = (telephon: string): string | undefined => (
-        telephon === selected.Number ? (selected.ContactName || selected.Username || selected.Number) : undefined
+        telephon === selected.telephon ? (selected.contactName || selected.username || selected.telephon) : undefined
     );
 
     // Wallpaper priority: per-chat > global > default pattern
-    const activeWallpaper = (selected && chatWallpapers[selected.Number]) || globalWallpaper || null;
+    const activeWallpaper = (selected && chatWallpapers[selected.telephon]) || globalWallpaper || null;
 
     const containerStyle = activeWallpaper
         ? {
@@ -231,12 +231,12 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                                 return (
                                     <div key={m.MessageID} data-message-id={m.MessageID} data-system-message="true" className="flex justify-center py-1 px-4">
                                         <span className="bg-chip backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full text-center">
-                                            {describeDirectSystemMessage(m, profile?.Telephon, resolveSystemName)}
+                                            {describeDirectSystemMessage(m, profile?.telephon, resolveSystemName)}
                                         </span>
                                     </div>
                                 );
                             }
-                            const isMine = m.SenderTelephon === profile?.Telephon;
+                            const isMine = m.SenderTelephon === profile?.telephon;
                             const isSticker = m.MediaType === 'sticker';
                             const stickerUrl = isSticker ? (m.MediaUrl || m.Message || '').trim() : '';
                             const builtinSticker = stickerUrl ? findBuiltinSticker(stickerUrl) : undefined;
@@ -414,7 +414,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                 />
             )}
             {whoFor !== null && (
-                <ReactionsModal target={{ kind: 'direct', messageID: whoFor }} myTelephon={profile?.Telephon} onClose={() => setWhoFor(null)} />
+                <ReactionsModal target={{ kind: 'direct', messageID: whoFor }} myTelephon={profile?.telephon} onClose={() => setWhoFor(null)} />
             )}
             {/* Indicador de carga de mensajes anteriores: absoluto y al final del DOM
                 (fuera del flujo y sin margen de space-y) para no mover el contenido */}

@@ -121,8 +121,8 @@ func sweepOrphanReplies(tx *gorm.DB, kind string) error {
 		table = "group_messages"
 	}
 	return tx.Unscoped().Model(model).
-		Where("reply_to_message_id IS NOT NULL AND created_at > now() - interval '"+orphanReplyWindow+"' AND "+
-			"NOT EXISTS (SELECT 1 FROM "+table+" t WHERE t.id = "+table+".reply_to_message_id)").
+		Where("reply_to_message_id IS NOT NULL AND created_at > now() - interval '" + orphanReplyWindow + "' AND " +
+			"NOT EXISTS (SELECT 1 FROM " + table + " t WHERE t.id = " + table + ".reply_to_message_id)").
 		UpdateColumns(map[string]interface{}{
 			"reply_to_message_id": nil,
 			"reply_to_message":    nil,

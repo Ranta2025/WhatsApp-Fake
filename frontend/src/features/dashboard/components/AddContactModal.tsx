@@ -84,7 +84,7 @@ const AddContactModal = ({ isOpen, onClose, initialNumber = '', initialName = ''
 
         setIsLoading(true);
         try {
-            const { data } = await api.post<AddContactResponse | null>('/api/v1/contact', { number: n, contact_name: cn });
+            const { data } = await api.post<AddContactResponse | null>('/api/v1/contact', { telephon: n, contactName: cn });
             const created = data?.contact || data?.['contacto creado'];
 
             if (created) {

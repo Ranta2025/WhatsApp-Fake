@@ -101,7 +101,7 @@ func TestE2EDisappearingMessages(t *testing.T) {
 	})
 	ca, cl := e2eLogin(t, base, ana), e2eLogin(t, base, luis)
 
-	code, body := ca.do("POST", "/api/v1/contact", map[string]string{"number": luis.Telephon, "contact_name": "Luis"})
+	code, body := ca.do("POST", "/api/v1/contact", map[string]string{"telephon": luis.Telephon, "contactName": "Luis"})
 	require.Equal(t, 201, code, body)
 
 	sendDirect := func(c *e2eClient, to, text string) map[string]interface{} {

@@ -10,8 +10,8 @@ type Username struct {
 }
 
 type ContactAdd struct {
-	Number      string `json:"number" binding:"required,e164"`  // Número de teléfono del contacto (formato internacional: +502...)
-	ContactName string `json:"contact_name" binding:"required"` // Nombre que le quieres poner al contacto
+	Number      string `json:"telephon" binding:"required,e164"` // Número de teléfono del contacto (formato internacional: +502...)
+	ContactName string `json:"contactName" binding:"required"`   // Nombre que le quieres poner al contacto
 }
 
 type MessageGet struct {
@@ -74,8 +74,8 @@ type UserForgotPassword struct {
 }
 
 type GetContactPut struct {
-	Number      string `json:"number" binding:"required,e164"`
-	ContactName string `json:"contact_name" binding:"required"`
+	Number      string `json:"telephon" binding:"required,e164"`
+	ContactName string `json:"contactName" binding:"required"`
 }
 
 // ─────────────────────────────────────────────────────────────────────────

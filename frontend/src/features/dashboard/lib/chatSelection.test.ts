@@ -7,17 +7,17 @@ import type { ContactChat } from '../../../types/api';
 // ya existe un historial de chat para él en `allChatGroups`. Antes de
 // extraer esta función, DashboardContext.jsx hacía
 // `contact || allChatGroups[telephon] || {...}` directamente: una entrada
-// de `allChatGroups` no tiene campo `Number` (tiene `ContactTelephon`), así
-// que `selected.Number` quedaba `undefined` y rompía todas las comparaciones
+// de `allChatGroups` no tiene campo `telephon` (tiene `ContactTelephon`), así
+// que `selected.telephon` quedaba `undefined` y rompía todas las comparaciones
 // posteriores (p.ej. "¿el chat abierto es este remitente?").
 const makeContact = (overrides: Partial<ContactChat> = {}): ContactChat => ({
-    Username: 'contact-user',
-    Number: '111',
-    Status: 'accepted',
-    ContactName: 'Contact Name',
-    last_seen: null,
-    avatar_url: '',
-    wallpaper_url: '',
+    username: 'contact-user',
+    telephon: '111',
+    status: 'accepted',
+    contactName: 'Contact Name',
+    lastSeen: null,
+    avatarUrl: '',
+    wallpaperUrl: '',
     ...overrides,
 });
 
@@ -31,42 +31,42 @@ const makeGroupEntry = (overrides: Partial<DashboardChatGroupEntry> = {}): Dashb
 
 describe('resolveChatTarget', () => {
     it('returns the matching contact when the telephon is a known contact', () => {
-        const contact = makeContact({ Number: '111' });
+        const contact = makeContact({ telephon: '111' });
         const result = resolveChatTarget('111', [contact], {});
         expect(result).toBe(contact);
     });
 
-    it('builds a Number-bearing target from allChatGroups when there is no contact match', () => {
+    it('builds a telephon-bearing target from allChatGroups when there is no contact match', () => {
         const group = makeGroupEntry({ ContactUsername: 'group-user', ContactName: 'Group Contact Name' });
         const result = resolveChatTarget('222', [], { '222': group });
 
-        expect(result.Number).toBe('222');
-        expect(result.Username).toBe('group-user');
-        expect(result.ContactName).toBe('Group Contact Name');
-        expect(result.Status).toBe('unknown');
+        expect(result.telephon).toBe('222');
+        expect(result.username).toBe('group-user');
+        expect(result.contactName).toBe('Group Contact Name');
+        expect(result.status).toBe('unknown');
     });
 
     it('falls back to a minimal telephon-only target when neither contact nor chat group exist', () => {
         const result = resolveChatTarget('333', [], {});
 
-        expect(result).toEqual({ Number: '333', Username: '333', Status: 'unknown' });
+        expect(result).toEqual({ telephon: '333', username: '333', status: 'unknown' });
     });
 
-    it('uses the provided fallback name as ContactName when neither contact nor chat group exist', () => {
-        // Original ToastContainer.jsx: `... || { Number: notif.telephon,
-        // ContactName: notif.senderName }` — the M6 refactor dropped
+    it('uses the provided fallback name as contactName when neither contact nor chat group exist', () => {
+        // Original ToastContainer.jsx: `... || { telephon: notif.telephon,
+        // contactName: notif.senderName }` — the M6 refactor dropped
         // senderName, so an unknown sender showed as their raw number.
         const result = resolveChatTarget('333', [], {}, 'Sender Name');
 
-        expect(result.Number).toBe('333');
-        expect(result.ContactName).toBe('Sender Name');
+        expect(result.telephon).toBe('333');
+        expect(result.contactName).toBe('Sender Name');
     });
 
     it('does not use the fallback name when a contact or chat group matches', () => {
-        const contact = makeContact({ Number: '111', ContactName: 'Contact Name' });
-        expect(resolveChatTarget('111', [contact], {}, 'Fallback').ContactName).toBe('Contact Name');
+        const contact = makeContact({ telephon: '111', contactName: 'Contact Name' });
+        expect(resolveChatTarget('111', [contact], {}, 'Fallback').contactName).toBe('Contact Name');
 
         const group = makeGroupEntry({ ContactName: 'Group Contact Name' });
-        expect(resolveChatTarget('222', [], { '222': group }, 'Fallback').ContactName).toBe('Group Contact Name');
+        expect(resolveChatTarget('222', [], { '222': group }, 'Fallback').contactName).toBe('Group Contact Name');
     });
 });

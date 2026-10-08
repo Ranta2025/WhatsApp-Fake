@@ -35,13 +35,13 @@ const makeToast = (overrides: Partial<TestToast> = {}): TestToast => ({
 });
 
 const makeContact = (overrides: Partial<ContactChat> = {}): ContactChat => ({
-    Username: 'bob',
-    Number: '555',
-    Status: 'accepted',
-    ContactName: 'Contact Bob',
-    last_seen: null,
-    avatar_url: '',
-    wallpaper_url: '',
+    username: 'bob',
+    telephon: '555',
+    status: 'accepted',
+    contactName: 'Contact Bob',
+    lastSeen: null,
+    avatarUrl: '',
+    wallpaperUrl: '',
     ...overrides,
 });
 
@@ -88,7 +88,7 @@ describe('ToastContainer handleOpen', () => {
     const selectedTarget = () => setSelected.mock.calls[0]?.[0] as SelectedChatTarget;
 
     it('selects the matching contact when the telephon is a known contact', async () => {
-        const contact = makeContact({ Number: '555', ContactName: 'Contact Bob' });
+        const contact = makeContact({ telephon: '555', contactName: 'Contact Bob' });
         await renderWith({ toasts: [makeToast({ telephon: '555', senderName: 'Bob' })], contacts: [contact] });
 
         expect(selectedTarget()).toBe(contact);
@@ -96,7 +96,7 @@ describe('ToastContainer handleOpen', () => {
         expect(dismissToast).toHaveBeenCalledTimes(1);
     });
 
-    it('selects a Number-bearing target from allChatGroups when there is no contact match', async () => {
+    it('selects a telephon-bearing target from allChatGroups when there is no contact match', async () => {
         await renderWith({
             toasts: [makeToast({ telephon: '555', senderName: 'Bob' })],
             allChatGroups: {
@@ -104,24 +104,24 @@ describe('ToastContainer handleOpen', () => {
             },
         });
 
-        expect(selectedTarget().Number).toBe('555');
-        expect(selectedTarget().ContactName).toBe('Bob');
+        expect(selectedTarget().telephon).toBe('555');
+        expect(selectedTarget().contactName).toBe('Bob');
         expect(setSidebarOpen).toHaveBeenCalledWith(false);
     });
 
-    it('restores senderName as ContactName when neither contact nor chat group match', async () => {
+    it('restores senderName as contactName when neither contact nor chat group match', async () => {
         await renderWith({ toasts: [makeToast({ telephon: '777', senderName: 'Unknown Sender' })] });
 
-        expect(selectedTarget().Number).toBe('777');
-        expect(selectedTarget().ContactName).toBe('Unknown Sender');
+        expect(selectedTarget().telephon).toBe('777');
+        expect(selectedTarget().contactName).toBe('Unknown Sender');
         expect(setSidebarOpen).toHaveBeenCalledWith(false);
     });
 
     it('still names the target when the toast has no telephon', async () => {
         await renderWith({ toasts: [makeToast({ senderName: 'Unknown Sender' })] });
 
-        expect(selectedTarget().Number).toBe('');
-        expect(selectedTarget().ContactName).toBe('Unknown Sender');
+        expect(selectedTarget().telephon).toBe('');
+        expect(selectedTarget().contactName).toBe('Unknown Sender');
         expect(setSidebarOpen).toHaveBeenCalledWith(false);
         expect(dismissToast).toHaveBeenCalledWith(1);
     });

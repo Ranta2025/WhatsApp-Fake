@@ -28,7 +28,7 @@ const MessageInput = () => {
         onUploadError: () => addToast({ type: 'error', message: 'No se pudo enviar la nota de voz' }),
     });
 
-    const currentDraft = selected ? (drafts[selected.Number] || '') : '';
+    const currentDraft = selected ? (drafts[selected.telephon] || '') : '';
 
     const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
         // El textarea solo se renderiza cuando `selected` no es null (guard
@@ -36,9 +36,9 @@ const MessageInput = () => {
         // este closure — invariante explícita, no cambia el comportamiento.
         if (!selected) return;
         const val = e.target.value;
-        setDrafts(prev => ({ ...prev, [selected.Number]: val }));
+        setDrafts(prev => ({ ...prev, [selected.telephon]: val }));
         if (isConnected && selected) {
-            sendTypingIndicator(selected.Number);
+            sendTypingIndicator(selected.telephon);
         }
     };
 
@@ -65,7 +65,7 @@ const MessageInput = () => {
                     <div className="w-1 h-8 bg-indigo-500 rounded-full"></div>
                     <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-indigo-400">
-                            Respondiendo a {replySenderLabel(replyingTo, profile?.Telephon, selected)}
+                            Respondiendo a {replySenderLabel(replyingTo, profile?.telephon, selected)}
                         </div>
                         <div className="text-xs text-slate-400 truncate">{previewMessage(replyingTo)}</div>
                     </div>

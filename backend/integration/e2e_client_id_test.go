@@ -70,7 +70,7 @@ func TestE2EClientIDIdempotentSends(t *testing.T) {
 	}
 
 	ca, cl := e2eLogin(t, base, ana), e2eLogin(t, base, luis)
-	code, body := ca.do("POST", "/api/v1/contact", map[string]string{"number": luis.Telephon, "contact_name": luis.Username})
+	code, body := ca.do("POST", "/api/v1/contact", map[string]string{"telephon": luis.Telephon, "contactName": luis.Username})
 	require.Equal(t, 201, code, body)
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "PW8", "members": []string{luis.Telephon}})
 	require.Equal(t, 201, code, grp)

@@ -30,7 +30,7 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
     });
 
     const acceptedContacts = useMemo(
-        () => contacts.filter(c => c.Status === 'accepted'),
+        () => contacts.filter(c => c.status === 'accepted'),
         [contacts]
     );
 
@@ -38,9 +38,9 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
         const q = memberSearch.toLowerCase();
         if (!q) return acceptedContacts;
         return acceptedContacts.filter(c =>
-            (c.ContactName || '').toLowerCase().includes(q) ||
-            (c.Username || '').toLowerCase().includes(q) ||
-            c.Number.includes(q)
+            (c.contactName || '').toLowerCase().includes(q) ||
+            (c.username || '').toLowerCase().includes(q) ||
+            c.telephon.includes(q)
         );
     }, [acceptedContacts, memberSearch]);
 
@@ -202,12 +202,12 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
                                 </p>
                             )}
                             {filteredContacts.map(c => {
-                                const checked = selectedMembers.has(c.Number);
+                                const checked = selectedMembers.has(c.telephon);
                                 return (
                                     <button
-                                        key={c.Number}
+                                        key={c.telephon}
                                         type="button"
-                                        onClick={() => toggleMember(c.Number)}
+                                        onClick={() => toggleMember(c.telephon)}
                                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-left ${
                                             checked ? 'bg-indigo-600/20' : 'hover:bg-fg/5'
                                         }`}
@@ -225,15 +225,15 @@ const CreateGroupModal = ({ isOpen, onClose }: CreateGroupModalProps) => {
 
                                         {/* Avatar */}
                                         <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center text-sm font-semibold text-fg overflow-hidden flex-shrink-0">
-                                            {(c.ContactName || c.Username)?.charAt(0)?.toUpperCase()}
+                                            {(c.contactName || c.username)?.charAt(0)?.toUpperCase()}
                                         </div>
 
                                         {/* Info */}
                                         <div className="flex-1 overflow-hidden">
                                             <div className="font-medium text-slate-100 truncate text-sm">
-                                                {c.ContactName || c.Username}
+                                                {c.contactName || c.username}
                                             </div>
-                                            <div className="text-xs text-slate-500 truncate">{c.Number}</div>
+                                            <div className="text-xs text-slate-500 truncate">{c.telephon}</div>
                                         </div>
                                     </button>
                                 );

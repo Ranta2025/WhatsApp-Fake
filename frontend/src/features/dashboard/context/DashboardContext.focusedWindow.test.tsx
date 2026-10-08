@@ -60,7 +60,7 @@ const groupMsg = (id: number): GroupMessageResponse => ({
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const ids = (list: ReadonlyArray<{ MessageID: number | string }> | undefined) => (list ?? []).map(m => m.MessageID);
 const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { isAxiosError: true, response: { status } });
-const contact = (n: string): ContactChat => ({ Number: n, ContactName: n, Username: n } as ContactChat);
+const contact = (n: string): ContactChat => ({ telephon: n, contactName: n, username: n } as ContactChat);
 
 type GetConfig = { params?: Record<string, number> } | undefined;
 
@@ -83,7 +83,7 @@ describe('DashboardProvider detached windows', () => {
         chatHandler = () => ({ data: [], headers: {} });
         groupHandler = () => ({ data: { messages: [] } });
         mockGet.mockImplementation((url: string, config?: GetConfig) => {
-            if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+            if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
             if (url.startsWith('/api/v1/chat/')) return Promise.resolve(chatHandler(url, config));
             if (url === '/api/v1/group/9/message') return Promise.resolve(groupHandler(config));
             return Promise.resolve({ data: null });
@@ -219,7 +219,7 @@ describe('DashboardProvider detached windows', () => {
             let resolveBefore: (v: unknown) => void = () => {};
             chatHandler = (_u, config) => (config?.params?.before ? new Promise(r => { resolveBefore = r; }) : around(40, 60));
             mockGet.mockImplementation((url: string, config?: GetConfig) => {
-                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
                 if (url.startsWith('/api/v1/chat/')) return Promise.resolve(chatHandler(url, config));
                 return Promise.resolve({ data: null });
             });
@@ -262,7 +262,7 @@ describe('DashboardProvider detached windows', () => {
                 return around(40, 60);
             };
             mockGet.mockImplementation((url: string, config?: GetConfig) => {
-                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
                 if (!url.startsWith('/api/v1/chat/')) return Promise.resolve({ data: null });
                 try { return Promise.resolve(chatHandler(url, config)); } catch (e) { return Promise.reject(e); }
             });
@@ -277,7 +277,7 @@ describe('DashboardProvider detached windows', () => {
         it('returnToLatest drops the window and discards an in-flight open', async () => {
             let resolveAround: (v: unknown) => void = () => {};
             mockGet.mockImplementation((url: string) => {
-                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
                 if (url.startsWith('/api/v1/chat/')) return new Promise(r => { resolveAround = r; });
                 return Promise.resolve({ data: null });
             });
@@ -293,7 +293,7 @@ describe('DashboardProvider detached windows', () => {
         it('the latest openMessageAt wins over an older, slower one', async () => {
             const resolvers: Array<(v: unknown) => void> = [];
             mockGet.mockImplementation((url: string) => {
-                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
                 if (url.startsWith('/api/v1/chat/')) return new Promise(r => { resolvers.push(r); });
                 return Promise.resolve({ data: null });
             });
@@ -356,11 +356,11 @@ describe('DashboardProvider detached windows', () => {
         it('leaving the chat drops its detached window', async () => {
             chatHandler = () => around(40, 60);
             await mount();
-            act(() => { ctx!.setSelected({ ...contact('B'), Number: 'B' } as never); });
+            act(() => { ctx!.setSelected({ ...contact('B'), telephon: 'B' } as never); });
             await act(async () => { await ctx!.openMessageAt({ kind: 'chat', key: 'B' }, 50); });
             expect(ctx!.focusedChat['B']).toBeDefined();
 
-            act(() => { ctx!.setSelected({ ...contact('C'), Number: 'C' } as never); });
+            act(() => { ctx!.setSelected({ ...contact('C'), telephon: 'C' } as never); });
 
             expect(ctx!.focusedChat['B']).toBeUndefined();
         });
@@ -380,7 +380,7 @@ describe('DashboardProvider detached windows', () => {
             holding = false;
             held = [];
             mockGet.mockImplementation((url: string, config?: GetConfig) => {
-                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
                 if (!url.startsWith('/api/v1/chat/')) return Promise.resolve({ data: null });
                 if (!holding) return Promise.resolve(around(40, 60));
                 return new Promise((resolve, reject) => { held.push({ params: config?.params ?? {}, resolve, reject }); });
@@ -531,7 +531,7 @@ describe('DashboardProvider detached windows', () => {
             const held: Held[] = [];
             let holding = false;
             mockGet.mockImplementation((url: string, config?: GetConfig) => {
-                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
                 if (url !== '/api/v1/group/9/message') return Promise.resolve({ data: null });
                 if (!holding) return Promise.resolve(groupAround(40, 60));
                 return new Promise((resolve, reject) => { held.push({ params: config?.params ?? {}, resolve, reject }); });

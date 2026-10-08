@@ -59,7 +59,7 @@ func TestE2EGroupReceipts(t *testing.T) {
 	ca, cb, cc, cd := login(alice), login(bob), login(carol), login(outsider)
 
 	for _, contact := range []models.UserDataBase{bob, carol} {
-		code, _ := ca.do("POST", "/api/v1/contact", map[string]string{"number": contact.Telephon, "contact_name": contact.Username})
+		code, _ := ca.do("POST", "/api/v1/contact", map[string]string{"telephon": contact.Telephon, "contactName": contact.Username})
 		require.Equal(t, 201, code)
 	}
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "Acuses", "members": []string{bob.Telephon, carol.Telephon}})

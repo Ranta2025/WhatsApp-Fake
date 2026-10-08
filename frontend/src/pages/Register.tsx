@@ -11,7 +11,7 @@ export default function Register() {
     const [formData, setFormData] = useState({
         username: '',
         email: '',
-        numero: '',
+        telephon: '',
         password: ''
     });
     const [confirm, setConfirm] = useState('');
@@ -43,14 +43,14 @@ export default function Register() {
         e.preventDefault();
         setError('');
 
-        const phoneResult = validatePhone(formData.numero);
+        const phoneResult = validatePhone(formData.telephon);
         if (!phoneResult.valid) {
             setError(phoneResult.error ?? '');
             setPhoneError(phoneResult.error ?? '');
             return;
         }
         // Usar el número formateado E.164 limpio
-        const cleanFormData = { ...formData, numero: phoneResult.formatted };
+        const cleanFormData = { ...formData, telephon: phoneResult.formatted };
 
         if (formData.password !== confirm) {
             setError('Las contraseñas no coinciden');
@@ -146,10 +146,10 @@ export default function Register() {
                                     setPhoneDialCode(code);
                                     setPhoneCountryIso(iso);
                                     const full = buildPhoneE164(code, phoneLocalNumber);
-                                    updateField('numero', full);
+                                    updateField('telephon', full);
                                 }}
                                 inputProps={{
-                                    name: 'numero',
+                                    name: 'telephon',
                                     autoFocus: false,
                                     readOnly: true,
                                     tabIndex: -1,
@@ -177,7 +177,7 @@ export default function Register() {
                                 setPhoneLocalNumber(local);
                                 setError('');
                                 const full = buildPhoneE164(phoneDialCode, local);
-                                updateField('numero', full);
+                                updateField('telephon', full);
                                 if (full && full.length > 3) {
                                     const result = validatePhone(full);
                                     setPhoneError(result.valid ? '' : (result.error ?? ''));

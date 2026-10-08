@@ -217,16 +217,16 @@ func MiddlewareRecoverAccount() gin.HandlerFunc {
 func MiddlewareResendCode() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var request struct {
-			Gmail string `json:"gmail"`
+			Email string `json:"email"`
 		}
-		if err := ctx.ShouldBindJSON(&request); err != nil || request.Gmail == "" {
+		if err := ctx.ShouldBindJSON(&request); err != nil || request.Email == "" {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"message": "complete todos los campos",
 			})
 			ctx.Abort()
 			return
 		}
-		ctx.Set("gmailResend", request.Gmail)
+		ctx.Set("gmailResend", request.Email)
 		ctx.Next()
 	}
 }

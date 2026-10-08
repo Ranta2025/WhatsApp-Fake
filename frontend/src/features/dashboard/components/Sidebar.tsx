@@ -159,7 +159,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
 
     const contactByNumber = useMemo(() => {
         const map = new Map<string, ContactChat>();
-        contacts.forEach(c => map.set(c.Number, c));
+        contacts.forEach(c => map.set(c.telephon, c));
         return map;
     }, [contacts]);
 
@@ -167,7 +167,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
     // ordenadas por la actividad más reciente.
     const chats = useMemo((): ChatEntry[] => {
         const numbers = new Set([
-            ...contacts.filter(c => c.Status === 'accepted').map(c => c.Number),
+            ...contacts.filter(c => c.status === 'accepted').map(c => c.telephon),
             ...Object.keys(messagesByChat),
         ]);
         return Array.from(numbers)
@@ -184,7 +184,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                     group,
                     last,
                     unread,
-                    name: contact?.ContactName || group?.ContactName || group?.ContactUsername || number,
+                    name: contact?.contactName || group?.ContactName || group?.ContactUsername || number,
                     lastTime: last?.Time ? new Date(last.Time).getTime() : 0,
                 };
             })
@@ -193,12 +193,12 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
     }, [contacts, contactByNumber, allChatGroups, messagesByChat, query]);
 
     const filteredContacts = useMemo(() => contacts
-        .filter(c => c.Status === 'accepted')
+        .filter(c => c.status === 'accepted')
         .filter(c => !query
-            || (c.ContactName || '').toLowerCase().includes(query)
-            || (c.Username || '').toLowerCase().includes(query)
-            || c.Number.includes(query))
-        .sort((a, b) => (a.ContactName || a.Username || '').localeCompare(b.ContactName || b.Username || '')),
+            || (c.contactName || '').toLowerCase().includes(query)
+            || (c.username || '').toLowerCase().includes(query)
+            || c.telephon.includes(query))
+        .sort((a, b) => (a.contactName || a.username || '').localeCompare(b.contactName || b.username || '')),
     [contacts, query]);
 
     const filteredGroups = useMemo((): LocalGroup[] => (groups || [])
@@ -210,10 +210,10 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
 
     const openChat = (chat: ChatEntry) => {
         setSelected(chat.contact || {
-            Number: chat.number,
-            Username: chat.group?.ContactUsername || chat.number,
-            ContactName: chat.group?.ContactName || null,
-            Status: 'unknown',
+            telephon: chat.number,
+            username: chat.group?.ContactUsername || chat.number,
+            contactName: chat.group?.ContactName || null,
+            status: 'unknown',
         });
     };
 
@@ -222,10 +222,10 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
         if (chat.kind === 'direct') {
             const group = allChatGroups[chat.key];
             setSelected(contactByNumber.get(chat.key) || {
-                Number: chat.key,
-                Username: group?.ContactUsername || chat.name,
-                ContactName: group?.ContactName || null,
-                Status: 'unknown',
+                telephon: chat.key,
+                username: group?.ContactUsername || chat.name,
+                contactName: group?.ContactName || null,
+                status: 'unknown',
             });
             void openMessageAt({ kind: 'chat', key: chat.key }, messageID);
             return;
@@ -258,7 +258,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                         <div className="font-semibold text-slate-100 truncate">{user?.username}</div>
                         <div className="text-xs text-slate-500 truncate flex items-center gap-1.5">
                             <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-indigo-400' : 'bg-amber-400 animate-pulse'}`} />
-                            {isConnected ? (profile?.Telephon || 'Conectado') : 'Conectando…'}
+                            {isConnected ? (profile?.telephon || 'Conectado') : 'Conectando…'}
                         </div>
                     </div>
                 </button>
@@ -345,7 +345,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                                 {chats.map(chat => (
                                     <ListItem
                                         key={chat.number}
-                                        active={selected?.Number === chat.number}
+                                        active={selected?.telephon === chat.number}
                                         onClick={() => openChat(chat)}
                                         avatar={<Avatar src={avatarMap[chat.number]} name={chat.name} size="lg" online={onlineUsers.has(chat.number)} />}
                                         title={chat.name}
@@ -391,15 +391,15 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                                     {filteredContacts.length} contacto{filteredContacts.length !== 1 ? 's' : ''}
                                 </div>
                                 {filteredContacts.map(c => {
-                                    const online = onlineUsers.has(c.Number);
+                                    const online = onlineUsers.has(c.telephon);
                                     return (
                                         <ListItem
-                                            key={c.Number}
-                                            active={selected?.Number === c.Number}
+                                            key={c.telephon}
+                                            active={selected?.telephon === c.telephon}
                                             onClick={() => setSelected(c)}
-                                            avatar={<Avatar src={avatarMap[c.Number]} name={c.ContactName || c.Username} size="lg" online={online} />}
-                                            title={c.ContactName || c.Username}
-                                            subtitle={online ? <span className="text-indigo-400">en línea</span> : (formatLastSeen(lastSeenMap[c.Number]) || c.Number)}
+                                            avatar={<Avatar src={avatarMap[c.telephon]} name={c.contactName || c.username} size="lg" online={online} />}
+                                            title={c.contactName || c.username}
+                                            subtitle={online ? <span className="text-indigo-400">en línea</span> : (formatLastSeen(lastSeenMap[c.telephon]) || c.telephon)}
                                         />
                                     );
                                 })}

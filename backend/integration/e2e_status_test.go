@@ -67,11 +67,11 @@ func TestE2EStatusMutualVisibility(t *testing.T) {
 
 	// Alice y Bob se agregan mutuamente. Alice agrega a Carol, pero Carol
 	// nunca agrega a Alice: relación unidireccional, no mutua.
-	code, _ := ca.do("POST", "/api/v1/contact", map[string]string{"number": bob.Telephon, "contact_name": "Bob"})
+	code, _ := ca.do("POST", "/api/v1/contact", map[string]string{"telephon": bob.Telephon, "contactName": "Bob"})
 	require.Equal(t, 201, code)
-	code, _ = cb.do("POST", "/api/v1/contact", map[string]string{"number": alice.Telephon, "contact_name": "Alice"})
+	code, _ = cb.do("POST", "/api/v1/contact", map[string]string{"telephon": alice.Telephon, "contactName": "Alice"})
 	require.Equal(t, 201, code)
-	code, _ = ca.do("POST", "/api/v1/contact", map[string]string{"number": carol.Telephon, "contact_name": "Carol"})
+	code, _ = ca.do("POST", "/api/v1/contact", map[string]string{"telephon": carol.Telephon, "contactName": "Carol"})
 	require.Equal(t, 201, code)
 
 	// Alice publica un estado de texto.

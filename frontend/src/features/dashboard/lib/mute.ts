@@ -1,9 +1,11 @@
 import type { MuteDuration, MuteResponse } from '../../../types/api';
 
 /**
- * Per-chat mute (1:1 and groups). The lists carry PascalCase `Muted` / `MutedUntil`
- * (omitempty); the PUT answers camelCase `{ muted, mutedUntil }`. Everything here is
- * pure and tolerant: network data is untrusted and never throws.
+ * Per-chat mute (1:1 and groups). The 1:1 contact list carries camelCase
+ * `muted` / `mutedUntil` (AC3); the group lists still carry PascalCase
+ * `Muted` / `MutedUntil` (until AC4/AC5); the PUT answers camelCase
+ * `{ muted, mutedUntil }`. `parseMuteFields` accepts both spellings. Everything
+ * here is pure and tolerant: network data is untrusted and never throws.
  */
 
 /** Mute fields as the lists carry them: absent `Muted` = not muted; `Muted` without `MutedUntil` = always. */
@@ -48,7 +50,11 @@ export function isChatMuted(fields: MuteFields | undefined, now: number): boolea
  */
 export function parseMuteFields(raw: unknown): MuteFields {
     if (!isRecord(raw)) return {};
-    const { Muted, MutedUntil } = raw;
+    // AC3 renamed ContactChat's mute keys to camelCase (muted/mutedUntil); the
+    // group lists (ChatGroup/GroupResponse) still emit PascalCase (Muted/
+    // MutedUntil) until AC4/AC5, so both spellings are accepted in this window.
+    const Muted = raw.muted !== undefined ? raw.muted : raw.Muted;
+    const MutedUntil = raw.mutedUntil !== undefined ? raw.mutedUntil : raw.MutedUntil;
     if (Muted !== true) return {};
     if (MutedUntil === undefined) return { Muted: true };
     if (typeof MutedUntil === 'string' && parseTime(MutedUntil) !== null) return { Muted: true, MutedUntil };

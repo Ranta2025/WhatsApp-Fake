@@ -37,7 +37,7 @@ export interface WsOnline {
 
 export interface WsOffline {
   type: 'offline';
-  payload: { username: string; telephon: string; last_seen: string };
+  payload: { username: string; telephon: string; lastSeen: string };
 }
 
 export interface WsContactsOnline {
@@ -48,12 +48,12 @@ export interface WsContactsOnline {
 
 export interface WsUsernameChanged {
   type: 'username_changed';
-  payload: { old_username: string; new_username: string; telephon: string };
+  payload: { oldUsername: string; newUsername: string; telephon: string };
 }
 
 export interface WsAvatarChanged {
   type: 'avatar_changed';
-  payload: { telephon: string; avatar_url: string };
+  payload: { telephon: string; avatarUrl: string };
 }
 
 /** Confirmación de un mensaje 1:1 nuevo (a remitente y receptor). */

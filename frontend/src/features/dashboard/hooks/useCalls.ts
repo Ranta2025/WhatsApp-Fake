@@ -116,20 +116,20 @@ export const useCalls = (): UseCallsResult => {
 
         setCallState({
             roomID,
-            remoteTelephon: selected.Number,
-            remoteName: selected.ContactName || selected.Username,
+            remoteTelephon: selected.telephon,
+            remoteName: selected.contactName || selected.username,
             callType,
             role: 'caller',
             status: 'ringing'
         });
 
-        sendCallOffer(selected.Number, roomID, callType);
+        sendCallOffer(selected.telephon, roomID, callType);
 
         // Timeout de 30 segundos para la señalización
         clearCallTimeout();
         callTimeoutRef.current = setTimeout(() => {
             // Avisar al receptor para que deje de sonar
-            sendCallEnd(selected.Number, roomID);
+            sendCallEnd(selected.telephon, roomID);
             setCallState(null);
             addToast({ type: 'error', message: 'La llamada no pudo establecerse (Timeout)' });
         }, 30000);

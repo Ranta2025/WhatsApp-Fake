@@ -41,12 +41,12 @@ describe('MessageList detached window (1:1)', () => {
 
     const renderWith = (opts: { focusedChat?: ReturnType<typeof focused>; live?: Message[]; searchQuery?: string } = {}) => {
         mockUseDashboard.mockReturnValue({
-            selected: { Number: '222' },
+            selected: { telephon: '222' },
             messagesByChat: { '222': opts.live ?? [msg(100), msg(101)] },
             chatPaging: { '222': { hasMore: true, loadingOlder: false, olderLoaded: false } },
             focusedChat: opts.focusedChat ? { '222': opts.focusedChat } : {},
             loadOlderMessages, loadOlderFocused, loadNewerFocused,
-            profile: { Telephon: '111' },
+            profile: { telephon: '111' },
             globalWallpaper: null,
         } as unknown as DashboardContextValue);
         act(() => { root.render(<MessageList searchQuery={opts.searchQuery} />); });

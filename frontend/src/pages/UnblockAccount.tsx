@@ -32,7 +32,7 @@ export default function UnblockAccount() {
         setLoading(true);
         try {
             await api.post('/api/v1/auth/resend-unlock-code', {
-                gmail: gmail
+                email: gmail
             });
             setStep(2);
         } catch (err) {

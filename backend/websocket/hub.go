@@ -356,9 +356,9 @@ func (h *Hub) NotifyContactsOffline(telephon string) {
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type": "offline",
 		"payload": map[string]interface{}{
-			"username":  username,
-			"telephon":  telephon,
-			"last_seen": now.Format(time.RFC3339),
+			"username": username,
+			"telephon": telephon,
+			"lastSeen": now.Format(time.RFC3339),
 		},
 	})
 	h.sendToMany(contacts, msg)
@@ -416,9 +416,9 @@ func (h *Hub) NotifyUsernameChange(telephon string, oldUsername string, newUsern
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type": "username_changed",
 		"payload": map[string]interface{}{
-			"old_username": oldUsername,
-			"new_username": newUsername,
-			"telephon":     telephon,
+			"oldUsername": oldUsername,
+			"newUsername": newUsername,
+			"telephon":    telephon,
 		},
 	})
 	h.sendToMany(contacts, msg)
@@ -443,8 +443,8 @@ func (h *Hub) NotifyAvatarChange(telephon string, avatarUrl string) {
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type": "avatar_changed",
 		"payload": map[string]interface{}{
-			"telephon":   telephon,
-			"avatar_url": avatarUrl,
+			"telephon":  telephon,
+			"avatarUrl": avatarUrl,
 		},
 	})
 

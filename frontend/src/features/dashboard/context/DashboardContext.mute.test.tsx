@@ -72,7 +72,7 @@ const HOUR = 3_600_000;
 const inFuture = () => new Date(Date.now() + HOUR).toISOString();
 const inPast = () => new Date(Date.now() - HOUR).toISOString();
 const contact = (n: string, over: Partial<ContactChat> = {}): ContactChat => ({
-    Username: n, Number: n, Status: 'accepted', ContactName: n, last_seen: null, avatar_url: '', wallpaper_url: '', ...over,
+    username: n, telephon: n, status: 'accepted', contactName: n, lastSeen: null, avatarUrl: '', wallpaperUrl: '', ...over,
 });
 const chat = (n: string, over: Partial<ChatGroup> = {}): ChatGroup => ({
     ContactTelephon: n, ContactUsername: n, ContactName: n, ContactAvatarUrl: '', IsContact: false, Messages: [], ...over,
@@ -119,7 +119,7 @@ describe('DashboardProvider per-chat mute', () => {
         chatsPayload = [];
         groupsPayload = { groups: [] };
         mockGet.mockImplementation((url: string) => {
-            if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+            if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
             if (url === '/api/v1/contact') return Promise.resolve({ data: contactsPayload });
             if (url === '/api/v1/chats') return Promise.resolve({ data: chatsPayload });
             if (url.startsWith('/api/v1/chat/')) return Promise.resolve({ data: [], headers: {} });
@@ -146,7 +146,7 @@ describe('DashboardProvider per-chat mute', () => {
 
     describe('state from the lists', () => {
         it('reads Muted/MutedUntil from /contact, /chats and /group, treating a past MutedUntil as not muted', async () => {
-            contactsPayload = [contact('B', { Muted: true }), contact('E')];
+            contactsPayload = [contact('B', { muted: true }), contact('E')];
             chatsPayload = [
                 chat('C', { Muted: true, MutedUntil: inFuture() }),
                 chat('D', { Muted: true, MutedUntil: inPast() }),
@@ -285,7 +285,7 @@ describe('DashboardProvider per-chat mute', () => {
             mockSetChatMute.mockResolvedValue(putResult(inFuture()));
             await act(async () => { await ctx!.setMute({ kind: 'direct', key: 'B' }, '8h'); });
             await act(async () => {
-                contactsReq.resolve({ data: [contact('B'), contact('E', { Muted: true })] });
+                contactsReq.resolve({ data: [contact('B'), contact('E', { muted: true })] });
                 chatsReq.resolve({ data: [chat('B'), chat('F', { Muted: true })] });
             });
             expect(ctx!.isMuted({ kind: 'direct', key: 'B' })).toBe(true);
@@ -326,7 +326,7 @@ describe('DashboardProvider per-chat mute', () => {
         });
 
         it('a failed or malformed answer toasts an error and leaves the state as it was', async () => {
-            contactsPayload = [contact('B', { Muted: true })];
+            contactsPayload = [contact('B', { muted: true })];
             await mount();
             mockSetChatMute.mockRejectedValue(new Error('500'));
             let ok: boolean | undefined;
@@ -353,7 +353,7 @@ describe('DashboardProvider per-chat mute', () => {
 
     describe('in-app suppression', () => {
         it('a muted chat gets no notification but its unread counter still increments', async () => {
-            contactsPayload = [contact('B', { Muted: true, MutedUntil: inFuture() }), contact('E')];
+            contactsPayload = [contact('B', { muted: true, mutedUntil: inFuture() }), contact('E')];
             await mount();
 
             emitMessage(incoming(1, 'B'));
@@ -390,7 +390,7 @@ describe('DashboardProvider per-chat mute', () => {
         });
 
         it('reaction toasts are suppressed for a muted chat or group', async () => {
-            contactsPayload = [contact('B', { Muted: true })];
+            contactsPayload = [contact('B', { muted: true })];
             groupsPayload = { groups: [groupRow(9, { Muted: true })] };
             await mount();
             emitReaction({

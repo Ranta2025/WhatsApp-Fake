@@ -206,7 +206,7 @@ func (hd *HandlerContact) HandlerUpdateAvatar() gin.HandlerFunc {
 			hd.hub.NotifyAvatarChange(telephon.(string), url)
 		}
 
-		ctx.JSON(http.StatusOK, gin.H{"message": "avatar actualizado", "avatar_url": url})
+		ctx.JSON(http.StatusOK, gin.H{"message": "avatar actualizado", "avatarUrl": url})
 	}
 }
 
@@ -221,7 +221,7 @@ func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 		}
 
 		var body struct {
-			WallpaperUrl string `json:"wallpaper_url"`
+			WallpaperUrl string `json:"wallpaperUrl"`
 		}
 		if err := ctx.ShouldBindJSON(&body); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "datos inválidos"})
@@ -235,7 +235,7 @@ func (hd *HandlerContact) HandlerUpdateWallpaper() gin.HandlerFunc {
 			return
 		}
 
-		ctx.JSON(http.StatusOK, gin.H{"message": "fondo actualizado", "wallpaper_url": body.WallpaperUrl})
+		ctx.JSON(http.StatusOK, gin.H{"message": "fondo actualizado", "wallpaperUrl": body.WallpaperUrl})
 	}
 }
 
@@ -250,11 +250,11 @@ func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
 		}
 
 		var body struct {
-			ContactTelephon string `json:"contact_telephon" binding:"required"`
-			WallpaperUrl    string `json:"wallpaper_url"`
+			ContactTelephon string `json:"contactTelephon" binding:"required"`
+			WallpaperUrl    string `json:"wallpaperUrl"`
 		}
 		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "contact_telephon requerido"})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "contactTelephon requerido"})
 			ctx.Abort()
 			return
 		}
@@ -265,6 +265,6 @@ func (hd *HandlerContact) HandlerUpdateContactWallpaper() gin.HandlerFunc {
 			return
 		}
 
-		ctx.JSON(http.StatusOK, gin.H{"message": "fondo del chat actualizado", "wallpaper_url": body.WallpaperUrl})
+		ctx.JSON(http.StatusOK, gin.H{"message": "fondo del chat actualizado", "wallpaperUrl": body.WallpaperUrl})
 	}
 }

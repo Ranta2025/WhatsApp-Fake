@@ -105,7 +105,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
     const closeOptions = useCallback(() => setOptionsOpen(false), []);
 
     // Búsqueda dentro del chat (barra bajo la cabecera; salta a cada coincidencia)
-    const selectedNumber = selected?.Number;
+    const selectedNumber = selected?.telephon;
     const searchTarget = useMemo<FocusTarget | null>(
         () => (selectedNumber ? { kind: 'chat', key: selectedNumber } : null),
         [selectedNumber],
@@ -121,37 +121,37 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
     const messagesByChatRef = useRef(messagesByChat);
     useEffect(() => { messagesByChatRef.current = messagesByChat; }, [messagesByChat]);
     useEffect(() => {
-        if (selected?.Number && !messagesByChatRef.current[selected.Number]) {
-            fetchChatMessages(selected.Number);
+        if (selected?.telephon && !messagesByChatRef.current[selected.telephon]) {
+            fetchChatMessages(selected.telephon);
         }
-    }, [selected?.Number, fetchChatMessages]);
+    }, [selected?.telephon, fetchChatMessages]);
 
     // Marcar mensajes como "visto" cuando se abre un chat con mensajes no leídos
     useEffect(() => {
-        if (!selected?.Number || !isConnected || !profile?.Telephon) return;
-        const msgs = messagesByChat[selected.Number];
+        if (!selected?.telephon || !isConnected || !profile?.telephon) return;
+        const msgs = messagesByChat[selected.telephon];
         if (!msgs || msgs.length === 0) return;
-        if (hasUnreadFrom(msgs, selected.Number)) {
-            markAsRead(selected.Number);
+        if (hasUnreadFrom(msgs, selected.telephon)) {
+            markAsRead(selected.telephon);
         }
-    }, [selected?.Number, messagesByChat, isConnected, profile?.Telephon, markAsRead]);
+    }, [selected?.telephon, messagesByChat, isConnected, profile?.telephon, markAsRead]);
 
     if (!selected) {
         // En móvil el sidebar ocupa toda la pantalla; en escritorio se muestra la bienvenida.
         return <WelcomePane isConnected={isConnected} />;
     }
 
-    const displayName = selected.ContactName || selected.Username || selected.Number;
-    const isOnline = onlineUsers.has(selected.Number);
-    const isTyping = typingUsers.has(selected.Number);
+    const displayName = selected.contactName || selected.username || selected.telephon;
+    const isOnline = onlineUsers.has(selected.telephon);
+    const isTyping = typingUsers.has(selected.telephon);
     // Es desconocido si no está en la lista de contactos (se actualiza al agregarlo)
-    const isUnknown = !contacts.some(c => c.Number === selected.Number);
+    const isUnknown = !contacts.some(c => c.telephon === selected.telephon);
 
     const handleClearChat = async () => {
         if (!window.confirm(`¿Seguro que quieres vaciar el chat con ${displayName}?`)) return;
         try {
-            await api.delete(`/api/v1/chat/${selected.Number}`);
-            setMessagesByChat(prev => ({ ...prev, [selected.Number]: [] }));
+            await api.delete(`/api/v1/chat/${selected.telephon}`);
+            setMessagesByChat(prev => ({ ...prev, [selected.telephon]: [] }));
             addToast({ type: 'success', message: 'Chat vaciado' });
         } catch {
             addToast({ type: 'error', message: 'No se pudo vaciar el chat' });
@@ -184,7 +184,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                     onClick={onShowContactDetails}
                     title="Ver información del contacto"
                 >
-                    <Avatar src={avatarMap[selected.Number]} name={displayName} size="md" online={isOnline} />
+                    <Avatar src={avatarMap[selected.telephon]} name={displayName} size="md" online={isOnline} />
                     <div className="min-w-0">
                         <div className="font-semibold text-slate-100 truncate">{displayName}</div>
                         <div className="text-xs truncate">
@@ -193,7 +193,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                             ) : isOnline ? (
                                 <span className="text-indigo-400">en línea</span>
                             ) : (
-                                <span className="text-slate-500">{formatLastSeen(lastSeenMap[selected.Number]) || selected.Number}</span>
+                                <span className="text-slate-500">{formatLastSeen(lastSeenMap[selected.telephon]) || selected.telephon}</span>
                             )}
                         </div>
                     </div>
@@ -229,7 +229,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
                         menuNavigation
                         className="bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[220px]"
                     >
-                        <MuteMenuItems key={selected.Number} target={{ kind: 'direct', key: selected.Number }} onDone={closeOptions} />
+                        <MuteMenuItems key={selected.telephon} target={{ kind: 'direct', key: selected.telephon }} onDone={closeOptions} />
                     </Popover>
                 </div>
             </header>
@@ -240,7 +240,7 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
             {isUnknown && (
                 <div className="flex-shrink-0 px-4 py-2.5 bg-amber-500/[0.08] border-b border-amber-500/15 flex items-center justify-between gap-3 animate-fade-in">
                     <span className="text-sm text-amber-200/90 truncate">
-                        <strong className="font-semibold">{allChatGroups[selected.Number]?.ContactUsername || selected.Number}</strong> no está en tus contactos
+                        <strong className="font-semibold">{allChatGroups[selected.telephon]?.ContactUsername || selected.telephon}</strong> no está en tus contactos
                     </span>
                     <button
                         onClick={() => setShowAddContactModal(true)}
@@ -253,9 +253,9 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
 
             <div className="relative flex-1 min-h-0 flex flex-col">
                 <MessageList searchQuery={chatSearch.activeQuery} />
-                {focusedChat[selected.Number] && (
+                {focusedChat[selected.telephon] && (
                     <button
-                        onClick={() => returnToLatest({ kind: 'chat', key: selected.Number })}
+                        onClick={() => returnToLatest({ kind: 'chat', key: selected.telephon })}
                         className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-fg/10 transition-colors"
                         aria-label="Ir a los mensajes recientes"
                     >
@@ -269,8 +269,8 @@ const ChatWindow = ({ onShowContactDetails, onStartCall }: ChatWindowProps) => {
             <AddContactModal
                 isOpen={showAddContactModal}
                 onClose={() => setShowAddContactModal(false)}
-                initialNumber={selected?.Number || ''}
-                initialName={allChatGroups[selected?.Number]?.ContactUsername || ''}
+                initialNumber={selected?.telephon || ''}
+                initialName={allChatGroups[selected?.telephon]?.ContactUsername || ''}
             />
 
             <ForwardMessageModalWrapper />

@@ -46,7 +46,7 @@ describe('GroupChatWindow mute menu', () => {
             setSelectedGroup: vi.fn(), setGroups: vi.fn(), addToast: vi.fn(),
             groupMessages: { 5: [] }, setGroupMessages: vi.fn(),
             fetchGroupMessages: vi.fn(), fetchGroupDetail: vi.fn(), groupPaging: {}, loadOlderGroupMessages: vi.fn(),
-            typingUsers: new Set(), profile: { Telephon: '111' }, contacts: [], setSelected: vi.fn(),
+            typingUsers: new Set(), profile: { telephon: '111' }, contacts: [], setSelected: vi.fn(),
             avatarMap: {}, myAvatar: '', globalWallpaper: null, groupReceipts: {}, focusedGroup: {},
             openMessageAt: vi.fn(), returnToLatest: vi.fn(), loadOlderFocused: vi.fn(), loadNewerFocused: vi.fn(),
             selectedDisappearSeconds: 0,

@@ -433,8 +433,8 @@ func TestGetFeedGroupsAndOrdersUnseenFirstThenMostRecent(t *testing.T) {
 	repo.On("GetMutualContactIDs", uint(1), ctx).Return([]uint{2, 3}, nil)
 	repo.On("GetActiveStatusesByUserIDs", []uint{2, 3}, ctx).Return(contactStatuses, nil)
 	repo.On("GetViewedStatusIDs", uint(1), []uint{1, 2, 3}, ctx).Return(map[uint]bool{
-		1: true, // b1 (de 2) visto
-		2: true, // c1 (de 3) visto
+		1: true,  // b1 (de 2) visto
+		2: true,  // c1 (de 3) visto
 		3: false, // c2 (de 3) NO visto
 	}, nil)
 	repo.On("GetAddedContactIDs", uint(1), ctx).Return(map[uint]string{2: "Beto", 3: "Cami"}, nil)

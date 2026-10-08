@@ -151,8 +151,8 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }: 
 
     // Buscar nombre del contacto por teléfono
     const getDisplayName = (telephon: string | undefined, username: string | undefined) => {
-        const contact = contacts?.find(c => c.Number === telephon);
-        return contact?.ContactName || username || telephon;
+        const contact = contacts?.find(c => c.telephon === telephon);
+        return contact?.contactName || username || telephon;
     };
 
     if (loading) {
@@ -201,15 +201,15 @@ export default function CallHistory({ contacts, onSelectContact, onStartCall }: 
                         className="group relative w-full text-left p-3 bg-fg/5 hover:bg-fg/10 rounded flex items-center gap-3 cursor-pointer transition"
                         onClick={() => {
                             // Al hacer click, abrir chat con ese contacto
-                            const contact = contacts?.find(c => c.Number === remoteTelephon);
+                            const contact = contacts?.find(c => c.telephon === remoteTelephon);
                             if (contact && onSelectContact) {
                                 onSelectContact(contact);
                             } else if (onSelectContact) {
                                 onSelectContact({
-                                    Number: remoteTelephon,
-                                    Username: remoteUsername || remoteTelephon,
-                                    ContactName: null,
-                                    Status: 'unknown'
+                                    telephon: remoteTelephon,
+                                    username: remoteUsername || remoteTelephon,
+                                    contactName: null,
+                                    status: 'unknown'
                                 });
                             }
                         }}

@@ -88,7 +88,7 @@ const emit = async (event: string, payload: unknown) => {
 
 beforeEach(async () => {
     mockGet.mockImplementation((url: string) => {
-        if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111', Username: 'ana' } });
+        if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111', username: 'ana' } });
         if (url === '/api/v1/chats') {
             // Held pending: released with a stale, short window (11 msgs => hasMore=false).
             return new Promise((resolve) => {
@@ -154,7 +154,7 @@ describe('DashboardContext sender echo vs stale full-history window', () => {
         // The history reload for the replayed ack fails: only the echoed frame
         // itself can put 101 on screen.
         mockGet.mockImplementation((url: string) => {
-            if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111', Username: 'ana' } });
+            if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111', username: 'ana' } });
             if (url === '/api/v1/chats') return Promise.resolve({ data: [], headers: {} });
             if (url === '/api/v1/chat/222') return Promise.reject(new Error('history down'));
             if (url === '/api/v1/contact') return Promise.resolve({ data: [] });

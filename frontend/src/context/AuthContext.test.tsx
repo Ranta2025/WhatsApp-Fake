@@ -80,7 +80,7 @@ describe('AuthProvider with a null response body', () => {
 describe('AuthProvider offline session cache', () => {
     const KEY = 'whatsapp-fake:session-user';
     const PROFILE = { username: 'Ana', telephon: '111', avatar: '/a.png' };
-    const SERVER = { Username: 'Ana', Telephon: '111', avatar_url: '/a.png' };
+    const SERVER = { username: 'Ana', telephon: '111', avatarUrl: '/a.png' };
     let container: HTMLDivElement;
     let root: Root;
     let ctx: AuthContextValue | undefined;
@@ -180,7 +180,7 @@ describe('AuthProvider offline session cache', () => {
         mockGet.mockRejectedValueOnce(networkError());
         await mount();
 
-        mockGet.mockResolvedValueOnce({ data: { ...SERVER, Username: 'Ana B' } });
+        mockGet.mockResolvedValueOnce({ data: { ...SERVER, username: 'Ana B' } });
         await act(async () => { window.dispatchEvent(new Event('online')); });
         expect(ctx?.user).toEqual({ ...PROFILE, username: 'Ana B' });
         expect(JSON.parse(localStorage.getItem(KEY) ?? 'null')).toEqual({ ...PROFILE, username: 'Ana B' });

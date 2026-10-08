@@ -48,7 +48,7 @@ func TestE2ESearchAPI(t *testing.T) {
 	require.NoError(t, db.Create(&models.Message{IdUser: alice.ID, IdReceptor: bob.ID, Message: "nada", Status: "enviado", Time: now}).Error)
 
 	// Contactos y grupo (alice + bob; carol es ajena)
-	code, _ := ca.do("POST", "/api/v1/contact", map[string]string{"number": bob.Telephon, "contact_name": "Bobby"})
+	code, _ := ca.do("POST", "/api/v1/contact", map[string]string{"telephon": bob.Telephon, "contactName": "Bobby"})
 	require.Equal(t, 201, code)
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "Buscadores", "members": []string{bob.Telephon}})
 	require.Equal(t, 201, code, grp)

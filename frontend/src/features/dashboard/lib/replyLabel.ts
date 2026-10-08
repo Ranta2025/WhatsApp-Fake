@@ -10,8 +10,8 @@ export interface ReplySender {
 
 /** Fuente de nombre para un chat 1:1 (`selected` o un contacto). */
 export interface ReplyNameSource {
-    ContactName?: string | null;
-    Username: string;
+    contactName?: string | null;
+    username: string;
 }
 
 /** Miembro de grupo mínimo para resolver el nombre del remitente. */
@@ -47,5 +47,5 @@ export function replySenderLabel(
         return replyingTo.SenderTelephon || 'mensaje';
     }
 
-    return selected?.ContactName || selected?.Username || 'mensaje';
+    return selected?.contactName || selected?.username || 'mensaje';
 }

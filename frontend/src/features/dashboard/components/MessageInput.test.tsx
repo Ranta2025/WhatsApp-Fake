@@ -49,9 +49,9 @@ describe('MessageInput sticker sending', () => {
         replyingTo?: Message | null;
     } = {}) => {
         mockUseDashboard.mockReturnValue({
-            selected: { Number: '111', Username: 'Yo', ContactName: null },
+            selected: { telephon: '111', username: 'Yo', contactName: null },
             isConnected: opts.isConnected ?? true,
-            profile: { Telephon: '999' },
+            profile: { telephon: '999' },
             drafts: {},
             setDrafts: vi.fn(),
             sendTypingIndicator: vi.fn(),

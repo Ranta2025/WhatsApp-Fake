@@ -341,9 +341,9 @@ func TestMediaGC_FailureIncrementsAttemptsWithBackoff(t *testing.T) {
 
 	assert.Empty(t, repo.deleted)
 	require.Len(t, repo.resched, 3)
-	assert.Equal(t, reschedCall{1, 1, 2*time.Minute, "minio caído"}, repo.resched[0])
-	assert.Equal(t, reschedCall{2, 3, 8*time.Minute, "minio caído"}, repo.resched[1])
-	assert.Equal(t, reschedCall{3, 7, 128*time.Minute, "minio caído"}, repo.resched[2])
+	assert.Equal(t, reschedCall{1, 1, 2 * time.Minute, "minio caído"}, repo.resched[0])
+	assert.Equal(t, reschedCall{2, 3, 8 * time.Minute, "minio caído"}, repo.resched[1])
+	assert.Equal(t, reschedCall{3, 7, 128 * time.Minute, "minio caído"}, repo.resched[2])
 	assert.Equal(t, 3, m.gc["failed"])
 	assert.EqualValues(t, 3, m.pending)
 }

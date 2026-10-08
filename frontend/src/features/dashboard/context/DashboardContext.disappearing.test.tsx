@@ -78,7 +78,7 @@ const groupSys = (id: number, seconds: number): GroupMessageResponse => groupMsg
 });
 const ids = (list: ReadonlyArray<{ MessageID: number | string }> | undefined) => (list ?? []).map(m => m.MessageID);
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-const contact = (n: string): ContactChat => ({ Number: n, ContactName: n, Username: n } as ContactChat);
+const contact = (n: string): ContactChat => ({ telephon: n, contactName: n, username: n } as ContactChat);
 const group = (over: Partial<SelectedGroup> = {}): SelectedGroup => ({
     ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
     OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false, ...over,
@@ -109,7 +109,7 @@ describe('DashboardProvider disappearing messages', () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
         chatsPayload = [];
         mockGet.mockImplementation((url: string, config?: GetConfig) => {
-            if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+            if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
             if (url === '/api/v1/chats') return Promise.resolve({ data: chatsPayload });
             if (url === '/api/v1/chat/B') {
                 return Promise.resolve(config?.params?.around
@@ -157,21 +157,21 @@ describe('DashboardProvider disappearing messages', () => {
             ];
             await mount();
             expect(ctx!.chatDisappear).toEqual({ B: 604800, C: 0 });
-            await act(async () => { ctx!.setSelected({ Number: 'B', Username: 'bea' }); });
+            await act(async () => { ctx!.setSelected({ telephon: 'B', username: 'bea' }); });
             expect(ctx!.selectedDisappearSeconds).toBe(604800);
-            await act(async () => { ctx!.setSelected({ Number: 'C', Username: 'carl' }); });
+            await act(async () => { ctx!.setSelected({ telephon: 'C', username: 'carl' }); });
             expect(ctx!.selectedDisappearSeconds).toBe(0);
         });
 
         it('GETs the settings when a chat with an unknown timer opens, and not when it is already known', async () => {
             mockGetChatSettings.mockResolvedValue(86400);
             await mount();
-            await act(async () => { ctx!.setSelected({ Number: 'B', Username: 'bea' }); });
+            await act(async () => { ctx!.setSelected({ telephon: 'B', username: 'bea' }); });
             expect(mockGetChatSettings).toHaveBeenCalledWith('B');
             expect(ctx!.chatDisappear['B']).toBe(86400);
             mockGetChatSettings.mockClear();
-            await act(async () => { ctx!.setSelected({ Number: 'C', Username: 'carl' }); });
-            await act(async () => { ctx!.setSelected({ Number: 'B', Username: 'bea' }); });
+            await act(async () => { ctx!.setSelected({ telephon: 'C', username: 'carl' }); });
+            await act(async () => { ctx!.setSelected({ telephon: 'B', username: 'bea' }); });
             expect(mockGetChatSettings).toHaveBeenCalledTimes(1);
             expect(mockGetChatSettings).toHaveBeenCalledWith('C');
         });
@@ -179,7 +179,7 @@ describe('DashboardProvider disappearing messages', () => {
         it('ignores a failed or malformed settings GET', async () => {
             mockGetChatSettings.mockRejectedValue(new Error('boom'));
             await mount();
-            await act(async () => { ctx!.setSelected({ Number: 'B', Username: 'bea' }); });
+            await act(async () => { ctx!.setSelected({ telephon: 'B', username: 'bea' }); });
             expect(ctx!.chatDisappear['B']).toBeUndefined();
             expect(ctx!.selectedDisappearSeconds).toBe(0);
         });
@@ -342,7 +342,7 @@ describe('DashboardProvider disappearing messages', () => {
                         headers: { 'x-has-more-older': 'false', 'x-has-more-newer': 'false' },
                     });
                 }
-                if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111' } });
+                if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111' } });
                 return Promise.resolve({ data: url === '/api/v1/chats' ? [] : null });
             });
             await act(async () => { await ctx!.openMessageAt({ kind: 'chat', key: 'B' }, 40); });

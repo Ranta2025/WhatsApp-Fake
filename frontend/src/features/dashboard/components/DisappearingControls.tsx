@@ -83,9 +83,9 @@ export const ChatDisappearingSection = () => {
     if (!selected) return null;
     return (
         <DisappearingSelector
-            key={selected.Number}
+            key={selected.telephon}
             value={selectedDisappearSeconds}
-            onChange={seconds => setChatDisappearing(selected.Number, seconds)}
+            onChange={seconds => setChatDisappearing(selected.telephon, seconds)}
         />
     );
 };

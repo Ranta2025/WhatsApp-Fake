@@ -1,11 +1,11 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 
 interface UserResponse {
-  Telephon: string;
+  telephon: string;
 }
 
 function isUserResponse(value: unknown): value is UserResponse {
-  return typeof value === 'object' && value !== null && typeof (value as { Telephon?: unknown }).Telephon === 'string';
+  return typeof value === 'object' && value !== null && typeof (value as { telephon?: unknown }).telephon === 'string';
 }
 
 // Teléfono del usuario autenticado en ese contexto de API.
@@ -13,8 +13,8 @@ export async function phoneOf(request: APIRequestContext): Promise<string> {
   const res = await request.get('/api/v1/user');
   expect(res.ok()).toBeTruthy();
   const body: unknown = await res.json();
-  if (!isUserResponse(body)) throw new Error('GET /api/v1/user sin "Telephon"');
-  return body.Telephon;
+  if (!isUserResponse(body)) throw new Error('GET /api/v1/user sin "telephon"');
+  return body.telephon;
 }
 
 // Envía un mensaje 1:1 por API (más rápido y estable que escribirlo por UI).

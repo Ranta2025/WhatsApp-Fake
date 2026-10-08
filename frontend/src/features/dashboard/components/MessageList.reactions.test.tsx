@@ -42,10 +42,10 @@ describe('MessageList reactions (1:1)', () => {
         messaging.menuOpen = null;
         mockGetReactions.mockResolvedValue({ reactions: [{ emoji: '👍', users: [{ telephon: 'B', username: 'bea', avatarUrl: '' }] }] });
         dash.value = {
-            selected: { Number: 'B', Username: 'bea' },
+            selected: { telephon: 'B', username: 'bea' },
             focusedChat: {},
             messagesByChat: { B: [msg(1, { Reactions: [{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '❤️', Count: 1, Mine: false }] }), msg(2)] },
-            profile: { Telephon: 'me' },
+            profile: { telephon: 'me' },
             globalWallpaper: '',
             chatPaging: {},
             loadOlderMessages: vi.fn(),

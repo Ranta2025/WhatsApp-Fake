@@ -63,12 +63,12 @@ describe('MessageList sticker rendering (1:1)', () => {
     const render = (message: Message, menuOpen: number | null = null) => {
         messaging.menuOpen = menuOpen;
         dash.value = {
-            selected: { Number: '222' },
+            selected: { telephon: '222' },
             focusedChat: {},
             messagesByChat: { '222': [message] },
             chatPaging: {},
             loadOlderMessages: vi.fn(),
-            profile: { Telephon: '111' },
+            profile: { telephon: '111' },
             globalWallpaper: null,
             reactToMessage,
         };

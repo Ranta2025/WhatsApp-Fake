@@ -110,7 +110,7 @@ const settle = async (check: () => void) => {
 
 beforeEach(async () => {
     mockGet.mockImplementation((url: string) => {
-        if (url === '/api/v1/user') return Promise.resolve({ data: { Telephon: '111', Username: 'ana' } });
+        if (url === '/api/v1/user') return Promise.resolve({ data: { telephon: '111', username: 'ana' } });
         return Promise.resolve({ data: url === '/api/v1/chats' || url === '/api/v1/contact' ? [] : null, headers: {} });
     });
     mockGetUserGroups.mockResolvedValue({ data: [] });

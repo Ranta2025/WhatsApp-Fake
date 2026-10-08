@@ -512,8 +512,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // `data?.` restaura la tolerancia que tenía la versión JS.
             const { data } = await api.get<UserGet | null>('/api/v1/user');
             setProfile(data);
-            if (data?.avatar_url) setMyAvatar(data.avatar_url);
-            if (data?.wallpaper_url) setGlobalWallpaper(data.wallpaper_url);
+            if (data?.avatarUrl) setMyAvatar(data.avatarUrl);
+            if (data?.wallpaperUrl) setGlobalWallpaper(data.wallpaperUrl);
         } catch (err) {
             console.error('Error fetching profile:', err);
         }
@@ -526,14 +526,14 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const list = Array.isArray(data) ? data : [];
             setContacts(list);
             setChatMutes(prev => mergeMutes(prev, list
-                .filter(c => !muteChangedSince({ kind: 'direct', key: c.Number }, muteStart))
-                .map(c => [c.Number, parseMuteFields(c)])));
+                .filter(c => !muteChangedSince({ kind: 'direct', key: c.telephon }, muteStart))
+                .map(c => [c.telephon, parseMuteFields(c)])));
 
             const seenMap: Record<string, string> = {};
             const avMap: Record<string, string> = {};
             list.forEach(c => {
-                if (c.last_seen) seenMap[c.Number] = c.last_seen;
-                if (c.avatar_url) avMap[c.Number] = c.avatar_url;
+                if (c.lastSeen) seenMap[c.telephon] = c.lastSeen;
+                if (c.avatarUrl) avMap[c.telephon] = c.avatarUrl;
             });
             setLastSeenMap(prev => ({ ...prev, ...seenMap }));
             setAvatarMap(prev => ({ ...prev, ...avMap }));
@@ -785,7 +785,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         });
         setAllChatGroups(prev => {
             if (prev[chatKey]) return prev;
-            const isContact = contactsRef.current.some(c => c.Number === chatKey);
+            const isContact = contactsRef.current.some(c => c.telephon === chatKey);
             return {
                 ...prev,
                 [chatKey]: { ContactTelephon: chatKey, ContactUsername: chatKey, ContactName: '', IsContact: isContact },
@@ -964,7 +964,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     }, [addToast, applyMute]);
 
     // Timer of a chat that has no value yet (e.g. a chat without messages in /chats): ask once on open.
-    const selectedChatNumber = selected?.Number;
+    const selectedChatNumber = selected?.telephon;
     useEffect(() => {
         if (!selectedChatNumber || chatDisappearRef.current[selectedChatNumber] !== undefined) return;
         let cancelled = false;
@@ -1156,7 +1156,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     }, [dropFocusState, patchFocusedChat, patchFocusedGroup]);
 
     // Salir de un chat/grupo descarta su ventana desprendida (y cualquier apertura en curso).
-    const selectedChatKey = selected?.Number;
+    const selectedChatKey = selected?.telephon;
     const selectedGroupKey = selectedGroup?.ID;
     useEffect(() => {
         for (const key of Object.keys(focusedChatRef.current)) {
@@ -1244,7 +1244,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         if (!isConnected) return;
 
         const handleIncomingMessage = (messageData: WsHandlerMap['message']) => {
-            const myTelephon = profileRef.current?.Telephon;
+            const myTelephon = profileRef.current?.telephon;
             const currentSelected = selectedRef.current;
             const { SenderTelephon, Receptor, MessageID, Message: messageText, MediaType } = messageData;
 
@@ -1275,7 +1275,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Primer mensaje de alguien que aún no tenemos en la lista de chats
             setAllChatGroups(prev => {
                 if (prev[contactNumber]) return prev;
-                const isContact = contactsRef.current.some(c => c.Number === contactNumber);
+                const isContact = contactsRef.current.some(c => c.telephon === contactNumber);
                 return {
                     ...prev,
                     [contactNumber]: {
@@ -1294,11 +1294,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             // Silenciado: sin notificación nativa (que es también el sonido), pero el mensaje ya
             // está en messagesByChat, así que el contador de no leídos sube igual.
             const muted = isChatMuted(chatMutesRef.current[contactNumber], Date.now());
-            if (SenderTelephon !== myTelephon && currentSelected?.Number !== contactNumber && !muted) {
+            if (SenderTelephon !== myTelephon && currentSelected?.telephon !== contactNumber && !muted) {
                 // buscar nombre para mostrar
-                const contact = contactsRef.current.find(c => c.Number === contactNumber);
+                const contact = contactsRef.current.find(c => c.telephon === contactNumber);
                 const group = allChatGroupsRef.current[contactNumber];
-                const title = contact?.ContactName || group?.ContactName || group?.ContactUsername || contactNumber;
+                const title = contact?.contactName || group?.ContactName || group?.ContactUsername || contactNumber;
                 let body = '';
                 if (MediaType) {
                     if (MediaType === 'audio') body = '🎵 Audio';
@@ -1325,7 +1325,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 });
             }
 
-            if (SenderTelephon !== myTelephon && currentSelected?.Number === contactNumber) {
+            if (SenderTelephon !== myTelephon && currentSelected?.telephon === contactNumber) {
                 markAsRead(contactNumber);
             }
         };
@@ -1377,28 +1377,28 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         // Handler: un contacto cambió su avatar
         const handleAvatarChanged = (payload: WsHandlerMap['avatar_changed']) => {
             if (!payload?.telephon) return;
-            setAvatarMap(prev => ({ ...prev, [payload.telephon]: payload.avatar_url || '' }));
+            setAvatarMap(prev => ({ ...prev, [payload.telephon]: payload.avatarUrl || '' }));
         };
 
         // Handler: un contacto cambió su username
         const handleUsernameChanged = (payload: WsHandlerMap['username_changed']) => {
             if (!payload?.telephon) return;
-            const { telephon, new_username } = payload;
+            const { telephon, newUsername } = payload;
             // Actualizar en contactos
             setContacts(prev => prev.map(c =>
-                c.Number === telephon ? { ...c, Username: new_username } : c
+                c.telephon === telephon ? { ...c, username: newUsername } : c
             ));
             // Actualizar en allChatGroups
             setAllChatGroups(prev => {
                 if (!prev[telephon]) return prev;
-                return { ...prev, [telephon]: { ...prev[telephon], ContactUsername: new_username } };
+                return { ...prev, [telephon]: { ...prev[telephon], ContactUsername: newUsername } };
             });
         };
 
         // Handler: un mensaje fue editado (por mí o por el otro participante)
         const handleEditMessage = (updatedMsg: WsHandlerMap['edit_message']) => {
             if (!updatedMsg?.MessageID) return;
-            const myTelephon = profileRef.current?.Telephon;
+            const myTelephon = profileRef.current?.telephon;
             // Determinar en qué chat está este mensaje
             const contactNumber = updatedMsg.SenderTelephon === myTelephon
                 ? updatedMsg.Receptor
@@ -1422,7 +1422,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         // Handler: un mensaje fue eliminado para todos (por mí o por el otro participante)
         const handleDeleteMessage = (deletedMsg: WsHandlerMap['delete_message']) => {
             if (!deletedMsg?.MessageID) return;
-            const myTelephon = profileRef.current?.Telephon;
+            const myTelephon = profileRef.current?.telephon;
             // Determinar en qué chat está este mensaje
             const contactNumber = deletedMsg.SenderTelephon === myTelephon
                 ? deletedMsg.Receptor
@@ -1454,7 +1454,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 return { ...prev, [msg.GroupID]: [...existing, msg] };
             });
             // Enviar un mensaje estando en una ventana desprendida vuelve a los últimos mensajes.
-            if (msg.SenderTelephon === profileRef.current?.Telephon) returnToLatest({ kind: 'group', id: msg.GroupID });
+            if (msg.SenderTelephon === profileRef.current?.telephon) returnToLatest({ kind: 'group', id: msg.GroupID });
             noteIncomingGroupMessage(msg.GroupID, msg.MessageID, msg.SenderTelephon);
         };
 
@@ -1469,7 +1469,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         const handleReaction = (payload: WsHandlerMap['reaction']) => {
             const event = parseReactionEvent(payload);
             if (!event) return;
-            const me = profileRef.current?.Telephon ?? selfTelephonRef.current;
+            const me = profileRef.current?.telephon ?? selfTelephonRef.current;
             if (event.telephon === me) shiftPending(pendingReactionsRef.current, reactionPendingKey(event.kind, event.messageID), Date.now());
             mapReactionContainers(event.kind, event.groupID, list => applyReaction(list, event, me));
 
@@ -1482,10 +1482,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 if (event.groupID !== undefined && isChatMuted(groupMutesRef.current[event.groupID], now)) return;
                 name = event.groupID === undefined ? undefined : groupMemberNamesRef.current[event.groupID]?.[event.telephon];
             } else {
-                if (selectedRef.current?.Number === event.telephon) return;
+                if (selectedRef.current?.telephon === event.telephon) return;
                 if (isChatMuted(chatMutesRef.current[event.telephon], now)) return;
-                const known = contactsRef.current.find(c => c.Number === event.telephon);
-                name = known?.ContactName || known?.Username || undefined;
+                const known = contactsRef.current.find(c => c.telephon === event.telephon);
+                name = known?.contactName || known?.username || undefined;
             }
             const who = name || event.username || event.telephon;
             addToast({
@@ -1661,7 +1661,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         const handleGroupMemberRole = (payload: WsHandlerMap['group_member_role']) => {
             const event = parseGroupMemberRole(payload);
             if (!event) return;
-            const myTelephon = profileRef.current?.Telephon;
+            const myTelephon = profileRef.current?.telephon;
             const iAmTarget = event.telephon === myTelephon;
             setGroups(prev => prev.map(g =>
                 g.ID === event.groupID && iAmTarget ? { ...g, UserRole: event.role } : g
@@ -1683,7 +1683,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         const handleGroupMemberRemoved = (payload: WsHandlerMap['group_member_removed']) => {
             const event = parseGroupMemberRemoved(payload);
             if (!event) return;
-            const myTelephon = profileRef.current?.Telephon;
+            const myTelephon = profileRef.current?.telephon;
             if (event.username) rememberNames(event.groupID, [{ telephon: event.telephon, username: event.username }]);
             setGroupReceipts(prev => removeMemberMark(prev, event.groupID, event.telephon));
             const iAmRemoved = event.telephon === myTelephon;
@@ -1860,7 +1860,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
     const selectedDisappearSeconds = selectedGroup
         ? normalizeDisappearSeconds(selectedGroup.DisappearSeconds)
-        : (selected ? chatDisappear[selected.Number] ?? 0 : 0);
+        : (selected ? chatDisappear[selected.telephon] ?? 0 : 0);
 
     const value: DashboardContextValue = {
         profile, setProfile,
