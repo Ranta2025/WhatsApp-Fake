@@ -5,11 +5,10 @@
  * numeric id (used as the pagination cursor); any malformed/legacy entry with a
  * non-numeric id is never a cursor.
  *
- * Casing transition (AC4): 1:1 messages use camelCase keys (`messageID`, `time`,
- * `reactions`) while group messages still use PascalCase (`MessageID`, `Time`,
- * `Reactions`) until AC5. These helpers are shared by both domains, so they read
- * through `messageIdOf`/`messageTimeOf` and accept either casing. The camel
- * accessors collapse to a single casing once AC5 lands.
+ * Casing (api-casing cutover complete): both 1:1 and group messages use
+ * camelCase keys (`messageID`, `time`, `reactions`). These helpers are shared
+ * by both domains, so they still read through `messageIdOf`/`messageTimeOf`
+ * and tolerate either casing (cached/stale payloads); new code uses camel.
  */
 
 import type { ReactionSummary } from '../../../types/api';
@@ -21,11 +20,11 @@ export interface MergeableMessage {
     time?: string;
 }
 
-/** Message id of a direct (camel) or group (Pascal) entry. */
+/** Message id of a chat entry (camel; tolerates legacy Pascal). */
 export const messageIdOf = (m: MergeableMessage): number | string | undefined =>
     m.messageID !== undefined ? m.messageID : m.MessageID;
 
-/** Timestamp of a direct (camel) or group (Pascal) entry. */
+/** Timestamp of a chat entry (camel; tolerates legacy Pascal). */
 export const messageTimeOf = (m: MergeableMessage): string | undefined =>
     m.time !== undefined ? m.time : m.Time;
 
@@ -34,7 +33,7 @@ export const isCamelMessage = (m: MergeableMessage): boolean => m.messageID !== 
 
 type ReactionsCarrier = { reactions?: ReactionSummary[]; Reactions?: ReactionSummary[] };
 
-/** Reactions of a direct (camel) or group (Pascal) entry. */
+/** Reactions of a chat entry (camel; tolerates legacy Pascal). */
 export const messageReactionsOf = (m: MergeableMessage): ReactionSummary[] | undefined => {
     const carrier = m as MergeableMessage & ReactionsCarrier;
     return carrier.reactions !== undefined ? carrier.reactions : carrier.Reactions;

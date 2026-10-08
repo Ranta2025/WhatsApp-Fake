@@ -45,8 +45,8 @@ describe('replySenderLabel (1:1)', () => {
 
 describe('replySenderLabel (group)', () => {
     const members = [
-        { Telephon: '222', Username: 'bob', ContactName: 'Bob' },
-        { Telephon: '333', Username: 'carol', ContactName: null },
+        { telephon: '222', username: 'bob', contactName: 'Bob' },
+        { telephon: '333', username: 'carol', contactName: null },
     ];
 
     it('resuelve el nombre desde la lista de miembros', () => {

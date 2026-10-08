@@ -47,11 +47,11 @@ import (
 
 // allowlist maps a still-non-camel JSON key to the api-casing domain that owns
 // its rename. It MUST become empty by the end of the cutover.
-var allowlist = map[string]string{
-	// AC7 leftovers (bug-report request body).
-	"user_email":  "AC7-leftovers",
-	"screen_size": "AC7-leftovers",
-}
+//
+// AC7 closes the cutover: the bug-report request body (the last owner) is now
+// lowerCamelCase, so the allowlist is empty and any future non-camel key fails
+// the inventory immediately.
+var allowlist = map[string]string{}
 
 // registry is the explicit inventory of wire-contract structs: every schema
 // response, every request body and every struct-based WebSocket payload.

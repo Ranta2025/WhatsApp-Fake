@@ -16,9 +16,9 @@ export interface ReplyNameSource {
 
 /** Miembro de grupo mínimo para resolver el nombre del remitente. */
 export interface ReplyGroupMember {
-    Telephon: string;
-    Username?: string;
-    ContactName?: string | null;
+    telephon: string;
+    username?: string;
+    contactName?: string | null;
 }
 
 /**
@@ -42,8 +42,8 @@ export function replySenderLabel(
     if (myTelephon && replyingTo.senderTelephon === myTelephon) return 'ti mismo';
 
     if (members) {
-        const member = members.find((m) => m.Telephon === replyingTo.senderTelephon);
-        if (member) return member.ContactName || member.Username || replyingTo.senderTelephon || 'mensaje';
+        const member = members.find((m) => m.telephon === replyingTo.senderTelephon);
+        if (member) return member.contactName || member.username || replyingTo.senderTelephon || 'mensaje';
         return replyingTo.senderTelephon || 'mensaje';
     }
 

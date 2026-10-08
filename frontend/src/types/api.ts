@@ -490,10 +490,10 @@ export interface BugReportRequest {
   steps: string;
   expected: string;
   actual: string;
-  user_email: string;
+  userEmail: string;
   browser: string;
   os: string;
-  screen_size: string;
+  screenSize: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

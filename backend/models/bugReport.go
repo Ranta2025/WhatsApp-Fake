@@ -6,10 +6,10 @@ type BugReport struct {
 	Steps       string `json:"steps"`
 	Expected    string `json:"expected"`
 	Actual      string `json:"actual"`
-	UserEmail   string `json:"user_email"`
+	UserEmail   string `json:"userEmail"`
 	Browser     string `json:"browser"`
 	OS          string `json:"os"`
-	ScreenSize  string `json:"screen_size"`
+	ScreenSize  string `json:"screenSize"`
 }
 
 type GitHubIssue struct {

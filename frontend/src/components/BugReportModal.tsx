@@ -14,7 +14,7 @@ interface BugReportFormData {
     steps: string;
     expected: string;
     actual: string;
-    user_email: string;
+    userEmail: string;
 }
 
 type SubmitStatus = 'success' | 'error' | null;
@@ -26,7 +26,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
         steps: '',
         expected: '',
         actual: '',
-        user_email: ''
+        userEmail: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState<SubmitStatus>(null);
@@ -51,7 +51,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
 
         const screenSize = `${window.screen.width}x${window.screen.height}`;
 
-        return { browser, os, screen_size: screenSize };
+        return { browser, os, screenSize };
     };
 
     const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -85,7 +85,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                 steps: '',
                 expected: '',
                 actual: '',
-                user_email: ''
+                userEmail: ''
             });
 
             // Cerrar modal después de 2 segundos
@@ -218,8 +218,8 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                         </label>
                         <input
                             type="email"
-                            name="user_email"
-                            value={formData.user_email}
+                            name="userEmail"
+                            value={formData.userEmail}
                             onChange={handleChange}
                             placeholder="tu@email.com"
                             className="w-full px-4 py-3 bg-fg/10 border border-fg/20 rounded-lg text-fg placeholder-indigo-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/50"
