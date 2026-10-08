@@ -55,10 +55,10 @@ const chatMsg = (id: number): Message => ({
     messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
 });
 const groupMsg = (id: number): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: 'B', SenderUsername: 'bea', Message: `g${id}`, Time: iso(id), Edited: false,
+    messageID: id, groupID: 9, senderTelephon: 'B', senderUsername: 'bea', message: `g${id}`, time: iso(id), edited: false,
 });
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
+const ids = (list: ReadonlyArray<{ messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID);
 
 describe('DashboardProvider message pagination', () => {
     let container: HTMLDivElement;
@@ -283,7 +283,7 @@ describe('DashboardProvider message pagination', () => {
             await mount();
             await act(async () => { await ctx!.fetchGroupMessages(9); });
             // Malformed/legacy entry (non-numeric id): never a pagination cursor.
-            const malformed = { messageID: 'system_1', GroupID: 9, message: 'x', time: iso(1) } as unknown as GroupMessageResponse;
+            const malformed = { messageID: 'system_1', groupID: 9, message: 'x', time: iso(1) } as unknown as GroupMessageResponse;
             await act(async () => {
                 ctx!.setGroupMessages(prev => ({
                     ...prev,
@@ -306,7 +306,7 @@ describe('DashboardProvider message pagination', () => {
             mockGetGroupMessages.mockResolvedValue({ data: { messages: desc(1, 50), hasMore: false } });
             await act(async () => { await ctx!.loadOlderGroupMessages(9); });
 
-            mockGetGroupDetail.mockResolvedValue({ data: { ID: 9, Members: [], Messages: desc(51, 101) } });
+            mockGetGroupDetail.mockResolvedValue({ data: { id: 9, members: [], messages: desc(51, 101) } });
             await act(async () => { await ctx!.fetchGroupDetail(9); });
             expect(ids(ctx?.groupMessages[9])).toEqual(range(1, 101));
 
@@ -333,7 +333,7 @@ describe('DashboardProvider message pagination', () => {
             expect(mockGetGroupMessages).toHaveBeenLastCalledWith(9, 50, 0, 201);
             expect(ctx?.groupPaging[9]).toMatchObject({ olderLoaded: true });
 
-            mockGetGroupDetail.mockResolvedValue({ data: { ID: 9, Members: [], Messages: desc(401, 450) } });
+            mockGetGroupDetail.mockResolvedValue({ data: { id: 9, members: [], messages: desc(401, 450) } });
             await act(async () => { await ctx!.fetchGroupDetail(9); });
             expect(ids(ctx?.groupMessages[9])).toEqual(range(401, 450));
             expect(ctx?.groupPaging[9]).toMatchObject({ hasMore: true, olderLoaded: false });

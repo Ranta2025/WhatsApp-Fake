@@ -300,7 +300,7 @@ func TestReactionsJSON_OmittedWhenEmpty(t *testing.T) {
 func TestReactionsJSON_CamelCaseKeys(t *testing.T) {
 	b, err := json.Marshal(schemas.Message{Reactions: wantThumbs()})
 	require.NoError(t, err)
-	assert.Contains(t, string(b), `"reactions":[{"Emoji":"👍","Count":2,"Mine":true}]`)
+	assert.Contains(t, string(b), `"reactions":[{"emoji":"👍","count":2,"mine":true}]`)
 }
 
 // Un *RepoReaction nil dentro de la interfaz no es == nil: el receptor debe ser

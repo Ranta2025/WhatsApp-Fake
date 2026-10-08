@@ -29,7 +29,7 @@ const mockSearchGroup = vi.mocked(searchGroup);
 const hit = (id: number) => ({ messageID: id, time: '2026-01-01T00:00:00Z', snippet: `g${id}`, highlights: [] as [number, number][] });
 const page = (ids: number[]): SearchPage => ({ results: ids.map(hit), hasMore: false });
 const msg = (id: number, text = `g${id}`): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: '222', SenderUsername: 'bob', Message: text, Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: id, groupID: 9, senderTelephon: '222', senderUsername: 'bob', message: text, time: '2026-01-01T10:00:00Z', edited: false,
 });
 
 describe('GroupChatWindow in-chat search', () => {
@@ -42,7 +42,7 @@ describe('GroupChatWindow in-chat search', () => {
 
     const renderGroup = (over: { role?: string; focusedGroup?: DashboardContextValue['focusedGroup'] } = {}) => {
         mockUseDashboard.mockReturnValue({
-            selectedGroup: { ID: 9, Name: 'Equipo', MemberCount: 3, UserRole: over.role ?? 'member', Members: [] },
+            selectedGroup: { id: 9, name: 'Equipo', memberCount: 3, userRole: over.role ?? 'member', members: [] },
             setSelectedGroup: vi.fn(), groupMessages: { 9: [msg(100), msg(101)] }, setGroupMessages: vi.fn(),
             fetchGroupMessages: vi.fn(), fetchGroupDetail: vi.fn(), groupPaging: {}, loadOlderGroupMessages: vi.fn(),
             typingUsers: new Set(), profile: { telephon: '111' }, contacts: [], setSelected: vi.fn(),

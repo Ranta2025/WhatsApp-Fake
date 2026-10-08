@@ -64,7 +64,7 @@ func TestE2EGroupReceipts(t *testing.T) {
 	}
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "Acuses", "members": []string{bob.Telephon, carol.Telephon}})
 	require.Equal(t, 201, code, grp)
-	groupID := int(grp["group"].(map[string]interface{})["ID"].(float64))
+	groupID := int(grp["group"].(map[string]interface{})["id"].(float64))
 
 	wsAlice, wsBob, wsCarol := ca.ws(""), cb.ws(""), cc.ws("")
 	defer wsAlice.Close()
@@ -78,7 +78,7 @@ func TestE2EGroupReceipts(t *testing.T) {
 
 	send(wsAlice, "group_chat", map[string]interface{}{"groupID": groupID, "message": "hola acuses"})
 	own := waitFor(t, wsAlice, "group_chat")
-	messageID := int(own["payload"].(map[string]interface{})["MessageID"].(float64))
+	messageID := int(own["payload"].(map[string]interface{})["messageID"].(float64))
 	receiptsPath := fmt.Sprintf("/api/v1/group/%d/message/%d/receipts", groupID, messageID)
 
 	// Sin acuses todavía: los dos miembros están pendientes
@@ -134,10 +134,10 @@ func TestE2EGroupReceipts(t *testing.T) {
 	code, detail := ca.do("GET", fmt.Sprintf("/api/v1/group/%d", groupID), nil)
 	require.Equal(t, 200, code)
 	var bobRead float64
-	for _, m := range detail["Members"].([]interface{}) {
+	for _, m := range detail["members"].([]interface{}) {
 		mm := m.(map[string]interface{})
-		if mm["Telephon"] == bob.Telephon {
-			bobRead, _ = mm["LastReadMessageID"].(float64)
+		if mm["telephon"] == bob.Telephon {
+			bobRead, _ = mm["lastReadMessageID"].(float64)
 		}
 	}
 	assert.EqualValues(t, messageID, bobRead)

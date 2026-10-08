@@ -68,20 +68,20 @@ const chatMsg = (id: number, over: Partial<Message> = {}): Message => ({
     messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false, ...over,
 });
 const groupMsg = (id: number, over: Partial<GroupMessageResponse> = {}): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: 'B', SenderUsername: 'bea', Message: `g${id}`, Time: iso(id), Edited: false, ...over,
+    messageID: id, groupID: 9, senderTelephon: 'B', senderUsername: 'bea', message: `g${id}`, time: iso(id), edited: false, ...over,
 });
 const directSys = (id: number, seconds: number, sender = '111'): Message => chatMsg(id, {
     senderTelephon: sender, receptor: sender === '111' ? 'B' : '111', message: String(seconds), kind: 'system', systemEvent: 'disappearing_changed',
 });
 const groupSys = (id: number, seconds: number): GroupMessageResponse => groupMsg(id, {
-    SenderTelephon: '111', SenderUsername: 'ana', Message: String(seconds), Kind: 'system', SystemEvent: 'disappearing_changed',
+    senderTelephon: '111', senderUsername: 'ana', message: String(seconds), kind: 'system', systemEvent: 'disappearing_changed',
 });
-const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
+const ids = (list: ReadonlyArray<{ messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID);
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const contact = (n: string): ContactChat => ({ telephon: n, contactName: n, username: n } as ContactChat);
 const group = (over: Partial<SelectedGroup> = {}): SelectedGroup => ({
-    ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false, ...over,
+    id: 9, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'member', createdAt: iso(0),
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false, ...over,
 });
 const directEvent = (seconds: number, systemMessage?: Message | null): DisappearingChangedPayload => ({
     kind: 'direct', key: 'B', seconds, byTelephon: '111', ...(systemMessage !== undefined ? { systemMessage } : {}),
@@ -226,14 +226,14 @@ describe('DashboardProvider disappearing messages', () => {
             expect(ctx!.allChatGroups['B']).toBeDefined();
         });
 
-        it('group: updates DisappearSeconds on the list and the selected group and appends the notice once', async () => {
+        it('group: updates disappearSeconds on the list and the selected group and appends the notice once', async () => {
             await seed();
             await act(async () => { ctx!.setSelectedGroup(group()); });
             const sys = groupSys(18, 7776000);
             emitChanged(groupEvent(7776000, sys));
             emitChanged(groupEvent(7776000, sys));
-            expect(ctx!.groups[0]!.DisappearSeconds).toBe(7776000);
-            expect(ctx!.selectedGroup!.DisappearSeconds).toBe(7776000);
+            expect(ctx!.groups[0]!.disappearSeconds).toBe(7776000);
+            expect(ctx!.selectedGroup!.disappearSeconds).toBe(7776000);
             expect(ctx!.selectedDisappearSeconds).toBe(7776000);
             expect(ids(ctx!.groupMessages[9])).toEqual([15, 16, 17, 18]);
             mockSetGroup.mockResolvedValue({ kind: 'group', key: 9, seconds: 7776000, byTelephon: '111', systemMessage: sys });
@@ -321,7 +321,7 @@ describe('DashboardProvider disappearing messages', () => {
             await mountFake();
             await act(async () => {
                 ctx!.setMessagesByChat({ B: [chatMsg(5), chatMsg(6, { expiresAt: at(5000) }), chatMsg(7, { expiresAt: at(60_000) })] });
-                ctx!.setGroupMessages({ 9: [groupMsg(15, { ExpiresAt: at(5000) }), groupMsg(16)] });
+                ctx!.setGroupMessages({ 9: [groupMsg(15, { expiresAt: at(5000) }), groupMsg(16)] });
             });
             act(() => { vi.advanceTimersByTime(4999); });
             expect(ids(ctx!.messagesByChat['B'])).toEqual([5, 6, 7]);

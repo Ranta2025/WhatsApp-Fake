@@ -6,9 +6,9 @@ import {
     parseReactionEvent, parseReactionErrorContext, reactionPendingKey,
 } from './reactions';
 
-interface Msg { MessageID: number | string; Time: string; Reactions?: ReactionSummary[] }
-const chip = (Emoji: string, Count = 1, Mine = false): ReactionSummary => ({ Emoji, Count, Mine });
-const msg = (id: number, Reactions?: ReactionSummary[]): Msg => ({ MessageID: id, Time: '2024-01-01T00:00:00Z', ...(Reactions ? { Reactions } : {}) });
+interface Msg { messageID: number | string; time: string; reactions?: ReactionSummary[] }
+const chip = (emoji: string, count = 1, mine = false): ReactionSummary => ({ emoji, count, mine });
+const msg = (id: number, reactions?: ReactionSummary[]): Msg => ({ messageID: id, time: '2024-01-01T00:00:00Z', ...(reactions ? { reactions } : {}) });
 const ev = (over: Partial<ReactionEventPayload> = {}): ReactionEventPayload => ({
     kind: 'direct', messageID: 1, telephon: '222', username: 'luis', emoji: '👍', previousEmoji: '',
     authorTelephon: '111', preview: 'hola', ...over,
@@ -18,32 +18,32 @@ const ME = '111';
 describe('applyReaction: another user', () => {
     it('adds a new chip when the actor had no reaction', () => {
         const out = applyReaction([msg(1)], ev(), ME);
-        expect(out[0]?.Reactions).toEqual([chip('👍', 1, false)]);
+        expect(out[0]?.reactions).toEqual([chip('👍', 1, false)]);
     });
 
-    it('increments an existing chip without touching Mine', () => {
+    it('increments an existing chip without touching mine', () => {
         const out = applyReaction([msg(1, [chip('👍', 1, true)])], ev(), ME);
-        expect(out[0]?.Reactions).toEqual([chip('👍', 2, true)]);
+        expect(out[0]?.reactions).toEqual([chip('👍', 2, true)]);
     });
 
     it('replace: decrements previousEmoji and increments the new emoji', () => {
         const out = applyReaction([msg(1, [chip('👍', 2), chip('🙏', 1)])], ev({ emoji: '❤️', previousEmoji: '👍' }), ME);
-        expect(out[0]?.Reactions).toEqual([chip('👍', 1), chip('🙏', 1), chip('❤️', 1)]);
+        expect(out[0]?.reactions).toEqual([chip('👍', 1), chip('🙏', 1), chip('❤️', 1)]);
     });
 
     it('replace: removes the previous chip when its count reaches zero', () => {
         const out = applyReaction([msg(1, [chip('👍', 1)])], ev({ emoji: '❤️', previousEmoji: '👍' }), ME);
-        expect(out[0]?.Reactions).toEqual([chip('❤️', 1)]);
+        expect(out[0]?.reactions).toEqual([chip('❤️', 1)]);
     });
 
     it('removal: decrements previousEmoji and drops the field when nothing is left', () => {
         const out = applyReaction([msg(1, [chip('👍', 1)])], ev({ emoji: '', previousEmoji: '👍' }), ME);
-        expect('Reactions' in (out[0] ?? {})).toBe(false);
+        expect('reactions' in (out[0] ?? {})).toBe(false);
     });
 
     it('ignores a stale previousEmoji with no matching chip (never goes negative)', () => {
         const out = applyReaction([msg(1, [chip('🙏', 1)])], ev({ emoji: '❤️', previousEmoji: '👍' }), ME);
-        expect(out[0]?.Reactions).toEqual([chip('🙏', 1), chip('❤️', 1)]);
+        expect(out[0]?.reactions).toEqual([chip('🙏', 1), chip('❤️', 1)]);
     });
 
     it('previousEmoji equal to emoji is a no-op (same array)', () => {
@@ -58,7 +58,7 @@ describe('applyReaction: another user', () => {
 
     it('keeps chips ordered by count (stable)', () => {
         const out = applyReaction([msg(1, [chip('👍', 1), chip('❤️', 1)])], ev({ emoji: '❤️' }), ME);
-        expect(out[0]?.Reactions?.map(r => r.Emoji)).toEqual(['❤️', '👍']);
+        expect(out[0]?.reactions?.map(r => r.emoji)).toEqual(['❤️', '👍']);
     });
 });
 
@@ -67,24 +67,24 @@ describe('applyReaction: my own reaction (echo / other session)', () => {
 
     it('is idempotent against the optimistic value: the echo does not double count', () => {
         const optimistic = applyOptimisticReaction([msg(1)], 1, '👍');
-        expect(optimistic[0]?.Reactions).toEqual([chip('👍', 1, true)]);
+        expect(optimistic[0]?.reactions).toEqual([chip('👍', 1, true)]);
         const list = applyReaction(optimistic, mine, ME);
         expect(list).toBe(optimistic);
     });
 
     it('applies a reaction made from another session of mine', () => {
         const out = applyReaction([msg(1, [chip('👍', 1)])], mine, ME);
-        expect(out[0]?.Reactions).toEqual([chip('👍', 2, true)]);
+        expect(out[0]?.reactions).toEqual([chip('👍', 2, true)]);
     });
 
-    it('replace uses Mine, not previousEmoji, to find what to decrement', () => {
+    it('replace uses mine, not previousEmoji, to find what to decrement', () => {
         const out = applyReaction([msg(1, [chip('🙏', 1, true), chip('👍', 3)])], ev({ ...mine, emoji: '👍', previousEmoji: '🙏' }), ME);
-        expect(out[0]?.Reactions).toEqual([chip('👍', 4, true)]);
+        expect(out[0]?.reactions).toEqual([chip('👍', 4, true)]);
     });
 
-    it('removal clears Mine and the empty chip', () => {
+    it('removal clears mine and the empty chip', () => {
         const out = applyReaction([msg(1, [chip('👍', 2, true)])], ev({ ...mine, emoji: '', previousEmoji: '👍' }), ME);
-        expect(out[0]?.Reactions).toEqual([chip('👍', 1, false)]);
+        expect(out[0]?.reactions).toEqual([chip('👍', 1, false)]);
     });
 
     it('a duplicated event for my own reaction changes nothing', () => {
@@ -103,19 +103,19 @@ describe('applyReaction: targeting', () => {
         const a = msg(1); const b = msg(2);
         const out = applyReaction([a, b], ev({ messageID: 2 }), ME);
         expect(out[0]).toBe(a);
-        expect(out[1]?.Reactions).toEqual([chip('👍')]);
+        expect(out[1]?.reactions).toEqual([chip('👍')]);
     });
 });
 
 describe('optimistic update, toggle and rollback', () => {
     it('replaces my own reaction', () => {
         const out = applyOptimisticReaction([msg(1, [chip('👍', 2, true)])], 1, '❤️');
-        expect(out[0]?.Reactions).toEqual([chip('👍', 1, false), chip('❤️', 1, true)]);
+        expect(out[0]?.reactions).toEqual([chip('👍', 1, false), chip('❤️', 1, true)]);
     });
 
     it('empty emoji removes my reaction', () => {
         const out = applyOptimisticReaction([msg(1, [chip('👍', 1, true)])], 1, '');
-        expect('Reactions' in (out[0] ?? {})).toBe(false);
+        expect('reactions' in (out[0] ?? {})).toBe(false);
     });
 
     it('unknown id is a no-op', () => {
@@ -132,12 +132,12 @@ describe('optimistic update, toggle and rollback', () => {
 
     it('revertMine puts my previous emoji back and keeps other users', () => {
         const live = [chip('👍', 2, true), chip('😂', 1)];
-        expect(revertMine([msg(1, live)], 1, '😂')[0]?.Reactions).toEqual([chip('😂', 2, true), chip('👍', 1)]);
+        expect(revertMine([msg(1, live)], 1, '😂')[0]?.reactions).toEqual([chip('😂', 2, true), chip('👍', 1)]);
     });
 
     it('revertMine with null removes only my reaction and the field when empty', () => {
         const sent = applyOptimisticReaction([msg(1)], 1, '👍');
-        expect('Reactions' in (revertMine(sent, 1, null)[0] ?? {})).toBe(false);
+        expect('reactions' in (revertMine(sent, 1, null)[0] ?? {})).toBe(false);
     });
 
     it('revertMine never goes negative and is a no-op on an unknown id or when already there', () => {

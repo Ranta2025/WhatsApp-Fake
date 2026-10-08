@@ -108,7 +108,7 @@ export interface CallState {
 }
 
 /**
- * `GroupResponse.UserRole` is `GroupRole` ('admin'|'member') per the backend
+ * `GroupResponse.userRole` is `GroupRole` ('admin'|'member') per the backend
  * contract (types/api.ts). `GroupChatWindow.tsx`'s "leave group" flow also
  * writes the client-only sentinel `'left'` into this same field on `groups`/
  * `selectedGroup` (keeps the group visible, read-only, without an extra state
@@ -116,8 +116,8 @@ export interface CallState {
  * client-side state widens it explicitly here so that write is typed, not cast.
  */
 export type LocalGroupRole = GroupRole | 'left';
-export type LocalGroup = Omit<GroupResponse, 'UserRole'> & { UserRole: LocalGroupRole };
-export type SelectedGroup = LocalGroup & Partial<Pick<GroupDetail, 'Members' | 'Messages'>> & {
+export type LocalGroup = Omit<GroupResponse, 'userRole'> & { userRole: LocalGroupRole };
+export type SelectedGroup = LocalGroup & Partial<Pick<GroupDetail, 'members' | 'messages'>> & {
     /**
      * Client-only: the viewer was removed by an admin (vs. leaving voluntarily).
      * The composer uses it to show the removal wording instead of the generic
@@ -126,7 +126,7 @@ export type SelectedGroup = LocalGroup & Partial<Pick<GroupDetail, 'Members' | '
     RemovedByAdmin?: boolean;
 };
 
-/** System messages are now server-persisted `GroupMessageResponse` rows (`Kind: 'system'`). */
+/** System messages are now server-persisted `GroupMessageResponse` rows (`kind: 'system'`). */
 export type GroupMessageEntry = GroupMessageResponse;
 
 export interface DashboardContextValue {
@@ -190,7 +190,7 @@ export interface DashboardContextValue {
     setChatDisappearing: (contact: string, seconds: number) => Promise<boolean>;
     /** Group counterpart of `setChatDisappearing` (same permission as editing the group info). */
     setGroupDisappearing: (groupID: number, seconds: number) => Promise<boolean>;
-    /** True while that chat/group is muted (a `MutedUntil` in the past counts as not muted). */
+    /** True while that chat/group is muted (a `mutedUntil` in the past counts as not muted). */
     isMuted: (target: MuteTarget) => boolean;
     /** Mutes through the REST API and applies its answer; false (+ error toast) on failure. */
     setMute: (target: MuteTarget, duration: MuteDuration) => Promise<boolean>;
@@ -241,7 +241,7 @@ export interface DashboardContextValue {
     groupReceipts: GroupReceiptsState;
     /**
      * groupID -> telephon -> username, cached from member lists and admin events so
-     * system messages can name a target that already left (it is gone from Members).
+     * system messages can name a target that already left (it is gone from members).
      */
     groupMemberNames: Record<number, Record<string, string>>;
     /**
@@ -497,8 +497,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const { noteIncomingGroupMessage } = useGroupReceiptAcks({
         selfTelephon: user?.telephon,
         isConnected,
-        openGroupId: selectedGroup && selectedGroup.UserRole !== 'left' ? selectedGroup.ID : null,
-        openGroupMessages: selectedGroup ? groupMessages[selectedGroup.ID] : undefined,
+        openGroupId: selectedGroup && selectedGroup.userRole !== 'left' ? selectedGroup.id : null,
+        openGroupMessages: selectedGroup ? groupMessages[selectedGroup.id] : undefined,
         sendGroupDelivered,
         sendGroupRead,
     });
@@ -664,7 +664,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 const next: Record<number, MuteFields> = {};
                 for (const g of list) {
                     const fields = parseMuteFields(g);
-                    if (fields.Muted === true) next[g.ID] = fields;
+                    if (fields.Muted === true) next[g.id] = fields;
                 }
                 for (const [id, changedAt] of groupMuteChangedAtRef.current) {
                     if (changedAt <= muteStart) continue;
@@ -770,7 +770,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         if (!msg) return;
         setGroupMessages(prev => {
             const list = prev[groupID] ?? [];
-            if (list.some(m => m.MessageID === msg.MessageID)) return prev;
+            if (list.some(m => m.messageID === msg.messageID)) return prev;
             return { ...prev, [groupID]: [...list, msg] };
         });
     }, []);
@@ -804,9 +804,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             appendDirectSystemMessage(event.key, event.systemMessage);
             return;
         }
-        const patch = { DisappearSeconds: event.seconds };
-        setGroups(prev => prev.map(g => (g.ID === event.key ? { ...g, ...patch } : g)));
-        setSelectedGroupState(prev => (prev?.ID === event.key ? { ...prev, ...patch } : prev));
+        const patch = { disappearSeconds: event.seconds };
+        setGroups(prev => prev.map(g => (g.id === event.key ? { ...g, ...patch } : g)));
+        setSelectedGroupState(prev => (prev?.id === event.key ? { ...prev, ...patch } : prev));
         appendSystemMessage(event.key, event.systemMessage);
     }, [appendDirectSystemMessage, appendSystemMessage]);
 
@@ -832,7 +832,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [patchFocusedChat, patchFocusedGroup]);
 
-    /** Local expiry sweep: drops every loaded message with `now >= ExpiresAt` (lists and windows). */
+    /** Local expiry sweep: drops every loaded message with `now >= expiresAt` (lists and windows). */
     const sweepExpired = useCallback((now: number) => {
         const sweepRecord = <T extends ExpirableMessage, K extends string | number>(
             prev: Record<K, T[]>,
@@ -853,7 +853,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         for (const id of Object.keys(focusedGroupRef.current).map(Number)) patchFocusedGroup(id, w => removeExpiredFromWindow(w, now));
     }, [patchFocusedChat, patchFocusedGroup]);
 
-    // One timeout for the earliest ExpiresAt among everything loaded (all chats, groups, windows).
+    // One timeout for the earliest expiresAt among everything loaded (all chats, groups, windows).
     const earliestExpiresAt = useMemo(() => earliestExpiry([
         ...Object.values(messagesByChat),
         ...Object.values(groupMessages),
@@ -894,7 +894,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
     // ── Silenciar chats ─────────────────────────────────────────────────────────
     // `muteNow` is the clock the render reads (never Date.now() during render); one timer bumps
-    // it when the earliest MutedUntil passes, so an expiring mute disappears without a reload.
+    // it when the earliest mutedUntil passes, so an expiring mute disappears without a reload.
     const [muteNow, setMuteNow] = useState(() => Date.now());
     const earliestMuteEnd = useMemo(
         () => earliestMuteExpiry([...Object.values(chatMutes), ...Object.values(groupMutes)], muteNow),
@@ -1080,7 +1080,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             } else {
                 const win = await getGroupWindowAround(target.id, messageId, WINDOW_LIMIT);
                 if (openSeqRef.current.get(fk) !== openSeq) return false;
-                if (!win.messages.some(m => m.MessageID === messageId)) throw new Error('target missing from window');
+                if (!win.messages.some(m => m.messageID === messageId)) throw new Error('target missing from window');
                 const seq = (focusedGroupRef.current[target.id]?.seq ?? 0) + 1;
                 bumpFocusEpoch(fk);
                 putFocusedGroup(target.id, createFocusedWindow(win.messages, win, messageId, seq));
@@ -1157,7 +1157,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
     // Salir de un chat/grupo descarta su ventana desprendida (y cualquier apertura en curso).
     const selectedChatKey = selected?.telephon;
-    const selectedGroupKey = selectedGroup?.ID;
+    const selectedGroupKey = selectedGroup?.id;
     useEffect(() => {
         for (const key of Object.keys(focusedChatRef.current)) {
             if (key !== selectedChatKey) { dropFocusState(focusKey({ kind: 'chat', key })); patchFocusedChat(key, () => null); }
@@ -1171,15 +1171,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     const fetchGroupDetail = useCallback(async (groupID: number) => {
         try {
             const { data } = await getGroupDetail(groupID);
-            // data is GroupDetail: GroupResponse + Members + Messages
+            // data is GroupDetail: GroupResponse + members + messages
             setSelectedGroupState(prev => {
                 // Only update if it's still the same group selected
-                if (prev?.ID !== groupID) return prev;
-                // DisappearSeconds is omitempty: absent in the detail means "off", not "unchanged".
-                return { ...prev, ...data, ...(data ? { DisappearSeconds: normalizeDisappearSeconds(data.DisappearSeconds) } : {}) };
+                if (prev?.id !== groupID) return prev;
+                // disappearSeconds is omitempty: absent in the detail means "off", not "unchanged".
+                return { ...prev, ...data, ...(data ? { disappearSeconds: normalizeDisappearSeconds(data.disappearSeconds) } : {}) };
             });
             // Sin lista de miembros (null/ausente) no se toca lo ya conocido.
-            const detailMembers = data?.Members;
+            const detailMembers = data?.members;
             if (Array.isArray(detailMembers)) {
                 setGroupReceipts(prev => ({
                     ...prev,
@@ -1190,8 +1190,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                     let changed = false;
                     const next = { ...known };
                     for (const m of detailMembers) {
-                        if (typeof m?.Telephon === 'string' && m.Telephon !== '' && typeof m.Username === 'string' && m.Username !== '' && next[m.Telephon] !== m.Username) {
-                            next[m.Telephon] = m.Username;
+                        if (typeof m?.telephon === 'string' && m.telephon !== '' && typeof m.username === 'string' && m.username !== '' && next[m.telephon] !== m.username) {
+                            next[m.telephon] = m.username;
                             changed = true;
                         }
                     }
@@ -1441,21 +1441,21 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
         /** Incoming group message (from sender confirm or group broadcast). */
         const handleGroupChatMessage = (msg: WsHandlerMap['group_chat']) => {
-            if (!msg?.GroupID) return;
+            if (!msg?.groupID) return;
             const clientID = readClientID(msg);
             // Same as 1:1: a possibly-replayed outbox ack reloads the group instead.
             if (clientID && outboxAck(clientID) === 'replayed') {
-                void fetchGroupMessages(msg.GroupID);
+                void fetchGroupMessages(msg.groupID);
                 return;
             }
             setGroupMessages(prev => {
-                const existing = prev[msg.GroupID] || [];
-                if (existing.some(m => m.MessageID === msg.MessageID || (clientID !== null && m.ClientID === clientID))) return prev;
-                return { ...prev, [msg.GroupID]: [...existing, msg] };
+                const existing = prev[msg.groupID] || [];
+                if (existing.some(m => m.messageID === msg.messageID || (clientID !== null && m.clientID === clientID))) return prev;
+                return { ...prev, [msg.groupID]: [...existing, msg] };
             });
             // Enviar un mensaje estando en una ventana desprendida vuelve a los últimos mensajes.
-            if (msg.SenderTelephon === profileRef.current?.telephon) returnToLatest({ kind: 'group', id: msg.GroupID });
-            noteIncomingGroupMessage(msg.GroupID, msg.MessageID, msg.SenderTelephon);
+            if (msg.senderTelephon === profileRef.current?.telephon) returnToLatest({ kind: 'group', id: msg.groupID });
+            noteIncomingGroupMessage(msg.groupID, msg.messageID, msg.senderTelephon);
         };
 
         /** A member's delivered/read watermarks advanced (only used to draw our own ticks). */
@@ -1478,7 +1478,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             let name: string | undefined;
             const now = Date.now();
             if (event.kind === 'group') {
-                if (selectedGroupRef.current?.ID === event.groupID) return;
+                if (selectedGroupRef.current?.id === event.groupID) return;
                 if (event.groupID !== undefined && isChatMuted(groupMutesRef.current[event.groupID], now)) return;
                 name = event.groupID === undefined ? undefined : groupMemberNamesRef.current[event.groupID]?.[event.telephon];
             } else {
@@ -1529,36 +1529,36 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
 
         /** A group message was edited. */
         const handleGroupEditMessage = (updatedMsg: WsHandlerMap['group_edit_message']) => {
-            if (!updatedMsg?.MessageID || !updatedMsg?.GroupID) return;
+            if (!updatedMsg?.messageID || !updatedMsg?.groupID) return;
             setGroupMessages(prev => {
-                const msgs = prev[updatedMsg.GroupID];
+                const msgs = prev[updatedMsg.groupID];
                 if (!msgs) return prev;
                 return {
                     ...prev,
-                    [updatedMsg.GroupID]: msgs.map(m =>
-                        m.MessageID === updatedMsg.MessageID
-                            ? { ...m, Message: updatedMsg.Message, Edited: true }
+                    [updatedMsg.groupID]: msgs.map(m =>
+                        m.messageID === updatedMsg.messageID
+                            ? { ...m, message: updatedMsg.message, edited: true }
                             : m
                     ),
                 };
             });
-            patchFocusedGroup(updatedMsg.GroupID, w => updateFocusedMessages(w, m =>
-                m.MessageID === updatedMsg.MessageID ? { ...m, Message: updatedMsg.Message, Edited: true } : m
+            patchFocusedGroup(updatedMsg.groupID, w => updateFocusedMessages(w, m =>
+                m.messageID === updatedMsg.messageID ? { ...m, message: updatedMsg.message, edited: true } : m
             ));
         };
 
         /** A group message was deleted for everyone. */
         const handleGroupDeleteMessage = (deletedMsg: WsHandlerMap['group_delete_message']) => {
-            if (!deletedMsg?.MessageID || !deletedMsg?.GroupID) return;
+            if (!deletedMsg?.messageID || !deletedMsg?.groupID) return;
             setGroupMessages(prev => {
-                const msgs = prev[deletedMsg.GroupID];
+                const msgs = prev[deletedMsg.groupID];
                 if (!msgs) return prev;
                 return {
                     ...prev,
-                    [deletedMsg.GroupID]: msgs.filter(m => m.MessageID !== deletedMsg.MessageID),
+                    [deletedMsg.groupID]: msgs.filter(m => m.messageID !== deletedMsg.messageID),
                 };
             });
-            patchFocusedGroup(deletedMsg.GroupID, w => removeFocusedMessage(w, deletedMsg.MessageID));
+            patchFocusedGroup(deletedMsg.groupID, w => removeFocusedMessage(w, deletedMsg.messageID));
         };
 
         /**
@@ -1578,10 +1578,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         const handleGroupAvatarUpdate = (payload: WsHandlerMap['group_avatar_update']) => {
             if (!payload?.groupID || payload.avatarUrl === undefined) return;
             setGroups(prev => prev.map(g =>
-                g.ID === payload.groupID ? { ...g, AvatarUrl: payload.avatarUrl } : g
+                g.id === payload.groupID ? { ...g, avatarUrl: payload.avatarUrl } : g
             ));
             setSelectedGroupState(prev =>
-                prev?.ID === payload.groupID ? { ...prev, AvatarUrl: payload.avatarUrl } : prev
+                prev?.id === payload.groupID ? { ...prev, avatarUrl: payload.avatarUrl } : prev
             );
         };
 
@@ -1601,7 +1601,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             });
         };
 
-        /** Members were added to a group — track receipts/names and append the persisted notice. */
+        /** members were added to a group — track receipts/names and append the persisted notice. */
         const handleGroupMemberAdded = (payload: WsHandlerMap['group_member_added']) => {
             if (!payload?.groupID || !payload?.addedMembers?.length) return;
             rememberNames(payload.groupID, payload.addedMembers);
@@ -1611,23 +1611,23 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
                 prev,
             ));
             setGroups(prev => prev.map(g =>
-                g.ID === payload.groupID
-                    ? { ...g, MemberCount: payload.newMemberCount ?? g.MemberCount }
+                g.id === payload.groupID
+                    ? { ...g, memberCount: payload.newMemberCount ?? g.memberCount }
                     : g
             ));
             setSelectedGroupState(prev => {
-                if (!prev || prev.ID !== payload.groupID) return prev;
+                if (!prev || prev.id !== payload.groupID) return prev;
                 const newMembers = (payload.addedMembers || []).map(m => ({
-                    Telephon: m.telephon,
-                    Username: m.username,
-                    Role: 'member' as const,
+                    telephon: m.telephon,
+                    username: m.username,
+                    role: 'member' as const,
                 }));
-                const existing = new Set((prev.Members || []).map(m => m.Telephon));
-                const toAdd = newMembers.filter(m => !existing.has(m.Telephon));
+                const existing = new Set((prev.members || []).map(m => m.telephon));
+                const toAdd = newMembers.filter(m => !existing.has(m.telephon));
                 return {
                     ...prev,
-                    MemberCount: payload.newMemberCount ?? prev.MemberCount,
-                    Members: [...(prev.Members || []), ...toAdd],
+                    memberCount: payload.newMemberCount ?? prev.memberCount,
+                    members: [...(prev.members || []), ...toAdd],
                 };
             });
             appendSystemMessage(payload.groupID, parseSystemMessage(payload.systemMessage));
@@ -1640,18 +1640,18 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             setGroupReceipts(prev => removeMemberMark(prev, payload.groupID, payload.telephon));
             // Update member count and remove from members list
             setGroups(prev => prev.map(g =>
-                g.ID === payload.groupID
-                    ? { ...g, MemberCount: Math.max((g.MemberCount || 1) - 1, 0) }
+                g.id === payload.groupID
+                    ? { ...g, memberCount: Math.max((g.memberCount || 1) - 1, 0) }
                     : g
             ));
             setSelectedGroupState(prev => {
-                if (!prev || prev.ID !== payload.groupID) return prev;
+                if (!prev || prev.id !== payload.groupID) return prev;
                 return {
                     ...prev,
-                    MemberCount: Math.max((prev.MemberCount || 1) - 1, 0),
-                    Members: prev.Members
-                        ? prev.Members.filter(m => m.Telephon !== payload.telephon)
-                        : prev.Members,
+                    memberCount: Math.max((prev.memberCount || 1) - 1, 0),
+                    members: prev.members
+                        ? prev.members.filter(m => m.telephon !== payload.telephon)
+                        : prev.members,
                 };
             });
             appendSystemMessage(payload.groupID, parseSystemMessage(payload.systemMessage));
@@ -1664,15 +1664,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const myTelephon = profileRef.current?.telephon;
             const iAmTarget = event.telephon === myTelephon;
             setGroups(prev => prev.map(g =>
-                g.ID === event.groupID && iAmTarget ? { ...g, UserRole: event.role } : g
+                g.id === event.groupID && iAmTarget ? { ...g, userRole: event.role } : g
             ));
             setSelectedGroupState(prev => {
-                if (!prev || prev.ID !== event.groupID) return prev;
+                if (!prev || prev.id !== event.groupID) return prev;
                 return {
                     ...prev,
-                    ...(iAmTarget ? { UserRole: event.role } : {}),
-                    Members: prev.Members?.map(m =>
-                        m.Telephon === event.telephon ? { ...m, Role: event.role } : m
+                    ...(iAmTarget ? { userRole: event.role } : {}),
+                    members: prev.members?.map(m =>
+                        m.telephon === event.telephon ? { ...m, role: event.role } : m
                     ),
                 };
             });
@@ -1688,19 +1688,19 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             setGroupReceipts(prev => removeMemberMark(prev, event.groupID, event.telephon));
             const iAmRemoved = event.telephon === myTelephon;
             setGroups(prev => prev.map(g => {
-                if (g.ID !== event.groupID) return g;
-                const MemberCount = event.newMemberCount ?? Math.max((g.MemberCount || 1) - 1, 0);
-                return iAmRemoved ? { ...g, MemberCount, UserRole: 'left' } : { ...g, MemberCount };
+                if (g.id !== event.groupID) return g;
+                const memberCount = event.newMemberCount ?? Math.max((g.memberCount || 1) - 1, 0);
+                return iAmRemoved ? { ...g, memberCount, userRole: 'left' } : { ...g, memberCount };
             }));
             setSelectedGroupState(prev => {
-                if (!prev || prev.ID !== event.groupID) return prev;
-                const MemberCount = event.newMemberCount ?? Math.max((prev.MemberCount || 1) - 1, 0);
-                const Members = prev.Members
-                    ? prev.Members.filter(m => m.Telephon !== event.telephon)
-                    : prev.Members;
+                if (!prev || prev.id !== event.groupID) return prev;
+                const memberCount = event.newMemberCount ?? Math.max((prev.memberCount || 1) - 1, 0);
+                const members = prev.members
+                    ? prev.members.filter(m => m.telephon !== event.telephon)
+                    : prev.members;
                 return iAmRemoved
-                    ? { ...prev, MemberCount, Members, UserRole: 'left', RemovedByAdmin: true }
-                    : { ...prev, MemberCount, Members };
+                    ? { ...prev, memberCount, members, userRole: 'left', RemovedByAdmin: true }
+                    : { ...prev, memberCount, members };
             });
             appendSystemMessage(event.groupID, event.systemMessage);
         };
@@ -1710,12 +1710,12 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const event = parseGroupSettings(payload);
             if (!event) return;
             const patch = {
-                OnlyAdminsCanSend: event.onlyAdminsCanSend,
-                OnlyAdminsCanEditInfo: event.onlyAdminsCanEditInfo,
-                OnlyAdminsCanAddMembers: event.onlyAdminsCanAddMembers,
+                onlyAdminsCanSend: event.onlyAdminsCanSend,
+                onlyAdminsCanEditInfo: event.onlyAdminsCanEditInfo,
+                onlyAdminsCanAddMembers: event.onlyAdminsCanAddMembers,
             };
-            setGroups(prev => prev.map(g => g.ID === event.groupID ? { ...g, ...patch } : g));
-            setSelectedGroupState(prev => prev?.ID === event.groupID ? { ...prev, ...patch } : prev);
+            setGroups(prev => prev.map(g => g.id === event.groupID ? { ...g, ...patch } : g));
+            setSelectedGroupState(prev => prev?.id === event.groupID ? { ...prev, ...patch } : prev);
             appendSystemMessage(event.groupID, event.systemMessage);
         };
 
@@ -1724,10 +1724,10 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             const event = parseGroupInfo(payload);
             if (!event) return;
             setGroups(prev => prev.map(g =>
-                g.ID === event.groupID ? { ...g, Name: event.name, Description: event.description } : g
+                g.id === event.groupID ? { ...g, name: event.name, description: event.description } : g
             ));
-            setSelectedGroupState(prev => prev?.ID === event.groupID
-                ? { ...prev, Name: event.name, Description: event.description }
+            setSelectedGroupState(prev => prev?.id === event.groupID
+                ? { ...prev, name: event.name, description: event.description }
                 : prev);
             appendSystemMessage(event.groupID, event.systemMessage);
         };
@@ -1798,7 +1798,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [isConnected, on, off, markAsRead, fetchUserGroups, noteIncomingGroupMessage, patchFocusedChat, patchFocusedGroup, returnToLatest, mapReactionContainers, addToast, appendSystemMessage, applyDisappearingChanged, removeExpiredIds, outboxAck, outboxHandleError, fetchChatMessages, fetchGroupMessages]);
 
-    // Outbox: a queued entry whose ClientID already came back in loaded history (e.g. sent
+    // Outbox: a queued entry whose clientID already came back in loaded history (e.g. sent
     // before a reload, ack lost) is delivered; drop it so it never shows twice.
     const outboxItems = outbox.items;
     useEffect(() => {
@@ -1827,16 +1827,16 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     // Whenever the user opens a group (or reconnects while one is open), re-join the WS room.
     // This is the definitive fix for "admin sends a message and others don't see it in real time".
     useEffect(() => {
-        const groupId = selectedGroup?.ID;
+        const groupId = selectedGroup?.id;
         if (!groupId || !isConnected) return;
         sendGroupJoin(groupId);
-    }, [selectedGroup?.ID, isConnected, sendGroupJoin]);
+    }, [selectedGroup?.id, isConnected, sendGroupJoin]);
 
     // manejar clicks sobre notificaciones (fuerza apertura del chat 1:1 o del grupo)
     const handleNotificationClick = useCallback((target: NotificationTarget) => {
         if (target.kind === 'group') {
             // Igual que el Sidebar: solo se puede abrir un grupo que ya está en `groups`.
-            const group = groups.find(g => g.ID === target.groupID);
+            const group = groups.find(g => g.id === target.groupID);
             if (!group) {
                 addToast({ type: 'error', message: 'No se pudo abrir el grupo' });
                 return;
@@ -1859,7 +1859,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     usePushSync(user?.telephon || null, notifPermission);
 
     const selectedDisappearSeconds = selectedGroup
-        ? normalizeDisappearSeconds(selectedGroup.DisappearSeconds)
+        ? normalizeDisappearSeconds(selectedGroup.disappearSeconds)
         : (selected ? chatDisappear[selected.telephon] ?? 0 : 0);
 
     const value: DashboardContextValue = {

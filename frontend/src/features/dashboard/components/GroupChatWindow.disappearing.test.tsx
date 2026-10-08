@@ -28,9 +28,9 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseGroupMessaging = vi.mocked(useGroupMessaging);
 
 const group = (over: Partial<SelectedGroup> = {}): SelectedGroup => ({
-    ID: 5, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 2, UserRole: 'admin', CreatedAt: '2026-01-01T00:00:00Z',
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
-    Members: [{ Telephon: '111', Username: 'ana', Role: 'admin' }, { Telephon: '222', Username: 'luis', Role: 'member' }],
+    id: 5, name: 'Equipo', creatorTelephon: '111', memberCount: 2, userRole: 'admin', createdAt: '2026-01-01T00:00:00Z',
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
+    members: [{ telephon: '111', username: 'ana', role: 'admin' }, { telephon: '222', username: 'luis', role: 'member' }],
     ...over,
 });
 
@@ -92,7 +92,7 @@ describe('GroupChatWindow disappearing messages', () => {
     });
 
     it('the info panel is read-only for a member when only admins edit info', () => {
-        render({ UserRole: 'member', OnlyAdminsCanEditInfo: true }, 86400);
+        render({ userRole: 'member', onlyAdminsCanEditInfo: true }, 86400);
         openPanel();
         expect(select()).toBeNull();
         expect(container.textContent).toContain('Solo los administradores pueden cambiar esta opción');

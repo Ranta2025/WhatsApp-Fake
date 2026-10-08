@@ -44,7 +44,7 @@ describe('MessageList reactions (1:1)', () => {
         dash.value = {
             selected: { telephon: 'B', username: 'bea' },
             focusedChat: {},
-            messagesByChat: { B: [msg(1, { reactions: [{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '❤️', Count: 1, Mine: false }] }), msg(2)] },
+            messagesByChat: { B: [msg(1, { reactions: [{ emoji: '👍', count: 2, mine: true }, { emoji: '❤️', count: 1, mine: false }] }), msg(2)] },
             profile: { telephon: 'me' },
             globalWallpaper: '',
             chatPaging: {},

@@ -10,8 +10,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock('../context/DashboardContext', () => ({ useDashboard: vi.fn() }));
 
 const msg: GroupMessageResponse = {
-    MessageID: 9, GroupID: 5, SenderTelephon: '111', SenderUsername: 'ana', Message: 'hola',
-    Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: 9, groupID: 5, senderTelephon: '111', senderUsername: 'ana', message: 'hola',
+    time: '2026-01-01T10:00:00Z', edited: false,
 };
 
 describe('GroupMessageBubble receipts (ticks + Info)', () => {

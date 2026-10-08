@@ -5,16 +5,16 @@ import {
     latestRealMessageId, addMemberMark, removeMemberMark, deriveGroupMessageStatus, type GroupReceiptMarks,
 } from './groupReceipts';
 
-const member = (Telephon: string, extra: Partial<GroupMemberResponse> = {}): GroupMemberResponse => ({
-    Telephon, Username: Telephon, Role: 'member', ...extra,
+const member = (telephon: string, extra: Partial<GroupMemberResponse> = {}): GroupMemberResponse => ({
+    telephon, username: telephon, role: 'member', ...extra,
 });
 
 describe('marksFromMembers', () => {
     it('maps watermarks and defaults missing/invalid values to 0', () => {
         const marks = marksFromMembers([
-            member('a', { JoinedMessageID: 3, LastDeliveredMessageID: 9, LastReadMessageID: 7 }),
+            member('a', { joinedMessageID: 3, lastDeliveredMessageID: 9, lastReadMessageID: 7 }),
             member('b'),
-            member('c', { LastReadMessageID: Number.NaN, LastDeliveredMessageID: -4 }),
+            member('c', { lastReadMessageID: Number.NaN, lastDeliveredMessageID: -4 }),
         ]);
         expect(marks).toEqual({
             a: { joined: 3, delivered: 9, read: 7 },
@@ -29,7 +29,7 @@ describe('marksFromMembers', () => {
     });
 
     it('skips entries without a telephon', () => {
-        expect(marksFromMembers([{ Username: 'x' } as unknown as GroupMemberResponse])).toEqual({});
+        expect(marksFromMembers([{ username: 'x' } as unknown as GroupMemberResponse])).toEqual({});
     });
 });
 
@@ -98,11 +98,11 @@ describe('applyReceiptEvent', () => {
 
 describe('latestRealMessageId', () => {
     it('returns the highest numeric id and ignores synthetic string ids', () => {
-        expect(latestRealMessageId([{ MessageID: 3 }, { MessageID: 'system_1' }, { MessageID: 9 }, { MessageID: 5 }])).toBe(9);
+        expect(latestRealMessageId([{ messageID: 3 }, { messageID: 'system_1' }, { messageID: 9 }, { messageID: 5 }])).toBe(9);
     });
     it('returns 0 when there is nothing real', () => {
         expect(latestRealMessageId(undefined)).toBe(0);
-        expect(latestRealMessageId([{ MessageID: 'system_1' }])).toBe(0);
+        expect(latestRealMessageId([{ messageID: 'system_1' }])).toBe(0);
     });
 });
 

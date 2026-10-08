@@ -51,26 +51,26 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const groupMsg = (id: number, sender = '222'): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: sender, SenderUsername: 'x', Message: `g${id}`, Time: iso(id), Edited: false,
+    messageID: id, groupID: 9, senderTelephon: sender, senderUsername: 'x', message: `g${id}`, time: iso(id), edited: false,
 });
 const sysMsg = (id: number, event: GroupSystemEvent, targets: string[] = [], sender = '222'): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: sender, SenderUsername: sender === '111' ? 'ana' : 'luis',
-    Message: '', Time: iso(id), Edited: false, Kind: 'system', SystemEvent: event, SystemTargets: targets,
+    messageID: id, groupID: 9, senderTelephon: sender, senderUsername: sender === '111' ? 'ana' : 'luis',
+    message: '', time: iso(id), edited: false, kind: 'system', systemEvent: event, systemTargets: targets,
 });
 const detail = (overrides: Partial<GroupDetail> = {}): GroupDetail => ({
-    ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
-    Members: [
-        { Telephon: '111', Username: 'ana', Role: 'admin' },
-        { Telephon: '222', Username: 'luis', Role: 'member', JoinedMessageID: 0, LastDeliveredMessageID: 10, LastReadMessageID: 4 },
-        { Telephon: '333', Username: 'marta', Role: 'member', JoinedMessageID: 6 },
+    id: 9, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'member', createdAt: iso(0),
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
+    members: [
+        { telephon: '111', username: 'ana', role: 'admin' },
+        { telephon: '222', username: 'luis', role: 'member', joinedMessageID: 0, lastDeliveredMessageID: 10, lastReadMessageID: 4 },
+        { telephon: '333', username: 'marta', role: 'member', joinedMessageID: 6 },
     ],
-    Messages: [],
+    messages: [],
     ...overrides,
 });
 const selected = (): SelectedGroup => ({
-    ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
+    id: 9, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'member', createdAt: iso(0),
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
 });
 
 describe('DashboardProvider group admin events', () => {
@@ -116,7 +116,7 @@ describe('DashboardProvider group admin events', () => {
         await act(async () => { await ctx!.fetchGroupDetail(9); });
     };
 
-    it('group_member_role updates the member role and my own UserRole, and appends the notice once', async () => {
+    it('group_member_role updates the member role and my own userRole, and appends the notice once', async () => {
         await mount();
         await asUser('222'); // Luis recibe su propia designación
         await openGroup();
@@ -125,15 +125,15 @@ describe('DashboardProvider group admin events', () => {
         act(() => {
             onRole({ groupID: 9, telephon: '222', role: 'admin', systemMessage: sysMsg(50, 'admin_granted', ['222'], '111') });
         });
-        expect(ctx?.selectedGroup?.UserRole).toBe('admin');
-        expect(ctx?.selectedGroup?.Members?.find(m => m.Telephon === '222')?.Role).toBe('admin');
-        expect(ctx?.groupMessages[9]?.map(m => m.MessageID)).toEqual([50]);
+        expect(ctx?.selectedGroup?.userRole).toBe('admin');
+        expect(ctx?.selectedGroup?.members?.find(m => m.telephon === '222')?.role).toBe('admin');
+        expect(ctx?.groupMessages[9]?.map(m => m.messageID)).toEqual([50]);
 
         // Same server id redelivered (other tab / event replay): no duplicate.
         act(() => {
             onRole({ groupID: 9, telephon: '222', role: 'admin', systemMessage: sysMsg(50, 'admin_granted', ['222'], '111') });
         });
-        expect(ctx?.groupMessages[9]?.map(m => m.MessageID)).toEqual([50]);
+        expect(ctx?.groupMessages[9]?.map(m => m.messageID)).toEqual([50]);
     });
 
     it('group_member_role ignores a malformed payload', async () => {
@@ -144,7 +144,7 @@ describe('DashboardProvider group admin events', () => {
         act(() => { onRole({ groupID: 9, telephon: '222' }); }); // missing role
         act(() => { onRole(null); });
 
-        expect(ctx?.selectedGroup?.Members?.find(m => m.Telephon === '222')?.Role).toBe('member');
+        expect(ctx?.selectedGroup?.members?.find(m => m.telephon === '222')?.role).toBe('member');
         expect(ctx?.groupMessages[9]).toBeUndefined();
     });
 
@@ -158,26 +158,26 @@ describe('DashboardProvider group admin events', () => {
             onRemoved({ groupID: 9, telephon: '333', username: 'marta', newMemberCount: 2, systemMessage: sysMsg(51, 'member_removed', ['333'], '111') });
         });
 
-        expect(ctx?.selectedGroup?.Members?.some(m => m.Telephon === '333')).toBe(false);
-        expect(ctx?.selectedGroup?.MemberCount).toBe(2);
+        expect(ctx?.selectedGroup?.members?.some(m => m.telephon === '333')).toBe(false);
+        expect(ctx?.selectedGroup?.memberCount).toBe(2);
         expect(ctx?.groupReceipts[9]?.['333']).toBeUndefined();
         expect(ctx?.groupMemberNames[9]?.['333']).toBe('marta');
-        expect(ctx?.groupMessages[9]?.map(m => m.MessageID)).toEqual([51]);
+        expect(ctx?.groupMessages[9]?.map(m => m.messageID)).toEqual([51]);
     });
 
     it('group_member_removed for me flips my groups/selectedGroup role to left', async () => {
         await mount();
         await asUser('222');
         await openGroup();
-        act(() => { ctx!.setGroups([{ ...selected(), UserRole: 'member' }]); });
+        act(() => { ctx!.setGroups([{ ...selected(), userRole: 'member' }]); });
         const onRemoved = handlerFor<unknown>('group_member_removed');
 
         act(() => {
             onRemoved({ groupID: 9, telephon: '222', username: 'luis', newMemberCount: 2, systemMessage: sysMsg(52, 'member_removed', ['222'], '111') });
         });
 
-        expect(ctx?.groups[0]?.UserRole).toBe('left');
-        expect(ctx?.selectedGroup?.UserRole).toBe('left');
+        expect(ctx?.groups[0]?.userRole).toBe('left');
+        expect(ctx?.selectedGroup?.userRole).toBe('left');
         expect(ctx?.selectedGroup?.RemovedByAdmin).toBe(true);
     });
 
@@ -191,11 +191,11 @@ describe('DashboardProvider group admin events', () => {
             onSettings({ groupID: 9, onlyAdminsCanSend: true, onlyAdminsCanEditInfo: true, onlyAdminsCanAddMembers: false, systemMessage: sysMsg(53, 'settings_changed', [], '111') });
         });
 
-        expect(ctx?.selectedGroup?.OnlyAdminsCanSend).toBe(true);
-        expect(ctx?.selectedGroup?.OnlyAdminsCanEditInfo).toBe(true);
-        expect(ctx?.selectedGroup?.OnlyAdminsCanAddMembers).toBe(false);
-        expect(ctx?.groups[0]?.OnlyAdminsCanSend).toBe(true);
-        expect(ctx?.groupMessages[9]?.map(m => m.MessageID)).toEqual([53]);
+        expect(ctx?.selectedGroup?.onlyAdminsCanSend).toBe(true);
+        expect(ctx?.selectedGroup?.onlyAdminsCanEditInfo).toBe(true);
+        expect(ctx?.selectedGroup?.onlyAdminsCanAddMembers).toBe(false);
+        expect(ctx?.groups[0]?.onlyAdminsCanSend).toBe(true);
+        expect(ctx?.groupMessages[9]?.map(m => m.messageID)).toEqual([53]);
     });
 
     it('group_info updates name/description and appends the notice', async () => {
@@ -208,10 +208,10 @@ describe('DashboardProvider group admin events', () => {
             onInfo({ groupID: 9, name: 'Nuevo nombre', description: 'nueva desc', systemMessage: sysMsg(54, 'info_changed', [], '111') });
         });
 
-        expect(ctx?.selectedGroup?.Name).toBe('Nuevo nombre');
-        expect(ctx?.selectedGroup?.Description).toBe('nueva desc');
-        expect(ctx?.groups[0]?.Name).toBe('Nuevo nombre');
-        expect(ctx?.groupMessages[9]?.map(m => m.MessageID)).toEqual([54]);
+        expect(ctx?.selectedGroup?.name).toBe('Nuevo nombre');
+        expect(ctx?.selectedGroup?.description).toBe('nueva desc');
+        expect(ctx?.groups[0]?.name).toBe('Nuevo nombre');
+        expect(ctx?.groupMessages[9]?.map(m => m.messageID)).toEqual([54]);
     });
 
     it('a reloaded history shows the persisted system message and a live replay does not duplicate it', async () => {
@@ -220,8 +220,8 @@ describe('DashboardProvider group admin events', () => {
         mockGetGroupMessages.mockResolvedValue({ data: { messages: [groupMsg(61), sysMsg(60, 'member_added', ['333'], '111')], hasMore: false } });
 
         await act(async () => { await ctx!.fetchGroupMessages(9); });
-        expect(ctx?.groupMessages[9]?.map(m => m.MessageID)).toEqual([60, 61]);
-        expect(ctx?.groupMessages[9]?.find(m => m.MessageID === 60)?.Kind).toBe('system');
+        expect(ctx?.groupMessages[9]?.map(m => m.messageID)).toEqual([60, 61]);
+        expect(ctx?.groupMessages[9]?.find(m => m.messageID === 60)?.kind).toBe('system');
 
         // The same event arriving live after the reload must not duplicate the row.
         act(() => {
@@ -230,7 +230,7 @@ describe('DashboardProvider group admin events', () => {
                 systemMessage: sysMsg(60, 'member_added', ['333'], '111'),
             });
         });
-        expect(ctx?.groupMessages[9]?.filter(m => m.MessageID === 60)).toHaveLength(1);
+        expect(ctx?.groupMessages[9]?.filter(m => m.messageID === 60)).toHaveLength(1);
     });
 
     it('group_member_added with a persisted systemMessage keeps receipts and does not synthesize a second notice', async () => {
@@ -246,7 +246,7 @@ describe('DashboardProvider group admin events', () => {
         });
 
         expect(ctx?.groupReceipts[9]?.['444']).toEqual({ joined: 30, delivered: 0, read: 0 });
-        expect(ctx?.groupMessages[9]?.map(m => m.MessageID)).toEqual([30, 55]);
+        expect(ctx?.groupMessages[9]?.map(m => m.messageID)).toEqual([30, 55]);
         expect(ctx?.groupMemberNames[9]?.['444']).toBe('nuevo');
     });
 });

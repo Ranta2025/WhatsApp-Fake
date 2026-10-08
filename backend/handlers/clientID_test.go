@@ -80,7 +80,7 @@ func TestHandleSendGroupMessage_ParsesClientIDAndBroadcastsFirstSend(t *testing.
 	require.Equal(t, http.StatusCreated, w.Code)
 	assert.Equal(t, restTestClientID, svc.got.ClientID)
 	assert.Equal(t, 1, n.groupSends)
-	assert.Contains(t, w.Body.String(), `"ClientID":"`+restTestClientID+`"`)
+	assert.Contains(t, w.Body.String(), `"clientID":"`+restTestClientID+`"`)
 }
 
 func TestHandleSendGroupMessage_DuplicateReturns200WithoutBroadcast(t *testing.T) {
@@ -91,7 +91,7 @@ func TestHandleSendGroupMessage_DuplicateReturns200WithoutBroadcast(t *testing.T
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, 0, n.groupSends)
-	assert.Contains(t, w.Body.String(), `"MessageID":88`)
+	assert.Contains(t, w.Body.String(), `"messageID":88`)
 }
 
 func TestHandleSendGroupMessage_InvalidClientIDIs400(t *testing.T) {

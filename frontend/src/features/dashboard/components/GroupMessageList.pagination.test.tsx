@@ -21,8 +21,8 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseGroupMessaging = vi.mocked(useGroupMessaging);
 
 const msg = (id: number): GroupMessageResponse => ({
-    MessageID: id, GroupID: 5, SenderTelephon: '222', SenderUsername: 'bob', Message: `g${id}`,
-    Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: id, groupID: 5, senderTelephon: '222', senderUsername: 'bob', message: `g${id}`,
+    time: '2026-01-01T10:00:00Z', edited: false,
 });
 
 describe('GroupMessageList infinite scroll up', () => {
@@ -55,7 +55,7 @@ describe('GroupMessageList infinite scroll up', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0; });
-        mockUseDashboard.mockReturnValue({ selectedGroup: { ID: 5, Members: [] } } as unknown as DashboardContextValue);
+        mockUseDashboard.mockReturnValue({ selectedGroup: { id: 5, members: [] } } as unknown as DashboardContextValue);
         mockUseGroupMessaging.mockReturnValue({
             messageMenuOpen: null, setMessageMenuOpen: vi.fn(),
         } as unknown as UseGroupMessagingResult);
@@ -93,8 +93,8 @@ describe('GroupMessageList infinite scroll up', () => {
 
     it('cada burbuja real lleva data-message-id; el aviso de sistema no', () => {
         const system: GroupMessageResponse = {
-            MessageID: 1, GroupID: 5, SenderTelephon: '222', SenderUsername: 'Ana', Message: '',
-            Time: '2026-01-01T09:00:00Z', Edited: false, Kind: 'system', SystemEvent: 'member_left', SystemTargets: ['222'],
+            messageID: 1, groupID: 5, senderTelephon: '222', senderUsername: 'Ana', message: '',
+            time: '2026-01-01T09:00:00Z', edited: false, kind: 'system', systemEvent: 'member_left', systemTargets: ['222'],
         };
         renderList({ messages: [system, msg(5), msg(6)] });
         const marked = Array.from(container.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'));
@@ -108,8 +108,8 @@ describe('GroupMessageList infinite scroll up', () => {
 
     it('un aviso de sistema al inicio no rompe el render', () => {
         const system: GroupMessageResponse = {
-            MessageID: 1, GroupID: 5, SenderTelephon: '222', SenderUsername: 'Ana', Message: '',
-            Time: '2026-01-01T09:00:00Z', Edited: false, Kind: 'system', SystemEvent: 'member_left', SystemTargets: ['222'],
+            messageID: 1, groupID: 5, senderTelephon: '222', senderUsername: 'Ana', message: '',
+            time: '2026-01-01T09:00:00Z', edited: false, kind: 'system', systemEvent: 'member_left', systemTargets: ['222'],
         };
         renderList({ messages: [system, msg(5)] });
         expect(container.textContent).toContain('Ana salió del grupo');

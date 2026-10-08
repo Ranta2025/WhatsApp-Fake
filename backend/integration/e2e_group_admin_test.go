@@ -35,10 +35,10 @@ func e2eLogin(t *testing.T, base string, u models.UserDataBase) *e2eClient {
 // e2eMemberRole devuelve el rol del teléfono en la lista Members de un detail.
 func e2eMemberRole(t *testing.T, detail map[string]interface{}, telephon string) string {
 	t.Helper()
-	for _, item := range detail["Members"].([]interface{}) {
+	for _, item := range detail["members"].([]interface{}) {
 		m := item.(map[string]interface{})
-		if m["Telephon"] == telephon {
-			role, _ := m["Role"].(string)
+		if m["telephon"] == telephon {
+			role, _ := m["role"].(string)
 			return role
 		}
 	}
@@ -132,21 +132,21 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 
 		g, ok := grp["group"].(map[string]interface{})
 		require.True(t, ok, "respuesta sin group: %v", grp)
-		groupID = uint(g["ID"].(float64))
+		groupID = uint(g["id"].(float64))
 		require.NotZero(t, groupID)
 
-		assert.Equal(t, "admin", g["UserRole"], "Ana es admin por ser creadora")
-		assert.Equal(t, false, g["OnlyAdminsCanSend"])
-		assert.Equal(t, false, g["OnlyAdminsCanEditInfo"])
-		assert.Equal(t, false, g["OnlyAdminsCanAddMembers"])
+		assert.Equal(t, "admin", g["userRole"], "Ana es admin por ser creadora")
+		assert.Equal(t, false, g["onlyAdminsCanSend"])
+		assert.Equal(t, false, g["onlyAdminsCanEditInfo"])
+		assert.Equal(t, false, g["onlyAdminsCanAddMembers"])
 
-		members, ok := g["Members"].([]interface{})
+		members, ok := g["members"].([]interface{})
 		require.True(t, ok)
 		require.Len(t, members, 3)
 		roles := map[string]string{}
 		for _, item := range members {
 			m := item.(map[string]interface{})
-			roles[m["Telephon"].(string)] = m["Role"].(string)
+			roles[m["telephon"].(string)] = m["role"].(string)
 		}
 		assert.Equal(t, "admin", roles[ana.Telephon])
 		assert.Equal(t, "member", roles[luis.Telephon])
@@ -177,9 +177,9 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 		// Sin efectos laterales: solo cambió lo que pidió Ana y el nombre quedó intacto.
 		code, detail := ca.do("GET", fmt.Sprintf("/api/v1/group/%d", groupID), nil)
 		require.Equal(t, 200, code)
-		assert.Equal(t, false, detail["OnlyAdminsCanSend"])
-		assert.Equal(t, true, detail["OnlyAdminsCanEditInfo"])
-		assert.Equal(t, "Equipo GA5", detail["Name"])
+		assert.Equal(t, false, detail["onlyAdminsCanSend"])
+		assert.Equal(t, true, detail["onlyAdminsCanEditInfo"])
+		assert.Equal(t, "Equipo GA5", detail["name"])
 		assert.Equal(t, "member", e2eMemberRole(t, detail, marta.Telephon))
 	})
 
@@ -203,7 +203,7 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 		assert.EqualValues(t, 2, p["newMemberCount"])
 		sys, ok := p["systemMessage"].(map[string]interface{})
 		require.True(t, ok, "el evento debe traer el systemMessage: %v", p)
-		assert.Equal(t, models.SystemEventMemberRemoved, sys["SystemEvent"])
+		assert.Equal(t, models.SystemEventMemberRemoved, sys["systemEvent"])
 
 		// El removido pierde acceso a detalle, historial y búsqueda.
 		code, _ = cm.do("GET", fmt.Sprintf("/api/v1/group/%d", groupID), nil)
@@ -243,7 +243,7 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 		// Luis (admin) sigue enviando.
 		sendWS(wsLuis, "group_chat", map[string]interface{}{"groupID": groupID, "message": "hola desde admin"})
 		got := waitFor(t, wsLuis, "group_chat")
-		assert.Equal(t, "hola desde admin", got["payload"].(map[string]interface{})["Message"])
+		assert.Equal(t, "hola desde admin", got["payload"].(map[string]interface{})["message"])
 	})
 
 	t.Run("ana vuelve a añadir a marta", func(t *testing.T) {
@@ -257,7 +257,7 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 		code, detail := cm.do("GET", fmt.Sprintf("/api/v1/group/%d", groupID), nil)
 		require.Equal(t, 200, code, detail)
 		assert.Equal(t, "member", e2eMemberRole(t, detail, marta.Telephon))
-		assert.Equal(t, true, detail["OnlyAdminsCanSend"])
+		assert.Equal(t, true, detail["onlyAdminsCanSend"])
 
 		code, body = cm.do("POST", fmt.Sprintf("/api/v1/group/%d/message", groupID), map[string]string{"message": "miembro restringido"})
 		assert.Equal(t, 403, code, body)
@@ -302,7 +302,7 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 
 		code, detail := cl.do("GET", fmt.Sprintf("/api/v1/group/%d", groupID), nil)
 		require.Equal(t, 200, code, detail)
-		assert.Equal(t, "admin", detail["UserRole"], "Luis debe quedar como admin tras salir el último")
+		assert.Equal(t, "admin", detail["userRole"], "Luis debe quedar como admin tras salir el último")
 		assert.Equal(t, "admin", e2eMemberRole(t, detail, luis.Telephon))
 		assert.Equal(t, "member", e2eMemberRole(t, detail, marta.Telephon))
 		assert.Equal(t, "member", e2eMemberRole(t, detail, dave.Telephon))
@@ -317,9 +317,9 @@ func TestE2EGroupAdminPermissions(t *testing.T) {
 		var got []string
 		for _, item := range list {
 			m := item.(map[string]interface{})
-			if m["Kind"] == models.GroupMessageKindSystem {
-				assert.NotZero(t, m["MessageID"], "un system message persistido debe tener id")
-				event, _ := m["SystemEvent"].(string)
+			if m["kind"] == models.GroupMessageKindSystem {
+				assert.NotZero(t, m["messageID"], "un system message persistido debe tener id")
+				event, _ := m["systemEvent"].(string)
 				got = append(got, event)
 			}
 		}

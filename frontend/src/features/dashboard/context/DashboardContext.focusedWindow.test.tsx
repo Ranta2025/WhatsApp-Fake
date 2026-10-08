@@ -55,10 +55,10 @@ const chatMsg = (id: number): Message => ({
     messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
 });
 const groupMsg = (id: number): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: 'B', SenderUsername: 'bea', Message: `g${id}`, Time: iso(id), Edited: false,
+    messageID: id, groupID: 9, senderTelephon: 'B', senderUsername: 'bea', message: `g${id}`, time: iso(id), edited: false,
 });
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
+const ids = (list: ReadonlyArray<{ messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID);
 const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { isAxiosError: true, response: { status } });
 const contact = (n: string): ContactChat => ({ telephon: n, contactName: n, username: n } as ContactChat);
 
@@ -601,7 +601,7 @@ describe('DashboardProvider detached windows', () => {
             act(() => { handlerFor<GroupMessageResponse>('group_chat')(groupMsg(500)); });
             expect(ctx!.focusedGroup[9]).toBeDefined();
 
-            act(() => { handlerFor<GroupMessageResponse>('group_chat')({ ...groupMsg(501), SenderTelephon: '111' }); });
+            act(() => { handlerFor<GroupMessageResponse>('group_chat')({ ...groupMsg(501), senderTelephon: '111' }); });
             expect(ctx!.focusedGroup[9]).toBeUndefined();
         });
 
@@ -610,8 +610,8 @@ describe('DashboardProvider detached windows', () => {
             await mount();
             await act(async () => { await ctx!.openMessageAt({ kind: 'group', id: 9 }, 41); });
 
-            act(() => { handlerFor<GroupMessageResponse>('group_edit_message')({ ...groupMsg(41), Message: 'editado' }); });
-            expect(fg().messages[1]).toMatchObject({ Message: 'editado', Edited: true });
+            act(() => { handlerFor<GroupMessageResponse>('group_edit_message')({ ...groupMsg(41), message: 'editado' }); });
+            expect(fg().messages[1]).toMatchObject({ message: 'editado', edited: true });
 
             act(() => { handlerFor<GroupMessageResponse>('group_delete_message')(groupMsg(42)); });
             expect(ids(fg().messages)).toEqual([40, 41]);

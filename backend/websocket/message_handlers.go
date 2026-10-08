@@ -450,8 +450,8 @@ func (mh *MessageHandler) HandleGroupDeleteMessage() {
 	responseBytes, _ := json.Marshal(map[string]interface{}{
 		"type": "group_delete_message",
 		"payload": map[string]interface{}{
-			"MessageID": payload.MessageID,
-			"GroupID":   payload.GroupID,
+			"messageID": payload.MessageID,
+			"groupID":   payload.GroupID,
 		},
 	})
 	mh.reply(responseBytes)

@@ -15,8 +15,8 @@ vi.mock('../context/DashboardContext', () => ({ useDashboard: vi.fn() }));
 const mockUseDashboard = vi.mocked(useDashboard);
 
 const group = (over: Partial<SelectedGroup> = {}): SelectedGroup => ({
-    ID: 5, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'admin', CreatedAt: '2026-01-01T00:00:00Z',
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
+    id: 5, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'admin', createdAt: '2026-01-01T00:00:00Z',
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
     ...over,
 });
 
@@ -120,7 +120,7 @@ describe('DisappearingControls', () => {
 
     describe('GroupDisappearingSection', () => {
         it('admin can change it when only admins may edit info', async () => {
-            dash({ selectedGroup: group({ UserRole: 'admin', OnlyAdminsCanEditInfo: true }), selectedDisappearSeconds: 86400 });
+            dash({ selectedGroup: group({ userRole: 'admin', onlyAdminsCanEditInfo: true }), selectedDisappearSeconds: 86400 });
             mount(<GroupDisappearingSection />);
             expect(select()!.value).toBe('86400');
             await choose('604800');
@@ -128,7 +128,7 @@ describe('DisappearingControls', () => {
         });
 
         it('member can change it while "Editar info" is open', async () => {
-            dash({ selectedGroup: group({ UserRole: 'member', OnlyAdminsCanEditInfo: false }) });
+            dash({ selectedGroup: group({ userRole: 'member', onlyAdminsCanEditInfo: false }) });
             mount(<GroupDisappearingSection />);
             expect(select()!.disabled).toBe(false);
             await choose('86400');
@@ -136,7 +136,7 @@ describe('DisappearingControls', () => {
         });
 
         it('member is read-only when only admins can edit info', () => {
-            dash({ selectedGroup: group({ UserRole: 'member', OnlyAdminsCanEditInfo: true }), selectedDisappearSeconds: 604800 });
+            dash({ selectedGroup: group({ userRole: 'member', onlyAdminsCanEditInfo: true }), selectedDisappearSeconds: 604800 });
             mount(<GroupDisappearingSection />);
             expect(select()).toBeNull();
             expect(container.querySelector('[data-testid="disappearing-readonly"]')?.textContent).toBe('7 días');
@@ -144,7 +144,7 @@ describe('DisappearingControls', () => {
         });
 
         it('a user who left the group is read-only even when open', () => {
-            dash({ selectedGroup: group({ UserRole: 'left', OnlyAdminsCanEditInfo: false }) });
+            dash({ selectedGroup: group({ userRole: 'left', onlyAdminsCanEditInfo: false }) });
             mount(<GroupDisappearingSection />);
             expect(select()).toBeNull();
             expect(container.querySelector('[data-testid="disappearing-readonly"]')?.textContent).toBe('Desactivados');
@@ -170,7 +170,7 @@ describe('DisappearingControls', () => {
     });
 
     describe('ExpiryClock', () => {
-        it('shows a labelled clock for a valid ExpiresAt', () => {
+        it('shows a labelled clock for a valid expiresAt', () => {
             mount(<ExpiryClock expiresAt="2026-01-02T10:00:00Z" />);
             const clock = container.querySelector('[data-testid="expiry-clock"]')!;
             expect(clock.getAttribute('aria-label')).toBe('Mensaje temporal');

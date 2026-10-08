@@ -41,7 +41,7 @@ const Section = ({ title, members, alwaysShow }: { title: string; members: Group
  */
 export default function GroupMessageInfoModal({ message, onClose }: GroupMessageInfoModalProps): JSX.Element {
     const [state, setState] = useState<LoadState>({ status: 'loading' });
-    const { GroupID: groupID, MessageID: messageID } = message;
+    const { groupID, messageID } = message;
 
     useEscapeToClose(onClose, true);
 
@@ -74,7 +74,7 @@ export default function GroupMessageInfoModal({ message, onClose }: GroupMessage
                     </button>
                 </div>
                 <div className="px-4 py-3 text-sm text-slate-200 break-words bg-indigo-600/20">
-                    {message.Message || 'Mensaje multimedia'}
+                    {message.message || 'Mensaje multimedia'}
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {state.status === 'loading' && (

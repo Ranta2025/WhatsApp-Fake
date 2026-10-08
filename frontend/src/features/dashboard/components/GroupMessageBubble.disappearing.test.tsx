@@ -5,15 +5,15 @@ import { createRoot, type Root } from 'react-dom/client';
 import { GroupMessageBubble } from './GroupChatWindow';
 import type { GroupMessageResponse } from '../../../types/api';
 
-// disappearing-messages (DE6): clock icon on group bubbles with a valid ExpiresAt.
+// disappearing-messages (DE6): clock icon on group bubbles with a valid expiresAt.
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock('../context/DashboardContext', () => ({ useDashboard: vi.fn() }));
 
 const base: GroupMessageResponse = {
-    MessageID: 9, GroupID: 5, SenderTelephon: '111', SenderUsername: 'ana', Message: 'hola',
-    Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: 9, groupID: 5, senderTelephon: '111', senderUsername: 'ana', message: 'hola',
+    time: '2026-01-01T10:00:00Z', edited: false,
 };
 
 describe('GroupMessageBubble expiry clock', () => {
@@ -37,12 +37,12 @@ describe('GroupMessageBubble expiry clock', () => {
         container.remove();
     });
 
-    it('shows the clock only with a valid ExpiresAt', () => {
+    it('shows the clock only with a valid expiresAt', () => {
         render(base);
         expect(container.querySelector('[data-testid="expiry-clock"]')).toBeNull();
-        render({ ...base, ExpiresAt: 'garbage' });
+        render({ ...base, expiresAt: 'garbage' });
         expect(container.querySelector('[data-testid="expiry-clock"]')).toBeNull();
-        render({ ...base, ExpiresAt: '2026-01-02T10:00:00Z' });
+        render({ ...base, expiresAt: '2026-01-02T10:00:00Z' });
         expect(container.querySelector('[aria-label="Mensaje temporal"]')).not.toBeNull();
     });
 });

@@ -244,7 +244,7 @@ const MessageList = ({ searchQuery }: MessageListProps) => {
                             const isMenuOpen = messageMenuOpen === m.messageID;
                             const time = formatTime(m.time || m.Timestamp || '');
                             const reactionTarget: ReactionTarget = { kind: 'direct', messageID: m.messageID };
-                            const myReaction = m.reactions?.find(r => r.Mine)?.Emoji;
+                            const myReaction = m.reactions?.find(r => r.mine)?.emoji;
 
                             return (
                                 <div 

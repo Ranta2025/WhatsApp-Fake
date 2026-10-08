@@ -9,7 +9,7 @@ import {
 } from './historyApi';
 
 const chat = (id: number) => ({ messageID: id, senderTelephon: 'B', receptor: 'A', message: `m${id}`, status: 'visto', time: '2026-01-01T00:00:00Z', edited: false });
-const grp = (id: number) => ({ MessageID: id, GroupID: 7, SenderTelephon: 'B', SenderUsername: 'b', Message: `g${id}`, Time: '2026-01-01T00:00:00Z', Edited: false });
+const grp = (id: number) => ({ messageID: id, groupID: 7, senderTelephon: 'B', senderUsername: 'b', message: `g${id}`, time: '2026-01-01T00:00:00Z', edited: false });
 
 beforeEach(() => { mockApi.get.mockReset(); });
 
@@ -59,7 +59,7 @@ describe('group windows', () => {
         mockApi.get.mockResolvedValue({ data: { messages: [grp(3), grp(4)], hasMoreOlder: false, hasMoreNewer: true } });
         const out = await getGroupWindowAround(7, 4, 30);
         expect(mockApi.get).toHaveBeenCalledWith('/api/v1/group/7/message', { params: { around: 4, limit: 30 } });
-        expect(out.messages.map(m => m.MessageID)).toEqual([3, 4]);
+        expect(out.messages.map(m => m.messageID)).toEqual([3, 4]);
         expect(out.hasMoreOlder).toBe(false);
         expect(out.hasMoreNewer).toBe(true);
     });

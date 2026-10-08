@@ -6,7 +6,7 @@ import {
 } from './normalizeResponses';
 
 // R3-dashboard-null-body-guards-removed: fetchUserGroups/fetchGroupMessages/
-// fetchGroupDetail read `data.groups`/`data.messages`/`data.Messages`
+// fetchGroupDetail read `data.groups`/`data.messages`/`data.messages`
 // straight off the axios response. The JS version guarded with
 // `data?.groups` etc. (empty/null body -> reset to []); typing `data` as the
 // non-nullable REST shape dropped that guard. These normalizers restore the
@@ -26,7 +26,7 @@ describe('normalizeGroupsResponse', () => {
     });
 
     it('returns the groups array when present', () => {
-        const groups = [{ ID: 1 }];
+        const groups = [{ id: 1 }];
         expect(normalizeGroupsResponse({ groups })).toBe(groups);
     });
 });
@@ -41,7 +41,7 @@ describe('normalizeGroupMessagesResponse', () => {
     });
 
     it('returns the messages array when present', () => {
-        const messages = [{ MessageID: 'a' }];
+        const messages = [{ messageID: 'a' }];
         expect(normalizeGroupMessagesResponse({ messages })).toBe(messages);
     });
 });
@@ -51,13 +51,13 @@ describe('normalizeGroupDetailMessages', () => {
         expect(normalizeGroupDetailMessages(null)).toEqual([]);
     });
 
-    it('returns [] when Messages is missing from the body', () => {
-        expect(normalizeGroupDetailMessages({ ID: 1 })).toEqual([]);
+    it('returns [] when messages is missing from the body', () => {
+        expect(normalizeGroupDetailMessages({ id: 1 })).toEqual([]);
     });
 
-    it('returns Messages when present', () => {
-        const Messages = [{ MessageID: 'a' }];
-        expect(normalizeGroupDetailMessages({ Messages })).toBe(Messages);
+    it('returns messages when present', () => {
+        const messages = [{ messageID: 'a' }];
+        expect(normalizeGroupDetailMessages({ messages })).toBe(messages);
     });
 });
 
@@ -125,42 +125,42 @@ describe('normalizeReactions', () => {
 
     it('keeps valid entries and drops malformed ones without throwing', () => {
         const out = normalizeReactions([
-            { Emoji: '👍', Count: 2, Mine: true },
-            { Emoji: '', Count: 1, Mine: false },
-            { Emoji: '❤️', Count: 0, Mine: false },
-            { Emoji: '😂', Count: 1.5, Mine: false },
-            { Emoji: '😮', Count: -1, Mine: false },
-            { Emoji: '😢', Count: '3', Mine: false },
-            { Emoji: '🙏', Count: 1, Mine: 'yes' },
-            { Emoji: 7, Count: 1, Mine: false },
+            { emoji: '👍', count: 2, mine: true },
+            { emoji: '', count: 1, mine: false },
+            { emoji: '❤️', count: 0, mine: false },
+            { emoji: '😂', count: 1.5, mine: false },
+            { emoji: '😮', count: -1, mine: false },
+            { emoji: '😢', count: '3', mine: false },
+            { emoji: '🙏', count: 1, mine: 'yes' },
+            { emoji: 7, count: 1, mine: false },
             null, 'x', 4,
-            { Emoji: '🙏', Count: 3, Mine: false },
+            { emoji: '🙏', count: 3, mine: false },
         ]);
-        expect(out).toEqual([{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '🙏', Count: 3, Mine: false }]);
+        expect(out).toEqual([{ emoji: '👍', count: 2, mine: true }, { emoji: '🙏', count: 3, mine: false }]);
     });
 
     it('drops duplicated emojis keeping the first occurrence', () => {
-        expect(normalizeReactions([{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '👍', Count: 1, Mine: false }]))
-            .toEqual([{ Emoji: '👍', Count: 2, Mine: true }]);
+        expect(normalizeReactions([{ emoji: '👍', count: 2, mine: true }, { emoji: '👍', count: 1, mine: false }]))
+            .toEqual([{ emoji: '👍', count: 2, mine: true }]);
     });
 });
 
-describe('Reactions inside message normalizers', () => {
+describe('reactions inside message normalizers', () => {
     it('normalizeChatMessagesResponse sanitizes reactions and removes an all-invalid field', () => {
         const [a, b] = normalizeChatMessagesResponse([
-            { messageID: 1, time: '2024-01-01T00:00:00Z', reactions: [{ Emoji: '👍', Count: 1, Mine: false }, { nope: true }] },
+            { messageID: 1, time: '2024-01-01T00:00:00Z', reactions: [{ emoji: '👍', count: 1, mine: false }, { nope: true }] },
             { messageID: 2, time: '2024-01-01T00:00:00Z', reactions: [{ nope: true }] },
         ]);
-        expect(a?.reactions).toEqual([{ Emoji: '👍', Count: 1, Mine: false }]);
+        expect(a?.reactions).toEqual([{ emoji: '👍', count: 1, mine: false }]);
         expect('reactions' in (b ?? {})).toBe(false);
     });
 
-    it('group history / detail normalizers sanitize Reactions too', () => {
-        const grp = { MessageID: 1, Time: '2024-01-01T00:00:00Z', Reactions: [{ Emoji: '🙏', Count: 2, Mine: true }, null] };
+    it('group history / detail normalizers sanitize reactions too', () => {
+        const grp = { messageID: 1, time: '2024-01-01T00:00:00Z', reactions: [{ emoji: '🙏', count: 2, mine: true }, null] };
         const [g] = normalizeGroupMessagesResponse({ messages: [grp] });
-        expect(g?.Reactions).toEqual([{ Emoji: '🙏', Count: 2, Mine: true }]);
-        const [d] = normalizeGroupDetailMessages({ Messages: [{ ...grp, Reactions: 'garbage' }] });
-        expect('Reactions' in (d ?? {})).toBe(false);
+        expect(g?.reactions).toEqual([{ emoji: '🙏', count: 2, mine: true }]);
+        const [d] = normalizeGroupDetailMessages({ messages: [{ ...grp, reactions: 'garbage' }] });
+        expect('reactions' in (d ?? {})).toBe(false);
     });
 });
 

@@ -6,8 +6,8 @@ const directSys = {
     time: '2026-01-01T10:00:00Z', edited: false, kind: 'system', systemEvent: 'disappearing_changed',
 };
 const groupSys = {
-    MessageID: 8, GroupID: 9, SenderTelephon: '111', SenderUsername: 'ana', Message: '604800',
-    Time: '2026-01-01T10:00:00Z', Edited: false, Kind: 'system', SystemEvent: 'disappearing_changed',
+    messageID: 8, groupID: 9, senderTelephon: '111', senderUsername: 'ana', message: '604800',
+    time: '2026-01-01T10:00:00Z', edited: false, kind: 'system', systemEvent: 'disappearing_changed',
 };
 
 describe('parseDirectSystemMessage', () => {
@@ -42,7 +42,7 @@ describe('parseDisappearingChanged', () => {
     it('parses a group event with numeric key and a group system message', () => {
         const ev = parseDisappearingChanged({ kind: 'group', key: 9, seconds: 604800, byTelephon: '111', systemMessage: groupSys });
         expect(ev).toMatchObject({ kind: 'group', key: 9, seconds: 604800 });
-        expect(ev?.systemMessage).toMatchObject({ MessageID: 8, GroupID: 9 });
+        expect(ev?.systemMessage).toMatchObject({ messageID: 8, groupID: 9 });
     });
 
     it('treats a null/absent/invalid systemMessage as "unchanged" (no message)', () => {

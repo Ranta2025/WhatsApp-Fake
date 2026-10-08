@@ -202,7 +202,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
     [contacts, query]);
 
     const filteredGroups = useMemo((): LocalGroup[] => (groups || [])
-        .filter(g => !query || (g.Name || '').toLowerCase().includes(query)),
+        .filter(g => !query || (g.name || '').toLowerCase().includes(query)),
     [groups, query]);
 
     const totalUnread = chats.reduce((sum, c) => sum + c.unread, 0);
@@ -231,7 +231,7 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
             return;
         }
         const groupId = Number(chat.key);
-        const target = (groups || []).find(g => g.ID === groupId);
+        const target = (groups || []).find(g => g.id === groupId);
         if (!target) {
             addToast({ type: 'error', message: 'No se pudo abrir el grupo' });
             return;
@@ -427,16 +427,16 @@ const Sidebar = ({ onOpenProfile, onAddContact, onCreateGroup }: SidebarProps) =
                             <div className="space-y-0.5 pt-1">
                                 {filteredGroups.map(g => (
                                     <ListItem
-                                        key={g.ID}
-                                        active={selectedGroup?.ID === g.ID}
+                                        key={g.id}
+                                        active={selectedGroup?.id === g.id}
                                         onClick={() => { setSelectedGroup(g); setSidebarOpen(false); }}
-                                        avatar={<Avatar src={g.AvatarUrl} name={g.Name} size="lg" />}
-                                        title={g.Name}
-                                        badge={g.UserRole === 'admin' && (
+                                        avatar={<Avatar src={g.avatarUrl} name={g.name} size="lg" />}
+                                        title={g.name}
+                                        badge={g.userRole === 'admin' && (
                                             <span className="text-[10px] font-medium bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded-md">admin</span>
                                         )}
-                                        subtitle={`${g.MemberCount} miembro${g.MemberCount !== 1 ? 's' : ''}${g.Description ? ` · ${g.Description}` : ''}`}
-                                        muted={isMuted({ kind: 'group', id: g.ID })}
+                                        subtitle={`${g.memberCount} miembro${g.memberCount !== 1 ? 's' : ''}${g.description ? ` · ${g.description}` : ''}`}
+                                        muted={isMuted({ kind: 'group', id: g.id })}
                                     />
                                 ))}
                             </div>

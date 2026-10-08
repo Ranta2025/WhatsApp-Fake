@@ -24,7 +24,7 @@ const msg = (id: number, from: string): Message => ({
     time: `2026-01-01T10:0${id}:00Z`, edited: false,
 });
 const groupRow = (id: number, name: string) => ({
-    ID: id, Name: name, CreatorTelephon: '111', MemberCount: 2, UserRole: 'member', CreatedAt: '2026-01-01T00:00:00Z',
+    id, name, creatorTelephon: '111', memberCount: 2, userRole: 'member', createdAt: '2026-01-01T00:00:00Z',
 });
 
 describe('Sidebar muted icon', () => {

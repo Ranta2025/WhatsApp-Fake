@@ -18,9 +18,9 @@ export type GroupPermissionRole = GroupRole | 'left' | null | undefined;
  * existing groups keep their current open behavior.
  */
 export interface GroupPermissionSettings {
-    OnlyAdminsCanSend?: boolean | null;
-    OnlyAdminsCanEditInfo?: boolean | null;
-    OnlyAdminsCanAddMembers?: boolean | null;
+    onlyAdminsCanSend?: boolean | null;
+    onlyAdminsCanEditInfo?: boolean | null;
+    onlyAdminsCanAddMembers?: boolean | null;
 }
 
 const isAdmin = (role: GroupPermissionRole): boolean => role === 'admin';
@@ -30,15 +30,15 @@ const isMember = (role: GroupPermissionRole): boolean => role === 'admin' || rol
 
 /** Send a message / edit an own message / typing: admin always, member when open. */
 export const canSend = (role: GroupPermissionRole, settings: GroupPermissionSettings): boolean =>
-    isAdmin(role) || (isMember(role) && !settings.OnlyAdminsCanSend);
+    isAdmin(role) || (isMember(role) && !settings.onlyAdminsCanSend);
 
 /** Edit group info (name, description, avatar): admin always, member when open. */
 export const canEditInfo = (role: GroupPermissionRole, settings: GroupPermissionSettings): boolean =>
-    isAdmin(role) || (isMember(role) && !settings.OnlyAdminsCanEditInfo);
+    isAdmin(role) || (isMember(role) && !settings.onlyAdminsCanEditInfo);
 
 /** Add members: admin always, member when open (invitee rules unchanged). */
 export const canAddMembers = (role: GroupPermissionRole, settings: GroupPermissionSettings): boolean =>
-    isAdmin(role) || (isMember(role) && !settings.OnlyAdminsCanAddMembers);
+    isAdmin(role) || (isMember(role) && !settings.onlyAdminsCanAddMembers);
 
 /** Promote / dismiss / remove: admin only, never configurable. */
 export const canManageMembers = (role: GroupPermissionRole): boolean => isAdmin(role);

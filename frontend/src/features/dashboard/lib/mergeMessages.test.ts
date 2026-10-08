@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import type { ReactionSummary } from '../../../types/api';
 import { mergeLatestWindow, prependOlder, oldestRealMessageId, isContiguousWindow } from './mergeMessages';
 
-interface Entry { MessageID: number | string; Time: string; Message?: string; Reactions?: ReactionSummary[] }
+interface Entry { messageID: number | string; time: string; message?: string; reactions?: ReactionSummary[] }
 
-const e = (id: number, iso: string, Message = `m${id}`): Entry => ({ MessageID: id, Time: iso, Message });
-const sys = (id: string, iso: string): Entry => ({ MessageID: id, Time: iso, Message: 'sistema' });
-const ids = (list: Entry[]) => list.map(m => m.MessageID);
+const e = (id: number, iso: string, message = `m${id}`): Entry => ({ messageID: id, time: iso, message });
+const sys = (id: string, iso: string): Entry => ({ messageID: id, time: iso, message: 'sistema' });
+const ids = (list: Entry[]) => list.map(m => m.messageID);
 
 describe('oldestRealMessageId', () => {
     it('returns null for an empty list', () => {
@@ -31,12 +31,12 @@ describe('prependOlder', () => {
         expect(ids(prependOlder(prev, older))).toEqual([3, 4, 5, 6]);
     });
 
-    it('dedupes by MessageID keeping the already-loaded copy', () => {
+    it('dedupes by messageID keeping the already-loaded copy', () => {
         const prev = [e(5, '2024-01-01T00:00:05Z', 'editado')];
         const older = [e(5, '2024-01-01T00:00:05Z', 'viejo'), e(4, '2024-01-01T00:00:04Z')];
         const merged = prependOlder(prev, older);
         expect(ids(merged)).toEqual([4, 5]);
-        expect(merged[1]?.Message).toBe('editado');
+        expect(merged[1]?.message).toBe('editado');
     });
 
     it('breaks timestamp ties by numeric id', () => {
@@ -68,7 +68,7 @@ describe('mergeLatestWindow', () => {
         const fresh = [e(5, '2024-01-01T00:00:05Z', 'a2'), e(7, '2024-01-01T00:00:07Z', 'c')];
         const merged = mergeLatestWindow(prev, fresh);
         expect(ids(merged)).toEqual([5, 7]);
-        expect(merged[0]?.Message).toBe('a2');
+        expect(merged[0]?.message).toBe('a2');
     });
 
     it('returns [] when the server window is empty (chat cleared)', () => {
@@ -167,40 +167,40 @@ describe('mergeLatestWindow contiguity (no silent gaps)', () => {
 });
 
 describe('reactions preservation', () => {
-    const chip = (Emoji: string, Count = 1, Mine = false): ReactionSummary => ({ Emoji, Count, Mine });
-    const withChips = (id: number, iso: string, Reactions?: ReactionSummary[]): Entry => ({ ...e(id, iso), ...(Reactions ? { Reactions } : {}) });
+    const chip = (emoji: string, count = 1, mine = false): ReactionSummary => ({ emoji, count, mine });
+    const withChips = (id: number, iso: string, reactions?: ReactionSummary[]): Entry => ({ ...e(id, iso), ...(reactions ? { reactions } : {}) });
 
     it('mergeLatestWindow: the server copy wins, replacing a stale local optimistic value', () => {
         const prev = [withChips(10, '2024-01-01T00:00:10Z', [chip('👍', 1, true)])];
         const fresh = [withChips(10, '2024-01-01T00:00:10Z', [chip('❤️', 2, false)])];
-        expect(mergeLatestWindow(prev, fresh)[0]?.Reactions).toEqual([chip('❤️', 2, false)]);
+        expect(mergeLatestWindow(prev, fresh)[0]?.reactions).toEqual([chip('❤️', 2, false)]);
     });
 
     it('mergeLatestWindow: a refetch keeps the chips carried by the fresh window', () => {
         const prev = [e(9, '2024-01-01T00:00:09Z'), withChips(10, '2024-01-01T00:00:10Z', [chip('👍')])];
         const fresh = [withChips(10, '2024-01-01T00:00:10Z', [chip('👍')]), withChips(11, '2024-01-01T00:00:11Z', [chip('😂', 3, true)])];
         const merged = mergeLatestWindow(prev, fresh);
-        expect(merged.map(m => m.Reactions)).toEqual([undefined, [chip('👍')], [chip('😂', 3, true)]]);
+        expect(merged.map(m => m.reactions)).toEqual([undefined, [chip('👍')], [chip('😂', 3, true)]]);
     });
 
-    it('mergeLatestWindow: a fresh copy without Reactions clears the local ones (all reactions removed)', () => {
+    it('mergeLatestWindow: a fresh copy without reactions clears the local ones (all reactions removed)', () => {
         const prev = [withChips(10, '2024-01-01T00:00:10Z', [chip('👍')])];
         const merged = mergeLatestWindow(prev, [e(10, '2024-01-01T00:00:10Z')]);
-        expect(merged[0]?.Reactions).toBeUndefined();
+        expect(merged[0]?.reactions).toBeUndefined();
     });
 
-    it('prependOlder: an older page overlapping a loaded message replaces its Reactions with the server value', () => {
+    it('prependOlder: an older page overlapping a loaded message replaces its reactions with the server value', () => {
         const prev = [withChips(10, '2024-01-01T00:00:10Z', [chip('👍', 1, true)]), e(11, '2024-01-01T00:00:11Z')];
         const older = [withChips(9, '2024-01-01T00:00:09Z', [chip('🙏')]), withChips(10, '2024-01-01T00:00:10Z', [chip('👍', 2, false)])];
         const merged = prependOlder(prev, older);
         expect(ids(merged)).toEqual([9, 10, 11]);
-        expect(merged[0]?.Reactions).toEqual([chip('🙏')]);
-        expect(merged[1]?.Reactions).toEqual([chip('👍', 2, false)]);
+        expect(merged[0]?.reactions).toEqual([chip('🙏')]);
+        expect(merged[1]?.reactions).toEqual([chip('👍', 2, false)]);
     });
 
     it('prependOlder: keeps the loaded copy for every other field (edits are not rolled back)', () => {
-        const prev = [{ ...withChips(10, '2024-01-01T00:00:10Z', [chip('👍')]), Message: 'edited' }];
+        const prev = [{ ...withChips(10, '2024-01-01T00:00:10Z', [chip('👍')]), message: 'edited' }];
         const older = [withChips(10, '2024-01-01T00:00:10Z', [chip('👍')])];
-        expect(prependOlder(prev, older)[0]?.Message).toBe('edited');
+        expect(prependOlder(prev, older)[0]?.message).toBe('edited');
     });
 });

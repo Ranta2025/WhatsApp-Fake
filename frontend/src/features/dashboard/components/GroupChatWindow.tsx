@@ -78,11 +78,11 @@ interface GroupMessageBubbleProps {
 export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete, onReply, onDeleteForMe, menuOpen, setMenuOpen, status, onInfo, searchQuery, onReact, onMoreReactions, onShowReactions, onStickerFeedback }: GroupMessageBubbleProps) => {
     const triggerRef = useRef<HTMLButtonElement>(null);
     const bindLongPress = useLongPress<number>(setMenuOpen);
-    const myReaction = msg.Reactions?.find(r => r.Mine)?.Emoji;
+    const myReaction = msg.reactions?.find(r => r.mine)?.emoji;
 
-    const isMenuOpen = menuOpen === msg.MessageID;
-    const isSticker = msg.MediaType === 'sticker';
-    const stickerUrl = isSticker ? (msg.MediaUrl || msg.Message || '').trim() : '';
+    const isMenuOpen = menuOpen === msg.messageID;
+    const isSticker = msg.mediaType === 'sticker';
+    const stickerUrl = isSticker ? (msg.mediaUrl || msg.message || '').trim() : '';
     const builtinSticker = stickerUrl ? findBuiltinSticker(stickerUrl) : undefined;
     const isCustomSticker = isSticker && !builtinSticker && stickerUrl.startsWith('/storage/');
 
@@ -98,15 +98,15 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
     };
 
     return (
-        <div data-message-id={msg.MessageID} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group px-2 py-0.5`}>
+        <div data-message-id={msg.messageID} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group px-2 py-0.5`}>
             <div className={`relative max-w-[75%] min-w-[80px] ${isMine ? 'items-end' : 'items-start'} flex flex-col`}>
                 {/* Reply preview */}
-                {msg.ReplyToMessage && (
+                {msg.replyToMessage && (
                     <div className={`text-xs px-2 py-1 rounded-lg mb-1 border-l-2 ${isMine ? 'bg-indigo-800/40 border-indigo-400 self-end' : 'bg-slate-700/60 border-slate-500 self-start'}`}>
                         <span className="font-medium text-slate-300 truncate block max-w-[200px]">
                             {replySender}
                         </span>
-                        <span className="text-slate-400 truncate block max-w-[200px]">{replyPreviewText(msg.ReplyToMessage)}</span>
+                        <span className="text-slate-400 truncate block max-w-[200px]">{replyPreviewText(msg.replyToMessage)}</span>
                     </div>
                 )}
 
@@ -115,36 +115,36 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     isSticker
                         ? 'relative text-sm leading-relaxed break-words'
                         : `relative px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed break-words ${isMine ? 'bg-indigo-600 text-on-accent rounded-tr-sm' : 'bg-slate-800 text-slate-100 rounded-tl-sm'}`
-                } {...bindLongPress(msg.MessageID)}>
+                } {...bindLongPress(msg.messageID)}>
                     {/* Sender name for non-mine messages */}
                     {!isMine && (
                         <div className="text-xs font-semibold text-indigo-400 mb-0.5 truncate">
-                            {msg.SenderUsername || msg.SenderTelephon}
+                            {msg.senderUsername || msg.senderTelephon}
                         </div>
                     )}
 
                     <MediaContent message={msg} isMine={isMine} />
 
                     {/* Text (always show unless it's a pure media URL) */}
-                    {msg.Message && !(msg.MediaType && msg.Message === msg.MediaUrl) && (
-                        <span><HighlightedText text={msg.Message} query={searchQuery} /></span>
+                    {msg.message && !(msg.mediaType && msg.message === msg.mediaUrl) && (
+                        <span><HighlightedText text={msg.message} query={searchQuery} /></span>
                     )}
 
                     {/* Footer: time + edited — en stickers es una píldora aparte */}
                     {isSticker ? (
                         <div className={`mt-1 flex ${isMine ? 'justify-end' : ''}`}>
                             <div className="flex items-center gap-1 rounded-full bg-chip-strong px-2 py-0.5 text-[10px] text-pill-fg">
-                                {msg.Edited && <span>editado</span>}
-                                <ExpiryClock expiresAt={msg.ExpiresAt} />
-                                <span>{formatTime(msg.Time)}</span>
+                                {msg.edited && <span>editado</span>}
+                                <ExpiryClock expiresAt={msg.expiresAt} />
+                                <span>{formatTime(msg.time)}</span>
                                 {isMine && status && <MessageTicks status={status} />}
                             </div>
                         </div>
                     ) : (
                         <div className={`text-[10px] mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-200/70 justify-end' : 'text-slate-500'}`}>
-                            {msg.Edited && <span>editado</span>}
-                            <ExpiryClock expiresAt={msg.ExpiresAt} />
-                            <span>{formatTime(msg.Time)}</span>
+                            {msg.edited && <span>editado</span>}
+                            <ExpiryClock expiresAt={msg.expiresAt} />
+                            <span>{formatTime(msg.time)}</span>
                             {isMine && status && <MessageTicks status={status} />}
                         </div>
                     )}
@@ -152,7 +152,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
                     {/* Context menu button (hover; se mantiene visible mientras el menú está abierto o con foco por teclado) */}
                     <button
                         ref={triggerRef}
-                        onClick={(e) => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : msg.MessageID); }}
+                        onClick={(e) => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : msg.messageID); }}
                         className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'}
                             px-1 transition-opacity text-slate-400 hover:text-fg focus-visible:opacity-100
                             ${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
@@ -179,7 +179,7 @@ export const GroupMessageBubble = ({ msg, isMine, replySender, onEdit, onDelete,
 
                 {onReact && (
                     <ReactionChips
-                        reactions={msg.Reactions}
+                        reactions={msg.reactions}
                         onToggle={(emoji) => onReact(msg, emoji)}
                         onShowWho={() => onShowReactions?.(msg)}
                         align={isMine ? 'end' : 'start'}
@@ -302,7 +302,7 @@ interface GroupMessageListProps {
     searchQuery?: string;
 }
 
-/** Persisted system entries (`Kind: 'system'`) render as a centered notice; see lib/groupAdminEvents.ts. */
+/** Persisted system entries (`kind: 'system'`) render as a centered notice; see lib/groupAdminEvents.ts. */
 
 export const GroupMessageList = ({
     messages, myTelephon, activeWallpaper, groupID, hasMore, loadingOlder, onLoadOlder,
@@ -322,7 +322,7 @@ export const GroupMessageList = ({
     // El Info se ata al grupo en que se abrió: si cambia el grupo o el mensaje
     // ya no está en la lista (borrado), se descarta durante el render.
     const [info, setInfo] = useState<{ groupID: number | undefined; message: GroupMessageResponse } | null>(null);
-    if (info && (info.groupID !== groupID || !messages?.some(m => m.MessageID === info.message.MessageID))) {
+    if (info && (info.groupID !== groupID || !messages?.some(m => m.messageID === info.message.messageID))) {
         setInfo(null);
     }
     const infoMessage = info?.message ?? null;
@@ -342,7 +342,7 @@ export const GroupMessageList = ({
     const resolveSystemName = useCallback((telephon: string): string | undefined => {
         if (groupID === undefined) return undefined;
         return groupMemberNames?.[groupID]?.[telephon]
-            ?? selectedGroup?.Members?.find(m => m.Telephon === telephon)?.Username
+            ?? selectedGroup?.members?.find(m => m.telephon === telephon)?.username
             ?? undefined;
     }, [groupID, groupMemberNames, selectedGroup]);
 
@@ -351,8 +351,8 @@ export const GroupMessageList = ({
     useLoadOlderOnScroll({
         containerRef,
         chatKey: groupID,
-        firstKey: messages?.[0]?.MessageID,
-        lastKey: pendingItems.at(-1)?.entry.clientID ?? messages?.[messages.length - 1]?.MessageID,
+        firstKey: messages?.[0]?.messageID,
+        lastKey: pendingItems.at(-1)?.entry.clientID ?? messages?.[messages.length - 1]?.messageID,
         hasMore,
         loadingOlder,
         loadOlder: onLoadOlder,
@@ -388,7 +388,7 @@ export const GroupMessageList = ({
             {messages?.map((msg) => {
                 if (isSystemGroupMessage(msg)) {
                     return (
-                        <div key={msg.MessageID} className="flex justify-center py-1 px-4">
+                        <div key={msg.messageID} className="flex justify-center py-1 px-4">
                             <span className="bg-chip backdrop-blur-sm text-slate-300 text-xs px-3 py-1 rounded-full">
                                 {describeGroupSystemMessage(msg, myTelephon, resolveSystemName)}
                             </span>
@@ -397,24 +397,24 @@ export const GroupMessageList = ({
                 }
                 return (
                     <GroupMessageBubble
-                        key={msg.MessageID}
+                        key={msg.messageID}
                         msg={msg}
-                        isMine={msg.SenderTelephon === myTelephon}
-                        replySender={groupReplySenderLabel(msg.ReplyToTelephon, myTelephon, selectedGroup?.Members)}
+                        isMine={msg.senderTelephon === myTelephon}
+                        replySender={groupReplySenderLabel(msg.replyToTelephon, myTelephon, selectedGroup?.members)}
                         onEdit={handleEditMessage}
                         onDelete={handleDeleteMessage}
                         onReply={handleReplyToMessage}
                         onDeleteForMe={handleDeleteMessageForMe}
                         menuOpen={messageMenuOpen}
                         setMenuOpen={setMessageMenuOpen}
-                        status={msg.SenderTelephon === myTelephon
-                            ? deriveGroupMessageStatus(msg.MessageID, msg.SenderTelephon, groupID === undefined ? undefined : groupReceipts[groupID])
+                        status={msg.senderTelephon === myTelephon
+                            ? deriveGroupMessageStatus(msg.messageID, msg.senderTelephon, groupID === undefined ? undefined : groupReceipts[groupID])
                             : undefined}
                         onInfo={openInfo}
                         searchQuery={searchQuery}
-                        onReact={(m, emoji) => reactTo(m.MessageID, emoji)}
-                        onMoreReactions={(m) => setFullPicker({ groupID, messageID: m.MessageID })}
-                        onShowReactions={(m) => setWho({ groupID, messageID: m.MessageID })}
+                        onReact={(m, emoji) => reactTo(m.messageID, emoji)}
+                        onMoreReactions={(m) => setFullPicker({ groupID, messageID: m.messageID })}
+                        onShowReactions={(m) => setWho({ groupID, messageID: m.messageID })}
                         onStickerFeedback={(message, type) => addToast?.({ type, message })}
                     />
                 );
@@ -460,7 +460,7 @@ const AddMembersModal = ({ isOpen, onClose, group }: AddMembersModalProps) => {
     const [search, setSearch]     = useState('');
     const [loading, setLoading]   = useState(false);
 
-    const existingMembers = new Set((group?.Members || []).map(m => m.Telephon));
+    const existingMembers = new Set((group?.members || []).map(m => m.telephon));
     const candidates = contacts.filter(c =>
         c.status === 'accepted' &&
         !existingMembers.has(c.telephon) &&
@@ -481,7 +481,7 @@ const AddMembersModal = ({ isOpen, onClose, group }: AddMembersModalProps) => {
         setLoading(true);
         try {
             const { addGroupMembers } = await import('../../../api/groupApi');
-            await addGroupMembers(group.ID, Array.from(selected));
+            await addGroupMembers(group.id, Array.from(selected));
             addToast({ type: 'success', message: 'Miembros añadidos' });
             await fetchUserGroups();
             onClose();
@@ -597,11 +597,11 @@ const GroupChatWindowInner = () => {
         return () => window.removeEventListener('group-wallpaper-changed', onCustom);
     }, []);
 
-    const activeWallpaper = (selectedGroup && groupWallpapers[selectedGroup.ID]) || globalWallpaper || null;
+    const activeWallpaper = (selectedGroup && groupWallpapers[selectedGroup.id]) || globalWallpaper || null;
 
     const handleGroupWallpaperUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !selectedGroup?.ID) return;
+        if (!file || !selectedGroup?.id) return;
         setUploadingWallpaper(true);
         try {
             const formData = new FormData();
@@ -612,7 +612,7 @@ const GroupChatWindowInner = () => {
             // TODO(types): a body without `url` still reports success (pre-existing;
             // the entry is just not stored) — no toast/behavior change in this migration.
             const url = data?.url;
-            const newWps: GroupWallpapers = url ? { ...groupWallpapers, [selectedGroup.ID]: url } : { ...groupWallpapers };
+            const newWps: GroupWallpapers = url ? { ...groupWallpapers, [selectedGroup.id]: url } : { ...groupWallpapers };
             setGroupWallpapers(newWps);
             localStorage.setItem('group_wallpapers', JSON.stringify(newWps));
             window.dispatchEvent(new CustomEvent('group-wallpaper-changed', { detail: newWps }));
@@ -626,9 +626,9 @@ const GroupChatWindowInner = () => {
     };
 
     const handleRemoveGroupWallpaper = () => {
-        if (!selectedGroup?.ID) return;
+        if (!selectedGroup?.id) return;
         const newWps = { ...groupWallpapers };
-        delete newWps[selectedGroup.ID];
+        delete newWps[selectedGroup.id];
         setGroupWallpapers(newWps);
         localStorage.setItem('group_wallpapers', JSON.stringify(newWps));
         window.dispatchEvent(new CustomEvent('group-wallpaper-changed', { detail: newWps }));
@@ -645,7 +645,7 @@ const GroupChatWindowInner = () => {
 
     const handleClearChat = () => {
         if (!selectedGroup) return;
-        setGroupMessages(prev => ({ ...prev, [selectedGroup.ID]: [] }));
+        setGroupMessages(prev => ({ ...prev, [selectedGroup.id]: [] }));
         setConfirmClear(false);
         setShowOptions(false);
     };
@@ -655,11 +655,11 @@ const GroupChatWindowInner = () => {
         setLoadingLeave(true);
         try {
             const { leaveGroup } = await import('../../../api/groupApi');
-            await leaveGroup(selectedGroup.ID);
+            await leaveGroup(selectedGroup.id);
             // Mark as left: keep visible but read-only
-            const gid = selectedGroup.ID;
-            setGroups(prev => prev.map(g => g.ID === gid ? { ...g, UserRole: 'left' } : g));
-            setSelectedGroup(prev => prev ? { ...prev, UserRole: 'left' } : prev);
+            const gid = selectedGroup.id;
+            setGroups(prev => prev.map(g => g.id === gid ? { ...g, userRole: 'left' } : g));
+            setSelectedGroup(prev => prev ? { ...prev, userRole: 'left' } : prev);
             addToast({ type: 'success', message: 'Has salido del grupo' });
         } catch (err) {
             addToast({ type: 'error', message: getResponseError(err) || 'Error al salir del grupo' });
@@ -672,9 +672,9 @@ const GroupChatWindowInner = () => {
     const handleDeleteGroup = async () => {
         if (!selectedGroup) return;
         setLoadingLeave(true);
-        const gid = selectedGroup.ID;
+        const gid = selectedGroup.id;
         // Remove from local state immediately — UI closes right away
-        setGroups(prev => prev.filter(g => g.ID !== gid));
+        setGroups(prev => prev.filter(g => g.id !== gid));
         setGroupMessages(prev => { const n = { ...prev }; delete n[gid]; return n; });
         setSelectedGroup(null);
         setConfirmDelete(false);
@@ -691,7 +691,7 @@ const GroupChatWindowInner = () => {
 
     const handleGroupAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !selectedGroup?.ID) return;
+        if (!file || !selectedGroup?.id) return;
         setUploadingAvatar(true);
         try {
             // 1. Upload image to MinIO
@@ -705,12 +705,12 @@ const GroupChatWindowInner = () => {
 
             // 2. Update group avatar in DB + broadcast WS to all members
             const { updateGroupAvatar } = await import('../../../api/groupApi');
-            await updateGroupAvatar(selectedGroup.ID, avatarUrl);
+            await updateGroupAvatar(selectedGroup.id, avatarUrl);
 
             // 3. Update local state immediately (the requester won't get the WS event)
-            const gid = selectedGroup.ID;
-            setGroups(prev => prev.map(g => g.ID === gid ? { ...g, AvatarUrl: avatarUrl } : g));
-            setSelectedGroup(prev => prev ? { ...prev, AvatarUrl: avatarUrl } : prev);
+            const gid = selectedGroup.id;
+            setGroups(prev => prev.map(g => g.id === gid ? { ...g, avatarUrl: avatarUrl } : g));
+            setSelectedGroup(prev => prev ? { ...prev, avatarUrl: avatarUrl } : prev);
             addToast({ type: 'success', message: 'Foto del grupo actualizada' });
         } catch (err) {
             addToast({ type: 'error', message: getResponseError(err) || 'Error al actualizar la foto' });
@@ -721,9 +721,9 @@ const GroupChatWindowInner = () => {
     };
 
     const myTelephon = profile?.telephon;
-    const liveMessages = selectedGroup ? groupMessages[selectedGroup.ID] : undefined;
+    const liveMessages = selectedGroup ? groupMessages[selectedGroup.id] : undefined;
     // Ventana desprendida (abierta desde una búsqueda): se muestra en lugar de los últimos mensajes.
-    const focused = selectedGroup ? focusedGroup[selectedGroup.ID] : undefined;
+    const focused = selectedGroup ? focusedGroup[selectedGroup.id] : undefined;
     const messages: GroupMessageEntry[] = (focused ? composeFocusedMessages<GroupMessageEntry>(focused, liveMessages) : liveMessages) || [];
 
     const focusedTargetId = focused?.targetId;
@@ -734,7 +734,7 @@ const GroupChatWindowInner = () => {
     );
 
     // Búsqueda dentro del grupo (barra bajo la cabecera; salta a cada coincidencia)
-    const groupId = selectedGroup?.ID;
+    const groupId = selectedGroup?.id;
     const searchTarget = useMemo<FocusTarget | null>(
         () => (groupId !== undefined ? { kind: 'group', id: groupId } : null),
         [groupId],
@@ -745,27 +745,27 @@ const GroupChatWindowInner = () => {
     );
     const chatSearch = useChatSearch({ target: searchTarget, search: searchMessages, openMessageAt });
     // El backend solo busca para miembros activos: un grupo que ya abandonaste no se puede buscar.
-    const canSearch = selectedGroup?.UserRole !== 'left';
+    const canSearch = selectedGroup?.userRole !== 'left';
 
     // Group-specific typing keys: "group:<groupID>:<telephon>"
     const typingInGroup = selectedGroup
-        ? Array.from(typingUsers).filter(k => k.startsWith(`group:${selectedGroup.ID}:`))
+        ? Array.from(typingUsers).filter(k => k.startsWith(`group:${selectedGroup.id}:`))
         : [];
 
-    // Load full detail (members + messages) if not yet loaded or if Members are missing.
+    // Load full detail (members + messages) if not yet loaded or if members are missing.
     // La caché de mensajes se lee por ref: el efecto solo debe dispararse al cambiar de grupo.
     const groupMessagesRef = useRef(groupMessages);
     useEffect(() => { groupMessagesRef.current = groupMessages; }, [groupMessages]);
     useEffect(() => {
-        if (!selectedGroup?.ID) return;
-        if (!selectedGroup.Members) {
+        if (!selectedGroup?.id) return;
+        if (!selectedGroup.members) {
             // selectedGroup is a lightweight GroupResponse — load the full GroupDetail
-            fetchGroupDetail(selectedGroup.ID);
-        } else if (!groupMessagesRef.current[selectedGroup.ID]) {
+            fetchGroupDetail(selectedGroup.id);
+        } else if (!groupMessagesRef.current[selectedGroup.id]) {
             // Detail already loaded but no cached messages yet
-            fetchGroupMessages(selectedGroup.ID);
+            fetchGroupMessages(selectedGroup.id);
         }
-    }, [selectedGroup?.ID, selectedGroup?.Members, fetchGroupDetail, fetchGroupMessages]);
+    }, [selectedGroup?.id, selectedGroup?.members, fetchGroupDetail, fetchGroupMessages]);
 
     // Escape cierra, en orden, lo que esté "más arriba": el panel de info del
     // grupo, o los diálogos de confirmación / el visor de avatar (cada
@@ -789,30 +789,30 @@ const GroupChatWindowInner = () => {
 
     // Permisos del grupo para este espectador (matriz de lib/groupPermissions).
     // Hiding controls is convenience only: el backend valida cada camino.
-    const canManageMembersNow = canManageMembers(selectedGroup.UserRole);
-    const canAddMembersNow = canAddMembers(selectedGroup.UserRole, selectedGroup);
-    const canEditInfoNow = canEditInfo(selectedGroup.UserRole, selectedGroup);
+    const canManageMembersNow = canManageMembers(selectedGroup.userRole);
+    const canAddMembersNow = canAddMembers(selectedGroup.userRole, selectedGroup);
+    const canEditInfoNow = canEditInfo(selectedGroup.userRole, selectedGroup);
 
     const openEditInfo = () => {
-        setInfoName(selectedGroup.Name);
-        setInfoDescription(selectedGroup.Description ?? '');
+        setInfoName(selectedGroup.name);
+        setInfoDescription(selectedGroup.description ?? '');
         setEditingInfo(true);
     };
 
     const saveGroupInfo = async () => {
-        const gid = selectedGroup.ID;
+        const gid = selectedGroup.id;
         const patch: GroupInfoRequest = {};
         const nextName = infoName.trim();
         const nextDescription = infoDescription.trim();
-        if (nextName && nextName !== selectedGroup.Name) patch.name = nextName;
-        if (nextDescription !== (selectedGroup.Description ?? '')) patch.description = nextDescription;
+        if (nextName && nextName !== selectedGroup.name) patch.name = nextName;
+        if (nextDescription !== (selectedGroup.description ?? '')) patch.description = nextDescription;
         if (Object.keys(patch).length === 0) { setEditingInfo(false); return; }
         setSavingInfo(true);
         try {
             const { updateGroupInfo } = await import('../../../api/groupApi');
             const { data } = await updateGroupInfo(gid, patch);
-            setSelectedGroup(prev => (prev && prev.ID === gid ? { ...prev, Name: data.name, Description: data.description } : prev));
-            setGroups(prev => prev.map(g => (g.ID === gid ? { ...g, Name: data.name, Description: data.description } : g)));
+            setSelectedGroup(prev => (prev && prev.id === gid ? { ...prev, name: data.name, description: data.description } : prev));
+            setGroups(prev => prev.map(g => (g.id === gid ? { ...g, name: data.name, description: data.description } : g)));
             addToast({ type: 'success', message: 'Información del grupo actualizada' });
             setEditingInfo(false);
         } catch (err) {
@@ -823,13 +823,13 @@ const GroupChatWindowInner = () => {
     };
 
     const handleMemberRole = async (telephon: string, role: GroupRole, displayName: string) => {
-        const gid = selectedGroup.ID;
+        const gid = selectedGroup.id;
         setMemberMenuOpen(null);
         try {
             const { changeGroupMemberRole } = await import('../../../api/groupApi');
             await changeGroupMemberRole(gid, telephon, role);
-            setSelectedGroup(prev => (prev && prev.ID === gid
-                ? { ...prev, Members: prev.Members?.map(m => (m.Telephon === telephon ? { ...m, Role: role } : m)) }
+            setSelectedGroup(prev => (prev && prev.id === gid
+                ? { ...prev, members: prev.members?.map(m => (m.telephon === telephon ? { ...m, role: role } : m)) }
                 : prev));
             addToast({ type: 'success', message: role === 'admin' ? `${displayName} es admin` : `${displayName} ya no es admin` });
         } catch (err) {
@@ -839,20 +839,20 @@ const GroupChatWindowInner = () => {
 
     const handleRemoveMember = async () => {
         if (!confirmRemoveMember) return;
-        const gid = selectedGroup.ID;
+        const gid = selectedGroup.id;
         const { telephon } = confirmRemoveMember;
         setMemberActionLoading(true);
         try {
             const { removeGroupMember } = await import('../../../api/groupApi');
             await removeGroupMember(gid, telephon);
-            setSelectedGroup(prev => (prev && prev.ID === gid
+            setSelectedGroup(prev => (prev && prev.id === gid
                 ? {
                     ...prev,
-                    MemberCount: Math.max((prev.MemberCount || 1) - 1, 0),
-                    Members: prev.Members?.filter(m => m.Telephon !== telephon),
+                    memberCount: Math.max((prev.memberCount || 1) - 1, 0),
+                    members: prev.members?.filter(m => m.telephon !== telephon),
                 }
                 : prev));
-            setGroups(prev => prev.map(g => (g.ID === gid ? { ...g, MemberCount: Math.max((g.MemberCount || 1) - 1, 0) } : g)));
+            setGroups(prev => prev.map(g => (g.id === gid ? { ...g, memberCount: Math.max((g.memberCount || 1) - 1, 0) } : g)));
             addToast({ type: 'success', message: 'Miembro eliminado' });
             setConfirmRemoveMember(null);
         } catch (err) {
@@ -877,20 +877,20 @@ const GroupChatWindowInner = () => {
 
                 {/* Avatar */}
                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 rounded-full flex items-center justify-center font-bold text-on-accent text-lg flex-shrink-0 shadow overflow-hidden">
-                    {selectedGroup.AvatarUrl
-                        ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
-                        : selectedGroup.Name?.charAt(0)?.toUpperCase()
+                    {selectedGroup.avatarUrl
+                        ? <img src={selectedGroup.avatarUrl} alt="grupo" className="w-full h-full object-cover" />
+                        : selectedGroup.name?.charAt(0)?.toUpperCase()
                     }
                 </div>
 
                 {/* Info — click opens side panel */}
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setShowMembers(!showMembers)}>
-                    <div className="font-semibold text-slate-100 truncate">{selectedGroup.Name}</div>
+                    <div className="font-semibold text-slate-100 truncate">{selectedGroup.name}</div>
                     <div className="text-xs text-slate-400 truncate">
                         {typingInGroup.length > 0 ? (
                             <span className="text-indigo-400 italic animate-pulse">alguien está escribiendo...</span>
                         ) : (
-                            `${selectedGroup.MemberCount ?? '?'} miembros`
+                            `${selectedGroup.memberCount ?? '?'} miembros`
                         )}
                     </div>
                 </div>
@@ -919,13 +919,13 @@ const GroupChatWindowInner = () => {
                         </button>
                         {showOptions && (
                             <div role="menu" ref={optionsMenuRef} onKeyDown={onOptionsKeyDown} className="absolute right-0 top-full mt-1 bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[220px] z-dropdown">
-                                {selectedGroup.UserRole !== 'left' && (
+                                {selectedGroup.userRole !== 'left' && (
                                     <>
-                                        <MuteMenuItems key={selectedGroup.ID} target={{ kind: 'group', id: selectedGroup.ID }} onDone={() => setShowOptions(false)} />
+                                        <MuteMenuItems key={selectedGroup.id} target={{ kind: 'group', id: selectedGroup.id }} onDone={() => setShowOptions(false)} />
                                         <div className="border-t border-fg/5" />
                                     </>
                                 )}
-                                {selectedGroup?.UserRole !== 'left' && (
+                                {selectedGroup?.userRole !== 'left' && (
                                     <button type="button" role="menuitem" onClick={() => { setConfirmLeave(true); setShowOptions(false); }}
                                             className="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10 flex items-center gap-2">
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -989,11 +989,11 @@ const GroupChatWindowInner = () => {
                                         onClick={() => setShowAvatarMenu(v => !v)}
                                         className="relative w-24 h-24 rounded-full overflow-hidden shadow-xl focus:outline-none"
                                         aria-label="Foto del grupo"
-                                        disabled={uploadingAvatar || (!selectedGroup.AvatarUrl && !canEditInfoNow)}>
+                                        disabled={uploadingAvatar || (!selectedGroup.avatarUrl && !canEditInfoNow)}>
                                         <div className="w-full h-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-4xl font-bold text-on-accent">
-                                            {selectedGroup.AvatarUrl
-                                                ? <img src={selectedGroup.AvatarUrl} alt="grupo" className="w-full h-full object-cover" />
-                                                : selectedGroup.Name?.charAt(0)?.toUpperCase()
+                                            {selectedGroup.avatarUrl
+                                                ? <img src={selectedGroup.avatarUrl} alt="grupo" className="w-full h-full object-cover" />
+                                                : selectedGroup.name?.charAt(0)?.toUpperCase()
                                             }
                                         </div>
                                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
@@ -1020,7 +1020,7 @@ const GroupChatWindowInner = () => {
                                         anchorRef={avatarTriggerRef}
                                         className="w-44 bg-slate-800 border border-fg/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
                                     >
-                                        {selectedGroup.AvatarUrl && (
+                                        {selectedGroup.avatarUrl && (
                                             <button
                                                 onClick={() => { setViewAvatarOpen(true); setShowAvatarMenu(false); }}
                                                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-fg hover:bg-fg/10 transition-colors">
@@ -1086,7 +1086,7 @@ const GroupChatWindowInner = () => {
                                 ) : (
                                     <>
                                         <div className="flex items-center justify-center gap-2 mt-0">
-                                            <h2 className="text-xl font-bold text-fg text-center">{selectedGroup.Name}</h2>
+                                            <h2 className="text-xl font-bold text-fg text-center">{selectedGroup.name}</h2>
                                             {canEditInfoNow && (
                                                 <button onClick={openEditInfo} aria-label="Editar info del grupo"
                                                         className="p-1.5 text-slate-400 hover:text-fg rounded-full hover:bg-fg/10 transition-colors">
@@ -1096,17 +1096,17 @@ const GroupChatWindowInner = () => {
                                                 </button>
                                             )}
                                         </div>
-                                        {selectedGroup.Description && (
-                                            <p className="text-sm text-slate-400 text-center mt-1 max-w-xs">{selectedGroup.Description}</p>
+                                        {selectedGroup.description && (
+                                            <p className="text-sm text-slate-400 text-center mt-1 max-w-xs">{selectedGroup.description}</p>
                                         )}
                                     </>
                                 )}
                                 <p className="text-xs text-slate-500 mt-2">
-                                    Grupo · {selectedGroup.MemberCount ?? (selectedGroup.Members?.length ?? '?')} participantes
+                                    Grupo · {selectedGroup.memberCount ?? (selectedGroup.members?.length ?? '?')} participantes
                                 </p>
-                                {selectedGroup.CreatedAt && (
+                                {selectedGroup.createdAt && (
                                     <p className="text-xs text-slate-600 mt-0.5">
-                                        Creado el {new Date(selectedGroup.CreatedAt).toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                        Creado el {new Date(selectedGroup.createdAt).toLocaleDateString('es', { year: 'numeric', month: 'long', day: 'numeric' })}
                                     </p>
                                 )}
                             </div>
@@ -1116,9 +1116,9 @@ const GroupChatWindowInner = () => {
                             {/* Wallpaper section */}
                             <div className="px-5 py-4">
                                 <div className="text-xs text-indigo-300/70 mb-3 uppercase tracking-wider font-semibold">Fondo de este chat</div>
-                                {groupWallpapers[selectedGroup.ID] ? (
+                                {groupWallpapers[selectedGroup.id] ? (
                                     <div className="relative rounded-xl overflow-hidden h-28 mb-1">
-                                        <img src={groupWallpapers[selectedGroup.ID]} alt="fondo" className="w-full h-full object-cover" />
+                                        <img src={groupWallpapers[selectedGroup.id]} alt="fondo" className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 gap-2">
                                             <label className="cursor-pointer flex items-center gap-1 text-xs text-on-accent bg-on-accent/20 hover:bg-on-accent/30 backdrop-blur-sm px-2 py-1 rounded-lg transition-colors">
                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1150,16 +1150,16 @@ const GroupChatWindowInner = () => {
                                         <input type="file" accept="image/*" className="hidden" onChange={handleGroupWallpaperUpload} disabled={uploadingWallpaper} />
                                     </label>
                                 )}
-                                {!groupWallpapers[selectedGroup.ID] && globalWallpaper && (
+                                {!groupWallpapers[selectedGroup.id] && globalWallpaper && (
                                     <p className="text-xs text-indigo-300/50 mt-2 text-center">Usando fondo global</p>
                                 )}
                             </div>
 
-                            {/* Members list */}
+                            {/* members list */}
                             <div className="px-0 py-2">
                                 <div className="px-4 py-2 flex items-center justify-between">
                                     <span className="text-sm font-semibold text-slate-300">
-                                        {selectedGroup.Members?.length ?? selectedGroup.MemberCount ?? '?'} participantes
+                                        {selectedGroup.members?.length ?? selectedGroup.memberCount ?? '?'} participantes
                                     </span>
                                     {canAddMembersNow && (
                                         <button onClick={() => { setShowMembers(false); setShowAddMembers(true); }}
@@ -1172,29 +1172,29 @@ const GroupChatWindowInner = () => {
                                     )}
                                 </div>
 
-                                {selectedGroup.Members ? (
-                                    selectedGroup.Members.map((m) => {
-                                        const isSelf     = m.Telephon === myTelephon;
-                                        const isOpen     = memberMenuOpen === m.Telephon;
-                                        const isContact  = contacts.some(c => c.telephon === m.Telephon && c.status === 'accepted');
-                                        const displayName = isSelf ? 'Tú' : (m.ContactName || ('~' + m.Username));
+                                {selectedGroup.members ? (
+                                    selectedGroup.members.map((m) => {
+                                        const isSelf     = m.telephon === myTelephon;
+                                        const isOpen     = memberMenuOpen === m.telephon;
+                                        const isContact  = contacts.some(c => c.telephon === m.telephon && c.status === 'accepted');
+                                        const displayName = isSelf ? 'Tú' : (m.contactName || ('~' + m.username));
                                         return (
-                                            <div key={m.Telephon} className="relative">
+                                            <div key={m.telephon} className="relative">
                                                 <div
                                                     ref={(el) => {
                                                         // R3-refmap-unbounded: liberar la entrada al desmontarse
                                                         // (el === null), en vez de dejarla colgada para siempre.
-                                                        if (el) getMemberTriggerRef(m.Telephon).current = el;
-                                                        else getMemberTriggerRef.release(m.Telephon);
+                                                        if (el) getMemberTriggerRef(m.telephon).current = el;
+                                                        else getMemberTriggerRef.release(m.telephon);
                                                     }}
-                                                    onClick={() => !isSelf && setMemberMenuOpen(isOpen ? null : m.Telephon)}
+                                                    onClick={() => !isSelf && setMemberMenuOpen(isOpen ? null : m.telephon)}
                                                     className={`flex items-center gap-3 px-4 py-3 transition-colors ${!isSelf ? 'hover:bg-fg/5 cursor-pointer' : ''}`}>
                                                     {/* Avatar */}
                                                     <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-slate-600 to-slate-500 flex items-center justify-center text-base font-bold text-fg flex-shrink-0 overflow-hidden">
-                                                        {(isSelf ? myAvatar : avatarMap[m.Telephon]) ? (
-                                                            <img src={isSelf ? myAvatar : avatarMap[m.Telephon]} alt="" className="w-full h-full object-cover" />
+                                                        {(isSelf ? myAvatar : avatarMap[m.telephon]) ? (
+                                                            <img src={isSelf ? myAvatar : avatarMap[m.telephon]} alt="" className="w-full h-full object-cover" />
                                                         ) : (
-                                                            (m.Username || m.Telephon)?.charAt(0)?.toUpperCase()
+                                                            (m.username || m.telephon)?.charAt(0)?.toUpperCase()
                                                         )}
                                                     </div>
                                                     {/* Info */}
@@ -1203,11 +1203,11 @@ const GroupChatWindowInner = () => {
                                                             <span className={`font-medium truncate text-sm ${isSelf ? 'text-indigo-300' : 'text-slate-100'}`}>
                                                                 {displayName}
                                                             </span>
-                                                            {m.Role === 'admin' && (
+                                                            {m.role === 'admin' && (
                                                                 <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">admin</span>
                                                             )}
                                                         </div>
-                                                        <div className="text-xs text-slate-500 truncate mt-0.5">{m.Telephon}</div>
+                                                        <div className="text-xs text-slate-500 truncate mt-0.5">{m.telephon}</div>
                                                     </div>
                                                 </div>
                                                 {/* Menú de miembro — portado (Popover) para no quedar recortado
@@ -1216,11 +1216,11 @@ const GroupChatWindowInner = () => {
                                                 <Popover
                                                     open={isOpen}
                                                     onClose={() => setMemberMenuOpen(null)}
-                                                    anchorRef={getMemberTriggerRef(m.Telephon)}
+                                                    anchorRef={getMemberTriggerRef(m.telephon)}
                                                     className="bg-slate-800 border border-fg/10 rounded-xl shadow-xl overflow-hidden min-w-[190px]"
                                                 >
                                                     <button
-                                                        onClick={() => { setSelected({ telephon: m.Telephon, username: m.Username, contactName: m.ContactName || '', status: 'unknown' }); setShowMembers(false); setMemberMenuOpen(null); }}
+                                                        onClick={() => { setSelected({ telephon: m.telephon, username: m.username, contactName: m.contactName || '', status: 'unknown' }); setShowMembers(false); setMemberMenuOpen(null); }}
                                                         className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1229,7 +1229,7 @@ const GroupChatWindowInner = () => {
                                                     </button>
                                                     {!isContact && (
                                                         <button
-                                                            onClick={() => { setAddContactTarget({ number: m.Telephon, username: m.Username }); setAddContactOpen(true); setMemberMenuOpen(null); }}
+                                                            onClick={() => { setAddContactTarget({ number: m.telephon, username: m.username }); setAddContactOpen(true); setMemberMenuOpen(null); }}
                                                             className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -1240,8 +1240,8 @@ const GroupChatWindowInner = () => {
                                                     {canManageMembersNow && (
                                                         <>
                                                             <div className="border-t border-fg/5" />
-                                                            {m.Role === 'admin' ? (
-                                                                <button onClick={() => { void handleMemberRole(m.Telephon, 'member', m.ContactName || m.Username); }}
+                                                            {m.role === 'admin' ? (
+                                                                <button onClick={() => { void handleMemberRole(m.telephon, 'member', m.contactName || m.username); }}
                                                                         className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1249,7 +1249,7 @@ const GroupChatWindowInner = () => {
                                                                     Descartar como admin
                                                                 </button>
                                                             ) : (
-                                                                <button onClick={() => { void handleMemberRole(m.Telephon, 'admin', m.ContactName || m.Username); }}
+                                                                <button onClick={() => { void handleMemberRole(m.telephon, 'admin', m.contactName || m.username); }}
                                                                         className="w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-fg/10 flex items-center gap-2">
                                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z" />
@@ -1257,7 +1257,7 @@ const GroupChatWindowInner = () => {
                                                                     Designar como admin
                                                                 </button>
                                                             )}
-                                                            <button onClick={() => { setConfirmRemoveMember({ telephon: m.Telephon, username: m.ContactName || m.Username }); setMemberMenuOpen(null); }}
+                                                            <button onClick={() => { setConfirmRemoveMember({ telephon: m.telephon, username: m.contactName || m.username }); setMemberMenuOpen(null); }}
                                                                     className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
                                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
@@ -1285,7 +1285,7 @@ const GroupChatWindowInner = () => {
 
                             {/* Actions section */}
                             <div className="py-2">
-                                {selectedGroup?.UserRole !== 'left' && (
+                                {selectedGroup?.userRole !== 'left' && (
                                     <button onClick={() => { setShowMembers(false); setConfirmLeave(true); }}
                                             className="w-full flex items-center gap-4 px-5 py-3.5 text-amber-400 hover:bg-amber-500/10 transition-colors">
                                         <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1318,31 +1318,31 @@ const GroupChatWindowInner = () => {
             {/* slideInRight animation */}
             <style>{`@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
 
-            {/* ── Message list ── */}
+            {/* ── message list ── */}
             <div className="relative flex-1 min-h-0 flex flex-col">
                 <GroupMessageList
                     messages={messages}
                     myTelephon={myTelephon}
                     activeWallpaper={activeWallpaper}
-                    groupID={selectedGroup?.ID}
-                    hasMore={focused ? focused.hasMoreOlder : (selectedGroup ? (groupPaging[selectedGroup.ID]?.hasMore ?? false) : false)}
-                    loadingOlder={focused ? focused.loadingOlder : (selectedGroup ? (groupPaging[selectedGroup.ID]?.loadingOlder ?? false) : false)}
+                    groupID={selectedGroup?.id}
+                    hasMore={focused ? focused.hasMoreOlder : (selectedGroup ? (groupPaging[selectedGroup.id]?.hasMore ?? false) : false)}
+                    loadingOlder={focused ? focused.loadingOlder : (selectedGroup ? (groupPaging[selectedGroup.id]?.loadingOlder ?? false) : false)}
                     onLoadOlder={() => {
                         if (!selectedGroup) return;
                         return focused
-                            ? loadOlderFocused({ kind: 'group', id: selectedGroup.ID })
-                            : loadOlderGroupMessages(selectedGroup.ID);
+                            ? loadOlderFocused({ kind: 'group', id: selectedGroup.id })
+                            : loadOlderGroupMessages(selectedGroup.id);
                     }}
                     detached={!!focused}
                     hasMoreNewer={focused?.hasMoreNewer ?? false}
                     loadingNewer={focused?.loadingNewer ?? false}
-                    onLoadNewer={() => { if (selectedGroup) return loadNewerFocused({ kind: 'group', id: selectedGroup.ID }); }}
+                    onLoadNewer={() => { if (selectedGroup) return loadNewerFocused({ kind: 'group', id: selectedGroup.id }); }}
                     scrollTarget={scrollTarget}
                     searchQuery={chatSearch.activeQuery}
                 />
                 {focused && selectedGroup && (
                     <button
-                        onClick={() => returnToLatest({ kind: 'group', id: selectedGroup.ID })}
+                        onClick={() => returnToLatest({ kind: 'group', id: selectedGroup.id })}
                         className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-full glass shadow-lg text-sm font-medium text-slate-100 hover:bg-fg/10 transition-colors"
                         aria-label="Ir a los mensajes recientes"
                     >
@@ -1466,7 +1466,7 @@ const GroupChatWindowInner = () => {
             )}
 
             {/* ── Avatar full-screen lightbox ── */}
-            {viewAvatarOpen && selectedGroup.AvatarUrl && (
+            {viewAvatarOpen && selectedGroup.avatarUrl && (
                 <div className="fixed inset-0 z-modal bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
                      onClick={() => setViewAvatarOpen(false)}>
                     <button onClick={() => setViewAvatarOpen(false)}
@@ -1476,12 +1476,12 @@ const GroupChatWindowInner = () => {
                         </svg>
                     </button>
                     <img
-                        src={selectedGroup.AvatarUrl}
-                        alt={selectedGroup.Name}
+                        src={selectedGroup.avatarUrl}
+                        alt={selectedGroup.name}
                         className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain"
                         onClick={e => e.stopPropagation()}
                     />
-                    <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-on-accent/70 text-sm font-medium">{selectedGroup.Name}</p>
+                    <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-on-accent/70 text-sm font-medium">{selectedGroup.name}</p>
                 </div>
             )}
 

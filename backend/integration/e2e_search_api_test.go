@@ -52,7 +52,7 @@ func TestE2ESearchAPI(t *testing.T) {
 	require.Equal(t, 201, code)
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "Buscadores", "members": []string{bob.Telephon}})
 	require.Equal(t, 201, code, grp)
-	groupID := uint(grp["group"].(map[string]interface{})["ID"].(float64))
+	groupID := uint(grp["group"].(map[string]interface{})["id"].(float64))
 	require.NoError(t, db.Create(&models.GroupMessage{GroupID: groupID, SenderID: bob.ID, Message: "otra canción en el grupo", Time: now}).Error)
 
 	t.Run("chat search: shape, highlights, validation", func(t *testing.T) {

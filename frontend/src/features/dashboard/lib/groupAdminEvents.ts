@@ -64,25 +64,25 @@ const asSystemEvent = (value: unknown): GroupSystemEvent | undefined =>
  * simply skips the append instead of injecting garbage.
  */
 export function parseSystemMessage(raw: unknown): GroupMessageResponse | undefined {
-    if (!isRecord(raw) || raw.Kind !== 'system') return undefined;
-    const messageID = asPositiveInt(raw.MessageID);
-    const groupID = asPositiveInt(raw.GroupID);
-    const senderTelephon = asNonEmptyString(raw.SenderTelephon);
+    if (!isRecord(raw) || raw.kind !== 'system') return undefined;
+    const messageID = asPositiveInt(raw.messageID);
+    const groupID = asPositiveInt(raw.groupID);
+    const senderTelephon = asNonEmptyString(raw.senderTelephon);
     if (messageID === undefined || groupID === undefined || senderTelephon === undefined) return undefined;
-    const targets = Array.isArray(raw.SystemTargets)
-        ? raw.SystemTargets.filter((t): t is string => typeof t === 'string' && t !== '')
+    const targets = Array.isArray(raw.systemTargets)
+        ? raw.systemTargets.filter((t): t is string => typeof t === 'string' && t !== '')
         : [];
     return {
-        MessageID: messageID,
-        GroupID: groupID,
-        SenderTelephon: senderTelephon,
-        SenderUsername: typeof raw.SenderUsername === 'string' ? raw.SenderUsername : '',
-        Message: typeof raw.Message === 'string' ? raw.Message : '',
-        Time: typeof raw.Time === 'string' ? raw.Time : '',
-        Edited: raw.Edited === true,
-        Kind: 'system',
-        SystemEvent: asSystemEvent(raw.SystemEvent),
-        ...(targets.length > 0 ? { SystemTargets: targets } : {}),
+        messageID: messageID,
+        groupID: groupID,
+        senderTelephon: senderTelephon,
+        senderUsername: typeof raw.senderUsername === 'string' ? raw.senderUsername : '',
+        message: typeof raw.message === 'string' ? raw.message : '',
+        time: typeof raw.time === 'string' ? raw.time : '',
+        edited: raw.edited === true,
+        kind: 'system',
+        systemEvent: asSystemEvent(raw.systemEvent),
+        ...(targets.length > 0 ? { systemTargets: targets } : {}),
     };
 }
 
@@ -143,7 +143,7 @@ export function parseGroupInfo(payload: unknown): GroupInfoEvent | null {
 }
 
 /** True for a persisted system event (rendered as a centered notice, not a bubble). */
-export const isSystemGroupMessage = (msg: GroupMessageResponse): boolean => msg.Kind === 'system';
+export const isSystemGroupMessage = (msg: GroupMessageResponse): boolean => msg.kind === 'system';
 
 const joinNames = (names: string[]): string => {
     if (names.length === 0) return '';
@@ -163,15 +163,15 @@ export function describeGroupSystemMessage(
     viewerTelephon: string | undefined,
     resolveName: (telephon: string) => string | undefined,
 ): string {
-    const actor = msg.SenderTelephon;
+    const actor = msg.senderTelephon;
     const actorIsViewer = viewerTelephon !== undefined && actor === viewerTelephon;
-    const actorName = actorIsViewer ? 'Tú' : (msg.SenderUsername || resolveName(actor) || actor);
-    const targets = (msg.SystemTargets ?? []).filter(t => t !== '');
+    const actorName = actorIsViewer ? 'Tú' : (msg.senderUsername || resolveName(actor) || actor);
+    const targets = (msg.systemTargets ?? []).filter(t => t !== '');
     const viewerIsSoleTarget = viewerTelephon !== undefined
         && targets.length === 1 && targets[0] === viewerTelephon;
     const targetList = joinNames(targets.map(t => (t === viewerTelephon ? 'a ti' : (resolveName(t) || t))));
 
-    switch (msg.SystemEvent) {
+    switch (msg.systemEvent) {
         case 'member_added':
             if (actorIsViewer) return `Tú añadiste a ${targetList}`;
             if (viewerIsSoleTarget) return `${actorName} te añadió al grupo`;
@@ -190,7 +190,7 @@ export function describeGroupSystemMessage(
             return `${actorName} eliminó a ${targetList}`;
         case 'member_left':
             if (actorIsViewer) return 'Tú saliste del grupo';
-            return `${msg.SenderUsername || resolveName(actor) || actor} salió del grupo`;
+            return `${msg.senderUsername || resolveName(actor) || actor} salió del grupo`;
         case 'settings_changed':
             return actorIsViewer
                 ? 'Tú cambiaste la configuración del grupo'
@@ -201,7 +201,7 @@ export function describeGroupSystemMessage(
                 : `${actorName} actualizó la información del grupo`;
         case 'disappearing_changed':
             return describeDisappearingSystemText(
-                msg.Message, actor, msg.SenderUsername || resolveName(actor), viewerTelephon,
+                msg.message, actor, msg.senderUsername || resolveName(actor), viewerTelephon,
             );
         default:
             return 'Evento del grupo';

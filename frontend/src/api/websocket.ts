@@ -49,25 +49,18 @@ export type WsConnectionState = 'connected' | 'disconnected' | 'unauthorized' | 
 
 /**
  * Forma mínima que necesitan `sendMessage`/`sendGroupMessage` del mensaje al que
- * se responde. Acepta el 1:1 camel (`messageID`/`senderTelephon`/`message`) y el
- * grupo Pascal (`MessageID`/`SenderTelephon`/`Message`) mientras dura el corte
- * por dominios (AC4/AC5); también el `OutboxReplyRef` camel persistido.
+ * se responde. 1:1 y grupo hablan camelCase tras AC4/AC5, igual que el
+ * `OutboxReplyRef` camel persistido.
  */
 export interface ReplySource {
-    MessageID?: number;
     messageID?: number;
-    SenderTelephon?: string;
     senderTelephon?: string;
-    Message?: string;
     message?: string;
 }
 
-const replyMessageId = (r: ReplySource): number | undefined =>
-    r.messageID !== undefined ? r.messageID : r.MessageID;
-const replySender = (r: ReplySource): string | undefined =>
-    r.senderTelephon !== undefined ? r.senderTelephon : r.SenderTelephon;
-const replyText = (r: ReplySource): string | undefined =>
-    r.message !== undefined ? r.message : r.Message;
+const replyMessageId = (r: ReplySource): number | undefined => r.messageID;
+const replySender = (r: ReplySource): string | undefined => r.senderTelephon;
+const replyText = (r: ReplySource): string | undefined => r.message;
 
 interface WsTicketResponse {
     ticket: string;

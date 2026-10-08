@@ -18,8 +18,8 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUpdateGroupSettings = vi.mocked(updateGroupSettings);
 
 const group = (over: Partial<SelectedGroup> = {}): SelectedGroup => ({
-    ID: 5, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'admin', CreatedAt: '2026-01-01T00:00:00Z',
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
+    id: 5, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'admin', createdAt: '2026-01-01T00:00:00Z',
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
     ...over,
 });
 
@@ -79,7 +79,7 @@ describe('GroupSettingsSection', () => {
     });
 
     it('non-admin: read-only values, no toggles', () => {
-        render({ UserRole: 'member', OnlyAdminsCanSend: true, OnlyAdminsCanEditInfo: false });
+        render({ userRole: 'member', onlyAdminsCanSend: true, onlyAdminsCanEditInfo: false });
         expect(row('group-setting-send')?.querySelectorAll('button').length).toBe(0);
         expect(row('group-setting-send')?.textContent).toContain('Solo admins');
         expect(row('group-setting-edit')?.textContent).toContain('Todos');

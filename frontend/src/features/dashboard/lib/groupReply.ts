@@ -2,7 +2,7 @@ import type { GroupMemberResponse } from '../../../types/api';
 
 /**
  * Sender label for a group message's reply preview. The backend only sends
- * `ReplyToTelephon` (never a sender name), so it is resolved against the
+ * `replyToTelephon` (never a sender name), so it is resolved against the
  * group's members; the telephon itself is the last resort.
  */
 export function groupReplySenderLabel(
@@ -12,5 +12,5 @@ export function groupReplySenderLabel(
 ): string {
     if (!replyToTelephon) return '';
     if (replyToTelephon === myTelephon) return 'Tú';
-    return members?.find(m => m.Telephon === replyToTelephon)?.Username || replyToTelephon;
+    return members?.find(m => m.telephon === replyToTelephon)?.username || replyToTelephon;
 }

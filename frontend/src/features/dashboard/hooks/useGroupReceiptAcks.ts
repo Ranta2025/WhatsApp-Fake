@@ -11,7 +11,7 @@ interface UseGroupReceiptAcksArgs {
     isConnected: boolean;
     /** Grupo abierto en pantalla (null si no hay o ya se salió de él). */
     openGroupId: number | null;
-    openGroupMessages: ReadonlyArray<{ MessageID: number | string }> | undefined;
+    openGroupMessages: ReadonlyArray<{ messageID: number | string }> | undefined;
     sendGroupDelivered: (groupID: number, messageID: number) => boolean;
     sendGroupRead: (groupID: number, upToMessageID: number) => boolean;
 }

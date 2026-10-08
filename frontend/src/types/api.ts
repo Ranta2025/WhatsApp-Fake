@@ -89,13 +89,13 @@ export interface ContactChat {
 
 /**
  * Agregado de reacciones de un mensaje tal como lo ve el espectador
- * (backend/schemas/schemaReaction.go, PascalCase dentro de Message /
- * GroupMessageResponse). `Mine` indica si el espectador es uno de los `Count`.
+ * (backend/schemas/schemaReaction.go, camelCase). `mine` indica si el
+ * espectador es uno de los `count`.
  */
 export interface ReactionSummary {
-  Emoji: string;
-  Count: number;
-  Mine: boolean;
+  emoji: string;
+  count: number;
+  mine: boolean;
 }
 
 /** Usuario que reaccionó (GET .../reactions, camelCase). */
@@ -161,62 +161,62 @@ export interface ChatGroup {
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface GroupResponse {
-  ID: number;
-  Name: string;
-  Description?: string;
-  AvatarUrl?: string;
-  CreatorTelephon: string;
-  MemberCount: number;
-  UserRole: GroupRole;
-  CreatedAt: string;
-  /** Permisos del grupo (PascalCase, backend schemaGroup.go). false = abierto (default). */
-  OnlyAdminsCanSend: boolean;
-  OnlyAdminsCanEditInfo: boolean;
-  OnlyAdminsCanAddMembers: boolean;
+  id: number;
+  name: string;
+  description?: string;
+  avatarUrl?: string;
+  creatorTelephon: string;
+  memberCount: number;
+  userRole: GroupRole;
+  createdAt: string;
+  /** Permisos del grupo (camelCase, backend schemaGroup.go). false = abierto (default). */
+  onlyAdminsCanSend: boolean;
+  onlyAdminsCanEditInfo: boolean;
+  onlyAdminsCanAddMembers: boolean;
   /** Temporizador de mensajes temporales en segundos (omitempty: ausente = 0). */
-  DisappearSeconds?: number;
-  /** Silencio por chat (omitempty): ausente = no silenciado; true sin MutedUntil = "Siempre". */
-  Muted?: boolean;
-  /** RFC 3339 UTC; el cliente trata `MutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
-  MutedUntil?: string;
+  disappearSeconds?: number;
+  /** Silencio por chat (omitempty): ausente = no silenciado; true sin mutedUntil = "Siempre". */
+  muted?: boolean;
+  /** RFC 3339 UTC; el cliente trata `mutedUntil <= ahora` como no silenciado (la lista puede estar desfasada). */
+  mutedUntil?: string;
 }
 
 export interface GroupMemberResponse {
-  Telephon: string;
-  Username: string;
-  AvatarUrl?: string;
-  Role: GroupRole;
-  ContactName?: string;
+  telephon: string;
+  username: string;
+  avatarUrl?: string;
+  role: GroupRole;
+  contactName?: string;
   /** Marcas de agua de acuses (ids de mensaje dentro del grupo); ausentes = 0. */
-  JoinedMessageID?: number;
-  LastDeliveredMessageID?: number;
-  LastReadMessageID?: number;
+  joinedMessageID?: number;
+  lastDeliveredMessageID?: number;
+  lastReadMessageID?: number;
 }
 
 export interface GroupMessageResponse {
-  MessageID: number;
-  GroupID: number;
-  SenderTelephon: string;
-  SenderUsername: string;
-  Message: string;
-  Time: string;
-  Edited: boolean;
-  MediaUrl?: string;
-  MediaType?: MediaType;
-  ReplyToMessageID?: number;
-  ReplyToTelephon?: string;
-  ReplyToMessage?: string;
+  messageID: number;
+  groupID: number;
+  senderTelephon: string;
+  senderUsername: string;
+  message: string;
+  time: string;
+  edited: boolean;
+  mediaUrl?: string;
+  mediaType?: MediaType;
+  replyToMessageID?: number;
+  replyToTelephon?: string;
+  replyToMessage?: string;
   /** Presente solo en eventos de sistema persistidos (backend omitempty). */
-  Kind?: GroupMessageKind;
-  SystemEvent?: GroupSystemEvent;
+  kind?: GroupMessageKind;
+  systemEvent?: GroupSystemEvent;
   /** Teléfonos afectados por el evento, para redactar por espectador. */
-  SystemTargets?: string[];
+  systemTargets?: string[];
   /** Omitido por el backend cuando no hay reacciones (omitempty). */
-  Reactions?: ReactionSummary[];
+  reactions?: ReactionSummary[];
   /** RFC 3339; solo si el grupo tenía temporizador al enviar (omitempty). Inválido = ignorado. */
-  ExpiresAt?: string;
+  expiresAt?: string;
   /** Sender's idempotency key echoed back (omitempty); untrusted, read via readClientID. */
-  ClientID?: string;
+  clientID?: string;
 }
 
 /** Ficha mínima de un miembro en la lista de acuses (camelCase, ver schemaGroup.go). */
@@ -237,8 +237,8 @@ export interface GroupMessageReceipts {
 
 /** GET /api/v1/group/:groupID */
 export interface GroupDetail extends GroupResponse {
-  Members: GroupMemberResponse[];
-  Messages: GroupMessageResponse[];
+  members: GroupMemberResponse[];
+  messages: GroupMessageResponse[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────

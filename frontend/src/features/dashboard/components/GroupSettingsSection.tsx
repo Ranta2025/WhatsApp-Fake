@@ -48,7 +48,7 @@ export const GroupPermissionToggle = ({ label, value, onChange, testId }: GroupP
     );
 };
 
-type SettingKey = 'OnlyAdminsCanSend' | 'OnlyAdminsCanEditInfo' | 'OnlyAdminsCanAddMembers';
+type SettingKey = 'onlyAdminsCanSend' | 'onlyAdminsCanEditInfo' | 'onlyAdminsCanAddMembers';
 
 interface SettingRow {
     key: SettingKey;
@@ -58,9 +58,9 @@ interface SettingRow {
 }
 
 const ROWS: readonly SettingRow[] = [
-    { key: 'OnlyAdminsCanSend', label: 'Enviar mensajes', testId: 'group-setting-send', patch: next => ({ onlyAdminsCanSend: next }) },
-    { key: 'OnlyAdminsCanEditInfo', label: 'Editar info del grupo', testId: 'group-setting-edit', patch: next => ({ onlyAdminsCanEditInfo: next }) },
-    { key: 'OnlyAdminsCanAddMembers', label: 'Agregar otros participantes', testId: 'group-setting-add', patch: next => ({ onlyAdminsCanAddMembers: next }) },
+    { key: 'onlyAdminsCanSend', label: 'Enviar mensajes', testId: 'group-setting-send', patch: next => ({ onlyAdminsCanSend: next }) },
+    { key: 'onlyAdminsCanEditInfo', label: 'Editar info del grupo', testId: 'group-setting-edit', patch: next => ({ onlyAdminsCanEditInfo: next }) },
+    { key: 'onlyAdminsCanAddMembers', label: 'Agregar otros participantes', testId: 'group-setting-add', patch: next => ({ onlyAdminsCanAddMembers: next }) },
 ];
 
 /**
@@ -72,14 +72,14 @@ const GroupSettingsSection = () => {
     const { selectedGroup, setSelectedGroup, setGroups, addToast } = useDashboard();
     if (!selectedGroup) return null;
 
-    const canEdit = canChangeSettings(selectedGroup.UserRole);
+    const canEdit = canChangeSettings(selectedGroup.userRole);
 
     const update = async (row: SettingRow, next: boolean) => {
-        const groupID = selectedGroup.ID;
+        const groupID = selectedGroup.id;
         try {
             await updateGroupSettings(groupID, row.patch(next));
-            setSelectedGroup(prev => (prev?.ID === groupID ? { ...prev, [row.key]: next } : prev));
-            setGroups(prev => prev.map(g => (g.ID === groupID ? { ...g, [row.key]: next } : g)));
+            setSelectedGroup(prev => (prev?.id === groupID ? { ...prev, [row.key]: next } : prev));
+            setGroups(prev => prev.map(g => (g.id === groupID ? { ...g, [row.key]: next } : g)));
             addToast({ type: 'success', message: 'Configuración actualizada' });
         } catch (err) {
             addToast({ type: 'error', message: getResponseError(err) || 'No se pudo actualizar la configuración' });

@@ -238,7 +238,7 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		"members": []string{luis.Telephon},
 	})
 	require.Equal(t, 201, code, body)
-	groupID := int(body["group"].(map[string]interface{})["ID"].(float64))
+	groupID := int(body["group"].(map[string]interface{})["id"].(float64))
 	gPath := fmt.Sprintf("/api/v1/group/%d/disappearing", groupID)
 
 	t.Run("grupo: miembro permitido con info abierta; inválido 400", func(t *testing.T) {
@@ -262,8 +262,8 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		require.Equal(t, 200, code, out)
 		sm, ok := out["systemMessage"].(map[string]interface{})
 		require.True(t, ok, out)
-		assert.Equal(t, models.SystemEventDisappearingChanged, sm["SystemEvent"])
-		assert.Equal(t, "86400", sm["Message"])
+		assert.Equal(t, models.SystemEventDisappearingChanged, sm["systemEvent"])
+		assert.Equal(t, "86400", sm["message"])
 
 		// mismo valor: no-op
 		code, out = ca.do("PUT", gPath, map[string]int{"seconds": 86400})
@@ -274,10 +274,10 @@ func TestE2EDisappearingMessages(t *testing.T) {
 	t.Run("grupo: detalle y lista muestran DisappearSeconds; el mensaje nuevo expira", func(t *testing.T) {
 		code, detail := ca.do("GET", fmt.Sprintf("/api/v1/group/%d", groupID), nil)
 		require.Equal(t, 200, code, detail)
-		assert.EqualValues(t, 86400, detail["DisappearSeconds"])
+		assert.EqualValues(t, 86400, detail["disappearSeconds"])
 		events := 0
-		for _, item := range detail["Messages"].([]interface{}) {
-			if item.(map[string]interface{})["SystemEvent"] == models.SystemEventDisappearingChanged {
+		for _, item := range detail["messages"].([]interface{}) {
+			if item.(map[string]interface{})["systemEvent"] == models.SystemEventDisappearingChanged {
 				events++
 			}
 		}
@@ -288,9 +288,9 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		found := false
 		for _, item := range list["groups"].([]interface{}) {
 			g := item.(map[string]interface{})
-			if int(g["ID"].(float64)) == groupID {
+			if int(g["id"].(float64)) == groupID {
 				found = true
-				assert.EqualValues(t, 86400, g["DisappearSeconds"])
+				assert.EqualValues(t, 86400, g["disappearSeconds"])
 			}
 		}
 		assert.True(t, found)
@@ -298,7 +298,7 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		code, out := cl.do("POST", fmt.Sprintf("/api/v1/group/%d/message", groupID), map[string]string{"message": "hola temporal"})
 		require.Equal(t, 201, code, out)
 		msg := out["message"].(map[string]interface{})
-		raw, ok := msg["ExpiresAt"].(string)
+		raw, ok := msg["expiresAt"].(string)
 		require.True(t, ok, "ExpiresAt presente: %v", msg)
 		exp, err := time.Parse(time.RFC3339Nano, raw)
 		require.NoError(t, err)
@@ -308,7 +308,7 @@ func TestE2EDisappearingMessages(t *testing.T) {
 	t.Run("grupo: el mensaje de sistema no aparece en la búsqueda del grupo", func(t *testing.T) {
 		code, out := cl.do("POST", fmt.Sprintf("/api/v1/group/%d/message", groupID), map[string]string{"message": fmt.Sprintf("control86400 %d", suffix)})
 		require.Equal(t, 201, code, out)
-		ctlID := out["message"].(map[string]interface{})["MessageID"]
+		ctlID := out["message"].(map[string]interface{})["messageID"]
 
 		code, out = ca.do("GET", fmt.Sprintf("/api/v1/group/%d/message/search?q=86400", groupID), nil)
 		require.Equal(t, 200, code, out)
@@ -455,10 +455,10 @@ func TestE2EDisappearingMessages(t *testing.T) {
 		}
 		code, out := post(ca, "gvigente"+tag, nil)
 		require.Equal(t, 201, code, out)
-		liveID := out["message"].(map[string]interface{})["MessageID"].(float64)
+		liveID := out["message"].(map[string]interface{})["messageID"].(float64)
 		code, out = post(ca, "gcaducado"+tag, nil)
 		require.Equal(t, 201, code, out)
-		goneID := out["message"].(map[string]interface{})["MessageID"].(float64)
+		goneID := out["message"].(map[string]interface{})["messageID"].(float64)
 		gBase := fmt.Sprintf("/api/v1/group/%d", groupID)
 		msgsOf := func(path string) []interface{} {
 			code, out := ca.do("GET", path, nil)
@@ -491,24 +491,24 @@ func TestE2EDisappearingMessages(t *testing.T) {
 
 		expire(&models.GroupMessage{}, goneID)
 
-		assert.True(t, deHasID(t, msgsOf(gBase+"/message"), "MessageID", liveID), "el vigente sigue en la página")
-		assert.False(t, deHasID(t, msgsOf(gBase+"/message"), "MessageID", goneID), "página")
-		assert.False(t, deHasID(t, msgsOf(fmt.Sprintf("%s/message?before=%d", gBase, int(liveID)+1)), "MessageID", goneID), "página con cursor")
+		assert.True(t, deHasID(t, msgsOf(gBase+"/message"), "messageID", liveID), "el vigente sigue en la página")
+		assert.False(t, deHasID(t, msgsOf(gBase+"/message"), "messageID", goneID), "página")
+		assert.False(t, deHasID(t, msgsOf(fmt.Sprintf("%s/message?before=%d", gBase, int(liveID)+1)), "messageID", goneID), "página con cursor")
 		code, out = ca.do("GET", fmt.Sprintf("%s/message?around=%d", gBase, int(goneID)), nil)
 		assert.Equal(t, 404, code, "around de un vencido: 404: %v", out)
 		around := msgsOf(fmt.Sprintf("%s/message?around=%d", gBase, int(liveID)))
-		assert.True(t, deHasID(t, around, "MessageID", liveID))
-		assert.False(t, deHasID(t, around, "MessageID", goneID), "around del vigente")
+		assert.True(t, deHasID(t, around, "messageID", liveID))
+		assert.False(t, deHasID(t, around, "messageID", goneID), "around del vigente")
 		after := msgsOf(fmt.Sprintf("%s/message?after=%d", gBase, int(liveID)-1))
-		assert.True(t, deHasID(t, after, "MessageID", liveID))
-		assert.False(t, deHasID(t, after, "MessageID", goneID), "after")
+		assert.True(t, deHasID(t, after, "messageID", liveID))
+		assert.False(t, deHasID(t, after, "messageID", goneID), "after")
 
 		code, detail := ca.do("GET", gBase, nil)
 		require.Equal(t, 200, code, detail)
-		items, ok := detail["Messages"].([]interface{})
+		items, ok := detail["messages"].([]interface{})
 		require.True(t, ok, "detalle con Messages[]: %v", detail)
-		assert.True(t, deHasID(t, items, "MessageID", liveID))
-		assert.False(t, deHasID(t, items, "MessageID", goneID), "detalle del grupo")
+		assert.True(t, deHasID(t, items, "messageID", liveID))
+		assert.False(t, deHasID(t, items, "messageID", goneID), "detalle del grupo")
 
 		d, g = searchGone()
 		assert.Equal(t, 0, d, "búsqueda del grupo")

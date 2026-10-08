@@ -2,7 +2,7 @@
  * Group read-receipt state (marcas de agua por miembro).
  *
  * The backend keeps, per member, the highest group message id delivered/read
- * (`LastDeliveredMessageID` / `LastReadMessageID`) plus `JoinedMessageID`
+ * (`lastDeliveredMessageID` / `lastReadMessageID`) plus `joinedMessageID`
  * (max message id when the member joined). Message ids are global serials, so
  * they are only comparable inside one group. Marks only ever advance.
  */
@@ -36,11 +36,11 @@ export function marksFromMembers(members: readonly GroupMemberResponse[] | null 
     const out: GroupReceiptMarks = {};
     if (!Array.isArray(members)) return out;
     for (const m of members) {
-        if (!m || typeof m.Telephon !== 'string' || m.Telephon === '') continue;
-        out[m.Telephon] = {
-            joined: mark(m.JoinedMessageID),
-            delivered: mark(m.LastDeliveredMessageID),
-            read: mark(m.LastReadMessageID),
+        if (!m || typeof m.telephon !== 'string' || m.telephon === '') continue;
+        out[m.telephon] = {
+            joined: mark(m.joinedMessageID),
+            delivered: mark(m.lastDeliveredMessageID),
+            read: mark(m.lastReadMessageID),
         };
     }
     return out;
@@ -96,14 +96,13 @@ export function applyReceiptEvent(state: GroupReceiptsState, event: GroupReceipt
     };
 }
 
-/** Highest real (numeric) message id; synthetic client-only entries use string ids.
- * Acepta el 1:1 camel (`messageID`) y el grupo Pascal (`MessageID`). */
+/** Highest real (numeric) message id; synthetic client-only entries use string ids. */
 export function latestRealMessageId(
-    messages: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined,
+    messages: ReadonlyArray<{ messageID?: number | string }> | undefined,
 ): number {
     let max = 0;
     for (const m of messages ?? []) {
-        const id = m.messageID !== undefined ? m.messageID : m.MessageID;
+        const id = m.messageID;
         if (typeof id === 'number' && Number.isFinite(id) && id > max) max = id;
     }
     return max;

@@ -30,14 +30,14 @@ export async function postGroupMessage(request: APIRequestContext, groupID: numb
 }
 
 interface GroupSummary {
-  ID: number;
-  Name: string;
+  id: number;
+  name: string;
 }
 
 function isGroupSummary(value: unknown): value is GroupSummary {
   if (typeof value !== 'object' || value === null) return false;
-  const g = value as { ID?: unknown; Name?: unknown };
-  return typeof g.ID === 'number' && typeof g.Name === 'string';
+  const g = value as { id?: unknown; name?: unknown };
+  return typeof g.id === 'number' && typeof g.name === 'string';
 }
 
 // Id de un grupo del usuario por nombre exacto.
@@ -46,9 +46,9 @@ export async function groupIdByName(request: APIRequestContext, name: string): P
   expect(res.ok()).toBeTruthy();
   const body: unknown = await res.json();
   const groups = typeof body === 'object' && body !== null ? (body as { groups?: unknown }).groups : undefined;
-  const found = Array.isArray(groups) ? groups.filter(isGroupSummary).find((g) => g.Name === name) : undefined;
+  const found = Array.isArray(groups) ? groups.filter(isGroupSummary).find((g) => g.name === name) : undefined;
   if (!found) throw new Error(`grupo "${name}" no encontrado`);
-  return found.ID;
+  return found.id;
 }
 
 // Optional permission settings accepted by POST /api/v1/group (all default to open).
@@ -69,8 +69,8 @@ export async function createGroup(
   expect(res.status(), `POST /api/v1/group "${name}"`).toBe(201);
   const body: unknown = await res.json();
   const group = typeof body === 'object' && body !== null ? (body as { group?: unknown }).group : undefined;
-  if (!isGroupSummary(group)) throw new Error('POST /api/v1/group sin "group.ID"');
-  return group.ID;
+  if (!isGroupSummary(group)) throw new Error('POST /api/v1/group sin "group.id"');
+  return group.id;
 }
 
 interface GlobalSearchChat {

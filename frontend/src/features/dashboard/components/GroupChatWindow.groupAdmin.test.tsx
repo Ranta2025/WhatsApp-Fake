@@ -36,11 +36,11 @@ const mockChangeRole = vi.mocked(changeGroupMemberRole);
 const mockRemoveMember = vi.mocked(removeGroupMember);
 
 const group = (over: Partial<SelectedGroup> = {}): SelectedGroup => ({
-    ID: 5, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'admin', CreatedAt: '2026-01-01T00:00:00Z',
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
-    Members: [
-        { Telephon: '111', Username: 'ana', Role: 'admin' },
-        { Telephon: '222', Username: 'luis', Role: 'member' },
+    id: 5, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'admin', createdAt: '2026-01-01T00:00:00Z',
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
+    members: [
+        { telephon: '111', username: 'ana', role: 'admin' },
+        { telephon: '222', username: 'luis', role: 'member' },
     ],
     ...over,
 });
@@ -113,9 +113,9 @@ describe('GroupChatWindow admin controls', () => {
     });
 
     it('admin sees "Descartar como admin" on an admin', () => {
-        render({ Members: [
-            { Telephon: '111', Username: 'ana', Role: 'admin' },
-            { Telephon: '222', Username: 'luis', Role: 'admin' },
+        render({ members: [
+            { telephon: '111', username: 'ana', role: 'admin' },
+            { telephon: '222', username: 'luis', role: 'admin' },
         ] });
         openPanel();
         openMemberMenu('luis');
@@ -136,7 +136,7 @@ describe('GroupChatWindow admin controls', () => {
     });
 
     it('a plain member gets no admin actions', () => {
-        render({ UserRole: 'member' });
+        render({ userRole: 'member' });
         openPanel();
         openMemberMenu('luis');
         expect(portalButton('Designar como admin')).toBeUndefined();
@@ -144,19 +144,19 @@ describe('GroupChatWindow admin controls', () => {
     });
 
     it('"Añadir" is hidden when the group restricts adding to admins', () => {
-        render({ UserRole: 'member', OnlyAdminsCanAddMembers: true });
+        render({ userRole: 'member', onlyAdminsCanAddMembers: true });
         openPanel();
         expect(Array.from(container.querySelectorAll('button')).some(b => b.textContent === 'Añadir')).toBe(false);
     });
 
     it('"Añadir" is visible when open to everyone', () => {
-        render({ UserRole: 'member', OnlyAdminsCanAddMembers: false });
+        render({ userRole: 'member', onlyAdminsCanAddMembers: false });
         openPanel();
         expect(Array.from(container.querySelectorAll('button')).some(b => b.textContent === 'Añadir')).toBe(true);
     });
 
     it('"Cambiar foto" is hidden when info editing is restricted to admins', () => {
-        render({ UserRole: 'member', OnlyAdminsCanEditInfo: true, AvatarUrl: '/storage/g.png' });
+        render({ userRole: 'member', onlyAdminsCanEditInfo: true, avatarUrl: '/storage/g.png' });
         openPanel();
         act(() => { container.querySelector<HTMLButtonElement>('button[aria-label="Foto del grupo"]')?.click(); });
         expect(portalLabel('Cambiar foto')).toBeUndefined();
@@ -164,14 +164,14 @@ describe('GroupChatWindow admin controls', () => {
     });
 
     it('"Cambiar foto" is visible to a member who may edit info', () => {
-        render({ UserRole: 'member', OnlyAdminsCanEditInfo: false, AvatarUrl: '/storage/g.png' });
+        render({ userRole: 'member', onlyAdminsCanEditInfo: false, avatarUrl: '/storage/g.png' });
         openPanel();
         act(() => { container.querySelector<HTMLButtonElement>('button[aria-label="Foto del grupo"]')?.click(); });
         expect(portalLabel('Cambiar foto')).toBeDefined();
     });
 
     it('the info edit affordance follows canEditInfo', () => {
-        render({ UserRole: 'member', OnlyAdminsCanEditInfo: true });
+        render({ userRole: 'member', onlyAdminsCanEditInfo: true });
         openPanel();
         expect(container.querySelector('button[aria-label="Editar info del grupo"]')).toBeNull();
 
@@ -180,7 +180,7 @@ describe('GroupChatWindow admin controls', () => {
         container = document.createElement('div');
         document.body.appendChild(container);
         root = createRoot(container);
-        render({ UserRole: 'member', OnlyAdminsCanEditInfo: false });
+        render({ userRole: 'member', onlyAdminsCanEditInfo: false });
         openPanel();
         expect(container.querySelector('button[aria-label="Editar info del grupo"]')).not.toBeNull();
     });

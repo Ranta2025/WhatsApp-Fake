@@ -10,7 +10,7 @@ import { isCamelMessage, messageIdOf } from './mergeMessages';
  *
  * How each actor is applied:
  *  - Me (event.telephon === myTelephon): SET semantics. My current reaction is read
- *    from `Mine` and replaced by `event.emoji`. This makes the echo of my own
+ *    from `mine` and replaced by `event.emoji`. This makes the echo of my own
  *    optimistic update (and a duplicated event) a no-op, and also keeps in sync a
  *    reaction made from another session of mine.
  *  - Another user: DELTA semantics. Aggregates do not say who reacted what, so the
@@ -88,28 +88,28 @@ export function parseReactionErrorContext(envelope: unknown): ReactionErrorTarge
     return { kind, messageID };
 }
 
-const byCountDesc = (list: ReactionSummary[]): ReactionSummary[] => list.sort((a, b) => b.Count - a.Count);
+const byCountDesc = (list: ReactionSummary[]): ReactionSummary[] => list.sort((a, b) => b.count - a.count);
 
 const finish = (list: ReactionSummary[]): ReactionSummary[] | undefined => (list.length > 0 ? byCountDesc(list) : undefined);
 
-/** Removes one reactor from `emoji`'s chip; `clearMine` also clears the Mine flag. */
+/** Removes one reactor from `emoji`'s chip; `clearMine` also clears the mine flag. */
 const decrement = (list: ReactionSummary[], emoji: string, clearMine: boolean): void => {
-    const i = list.findIndex(r => r.Emoji === emoji);
+    const i = list.findIndex(r => r.emoji === emoji);
     const chip = list[i];
     if (!chip) return;
-    if (chip.Count <= 1) list.splice(i, 1);
-    else list[i] = { ...chip, Count: chip.Count - 1, Mine: clearMine ? false : chip.Mine };
+    if (chip.count <= 1) list.splice(i, 1);
+    else list[i] = { ...chip, count: chip.count - 1, mine: clearMine ? false : chip.mine };
 };
 
 const increment = (list: ReactionSummary[], emoji: string, mine: boolean): void => {
-    const i = list.findIndex(r => r.Emoji === emoji);
+    const i = list.findIndex(r => r.emoji === emoji);
     const chip = list[i];
-    if (!chip) list.push({ Emoji: emoji, Count: 1, Mine: mine });
-    else list[i] = { ...chip, Count: chip.Count + 1, Mine: mine || chip.Mine };
+    if (!chip) list.push({ emoji: emoji, count: 1, mine: mine });
+    else list[i] = { ...chip, count: chip.count + 1, mine: mine || chip.mine };
 };
 
 /** My current emoji according to the aggregates ('' when none). */
-const myEmoji = (reactions: readonly ReactionSummary[] | undefined): string => reactions?.find(r => r.Mine)?.Emoji ?? '';
+const myEmoji = (reactions: readonly ReactionSummary[] | undefined): string => reactions?.find(r => r.mine)?.emoji ?? '';
 
 /** SET my reaction to `emoji` ('' = none). Same reference when it already is that. */
 function setMine(reactions: ReactionSummary[] | undefined, emoji: string): ReactionSummary[] | undefined {

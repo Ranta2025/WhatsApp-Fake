@@ -26,8 +26,8 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseGroupMessaging = vi.mocked(useGroupMessaging);
 
 const msg = (id: number, sender: string): GroupMessageResponse => ({
-    MessageID: id, GroupID: 5, SenderTelephon: sender, SenderUsername: sender, Message: `g${id}`,
-    Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: id, groupID: 5, senderTelephon: sender, senderUsername: sender, message: `g${id}`,
+    time: '2026-01-01T10:00:00Z', edited: false,
 });
 
 describe('GroupMessageList receipts', () => {
@@ -37,7 +37,7 @@ describe('GroupMessageList receipts', () => {
     const noop = vi.fn();
 
     const mockContext = (groupReceipts: DashboardContextValue['groupReceipts'], messageMenuOpen: number | null = null) => {
-        mockUseDashboard.mockReturnValue({ selectedGroup: { ID: 5, Members: [] }, groupReceipts } as unknown as DashboardContextValue);
+        mockUseDashboard.mockReturnValue({ selectedGroup: { id: 5, members: [] }, groupReceipts } as unknown as DashboardContextValue);
         mockUseGroupMessaging.mockReturnValue({
             messageMenuOpen, setMessageMenuOpen, handleEditMessage: noop, handleDeleteMessage: noop,
             handleDeleteMessageForMe: noop, handleReplyToMessage: noop,

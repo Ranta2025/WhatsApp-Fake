@@ -74,7 +74,7 @@ func TestE2EClientIDIdempotentSends(t *testing.T) {
 	require.Equal(t, 201, code, body)
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "PW8", "members": []string{luis.Telephon}})
 	require.Equal(t, 201, code, grp)
-	groupID := uint(grp["group"].(map[string]interface{})["ID"].(float64))
+	groupID := uint(grp["group"].(map[string]interface{})["id"].(float64))
 	require.NotZero(t, groupID)
 
 	t.Run("repo: concurrent 1:1 inserts with one clientID store one row", func(t *testing.T) {
@@ -178,12 +178,12 @@ func TestE2EClientIDIdempotentSends(t *testing.T) {
 		sendWS(wsAna, "group_chat", payload)
 		first := anaEv.wait(t, "group_chat")["payload"].(map[string]interface{})
 		delivered := luisEv.wait(t, "group_chat")["payload"].(map[string]interface{})
-		assert.Equal(t, first["MessageID"], delivered["MessageID"])
+		assert.Equal(t, first["messageID"], delivered["messageID"])
 
 		sendWS(wsAna, "group_chat", payload)
 		second := anaEv.wait(t, "group_chat")["payload"].(map[string]interface{})
-		assert.Equal(t, first["MessageID"], second["MessageID"])
-		assert.Equal(t, cid, second["ClientID"])
+		assert.Equal(t, first["messageID"], second["messageID"])
+		assert.Equal(t, cid, second["clientID"])
 		luisEv.none(t, "group_chat", 700*time.Millisecond)
 		assert.EqualValues(t, 1, countGroup(ana.ID, cid))
 	})
@@ -200,8 +200,8 @@ func TestE2EClientIDIdempotentSends(t *testing.T) {
 		code, second := ca.do("POST", path, req)
 		require.Equal(t, 200, code, second)
 		f, s := first["message"].(map[string]interface{}), second["message"].(map[string]interface{})
-		assert.Equal(t, f["MessageID"], s["MessageID"])
-		assert.Equal(t, cid, s["ClientID"])
+		assert.Equal(t, f["messageID"], s["messageID"])
+		assert.Equal(t, cid, s["clientID"])
 		luisEv.none(t, "group_chat", 700*time.Millisecond)
 		assert.EqualValues(t, 1, countGroup(ana.ID, cid))
 

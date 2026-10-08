@@ -247,9 +247,9 @@ func TestHandlerGetUserGroupsCarriesMuteFields(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	require.Len(t, got.Groups, 2)
-	assert.NotContains(t, got.Groups[0], "Muted")
-	assert.Equal(t, true, got.Groups[1]["Muted"])
-	assert.Equal(t, "2026-10-11T12:00:00Z", got.Groups[1]["MutedUntil"])
+	assert.NotContains(t, got.Groups[0], "muted")
+	assert.Equal(t, true, got.Groups[1]["muted"])
+	assert.Equal(t, "2026-10-11T12:00:00Z", got.Groups[1]["mutedUntil"])
 }
 
 // Sin servicio de silencios (tests antiguos / wiring parcial) los listados no cambian.

@@ -67,7 +67,7 @@ const chatMsg = (id: number): Message => ({
     messageID: id, senderTelephon: 'B', receptor: '111', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
 });
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-const ids = (list: ReadonlyArray<{ MessageID?: number | string; messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID !== undefined ? m.messageID : m.MessageID);
+const ids = (list: ReadonlyArray<{ messageID?: number | string }> | undefined) => (list ?? []).map(m => m.messageID);
 
 let container: HTMLDivElement;
 let root: Root;

@@ -30,11 +30,11 @@ const GroupMessageInput = () => {
         onUploadError: () => addToast({ type: 'error', message: 'No se pudo enviar la nota de voz' }),
     });
 
-    const isLeft = selectedGroup?.UserRole === 'left';
+    const isLeft = selectedGroup?.userRole === 'left';
     const isEditing = Boolean(editingMessageId);
     // Matriz de permisos (lib/groupPermissions.ts): un miembro sólo queda
     // restringido si el envío es solo-admins; admin nunca. `left` se maneja aparte.
-    const restrictedSend = Boolean(selectedGroup) && !isLeft && !canSend(selectedGroup!.UserRole, selectedGroup!);
+    const restrictedSend = Boolean(selectedGroup) && !isLeft && !canSend(selectedGroup!.userRole, selectedGroup!);
 
     // Si el rol pasa a 'left' mientras se graba, soltar el micrófono sin subir.
     useEffect(() => {
@@ -137,7 +137,7 @@ const GroupMessageInput = () => {
                 <div className="flex items-center gap-2 px-4 py-2 bg-indigo-900/30 border-b border-indigo-500/20">
                     <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-indigo-400">
-                            Respondiendo a {replyingTo.SenderUsername || replyingTo.SenderTelephon}
+                            Respondiendo a {replyingTo.senderUsername || replyingTo.senderTelephon}
                         </div>
                         <div className="text-xs text-slate-400 truncate">{previewMessage(replyingTo)}</div>
                     </div>

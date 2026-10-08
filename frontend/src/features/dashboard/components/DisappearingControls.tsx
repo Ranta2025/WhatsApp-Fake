@@ -94,14 +94,14 @@ export const ChatDisappearingSection = () => {
 export const GroupDisappearingSection = () => {
     const { selectedGroup, selectedDisappearSeconds, setGroupDisappearing } = useDashboard();
     if (!selectedGroup) return null;
-    const editable = canEditInfo(selectedGroup.UserRole, selectedGroup);
+    const editable = canEditInfo(selectedGroup.userRole, selectedGroup);
     return (
         <div className="px-5 py-4">
             <DisappearingSelector
-                key={selectedGroup.ID}
+                key={selectedGroup.id}
                 value={selectedDisappearSeconds}
-                onChange={editable ? seconds => setGroupDisappearing(selectedGroup.ID, seconds) : undefined}
-                readOnlyHint={selectedGroup.UserRole === 'left' ? undefined : 'Solo los administradores pueden cambiar esta opción'}
+                onChange={editable ? seconds => setGroupDisappearing(selectedGroup.id, seconds) : undefined}
+                readOnlyHint={selectedGroup.userRole === 'left' ? undefined : 'Solo los administradores pueden cambiar esta opción'}
             />
         </div>
     );

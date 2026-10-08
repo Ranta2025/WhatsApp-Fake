@@ -27,8 +27,8 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseGroupMessaging = vi.mocked(useGroupMessaging);
 
 const msg = (id: number, over: Partial<GroupMessageResponse> = {}): GroupMessageResponse => ({
-    MessageID: id, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis', Message: `g${id}`,
-    Time: '2026-01-01T10:00:00Z', Edited: false, ...over,
+    messageID: id, groupID: 5, senderTelephon: '222', senderUsername: 'luis', message: `g${id}`,
+    time: '2026-01-01T10:00:00Z', edited: false, ...over,
 });
 
 describe('GroupMessageList reactions', () => {
@@ -40,7 +40,7 @@ describe('GroupMessageList reactions', () => {
 
     const renderList = (messages: GroupMessageResponse[], messageMenuOpen: number | null = null) => {
         mockUseDashboard.mockReturnValue({
-            selectedGroup: { ID: 5, Members: [] }, groupReceipts: {}, reactToMessage,
+            selectedGroup: { id: 5, members: [] }, groupReceipts: {}, reactToMessage,
         } as unknown as DashboardContextValue);
         mockUseGroupMessaging.mockReturnValue({
             messageMenuOpen, setMessageMenuOpen, handleEditMessage: noop, handleDeleteMessage: noop,
@@ -56,7 +56,7 @@ describe('GroupMessageList reactions', () => {
     const byLabel = (label: string, scope: ParentNode = document.body) =>
         Array.from(scope.querySelectorAll<HTMLElement>('button')).filter(b => b.getAttribute('aria-label') === label);
     const bubble = (id: number) => container.querySelector<HTMLElement>(`[data-message-id="${id}"]`) as HTMLElement;
-    const reacted = [msg(10, { Reactions: [{ Emoji: '😂', Count: 3, Mine: false }] }), msg(11)];
+    const reacted = [msg(10, { reactions: [{ emoji: '😂', count: 3, mine: false }] }), msg(11)];
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -104,7 +104,7 @@ describe('GroupMessageList reactions', () => {
     });
 
     it('has no reaction UI on system notices', () => {
-        const system = msg(12, { Kind: 'system', SenderTelephon: '', Message: '', Reactions: [{ Emoji: '👍', Count: 1, Mine: false }] });
+        const system = msg(12, { kind: 'system', senderTelephon: '', message: '', reactions: [{ emoji: '👍', count: 1, mine: false }] });
         renderList([system]);
         expect(byLabel('Reaccionar')).toHaveLength(0);
         expect(byLabel('Ver reacciones')).toHaveLength(0);

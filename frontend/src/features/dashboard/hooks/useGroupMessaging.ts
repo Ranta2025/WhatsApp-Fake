@@ -74,7 +74,7 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
 
         // Text goes through the outbox (PW9): always a clientID, queued while offline.
         if (!mediaType) {
-            sendText({ kind: 'group', target: selectedGroup.ID, text, replyTo: toReplyRef(replyingTo) })
+            sendText({ kind: 'group', target: selectedGroup.id, text, replyTo: toReplyRef(replyingTo) })
                 .then(result => {
                     if (result === 'unavailable') addToast({ type: 'error', message: 'No hay conexión con el servidor' });
                 })
@@ -93,7 +93,7 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
         }
 
         try {
-            sendGroupMessage(selectedGroup.ID, text, replyingTo, mediaType);
+            sendGroupMessage(selectedGroup.id, text, replyingTo, mediaType);
             setReplyingTo(null);
         } catch (err) {
             console.error('[GroupMessaging] Error sending message:', err);
@@ -104,8 +104,8 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
     // ── Edit ──────────────────────────────────────────────────────────────────
 
     const handleEditMessage = useCallback((message: GroupMessageResponse) => {
-        setEditingMessageId(message.MessageID);
-        setEditingMessageText(message.Message);
+        setEditingMessageId(message.messageID);
+        setEditingMessageText(message.message);
         setMessageMenuOpen(null);
     }, []);
 
@@ -121,7 +121,7 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
             return;
         }
 
-        sendGroupEditMessage(selectedGroup.ID, editingMessageId, editingMessageText);
+        sendGroupEditMessage(selectedGroup.id, editingMessageId, editingMessageText);
         setEditingMessageId(null);
         setEditingMessageText('');
     }, [editingMessageId, selectedGroup, isConnected, sendGroupEditMessage, editingMessageText, addToast]);
@@ -143,12 +143,12 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
 
         // Optimistic: remove immediately for the sender; WS broadcast handles others.
         setGroupMessages(prev => {
-            const msgs = prev[selectedGroup.ID];
+            const msgs = prev[selectedGroup.id];
             if (!msgs) return prev;
-            return { ...prev, [selectedGroup.ID]: msgs.filter(m => m.MessageID !== message.MessageID) };
+            return { ...prev, [selectedGroup.id]: msgs.filter(m => m.messageID !== message.messageID) };
         });
 
-        sendGroupDeleteMessage(selectedGroup.ID, message.MessageID);
+        sendGroupDeleteMessage(selectedGroup.id, message.messageID);
         setMessageMenuOpen(null);
     }, [selectedGroup, isConnected, sendGroupDeleteMessage, setGroupMessages, addToast]);
 
@@ -157,9 +157,9 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
     const handleDeleteMessageForMe = useCallback((message: GroupMessageResponse) => {
         if (!selectedGroup) return;
         setGroupMessages(prev => {
-            const msgs = prev[selectedGroup.ID];
+            const msgs = prev[selectedGroup.id];
             if (!msgs) return prev;
-            return { ...prev, [selectedGroup.ID]: msgs.filter(m => m.MessageID !== message.MessageID) };
+            return { ...prev, [selectedGroup.id]: msgs.filter(m => m.messageID !== message.messageID) };
         });
         setMessageMenuOpen(null);
     }, [selectedGroup, setGroupMessages]);
@@ -177,7 +177,7 @@ const useGroupMessagingInternal = (): UseGroupMessagingResult => {
 
     const handleTyping = useCallback(() => {
         if (selectedGroup && isConnected) {
-            sendGroupTyping(selectedGroup.ID);
+            sendGroupTyping(selectedGroup.id);
         }
     }, [selectedGroup, isConnected, sendGroupTyping]);
 

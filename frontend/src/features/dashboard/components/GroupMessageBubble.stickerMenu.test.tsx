@@ -35,13 +35,13 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseGroupMessaging = vi.mocked(useGroupMessaging);
 
 const baseMsg = (over: Partial<GroupMessageResponse>): GroupMessageResponse => ({
-    MessageID: 1,
-    GroupID: 5,
-    SenderTelephon: '222',
-    SenderUsername: 'bob',
-    Message: '',
-    Time: '2026-01-01T10:00:00Z',
-    Edited: false,
+    messageID: 1,
+    groupID: 5,
+    senderTelephon: '222',
+    senderUsername: 'bob',
+    message: '',
+    time: '2026-01-01T10:00:00Z',
+    edited: false,
     ...over,
 });
 
@@ -60,7 +60,7 @@ describe('GroupMessageBubble received-sticker menu', () => {
                     onDelete={vi.fn()}
                     onReply={vi.fn()}
                     onDeleteForMe={vi.fn()}
-                    menuOpen={msg.MessageID}
+                    menuOpen={msg.messageID}
                     setMenuOpen={vi.fn()}
                     onStickerFeedback={onStickerFeedback}
                 />,
@@ -88,7 +88,7 @@ describe('GroupMessageBubble received-sticker menu', () => {
     });
 
     it('offers "Añadir a favoritos" for a built-in sticker and calls the hook', async () => {
-        renderBubble(baseMsg({ MediaType: 'sticker', MediaUrl: '/stickers/animales/gato.webp', Message: '/stickers/animales/gato.webp' }));
+        renderBubble(baseMsg({ mediaType: 'sticker', mediaUrl: '/stickers/animales/gato.webp', message: '/stickers/animales/gato.webp' }));
         const item = menuItem('Añadir a favoritos');
         expect(item).toBeTruthy();
 
@@ -97,7 +97,7 @@ describe('GroupMessageBubble received-sticker menu', () => {
     });
 
     it('offers "Añadir a mis stickers" for a custom storage sticker and calls the hook', async () => {
-        renderBubble(baseMsg({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        renderBubble(baseMsg({ mediaType: 'sticker', mediaUrl: '/storage/bucket/stickers/abc.webp', message: '/storage/bucket/stickers/abc.webp' }));
         const item = menuItem('Añadir a mis stickers');
         expect(item).toBeTruthy();
 
@@ -106,14 +106,14 @@ describe('GroupMessageBubble received-sticker menu', () => {
     });
 
     it('does not offer the sticker items for a non-sticker message', () => {
-        renderBubble(baseMsg({ MediaType: 'image', MediaUrl: '/storage/a.png', Message: '/storage/a.png' }));
+        renderBubble(baseMsg({ mediaType: 'image', mediaUrl: '/storage/a.png', message: '/storage/a.png' }));
         expect(document.body.textContent).not.toContain('Añadir a favoritos');
         expect(document.body.textContent).not.toContain('Añadir a mis stickers');
     });
 
     // RF19: los textos del toast (éxito y fallo) del menú de grupo.
     it('reports success and failure feedback for the favorite action', async () => {
-        const okFeedback = renderBubble(baseMsg({ MediaType: 'sticker', MediaUrl: '/stickers/animales/gato.webp', Message: '/stickers/animales/gato.webp' }));
+        const okFeedback = renderBubble(baseMsg({ mediaType: 'sticker', mediaUrl: '/stickers/animales/gato.webp', message: '/stickers/animales/gato.webp' }));
         await act(async () => { menuItem('Añadir a favoritos').click(); await Promise.resolve(); });
         expect(okFeedback).toHaveBeenCalledWith('Añadido a favoritos', 'success');
 
@@ -123,14 +123,14 @@ describe('GroupMessageBubble received-sticker menu', () => {
         document.body.appendChild(container);
         root = createRoot(container);
         lib.toggleFavorite.mockResolvedValue(false);
-        const failFeedback = renderBubble(baseMsg({ MediaType: 'sticker', MediaUrl: '/stickers/animales/gato.webp', Message: '/stickers/animales/gato.webp' }));
+        const failFeedback = renderBubble(baseMsg({ mediaType: 'sticker', mediaUrl: '/stickers/animales/gato.webp', message: '/stickers/animales/gato.webp' }));
         await act(async () => { menuItem('Añadir a favoritos').click(); await Promise.resolve(); });
         expect(failFeedback).toHaveBeenCalledWith('No se pudo añadir a favoritos', 'error');
     });
 
     it('reports success and failure feedback for the save action', async () => {
         lib.saveFromMessage.mockResolvedValue({ id: 1 });
-        const okFeedback = renderBubble(baseMsg({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        const okFeedback = renderBubble(baseMsg({ mediaType: 'sticker', mediaUrl: '/storage/bucket/stickers/abc.webp', message: '/storage/bucket/stickers/abc.webp' }));
         await act(async () => { menuItem('Añadir a mis stickers').click(); await Promise.resolve(); });
         expect(okFeedback).toHaveBeenCalledWith('Añadido a Mis stickers', 'success');
 
@@ -140,7 +140,7 @@ describe('GroupMessageBubble received-sticker menu', () => {
         document.body.appendChild(container);
         root = createRoot(container);
         lib.saveFromMessage.mockResolvedValue(null);
-        const failFeedback = renderBubble(baseMsg({ MediaType: 'sticker', MediaUrl: '/storage/bucket/stickers/abc.webp', Message: '/storage/bucket/stickers/abc.webp' }));
+        const failFeedback = renderBubble(baseMsg({ mediaType: 'sticker', mediaUrl: '/storage/bucket/stickers/abc.webp', message: '/storage/bucket/stickers/abc.webp' }));
         await act(async () => { menuItem('Añadir a mis stickers').click(); await Promise.resolve(); });
         expect(failFeedback).toHaveBeenCalledWith('No se pudo añadir el sticker', 'error');
     });
@@ -173,7 +173,7 @@ describe('GroupMessageList sticker feedback wiring', () => {
         vi.clearAllMocks();
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0; });
         mockUseDashboard.mockReturnValue({
-            selectedGroup: { ID: 5, Members: [] },
+            selectedGroup: { id: 5, members: [] },
             groupReceipts: {},
             groupMemberNames: {},
             reactToMessage: vi.fn(),
@@ -198,7 +198,7 @@ describe('GroupMessageList sticker feedback wiring', () => {
     });
 
     it('routes the sticker feedback to the dashboard toast on a menu click', async () => {
-        renderList(baseMsg({ MediaType: 'sticker', MediaUrl: '/stickers/animales/gato.webp', Message: '/stickers/animales/gato.webp' }));
+        renderList(baseMsg({ mediaType: 'sticker', mediaUrl: '/stickers/animales/gato.webp', message: '/stickers/animales/gato.webp' }));
         const item = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
             .find((button) => button.textContent?.includes('Añadir a favoritos'))!;
         expect(item).toBeTruthy();
@@ -211,13 +211,13 @@ describe('GroupMessageList sticker feedback wiring', () => {
 
     it('does not crash the sticker feedback when the dashboard toast is absent', async () => {
         mockUseDashboard.mockReturnValue({
-            selectedGroup: { ID: 5, Members: [] },
+            selectedGroup: { id: 5, members: [] },
             groupReceipts: {},
             groupMemberNames: {},
             reactToMessage: vi.fn(),
             outboxItems: [],
         } as unknown as DashboardContextValue);
-        renderList(baseMsg({ MediaType: 'sticker', MediaUrl: '/stickers/animales/gato.webp', Message: '/stickers/animales/gato.webp' }));
+        renderList(baseMsg({ mediaType: 'sticker', mediaUrl: '/stickers/animales/gato.webp', message: '/stickers/animales/gato.webp' }));
         const item = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
             .find((button) => button.textContent?.includes('Añadir a favoritos'))!;
         expect(item).toBeTruthy();

@@ -4,9 +4,9 @@ package schemas
 // como lo ve el espectador: Count usuarios reaccionaron con Emoji y Mine indica
 // si el espectador es uno de ellos. Viaja dentro de Message / GroupMessageResponse.
 type ReactionSummary struct {
-	Emoji string `json:"Emoji"`
-	Count int    `json:"Count"`
-	Mine  bool   `json:"Mine"`
+	Emoji string `json:"emoji"`
+	Count int    `json:"count"`
+	Mine  bool   `json:"mine"`
 }
 
 // ReactionEvent es el payload del evento WS `reaction` (servidor -> cliente).

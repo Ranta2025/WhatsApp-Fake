@@ -212,21 +212,21 @@ func TestE2E(t *testing.T) {
 	// Grupos
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "Equipo", "members": []string{bob.Telephon}})
 	require.Equal(t, 201, code, grp)
-	groupID := grp["group"].(map[string]interface{})["ID"].(float64)
-	assert.Equal(t, "admin", grp["group"].(map[string]interface{})["UserRole"])
+	groupID := grp["group"].(map[string]interface{})["id"].(float64)
+	assert.Equal(t, "admin", grp["group"].(map[string]interface{})["userRole"])
 	waitFor(t, wsBob, "group_added")
 	code, _ = ca.do("POST", fmt.Sprintf("/api/v1/group/%d/members", int(groupID)), map[string]interface{}{"members": []string{bob.Telephon}})
 	assert.Equal(t, 200, code, "añadir un miembro existente no debe fallar")
 	time.Sleep(200 * time.Millisecond)
 	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "hola grupo"}}))
 	ev = waitFor(t, wsBob, "group_chat")
-	assert.Equal(t, "hola grupo", ev["payload"].(map[string]interface{})["Message"])
+	assert.Equal(t, "hola grupo", ev["payload"].(map[string]interface{})["message"])
 
 	// Media en grupo: ida y vuelta con mediaUrl/mediaType y rechazo de URL peligrosa
 	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "", "mediaUrl": up["url"], "mediaType": "image"}}))
 	ev = waitFor(t, wsBob, "group_chat")
-	assert.Equal(t, up["url"], ev["payload"].(map[string]interface{})["MediaUrl"])
-	assert.Equal(t, "image", ev["payload"].(map[string]interface{})["MediaType"])
+	assert.Equal(t, up["url"], ev["payload"].(map[string]interface{})["mediaUrl"])
+	assert.Equal(t, "image", ev["payload"].(map[string]interface{})["mediaType"])
 	require.NoError(t, wsAlice.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": "x", "mediaUrl": "javascript:alert(1)", "mediaType": "document"}}))
 	waitFor(t, wsAlice, "error")
 

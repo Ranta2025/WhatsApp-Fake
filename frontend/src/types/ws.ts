@@ -132,13 +132,11 @@ export interface WsGroupEditMessage {
 /**
  * A diferencia de group_chat/group_edit_message, el backend NO reenvía el
  * schema completo aquí: construye un mapa a mano solo con estas dos claves
- * (message_handlers.go HandleGroupDeleteMessage), en PascalCase (coherente
- * con el resto de claves de grupo, mismatched con group_typing que usa
- * camelCase "groupID").
+ * (message_handlers.go HandleGroupDeleteMessage), en camelCase.
  */
 export interface WsGroupDeleteMessage {
   type: 'group_delete_message';
-  payload: { MessageID: number; GroupID: number };
+  payload: { messageID: number; groupID: number };
 }
 
 /** Solo se emite al crear el grupo o añadir miembros (REST, sin equivalente WS). */

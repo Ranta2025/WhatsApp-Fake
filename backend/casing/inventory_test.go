@@ -50,63 +50,20 @@ import (
 // allowlist maps a still-non-camel JSON key to the api-casing domain that owns
 // its rename. It MUST become empty by the end of the cutover.
 var allowlist = map[string]string{
-	// Shared keys: after AC3 renamed its own emitters these are still emitted by
-	// later domains, so they stay allowlisted until the last owner lands.
-	//   Username/Telephon -> AC5 GroupMemberResponse, AC6 StatusOwnerBrief/Viewer
-	//   Muted/MutedUntil  -> AC5 GroupResponse
-	"Username":   "AC5-groups/AC6-status",
-	"Telephon":   "AC5-groups/AC6-status",
-	"Muted":      "AC5-groups",
-	"MutedUntil": "AC5-groups",
-
-	// Re-homed from AC4: schemas.Message/ChatGroup were renamed natively in AC4,
-	// so the 1:1 chat domain no longer emits these keys. They stay allowlisted
-	// under their remaining owner: the AC5 group schemas (GroupMessageResponse,
-	// GroupDetail, GroupResponse, and the shared ReactionSummary), plus AC6 for
-	// ContactName (StatusOwnerBrief) and Mine (StatusFeed). Emoji/Count are
-	// co-owned by AC5 through ReactionSummary, which is outside AC4's surfaces.
-	"Message":          "AC5-groups",
-	"MessageID":        "AC5-groups",
-	"SenderTelephon":   "AC5-groups",
-	"Time":             "AC5-groups",
-	"Edited":           "AC5-groups",
-	"MediaUrl":         "AC5-groups",
-	"MediaType":        "AC5-groups",
-	"ReplyToMessageID": "AC5-groups",
-	"ReplyToTelephon":  "AC5-groups",
-	"ReplyToMessage":   "AC5-groups",
-	"Reactions":        "AC5-groups",
-	"ExpiresAt":        "AC5-groups",
-	"Kind":             "AC5-groups",
-	"SystemEvent":      "AC5-groups",
-	"ClientID":         "AC5-groups",
-	"Messages":         "AC5-groups",
-	"DisappearSeconds": "AC5-groups",
-	"Emoji":            "AC5-groups",
-	"Count":            "AC5-groups",
-	"ContactName":      "AC5-groups/AC6-status",
-	"Mine":             "AC5-groups/AC6-status",
-
-	// AC5 groups (Group* schemas + WS).
-	"ID":                      "AC5-groups",
-	"Name":                    "AC5-groups",
-	"Description":             "AC5-groups",
-	"AvatarUrl":               "AC5-groups",
-	"CreatorTelephon":         "AC5-groups",
-	"MemberCount":             "AC5-groups",
-	"UserRole":                "AC5-groups",
-	"CreatedAt":               "AC5-groups",
-	"OnlyAdminsCanSend":       "AC5-groups",
-	"OnlyAdminsCanEditInfo":   "AC5-groups",
-	"OnlyAdminsCanAddMembers": "AC5-groups",
-	"Role":                    "AC5-groups",
-	"JoinedMessageID":         "AC5-groups",
-	"LastDeliveredMessageID":  "AC5-groups",
-	"LastReadMessageID":       "AC5-groups",
-	"GroupID":                 "AC5-groups",
-	"SenderUsername":          "AC5-groups",
-	"SystemTargets":           "AC5-groups",
-	"Members":                 "AC5-groups",
+	// Shared keys re-homed to AC6 after AC5 renamed its own emitters: the AC5
+	// group schemas no longer emit them, but StatusItem emits ID/CreatedAt/
+	// MediaUrl/ExpiresAt, StatusOwnerBrief/StatusViewer emit Telephon/Username/
+	// ContactName/AvatarUrl and StatusFeed emits Mine. They stay allowlisted
+	// until AC6 lands (their last owner).
+	"Username":    "AC6-status",
+	"Telephon":    "AC6-status",
+	"ContactName": "AC6-status",
+	"Mine":        "AC6-status",
+	"ID":          "AC6-status",
+	"CreatedAt":   "AC6-status",
+	"MediaUrl":    "AC6-status",
+	"ExpiresAt":   "AC6-status",
+	"AvatarUrl":   "AC6-status",
 
 	// AC6 status (Status* schemas + status_* WS).
 	"Type":            "AC6-status",

@@ -43,7 +43,7 @@ describe('Sidebar global message search', () => {
     const openMessageAt = vi.fn();
     const addToast = vi.fn();
     const luis = { telephon: '222', contactName: 'Luis Alias', username: 'luis', status: 'accepted' };
-    const groupEquipo = { ID: 9, Name: 'Equipo demo', MemberCount: 3, UserRole: 'member' };
+    const groupEquipo = { id: 9, name: 'Equipo demo', memberCount: 3, userRole: 'member' };
 
     const renderSidebar = (over: Record<string, unknown> = {}) => {
         mockUseDashboard.mockReturnValue({

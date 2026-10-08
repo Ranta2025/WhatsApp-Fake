@@ -69,9 +69,9 @@ describe('GroupMessageInput media', () => {
         mockUseDashboard.mockReturnValue({
             isConnected: opts.isConnected ?? true,
             selectedGroup: {
-                ID: 5,
-                UserRole: opts.role ?? 'member',
-                OnlyAdminsCanSend: opts.onlyAdminsCanSend ?? false,
+                id: 5,
+                userRole: opts.role ?? 'member',
+                onlyAdminsCanSend: opts.onlyAdminsCanSend ?? false,
                 RemovedByAdmin: opts.removedByAdmin,
             },
             addToast,
@@ -240,8 +240,8 @@ describe('GroupMessageInput media', () => {
 
     it('si el envío se restringe mientras edita/respondía/grababa, cancela todo', () => {
         const reply: GroupMessageResponse = {
-            MessageID: 7, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis',
-            Message: 'hola', Time: '2026-01-01T10:00:00Z', Edited: false,
+            messageID: 7, groupID: 5, senderTelephon: '222', senderUsername: 'luis',
+            message: 'hola', time: '2026-01-01T10:00:00Z', edited: false,
         };
         recorderState = { isRecording: true, recordingTime: 3 };
         setup({ role: 'member', replyingTo: reply });
@@ -281,9 +281,9 @@ describe('GroupMessageInput media', () => {
 
     it('el banner de respuesta muestra ✨ Sticker, no la URL', () => {
         const reply: GroupMessageResponse = {
-            MessageID: 7, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis',
-            Message: '/stickers/basic/hola.webp', Time: '2026-01-01T10:00:00Z', Edited: false,
-            MediaType: 'sticker', MediaUrl: '/stickers/basic/hola.webp',
+            messageID: 7, groupID: 5, senderTelephon: '222', senderUsername: 'luis',
+            message: '/stickers/basic/hola.webp', time: '2026-01-01T10:00:00Z', edited: false,
+            mediaType: 'sticker', mediaUrl: '/stickers/basic/hola.webp',
         };
         setup({ replyingTo: reply });
         expect(container.textContent).toContain('✨ Sticker');
@@ -292,8 +292,8 @@ describe('GroupMessageInput media', () => {
 
     it('RF9: una respuesta de texto plano conserva su texto en el banner', () => {
         const reply: GroupMessageResponse = {
-            MessageID: 8, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis',
-            Message: 'texto plano', Time: '2026-01-01T10:00:00Z', Edited: false,
+            messageID: 8, groupID: 5, senderTelephon: '222', senderUsername: 'luis',
+            message: 'texto plano', time: '2026-01-01T10:00:00Z', edited: false,
         };
         setup({ replyingTo: reply });
         expect(container.textContent).toContain('texto plano');
@@ -322,8 +322,8 @@ describe('GroupMessageInput media', () => {
 
     it('RF10: un Escape ya manejado por el panel (Popover) no cancela la respuesta', () => {
         const reply: GroupMessageResponse = {
-            MessageID: 7, GroupID: 5, SenderTelephon: '222', SenderUsername: 'luis',
-            Message: 'hola', Time: '2026-01-01T10:00:00Z', Edited: false,
+            messageID: 7, groupID: 5, senderTelephon: '222', senderUsername: 'luis',
+            message: 'hola', time: '2026-01-01T10:00:00Z', edited: false,
         };
         setup({ replyingTo: reply });
         const ta = container.querySelector('textarea') as HTMLTextAreaElement;

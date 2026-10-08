@@ -21,8 +21,8 @@ const mockUseDashboard = vi.mocked(useDashboard);
 const mockUseGroupMessaging = vi.mocked(useGroupMessaging);
 
 const msg = (id: number, text = `g${id}`): GroupMessageResponse => ({
-    MessageID: id, GroupID: 5, SenderTelephon: '222', SenderUsername: 'bob', Message: text,
-    Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: id, groupID: 5, senderTelephon: '222', senderUsername: 'bob', message: text,
+    time: '2026-01-01T10:00:00Z', edited: false,
 });
 
 describe('GroupMessageList detached mode', () => {
@@ -62,7 +62,7 @@ describe('GroupMessageList detached mode', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0; });
-        mockUseDashboard.mockReturnValue({ selectedGroup: { ID: 5, Members: [] } } as unknown as DashboardContextValue);
+        mockUseDashboard.mockReturnValue({ selectedGroup: { id: 5, members: [] } } as unknown as DashboardContextValue);
         mockUseGroupMessaging.mockReturnValue({
             messageMenuOpen: null, setMessageMenuOpen: vi.fn(),
         } as unknown as UseGroupMessagingResult);

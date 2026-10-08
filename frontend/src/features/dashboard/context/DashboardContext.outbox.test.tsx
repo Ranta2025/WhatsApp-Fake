@@ -78,8 +78,8 @@ const echo = (id: number, clientID: string | undefined, over: Partial<Message> =
     ...(clientID ? { clientID: clientID } : {}), ...over,
 });
 const groupEcho = (id: number, clientID: string): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: '111', SenderUsername: 'ana', Message: 'hola grupo', Time: iso(id), Edited: false,
-    ClientID: clientID,
+    messageID: id, groupID: 9, senderTelephon: '111', senderUsername: 'ana', message: 'hola grupo', time: iso(id), edited: false,
+    clientID: clientID,
 });
 
 let container: HTMLDivElement;
@@ -190,7 +190,7 @@ describe('DashboardContext outbox wiring', () => {
         await settle(() => expect(mockSendGroupMessage).toHaveBeenCalledWith(9, 'hola grupo', null, null, clientID));
         await emit('group_chat', groupEcho(11, clientID));
         await emit('group_chat', groupEcho(11, clientID));
-        expect(latest.groupMessages[9]?.map(m => m.MessageID)).toEqual([11]);
+        expect(latest.groupMessages[9]?.map(m => m.messageID)).toEqual([11]);
         expect(latest.outboxItems).toEqual([]);
     });
 

@@ -6,8 +6,8 @@ import {
 } from './groupAdminEvents';
 
 const sysMsg = (over: Partial<GroupMessageResponse> = {}): GroupMessageResponse => ({
-    MessageID: 10, GroupID: 9, SenderTelephon: '222', SenderUsername: 'Ana', Message: '',
-    Time: '2026-01-01T09:00:00Z', Edited: false, Kind: 'system', ...over,
+    messageID: 10, groupID: 9, senderTelephon: '222', senderUsername: 'Ana', message: '',
+    time: '2026-01-01T09:00:00Z', edited: false, kind: 'system', ...over,
 });
 
 const names: Record<string, string> = { '222': 'Ana', '333': 'Luis', '444': 'Marta' };
@@ -16,40 +16,40 @@ const resolveName = (t: string): string | undefined => names[t];
 describe('parseSystemMessage', () => {
     it('accepts a persisted system row and normalizes its fields', () => {
         const parsed = parseSystemMessage({
-            MessageID: 10, GroupID: 9, SenderTelephon: '222', SenderUsername: 'Ana',
-            Kind: 'system', SystemEvent: 'admin_granted', SystemTargets: ['333', '', 7],
+            messageID: 10, groupID: 9, senderTelephon: '222', senderUsername: 'Ana',
+            kind: 'system', systemEvent: 'admin_granted', systemTargets: ['333', '', 7],
         });
         expect(parsed).toMatchObject({
-            MessageID: 10, GroupID: 9, SenderTelephon: '222', SenderUsername: 'Ana',
-            Kind: 'system', SystemEvent: 'admin_granted', SystemTargets: ['333'],
+            messageID: 10, groupID: 9, senderTelephon: '222', senderUsername: 'Ana',
+            kind: 'system', systemEvent: 'admin_granted', systemTargets: ['333'],
         });
     });
 
     it('rejects absent, non-system and malformed messages', () => {
         expect(parseSystemMessage(undefined)).toBeUndefined();
         expect(parseSystemMessage(null)).toBeUndefined();
-        expect(parseSystemMessage({ Kind: 'user' })).toBeUndefined();
-        expect(parseSystemMessage(sysMsg({ MessageID: 0 }))).toBeUndefined();
-        expect(parseSystemMessage(sysMsg({ GroupID: 0 }))).toBeUndefined();
-        expect(parseSystemMessage(sysMsg({ SenderTelephon: '' }))).toBeUndefined();
+        expect(parseSystemMessage({ kind: 'user' })).toBeUndefined();
+        expect(parseSystemMessage(sysMsg({ messageID: 0 }))).toBeUndefined();
+        expect(parseSystemMessage(sysMsg({ groupID: 0 }))).toBeUndefined();
+        expect(parseSystemMessage(sysMsg({ senderTelephon: '' }))).toBeUndefined();
     });
 
-    it('drops an unknown SystemEvent instead of inventing one', () => {
-        const parsed = parseSystemMessage(sysMsg({ SystemEvent: 'nope' as never }));
-        expect(parsed?.SystemEvent).toBeUndefined();
+    it('drops an unknown systemEvent instead of inventing one', () => {
+        const parsed = parseSystemMessage(sysMsg({ systemEvent: 'nope' as never }));
+        expect(parsed?.systemEvent).toBeUndefined();
     });
 
-    it('isSystemGroupMessage only matches Kind === "system"', () => {
+    it('isSystemGroupMessage only matches kind === "system"', () => {
         expect(isSystemGroupMessage(sysMsg())).toBe(true);
-        expect(isSystemGroupMessage(sysMsg({ Kind: undefined }))).toBe(false);
+        expect(isSystemGroupMessage(sysMsg({ kind: undefined }))).toBe(false);
     });
 });
 
 describe('event guards', () => {
     it('parseGroupMemberRole validates group/telephon/role and keeps a valid system message', () => {
         expect(parseGroupMemberRole({ groupID: 9, telephon: '333', role: 'admin', systemMessage: sysMsg() }))
-            .toEqual({ groupID: 9, telephon: '333', role: 'admin', systemMessage: expect.objectContaining({ MessageID: 10 }) });
-        expect(parseGroupMemberRole({ groupID: 9, telephon: '333', role: 'admin', systemMessage: { Kind: 'system' } }))
+            .toEqual({ groupID: 9, telephon: '333', role: 'admin', systemMessage: expect.objectContaining({ messageID: 10 }) });
+        expect(parseGroupMemberRole({ groupID: 9, telephon: '333', role: 'admin', systemMessage: { kind: 'system' } }))
             .toEqual({ groupID: 9, telephon: '333', role: 'admin' });
         expect(parseGroupMemberRole({ groupID: 9, telephon: '333', role: 'owner' })).toBeNull();
         expect(parseGroupMemberRole({ groupID: 0, telephon: '333', role: 'admin' })).toBeNull();
@@ -84,59 +84,59 @@ describe('event guards', () => {
 
 describe('describeGroupSystemMessage (per-viewer wording)', () => {
     it('admin_granted: the target reads "te", others read the target name, the actor "Tú"', () => {
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'admin_granted', SystemTargets: ['333'] }), '333', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'admin_granted', systemTargets: ['333'] }), '333', resolveName))
             .toBe('Ana te designó como admin');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'admin_granted', SystemTargets: ['333'] }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'admin_granted', systemTargets: ['333'] }), '111', resolveName))
             .toBe('Ana designó a Luis como admin');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'admin_granted', SystemTargets: ['333'] }), '222', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'admin_granted', systemTargets: ['333'] }), '222', resolveName))
             .toBe('Tú designaste a Luis como admin');
     });
 
     it('admin_revoked wording', () => {
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'admin_revoked', SystemTargets: ['333'] }), '333', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'admin_revoked', systemTargets: ['333'] }), '333', resolveName))
             .toBe('Ana te descartó como admin');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'admin_revoked', SystemTargets: ['333'] }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'admin_revoked', systemTargets: ['333'] }), '111', resolveName))
             .toBe('Ana descartó a Luis como admin');
     });
 
     it('member_added wording', () => {
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_added', SystemTargets: ['333'] }), '333', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_added', systemTargets: ['333'] }), '333', resolveName))
             .toBe('Ana te añadió al grupo');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_added', SystemTargets: ['333', '444'] }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_added', systemTargets: ['333', '444'] }), '111', resolveName))
             .toBe('Ana añadió a Luis y Marta');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_added', SystemTargets: ['444', '333', '999'] }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_added', systemTargets: ['444', '333', '999'] }), '111', resolveName))
             .toBe('Ana añadió a Marta, Luis y 999');
     });
 
     it('member_removed wording: "Tú eliminaste" for the actor, "te eliminó" for the target', () => {
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_removed', SystemTargets: ['333'] }), '222', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_removed', systemTargets: ['333'] }), '222', resolveName))
             .toBe('Tú eliminaste a Luis');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_removed', SystemTargets: ['333'] }), '333', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_removed', systemTargets: ['333'] }), '333', resolveName))
             .toBe('Ana te eliminó del grupo');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_removed', SystemTargets: ['333'] }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_removed', systemTargets: ['333'] }), '111', resolveName))
             .toBe('Ana eliminó a Luis');
     });
 
     it('member_left wording', () => {
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_left', SystemTargets: ['222'], SenderUsername: 'Ana' }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_left', systemTargets: ['222'], senderUsername: 'Ana' }), '111', resolveName))
             .toBe('Ana salió del grupo');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'member_left', SystemTargets: ['222'], SenderUsername: 'Ana' }), '222', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'member_left', systemTargets: ['222'], senderUsername: 'Ana' }), '222', resolveName))
             .toBe('Tú saliste del grupo');
     });
 
     it('settings_changed / info_changed and an unknown event fallback', () => {
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'settings_changed' }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'settings_changed' }), '111', resolveName))
             .toBe('Ana cambió la configuración del grupo');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'settings_changed' }), '222', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'settings_changed' }), '222', resolveName))
             .toBe('Tú cambiaste la configuración del grupo');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'info_changed' }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'info_changed' }), '111', resolveName))
             .toBe('Ana actualizó la información del grupo');
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: undefined }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: undefined }), '111', resolveName))
             .toBe('Evento del grupo');
     });
 
     it('falls back to the telephon when no name resolves', () => {
-        expect(describeGroupSystemMessage(sysMsg({ SystemEvent: 'admin_granted', SystemTargets: ['999'] }), '111', resolveName))
+        expect(describeGroupSystemMessage(sysMsg({ systemEvent: 'admin_granted', systemTargets: ['999'] }), '111', resolveName))
             .toBe('Ana designó a 999 como admin');
     });
 });

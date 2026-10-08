@@ -37,21 +37,21 @@ describe('ReactionChips', () => {
     });
 
     it('draws one chip per entry with emoji and count, highlighting mine', () => {
-        render([{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '❤️', Count: 1, Mine: false }]);
+        render([{ emoji: '👍', count: 2, mine: true }, { emoji: '❤️', count: 1, mine: false }]);
         expect(chips().map(c => c.textContent)).toEqual(['👍2', '❤️1']);
         expect(chips().map(c => c.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
         expect(chips().map(c => c.getAttribute('aria-label'))).toEqual(['👍 2, reaccionaste', '❤️ 1']);
     });
 
     it('tapping a chip toggles my reaction to that emoji', () => {
-        render([{ Emoji: '👍', Count: 2, Mine: true }, { Emoji: '❤️', Count: 1, Mine: false }]);
+        render([{ emoji: '👍', count: 2, mine: true }, { emoji: '❤️', count: 1, mine: false }]);
         act(() => { chips()[1]?.click(); });
         expect(onToggle).toHaveBeenCalledExactlyOnceWith('❤️');
         expect(onShowWho).not.toHaveBeenCalled();
     });
 
     it('a separate control opens the who-reacted list', () => {
-        render([{ Emoji: '👍', Count: 2, Mine: false }]);
+        render([{ emoji: '👍', count: 2, mine: false }]);
         act(() => { container.querySelector<HTMLButtonElement>('button[aria-label="Ver reacciones"]')?.click(); });
         expect(onShowWho).toHaveBeenCalledTimes(1);
         expect(onToggle).not.toHaveBeenCalled();

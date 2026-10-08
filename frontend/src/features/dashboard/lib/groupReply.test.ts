@@ -3,13 +3,13 @@ import { groupReplySenderLabel } from './groupReply';
 import type { GroupMemberResponse } from '../../../types/api';
 
 // The backend never sends a `ReplyToSender` field on group messages (only
-// `ReplyToTelephon`/`ReplyToMessage`), so the reply preview in the group chat
+// `replyToTelephon`/`replyToMessage`), so the reply preview in the group chat
 // always rendered an empty sender line. The label is now derived from the
 // replied-to telephon.
 
 const members: GroupMemberResponse[] = [
-    { Telephon: '111', Username: 'ana', Role: 'admin' },
-    { Telephon: '222', Username: 'bob', Role: 'member', ContactName: 'Bobby' },
+    { telephon: '111', username: 'ana', role: 'admin' },
+    { telephon: '222', username: 'bob', role: 'member', contactName: 'Bobby' },
 ];
 
 describe('groupReplySenderLabel', () => {
@@ -26,7 +26,7 @@ describe('groupReplySenderLabel', () => {
         expect(groupReplySenderLabel('222', '111', undefined)).toBe('222');
     });
 
-    it('is empty when the message carries no ReplyToTelephon', () => {
+    it('is empty when the message carries no replyToTelephon', () => {
         expect(groupReplySenderLabel(undefined, '111', members)).toBe('');
         expect(groupReplySenderLabel('', '111', members)).toBe('');
     });

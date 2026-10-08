@@ -74,13 +74,13 @@ describe('wsManager dispatch (remapped listener contract)', () => {
         wsManager.on('message', handler);
 
         const message = {
-            MessageID: 1,
-            SenderTelephon: 'a',
+            messageID: 1,
+            senderTelephon: 'a',
             Receptor: 'b',
-            Message: 'hi',
+            message: 'hi',
             Status: 'enviado',
-            Time: 't',
-            Edited: false,
+            time: 't',
+            edited: false,
         };
         emit(socket, { type: 'chat', payload: message });
 
@@ -207,7 +207,7 @@ describe('group receipt frames', () => {
     it('sendMessage / sendGroupMessage carry an optional clientID (omitted when absent)', async () => {
         const { wsManager, socket } = await connectAndOpen();
         const id = '0b7f3c1e-2d4a-4f6b-9c8d-1a2b3c4d5e6f';
-        const reply = { MessageID: 3, SenderTelephon: '222', Message: 'q' };
+        const reply = { messageID: 3, senderTelephon: '222', message: 'q' };
 
         expect(wsManager.sendMessage('222', 'hola', null, null, id)).toBe(true);
         expect(wsManager.sendGroupMessage(9, 'grupo', reply, null, id)).toBe(true);

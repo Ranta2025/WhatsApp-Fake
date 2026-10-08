@@ -12,13 +12,10 @@ export interface OutboxReplyRef {
     message: string;
 }
 
-/** Fuente de un reply ref: 1:1 camel o grupo Pascal (mientras dura el corte por dominios). */
+/** Fuente de un reply ref: un mensaje 1:1 o de grupo (ambos camelCase tras AC4/AC5). */
 interface ReplyRefSource {
-    MessageID?: number;
     messageID?: number;
-    SenderTelephon?: string;
     senderTelephon?: string;
-    Message?: string;
     message?: string;
 }
 
@@ -86,25 +83,25 @@ export function parseOutboxEntry(raw: unknown): OutboxEntry | null {
     return null;
 }
 
-/** Reads the echoed clientID of a server message (1:1 camel or group Pascal), only when it is a canonical UUID. */
+/** Reads the echoed clientID of a server message (camelCase), only when it is a canonical UUID. */
 export function readClientID(message: unknown): string | null {
     if (!isRecord(message)) return null;
-    const value = message.clientID !== undefined ? message.clientID : message.ClientID;
+    const value = message.clientID;
     return isClientID(value) ? value : null;
 }
 
 /** Strips a full message down to the reply reference stored in the outbox. */
 export function toReplyRef(message: ReplyRefSource | null | undefined): OutboxReplyRef | null {
     if (!message) return null;
-    const messageID = message.messageID !== undefined ? message.messageID : message.MessageID;
-    const senderTelephon = message.senderTelephon !== undefined ? message.senderTelephon : message.SenderTelephon;
-    const text = message.message !== undefined ? message.message : message.Message;
+    const messageID = message.messageID;
+    const senderTelephon = message.senderTelephon;
+    const text = message.message;
     if (messageID === undefined || senderTelephon === undefined || text === undefined) return null;
     return { messageID, senderTelephon, message: text };
 }
 
 /**
- * Items of the open chat/group, minus any whose ClientID the server already returned.
+ * Items of the open chat/group, minus any whose clientID the server already returned.
  * `items` may be undefined (partial dashboard contexts, e.g. component test doubles).
  */
 export function outboxItemsFor(

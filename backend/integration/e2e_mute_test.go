@@ -49,7 +49,7 @@ func e2eGroupEntry(t *testing.T, c *e2eClient, groupID uint) map[string]interfac
 	require.Equal(t, 200, code, body)
 	for _, it := range body["groups"].([]interface{}) {
 		g := it.(map[string]interface{})
-		if uint(g["ID"].(float64)) == groupID {
+		if uint(g["id"].(float64)) == groupID {
 			return g
 		}
 	}
@@ -184,15 +184,15 @@ func TestE2EChatMute(t *testing.T) {
 			"members": []string{luis.Telephon},
 		})
 		require.Equal(t, 201, code, grp)
-		groupID = uint(grp["group"].(map[string]interface{})["ID"].(float64))
+		groupID = uint(grp["group"].(map[string]interface{})["id"].(float64))
 		groupMute := fmt.Sprintf("/api/v1/group/%d/mute", groupID)
 
 		code, body := ca.do("PUT", groupMute, map[string]string{"duration": "1w"})
 		require.Equal(t, 200, code, body)
 		until := e2eAssertMutedUntil(t, body["mutedUntil"], 7*24*time.Hour)
 		g := e2eGroupEntry(t, ca, groupID)
-		assert.Equal(t, true, g["Muted"])
-		assert.Equal(t, until, g["MutedUntil"])
+		assert.Equal(t, true, g["muted"])
+		assert.Equal(t, until, g["mutedUntil"])
 
 		code, body = ca.do("PUT", groupMute, map[string]string{"duration": "always"})
 		require.Equal(t, 200, code, body)
@@ -200,8 +200,8 @@ func TestE2EChatMute(t *testing.T) {
 		assert.True(t, present)
 		assert.Nil(t, v)
 		g = e2eGroupEntry(t, ca, groupID)
-		assert.Equal(t, true, g["Muted"])
-		assert.NotContains(t, g, "MutedUntil")
+		assert.Equal(t, true, g["muted"])
+		assert.NotContains(t, g, "mutedUntil")
 
 		// A group ana is not a member of (created directly: no extra login).
 		foreign := models.Group{Name: "Grupo ajeno", CreatorID: luis.ID}
@@ -213,6 +213,6 @@ func TestE2EChatMute(t *testing.T) {
 
 		assert.Equal(t, 204, ca.raw("DELETE", groupMute).status)
 		g = e2eGroupEntry(t, ca, groupID)
-		assert.NotContains(t, g, "Muted")
+		assert.NotContains(t, g, "muted")
 	})
 }

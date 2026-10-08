@@ -9,7 +9,7 @@ import {
 
 const open: GroupPermissionSettings = {};
 const allRestricted: GroupPermissionSettings = {
-    OnlyAdminsCanSend: true, OnlyAdminsCanEditInfo: true, OnlyAdminsCanAddMembers: true,
+    onlyAdminsCanSend: true, onlyAdminsCanEditInfo: true, onlyAdminsCanAddMembers: true,
 };
 
 describe('groupPermissions matrix', () => {
@@ -18,8 +18,8 @@ describe('groupPermissions matrix', () => {
             { role: 'admin', settings: open, want: true },
             { role: 'admin', settings: allRestricted, want: true },
             { role: 'member', settings: open, want: true },
-            { role: 'member', settings: { OnlyAdminsCanSend: true }, want: false },
-            { role: 'member', settings: { OnlyAdminsCanEditInfo: true }, want: true },
+            { role: 'member', settings: { onlyAdminsCanSend: true }, want: false },
+            { role: 'member', settings: { onlyAdminsCanEditInfo: true }, want: true },
             { role: 'left', settings: open, want: false },
             { role: 'left', settings: allRestricted, want: false },
             { role: undefined, settings: open, want: false },
@@ -31,8 +31,8 @@ describe('groupPermissions matrix', () => {
     it('canEditInfo: admin always, member only when edit info is open', () => {
         expect(canEditInfo('admin', allRestricted)).toBe(true);
         expect(canEditInfo('member', open)).toBe(true);
-        expect(canEditInfo('member', { OnlyAdminsCanEditInfo: true })).toBe(false);
-        expect(canEditInfo('member', { OnlyAdminsCanSend: true })).toBe(true);
+        expect(canEditInfo('member', { onlyAdminsCanEditInfo: true })).toBe(false);
+        expect(canEditInfo('member', { onlyAdminsCanSend: true })).toBe(true);
         expect(canEditInfo('left', open)).toBe(false);
         expect(canEditInfo(undefined, open)).toBe(false);
     });
@@ -40,8 +40,8 @@ describe('groupPermissions matrix', () => {
     it('canAddMembers: admin always, member only when add members is open', () => {
         expect(canAddMembers('admin', allRestricted)).toBe(true);
         expect(canAddMembers('member', open)).toBe(true);
-        expect(canAddMembers('member', { OnlyAdminsCanAddMembers: true })).toBe(false);
-        expect(canAddMembers('member', { OnlyAdminsCanSend: true })).toBe(true);
+        expect(canAddMembers('member', { onlyAdminsCanAddMembers: true })).toBe(false);
+        expect(canAddMembers('member', { onlyAdminsCanSend: true })).toBe(true);
         expect(canAddMembers('left', open)).toBe(false);
         expect(canAddMembers(undefined, open)).toBe(false);
     });

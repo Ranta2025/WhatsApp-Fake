@@ -15,8 +15,8 @@ import type {
  */
 
 /**
- * `Reactions` of a message: keeps entries with a non-empty string `Emoji`, an
- * integer `Count` > 0 and a boolean `Mine` (first occurrence per emoji); anything
+ * `reactions` of a message: keeps entries with a non-empty string `emoji`, an
+ * integer `count` > 0 and a boolean `mine` (first occurrence per emoji); anything
  * else is dropped, never thrown. Returns undefined when nothing valid remains
  * (the backend omits the field when there are no reactions).
  */
@@ -26,33 +26,28 @@ export function normalizeReactions(data: unknown): ReactionSummary[] | undefined
     const out: ReactionSummary[] = [];
     for (const item of data) {
         if (!item || typeof item !== 'object') continue;
-        const { Emoji, Count, Mine } = item as { Emoji?: unknown; Count?: unknown; Mine?: unknown };
-        if (typeof Emoji !== 'string' || Emoji === '' || seen.has(Emoji)) continue;
-        if (typeof Count !== 'number' || !Number.isInteger(Count) || Count <= 0) continue;
-        if (typeof Mine !== 'boolean') continue;
-        seen.add(Emoji);
-        out.push({ Emoji, Count, Mine });
+        const { emoji, count, mine } = item as { emoji?: unknown; count?: unknown; mine?: unknown };
+        if (typeof emoji !== 'string' || emoji === '' || seen.has(emoji)) continue;
+        if (typeof count !== 'number' || !Number.isInteger(count) || count <= 0) continue;
+        if (typeof mine !== 'boolean') continue;
+        seen.add(emoji);
+        out.push({ emoji, count, mine });
     }
     return out.length > 0 ? out : undefined;
 }
 
-/** Sanitizes `Reactions` on one message; same object when it has none (the common case). */
+/** Sanitizes `reactions` on one message; same object when it has none (the common case). */
 const withNormalizedReactions = <T extends object>(message: T): T => {
-    // 1:1 messages carry `reactions` (camel, AC4); group messages still `Reactions` (AC5).
+    // 1:1 and group messages both carry `reactions` (camel) after AC4/AC5.
     if ('reactions' in message) {
         const { reactions, ...rest } = message as T & { reactions?: unknown };
         const clean = normalizeReactions(reactions);
         return (clean ? { ...rest, reactions: clean } : rest) as T;
     }
-    if ('Reactions' in message) {
-        const { Reactions, ...rest } = message as T & { Reactions?: unknown };
-        const clean = normalizeReactions(Reactions);
-        return (clean ? { ...rest, Reactions: clean } : rest) as T;
-    }
     return message;
 };
 
-/** Sanitizes Reactions on every element; returns the SAME array when no element changed. */
+/** Sanitizes reactions on every element; returns the SAME array when no element changed. */
 const normalizeMessageList = <T extends object>(list: unknown[]): T[] => {
     let changed = false;
     const out = list.map(m => {
@@ -103,11 +98,11 @@ export function normalizeGroupMessagesResponse(data: unknown): GroupMessageRespo
     return Array.isArray(messages) ? normalizeMessageList<GroupMessageResponse>(messages) : [];
 }
 
-/** `GroupDetail.Messages` (fetchGroupDetail's pre-populated message cache): empty/null -> no messages. */
+/** `GroupDetail.messages` (fetchGroupDetail's pre-populated message cache): empty/null -> no messages. */
 export function normalizeGroupDetailMessages(data: unknown): GroupMessageResponse[] {
     if (!data || typeof data !== 'object') return [];
-    const { Messages } = data as { Messages?: unknown };
-    return Array.isArray(Messages) ? normalizeMessageList<GroupMessageResponse>(Messages) : [];
+    const { messages } = data as { messages?: unknown };
+    return Array.isArray(messages) ? normalizeMessageList<GroupMessageResponse>(messages) : [];
 }
 
 /**

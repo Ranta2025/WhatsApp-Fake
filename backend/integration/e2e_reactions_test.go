@@ -86,7 +86,7 @@ func (s *evStream) none(t *testing.T, eventType string, wait time.Duration) {
 func reactionSummaries(m map[string]interface{}) []map[string]interface{} {
 	list, _ := m["reactions"].([]interface{})
 	if list == nil {
-		list, _ = m["Reactions"].([]interface{})
+		list, _ = m["reactions"].([]interface{})
 	}
 	out := make([]map[string]interface{}, 0, len(list))
 	for _, r := range list {
@@ -129,7 +129,7 @@ func TestE2EReactions(t *testing.T) {
 	require.Equal(t, 201, code)
 	code, grp := ca.do("POST", "/api/v1/group", map[string]interface{}{"name": "Reacciones", "members": []string{bob.Telephon}})
 	require.Equal(t, 201, code, grp)
-	groupID := int(grp["group"].(map[string]interface{})["ID"].(float64))
+	groupID := int(grp["group"].(map[string]interface{})["id"].(float64))
 
 	rawA, rawB, rawC := ca.ws(""), cb.ws(""), cc.ws("")
 	wsA, wsB, wsC := newEvStream(rawA), newEvStream(rawB), newEvStream(rawC)
@@ -192,13 +192,13 @@ func TestE2EReactions(t *testing.T) {
 
 		fromA := reactionSummaries(history(ca))
 		require.Len(t, fromA, 1)
-		assert.Equal(t, "❤️", fromA[0]["Emoji"])
-		assert.EqualValues(t, 1, fromA[0]["Count"])
-		assert.Equal(t, true, fromA[0]["Mine"])
+		assert.Equal(t, "❤️", fromA[0]["emoji"])
+		assert.EqualValues(t, 1, fromA[0]["count"])
+		assert.Equal(t, true, fromA[0]["mine"])
 		fromB := reactionSummaries(history(cb))
 		require.Len(t, fromB, 1)
-		assert.Equal(t, "❤️", fromB[0]["Emoji"])
-		assert.Equal(t, false, fromB[0]["Mine"])
+		assert.Equal(t, "❤️", fromB[0]["emoji"])
+		assert.Equal(t, false, fromB[0]["mine"])
 	})
 
 	t.Run("1:1 repetir el mismo emoji es un no-op: eco solo al actor, sin difusión", func(t *testing.T) {
@@ -296,7 +296,7 @@ func TestE2EReactions(t *testing.T) {
 	groupText := fmt.Sprintf("hola grupo %d", suffix)
 	require.NoError(t, rawB.WriteJSON(map[string]interface{}{"type": "group_chat", "payload": map[string]interface{}{"groupID": groupID, "message": groupText}}))
 	gm := wsB.wait(t, "group_chat")
-	groupMsgID := int(gm["payload"].(map[string]interface{})["MessageID"].(float64))
+	groupMsgID := int(gm["payload"].(map[string]interface{})["messageID"].(float64))
 	wsA.wait(t, "group_chat")
 
 	t.Run("grupo: miembros reciben el evento y el no miembro recibe 403", func(t *testing.T) {
@@ -329,7 +329,7 @@ func TestE2EReactions(t *testing.T) {
 			require.Equal(t, 200, code, page)
 			for _, m := range page["messages"].([]interface{}) {
 				mm := m.(map[string]interface{})
-				if int(mm["MessageID"].(float64)) == groupMsgID {
+				if int(mm["messageID"].(float64)) == groupMsgID {
 					return mm
 				}
 			}
@@ -338,11 +338,11 @@ func TestE2EReactions(t *testing.T) {
 		}
 		ra := reactionSummaries(find(ca))
 		require.Len(t, ra, 1)
-		assert.Equal(t, "🙏", ra[0]["Emoji"])
-		assert.Equal(t, true, ra[0]["Mine"])
+		assert.Equal(t, "🙏", ra[0]["emoji"])
+		assert.Equal(t, true, ra[0]["mine"])
 		rb := reactionSummaries(find(cb))
 		require.Len(t, rb, 1)
-		assert.Equal(t, false, rb[0]["Mine"])
+		assert.Equal(t, false, rb[0]["mine"])
 
 		// Bob también reacciona por REST: cuenta 2 con el mismo emoji
 		path := fmt.Sprintf("/api/v1/group/%d/message/%d/reaction", groupID, groupMsgID)
@@ -369,8 +369,8 @@ func TestE2EReactions(t *testing.T) {
 		systemID := 0
 		for _, m := range page["messages"].([]interface{}) {
 			mm := m.(map[string]interface{})
-			if mm["Kind"] == models.GroupMessageKindSystem {
-				systemID = int(mm["MessageID"].(float64))
+			if mm["kind"] == models.GroupMessageKindSystem {
+				systemID = int(mm["messageID"].(float64))
 				break
 			}
 		}

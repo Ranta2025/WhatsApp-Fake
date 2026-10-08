@@ -9,7 +9,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 interface HarnessProps {
     isConnected?: boolean;
     openGroupId: number | null;
-    messages: ReadonlyArray<{ MessageID: number | string }> | undefined;
+    messages: ReadonlyArray<{ messageID: number | string }> | undefined;
     sendDelivered: (groupID: number, messageID: number) => boolean;
     sendRead: (groupID: number, upToMessageID: number) => boolean;
     onReady?: (api: ReturnType<typeof useGroupReceiptAcks>) => void;
@@ -28,7 +28,7 @@ function Harness({ isConnected = true, openGroupId, messages, sendDelivered, sen
     return null;
 }
 
-const msgs = (...ids: Array<number | string>) => ids.map(MessageID => ({ MessageID }));
+const msgs = (...ids: Array<number | string>) => ids.map(messageID => ({ messageID }));
 
 describe('useGroupReceiptAcks', () => {
     let host: HTMLDivElement;

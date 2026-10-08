@@ -69,8 +69,8 @@ describe('describeDirectSystemMessage / group case', () => {
 
     it('describeGroupSystemMessage handles disappearing_changed', () => {
         const g = (text: string, actor: string): GroupMessageResponse => ({
-            MessageID: 3, GroupID: 9, SenderTelephon: actor, SenderUsername: 'Ana', Message: text,
-            Time: '2026-01-01T10:00:00Z', Edited: false, Kind: 'system', SystemEvent: 'disappearing_changed',
+            messageID: 3, groupID: 9, senderTelephon: actor, senderUsername: 'Ana', message: text,
+            time: '2026-01-01T10:00:00Z', edited: false, kind: 'system', systemEvent: 'disappearing_changed',
         });
         expect(describeGroupSystemMessage(g('86400', '222'), '111', () => undefined)).toBe('Ana activó los mensajes temporales: 24 horas');
         expect(describeGroupSystemMessage(g('0', '222'), '111', () => undefined)).toBe('Ana desactivó los mensajes temporales');
@@ -102,7 +102,7 @@ describe('removal reducers', () => {
         expect(removeMessagesByIds(list, new Set())).toBe(list);
     });
 
-    it('removeExpiredMessages uses >= (a message expiring exactly now is gone) and ignores invalid ExpiresAt', () => {
+    it('removeExpiredMessages uses >= (a message expiring exactly now is gone) and ignores invalid expiresAt', () => {
         const now = Date.parse('2026-01-01T12:00:00Z');
         const list = [
             msg(1, { expiresAt: '2026-01-01T11:59:59Z' }),
@@ -117,7 +117,7 @@ describe('removal reducers', () => {
         expect(removeExpiredMessages(same, now)).toBe(same);
     });
 
-    it('never removes system messages, even with a past ExpiresAt', () => {
+    it('never removes system messages, even with a past expiresAt', () => {
         const now = Date.parse('2026-01-01T12:00:00Z');
         const list = [sys(1, '86400', { expiresAt: '2026-01-01T11:00:00Z' }), msg(2, { expiresAt: '2026-01-01T11:00:00Z' })];
         const out = removeExpiredMessages(list, now);
@@ -168,7 +168,7 @@ describe('earliestExpiry / expiryDelay', () => {
 });
 
 describe('system message exclusions', () => {
-    it('isSystemDirectMessage is true only for Kind system', () => {
+    it('isSystemDirectMessage is true only for kind system', () => {
         expect(isSystemDirectMessage(sys(1, '0'))).toBe(true);
         expect(isSystemDirectMessage(msg(1))).toBe(false);
     });

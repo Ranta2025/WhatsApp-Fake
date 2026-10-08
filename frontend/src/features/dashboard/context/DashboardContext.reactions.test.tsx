@@ -58,19 +58,19 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 }
 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
-const chip = (Emoji: string, Count = 1, Mine = false): ReactionSummary => ({ Emoji, Count, Mine });
+const chip = (emoji: string, count = 1, mine = false): ReactionSummary => ({ emoji, count, mine });
 const chatMsg = (id: number, reactions?: ReactionSummary[]): Message => ({
     messageID: id, senderTelephon: '111', receptor: 'B', message: `m${id}`, status: 'visto', time: iso(id), edited: false,
     ...(reactions ? { reactions } : {}),
 });
-const groupMsg = (id: number, Reactions?: ReactionSummary[]): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: '111', SenderUsername: 'ana', Message: `g${id}`, Time: iso(id), Edited: false,
-    ...(Reactions ? { Reactions } : {}),
+const groupMsg = (id: number, reactions?: ReactionSummary[]): GroupMessageResponse => ({
+    messageID: id, groupID: 9, senderTelephon: '111', senderUsername: 'ana', message: `g${id}`, time: iso(id), edited: false,
+    ...(reactions ? { reactions } : {}),
 });
 const contact = (n: string, name: string): ContactChat => ({ telephon: n, contactName: name, username: n } as ContactChat);
 const group = (): SelectedGroup => ({
-    ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
+    id: 9, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'member', createdAt: iso(0),
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
 });
 const direct = (over: Partial<ReactionEventPayload> = {}): ReactionEventPayload => ({
     kind: 'direct', messageID: 5, telephon: 'B', username: 'bea_user', emoji: '👍', previousEmoji: '',
@@ -143,7 +143,7 @@ describe('DashboardProvider reactions', () => {
         it('applies a group reaction to groupMessages', async () => {
             await seed();
             emitReaction(inGroup());
-            expect(ctx!.groupMessages[9]?.[0]?.Reactions).toEqual([chip('❤️')]);
+            expect(ctx!.groupMessages[9]?.[0]?.reactions).toEqual([chip('❤️')]);
         });
 
         it('replace by another user decrements previousEmoji and increments the new one', async () => {
@@ -177,7 +177,7 @@ describe('DashboardProvider reactions', () => {
             emitReaction(inGroup());
 
             expect(ctx!.focusedChat['B']?.messages[0]?.reactions).toEqual([chip('👍')]);
-            expect(ctx!.focusedGroup[9]?.messages[0]?.Reactions).toEqual([chip('❤️')]);
+            expect(ctx!.focusedGroup[9]?.messages[0]?.reactions).toEqual([chip('❤️')]);
             expect(ctx!.messagesByChat['B']?.[0]?.reactions).toEqual([chip('👍')]);
         });
 
@@ -210,7 +210,7 @@ describe('DashboardProvider reactions', () => {
             await seed();
             act(() => { ctx!.reactToMessage({ kind: 'group', messageID: 7, groupID: 9 }, '🙏'); });
             expect(mockSendReaction).toHaveBeenCalledWith('group', 7, '🙏', 9);
-            expect(ctx!.groupMessages[9]?.[0]?.Reactions).toEqual([chip('🙏', 1, true)]);
+            expect(ctx!.groupMessages[9]?.[0]?.reactions).toEqual([chip('🙏', 1, true)]);
         });
 
         it('the server echo of my own reaction does not double count', async () => {
@@ -236,7 +236,7 @@ describe('DashboardProvider reactions', () => {
             await seed();
             act(() => { ctx!.reactToMessage({ kind: 'group', messageID: 7, groupID: 9 }, '🙏'); });
             emitError({ type: 'error', error: 'x', context: { action: 'react', kind: 'group', messageID: 7, groupID: 9, status: 404 } });
-            expect(ctx!.groupMessages[9]?.[0]).not.toHaveProperty('Reactions');
+            expect(ctx!.groupMessages[9]?.[0]).not.toHaveProperty('reactions');
         });
 
         it('a rapid second tap rolls back to the state before the FIRST pending reaction', async () => {

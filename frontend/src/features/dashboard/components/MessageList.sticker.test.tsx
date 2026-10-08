@@ -114,7 +114,7 @@ describe('MessageList sticker rendering (1:1)', () => {
     });
 
     it('las reacciones siguen funcionando en sticker messages', () => {
-        render(stickerMsg({ reactions: [{ Emoji: '👍', Count: 2, Mine: true }] }));
+        render(stickerMsg({ reactions: [{ emoji: '👍', count: 2, mine: true }] }));
         const chip = Array.from(container.querySelectorAll<HTMLElement>('button'))
             .find(b => b.getAttribute('aria-label') === '👍 2, reaccionaste');
         expect(chip).toBeTruthy();

@@ -150,8 +150,8 @@ describe('DashboardProvider fetchers with a null response body', () => {
         mockGetUserGroups.mockResolvedValueOnce({
             data: {
                 groups: [{
-                    ID: 1, Name: 'g1', CreatorTelephon: '111', MemberCount: 1,
-                    UserRole: 'admin', CreatedAt: '2024-01-01T00:00:00Z',
+                    id: 1, name: 'g1', creatorTelephon: '111', memberCount: 1,
+                    userRole: 'admin', createdAt: '2024-01-01T00:00:00Z',
                 }],
             },
         });

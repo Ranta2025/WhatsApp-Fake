@@ -19,18 +19,18 @@ export default function ReactionChips({ reactions, onToggle, onShowWho, align = 
     if (!reactions || reactions.length === 0) return null;
     return (
         <div className={`flex flex-wrap items-center gap-1 -mt-1 relative z-10 ${align === 'end' ? 'justify-end' : 'justify-start'}`}>
-            {reactions.map(({ Emoji, Count, Mine }) => (
+            {reactions.map(({ emoji, count, mine }) => (
                 <button
-                    key={Emoji}
+                    key={emoji}
                     type="button"
-                    aria-pressed={Mine}
-                    aria-label={Mine ? `${Emoji} ${Count}, reaccionaste` : `${Emoji} ${Count}`}
-                    onClick={() => onToggle(Emoji)}
+                    aria-pressed={mine}
+                    aria-label={mine ? `${emoji} ${count}, reaccionaste` : `${emoji} ${count}`}
+                    onClick={() => onToggle(emoji)}
                     className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs shadow-sm transition-colors
-                        ${Mine ? 'border-indigo-400 bg-indigo-500/30 text-fg' : 'border-fg/10 bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
+                        ${mine ? 'border-indigo-400 bg-indigo-500/30 text-fg' : 'border-fg/10 bg-slate-800 text-slate-200 hover:bg-slate-700'}`}
                 >
-                    <span aria-hidden="true">{Emoji}</span>
-                    <span aria-hidden="true">{Count}</span>
+                    <span aria-hidden="true">{emoji}</span>
+                    <span aria-hidden="true">{count}</span>
                 </button>
             ))}
             <button

@@ -121,7 +121,7 @@ export function sortUnique<T extends MergeableMessage>(list: readonly T[]): T[] 
 const sameReactions = (a: readonly ReactionSummary[] | undefined, b: readonly ReactionSummary[] | undefined): boolean => {
     if (a === b) return true;
     if (!a || !b || a.length !== b.length) return false;
-    return a.every((r, i) => r.Emoji === b[i]?.Emoji && r.Count === b[i]?.Count && r.Mine === b[i]?.Mine);
+    return a.every((r, i) => r.emoji === b[i]?.emoji && r.count === b[i]?.count && r.mine === b[i]?.mine);
 };
 
 /**

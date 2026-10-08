@@ -4,80 +4,79 @@ import "time"
 
 // GroupResponse contiene los datos básicos de un grupo para listados.
 type GroupResponse struct {
-	ID              uint      `json:"ID"`
-	Name            string    `json:"Name"`
-	Description     string    `json:"Description,omitempty"`
-	AvatarUrl       string    `json:"AvatarUrl,omitempty"`
-	CreatorTelephon string    `json:"CreatorTelephon"`
-	MemberCount     int       `json:"MemberCount"`
-	UserRole        string    `json:"UserRole"` // rol del usuario que hace la petición: "admin" | "member"
-	CreatedAt       time.Time `json:"CreatedAt"`
+	ID              uint      `json:"id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description,omitempty"`
+	AvatarUrl       string    `json:"avatarUrl,omitempty"`
+	CreatorTelephon string    `json:"creatorTelephon"`
+	MemberCount     int       `json:"memberCount"`
+	UserRole        string    `json:"userRole"` // rol del usuario que hace la petición: "admin" | "member"
+	CreatedAt       time.Time `json:"createdAt"`
 
-	// Configuración de permisos del grupo (PascalCase por regla cross-feature:
-	// campos añadidos dentro de un schema PascalCase existente).
-	OnlyAdminsCanSend       bool `json:"OnlyAdminsCanSend"`
-	OnlyAdminsCanEditInfo   bool `json:"OnlyAdminsCanEditInfo"`
-	OnlyAdminsCanAddMembers bool `json:"OnlyAdminsCanAddMembers"`
+	// Configuración de permisos del grupo.
+	OnlyAdminsCanSend       bool `json:"onlyAdminsCanSend"`
+	OnlyAdminsCanEditInfo   bool `json:"onlyAdminsCanEditInfo"`
+	OnlyAdminsCanAddMembers bool `json:"onlyAdminsCanAddMembers"`
 
 	// Temporizador de mensajes temporales en segundos (0 = off, se omite).
-	DisappearSeconds int `json:"DisappearSeconds,omitempty"`
+	DisappearSeconds int `json:"disappearSeconds,omitempty"`
 
 	// Silencio del grupo para el usuario que consulta (solo lo rellena el
-	// listado GET /group). Muted se omite si es false; MutedUntil se omite si
-	// no hay silencio o si es "para siempre" (Muted=true sin MutedUntil).
-	Muted      bool       `json:"Muted,omitempty"`
-	MutedUntil *time.Time `json:"MutedUntil,omitempty"`
+	// listado GET /group). muted se omite si es false; mutedUntil se omite si
+	// no hay silencio o si es "para siempre" (muted=true sin mutedUntil).
+	Muted      bool       `json:"muted,omitempty"`
+	MutedUntil *time.Time `json:"mutedUntil,omitempty"`
 }
 
 // GroupMemberResponse son los datos de un miembro dentro de un grupo,
 // incluyendo el nombre personalizado del contacto si lo tiene.
 type GroupMemberResponse struct {
-	Telephon    string `json:"Telephon"`
-	Username    string `json:"Username"`
-	AvatarUrl   string `json:"AvatarUrl,omitempty"`
-	Role        string `json:"Role"`                  // "admin" | "member"
-	ContactName string `json:"ContactName,omitempty"` // nombre personalizado (si lo tienen como contacto)
+	Telephon    string `json:"telephon"`
+	Username    string `json:"username"`
+	AvatarUrl   string `json:"avatarUrl,omitempty"`
+	Role        string `json:"role"`                  // "admin" | "member"
+	ContactName string `json:"contactName,omitempty"` // nombre personalizado (si lo tienen como contacto)
 
 	// Marcas de agua de acuses del miembro (ids de mensaje dentro de este grupo).
 	// Permiten al cliente derivar los ticks de cualquier página cargada.
-	JoinedMessageID        uint `json:"JoinedMessageID,omitempty"`
-	LastDeliveredMessageID uint `json:"LastDeliveredMessageID,omitempty"`
-	LastReadMessageID      uint `json:"LastReadMessageID,omitempty"`
+	JoinedMessageID        uint `json:"joinedMessageID,omitempty"`
+	LastDeliveredMessageID uint `json:"lastDeliveredMessageID,omitempty"`
+	LastReadMessageID      uint `json:"lastReadMessageID,omitempty"`
 }
 
 // GroupMessageResponse es un mensaje de grupo serializado para la API y WebSocket.
 type GroupMessageResponse struct {
-	MessageID      uint      `json:"MessageID"`
-	GroupID        uint      `json:"GroupID"`
-	SenderTelephon string    `json:"SenderTelephon"`
-	SenderUsername string    `json:"SenderUsername"`
-	Message        string    `json:"Message"`
-	Time           time.Time `json:"Time"`
-	Edited         bool      `json:"Edited"`
+	MessageID      uint      `json:"messageID"`
+	GroupID        uint      `json:"groupID"`
+	SenderTelephon string    `json:"senderTelephon"`
+	SenderUsername string    `json:"senderUsername"`
+	Message        string    `json:"message"`
+	Time           time.Time `json:"time"`
+	Edited         bool      `json:"edited"`
 
-	MediaUrl  string `json:"MediaUrl,omitempty"`
-	MediaType string `json:"MediaType,omitempty"`
+	MediaUrl  string `json:"mediaUrl,omitempty"`
+	MediaType string `json:"mediaType,omitempty"`
 
-	ReplyToMessageID *uint   `json:"ReplyToMessageID,omitempty"`
-	ReplyToTelephon  *string `json:"ReplyToTelephon,omitempty"`
-	ReplyToMessage   *string `json:"ReplyToMessage,omitempty"`
+	ReplyToMessageID *uint   `json:"replyToMessageID,omitempty"`
+	ReplyToTelephon  *string `json:"replyToTelephon,omitempty"`
+	ReplyToMessage   *string `json:"replyToMessage,omitempty"`
 
 	// Agregados de reacciones para el espectador; se omite si no hay ninguna.
-	Reactions []ReactionSummary `json:"Reactions,omitempty"`
+	Reactions []ReactionSummary `json:"reactions,omitempty"`
 
 	// Mensajes de sistema persistidos. Kind "" en los mensajes normales; en los
 	// de sistema Kind="system" y SystemEvent describe el evento. SystemTargets
 	// son los teléfonos afectados para que el cliente redacte por espectador.
-	Kind          string   `json:"Kind,omitempty"`
-	SystemEvent   string   `json:"SystemEvent,omitempty"`
-	SystemTargets []string `json:"SystemTargets,omitempty"`
+	Kind          string   `json:"kind,omitempty"`
+	SystemEvent   string   `json:"systemEvent,omitempty"`
+	SystemTargets []string `json:"systemTargets,omitempty"`
 
 	// Instante de expiración (mensajes temporales); nil si no expira.
-	ExpiresAt *time.Time `json:"ExpiresAt,omitempty"`
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 
 	// ClientID echoes the sender's idempotency key so the client can reconcile
 	// its optimistic copy; receivers may see it too (it is an opaque UUID).
-	ClientID *string `json:"ClientID,omitempty"`
+	ClientID *string `json:"clientID,omitempty"`
 
 	// Duplicate marks a replayed send that returned the stored message. It is a
 	// transport hint for handlers (skip re-broadcast) and is never serialized.
@@ -88,8 +87,8 @@ type GroupMessageResponse struct {
 // Devuelto por GET /api/v1/group/:groupID.
 type GroupDetail struct {
 	GroupResponse
-	Members  []GroupMemberResponse  `json:"Members"`
-	Messages []GroupMessageResponse `json:"Messages"`
+	Members  []GroupMemberResponse  `json:"members"`
+	Messages []GroupMessageResponse `json:"messages"`
 }
 
 // GroupReceiptUpdate es el evento `group_receipt` (WS) que avisa a los miembros

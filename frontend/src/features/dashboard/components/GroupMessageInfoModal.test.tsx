@@ -13,8 +13,8 @@ vi.mock('../../../api/groupApi', () => ({
 }));
 
 const message: GroupMessageResponse = {
-    MessageID: 42, GroupID: 7, SenderTelephon: '111', SenderUsername: 'ana', Message: 'hola equipo',
-    Time: '2026-01-01T10:00:00Z', Edited: false,
+    messageID: 42, groupID: 7, senderTelephon: '111', senderUsername: 'ana', message: 'hola equipo',
+    time: '2026-01-01T10:00:00Z', edited: false,
 };
 
 describe('GroupMessageInfoModal', () => {

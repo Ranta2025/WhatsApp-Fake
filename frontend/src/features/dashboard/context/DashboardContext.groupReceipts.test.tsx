@@ -54,22 +54,22 @@ function Harness({ onReady }: { onReady: (value: DashboardContextValue) => void 
 
 const iso = (n: number) => new Date(Date.UTC(2024, 0, 1, 0, 0, n)).toISOString();
 const groupMsg = (id: number, sender = '222'): GroupMessageResponse => ({
-    MessageID: id, GroupID: 9, SenderTelephon: sender, SenderUsername: 'x', Message: `g${id}`, Time: iso(id), Edited: false,
+    messageID: id, groupID: 9, senderTelephon: sender, senderUsername: 'x', message: `g${id}`, time: iso(id), edited: false,
 });
 const detail = (overrides: Partial<GroupDetail> = {}): GroupDetail => ({
-    ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
-    Members: [
-        { Telephon: '111', Username: 'ana', Role: 'admin' },
-        { Telephon: '222', Username: 'luis', Role: 'member', JoinedMessageID: 0, LastDeliveredMessageID: 10, LastReadMessageID: 4 },
-        { Telephon: '333', Username: 'marta', Role: 'member', JoinedMessageID: 6 },
+    id: 9, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'member', createdAt: iso(0),
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
+    members: [
+        { telephon: '111', username: 'ana', role: 'admin' },
+        { telephon: '222', username: 'luis', role: 'member', joinedMessageID: 0, lastDeliveredMessageID: 10, lastReadMessageID: 4 },
+        { telephon: '333', username: 'marta', role: 'member', joinedMessageID: 6 },
     ],
-    Messages: [],
+    messages: [],
     ...overrides,
 });
 const selected = (): SelectedGroup => ({
-    ID: 9, Name: 'Equipo', CreatorTelephon: '111', MemberCount: 3, UserRole: 'member', CreatedAt: iso(0),
-    OnlyAdminsCanSend: false, OnlyAdminsCanEditInfo: false, OnlyAdminsCanAddMembers: false,
+    id: 9, name: 'Equipo', creatorTelephon: '111', memberCount: 3, userRole: 'member', createdAt: iso(0),
+    onlyAdminsCanSend: false, onlyAdminsCanEditInfo: false, onlyAdminsCanAddMembers: false,
 });
 
 describe('DashboardProvider group receipts', () => {
@@ -126,17 +126,17 @@ describe('DashboardProvider group receipts', () => {
         });
     });
 
-    it('keeps the group marks when a later detail response carries no Members array', async () => {
+    it('keeps the group marks when a later detail response carries no members array', async () => {
         await mount();
         await openGroup();
         const before = ctx?.groupReceipts[9];
         expect(before?.['222']).toEqual({ joined: 0, delivered: 10, read: 4 });
 
-        mockGetGroupDetail.mockResolvedValue({ data: { ...detail(), Members: null } });
+        mockGetGroupDetail.mockResolvedValue({ data: { ...detail(), members: null } });
         await act(async () => { await ctx!.fetchGroupDetail(9); });
         expect(ctx?.groupReceipts[9]).toEqual(before);
 
-        mockGetGroupDetail.mockResolvedValue({ data: { ID: 9, Name: 'Equipo' } });
+        mockGetGroupDetail.mockResolvedValue({ data: { id: 9, name: 'Equipo' } });
         await act(async () => { await ctx!.fetchGroupDetail(9); });
         expect(ctx?.groupReceipts[9]).toEqual(before);
     });
@@ -211,7 +211,7 @@ describe('DashboardProvider group receipts', () => {
     it('does not ack read for a group the user left', async () => {
         await mount();
         act(() => { ctx!.setGroupMessages({ 9: [groupMsg(5)] }); });
-        await act(async () => { ctx!.setSelectedGroup({ ...selected(), UserRole: 'left' }); });
+        await act(async () => { ctx!.setSelectedGroup({ ...selected(), userRole: 'left' }); });
         expect(sendGroupRead).not.toHaveBeenCalled();
     });
 });
