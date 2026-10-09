@@ -45,11 +45,10 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 
-## Handoff state (2026-10-06)
-- **Current tip:** `main` (roadmap features plus ui-themes merged and pushed). The only unfinished feature is **api-casing**: continue it on a branch from `main` (`git switch -c feat/api-casing-2 main`, or recreate `feat/api-casing` from `main`).
-- **Last reviewed boundary:** `94d03d3` (ui-themes final slice, acknowledged); later commits on `main` are doc-only.
-- **Next:** `outbox-sender-echo.md` (bug), then `api-casing.md` AC3 -> AC7, AC10.
-- **New (2026-10-07, not fixed):** `offline-placeholder-race.md` — `offline-send.e2e.ts:84` setup flake: group composer placeholder follows WS `isConnected` (lags `setOffline(true)`), so `openGroup` races disconnect detection. Found during outbox-sender-echo OE3 re-verification; needs its own branch after user approval.
+## Handoff state (2026-10-09)
+- **Current tip:** `main` = `9f3a486` (pushed). Landed since 49afc1a: outbox-sender-echo fix (sender echo kept on stale resync + replayed append), api-casing AC3→AC7+AC10 (all-camelCase contract, inventory allowlist empty, docs/API_CONTRACT.md), offline-placeholder-race fix (group composer text enabled offline + placeholder-tolerant helpers).
+- **Last reviewed boundary:** `a9282dc` (api-casing AC0, acknowledged). All later domain slices: native review **unavailable** (lens budget exceeded or no relay transport in this runtime); verification of record is the per-domain full matrix, recorded per feature doc.
+- **Next:** nothing pending — roadmap complete except known flakes (stickers-full:168, documented).
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
