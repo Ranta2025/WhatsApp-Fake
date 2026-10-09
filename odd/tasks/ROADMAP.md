@@ -46,9 +46,9 @@ Before creating a branch: `git branch --show-current`, `git status`, and branch 
 Cross-feature rules until api-casing lands: fields added inside an existing PascalCase schema stay PascalCase; brand-new endpoints/events are camelCase.
 
 ## Handoff state (2026-10-09)
-- **Current tip:** `main` = `9f3a486` (pushed). Landed since 49afc1a: outbox-sender-echo fix (sender echo kept on stale resync + replayed append), api-casing AC3→AC7+AC10 (all-camelCase contract, inventory allowlist empty, docs/API_CONTRACT.md), offline-placeholder-race fix (group composer text enabled offline + placeholder-tolerant helpers).
+- **Current tip:** `main` = `8b2b577` (pushed). Landed since 49afc1a: outbox-sender-echo fix (sender echo kept on stale resync + replayed append), api-casing AC3→AC7+AC10 (all-camelCase contract, inventory allowlist empty, docs/API_CONTRACT.md), offline-placeholder-race fix (group composer text enabled offline + placeholder-tolerant helpers), stickers-full:168 flake fix (wait favorites PUT before reload).
 - **Last reviewed boundary:** `a9282dc` (api-casing AC0, acknowledged). All later domain slices: native review **unavailable** (lens budget exceeded or no relay transport in this runtime); verification of record is the per-domain full matrix, recorded per feature doc.
-- **Next:** nothing pending — roadmap complete except known flakes (stickers-full:168, documented).
+- **Next:** nothing pending. Theoretical note only: unobserved deleted-echo resurrection tradeoff (outbox doc Review section).
 - **Checks to run before and after each task:**
   - `go build ./... && go vet ./... && go test ./...`
   - `make test-integration` (tag e2e; wait about 60s between runs because of the login rate limit, 429)
