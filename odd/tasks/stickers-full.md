@@ -162,3 +162,7 @@ Fold into the first task touching each file (same rule as stickers-basic RFs); n
 
 ## Next step
 Feature complete. Next session: api-casing (last in roadmap order).
+
+## Follow-up (2026-10-0x): stickers-full:168 flake — FIXED
+- Symptom: `favoritos persiste tras recargar` failed ~1/5 full-suite runs (timeout), always green alone.
+- Root cause: `handleToggleFavorite` fires PUT /api/v1/stickers/favorites in background after closing the menu; spec reloaded before the PUT completed. Fix (spec-only, commit on fix/stickers-flake-168): waitForResponse PUT after clicking Favorito/Quitar before close/reload. Verified: file 5/5 + full suite 45/0/1 (only VAPID skip).

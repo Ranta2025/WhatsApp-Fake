@@ -178,7 +178,13 @@ test.describe('stickers full', () => {
       // "Favorito" and the real mouse click below always runs (the durable
       // regression proof for the unclipped menu layer).
       if (await ana.page.getByRole('menuitem', { name: 'Quitar de favoritos', exact: true }).count() > 0) {
+        // La desmarcación también es async (PUT en background): esperarla antes
+        // de cerrar/recargar o la spec pierde la carrera igual que al marcar.
+        const unfavorited = ana.page.waitForResponse(
+          (r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === '/api/v1/stickers/favorites',
+        );
         await ana.page.getByRole('menuitem', { name: 'Quitar de favoritos', exact: true }).click();
+        expect((await unfavorited).ok()).toBeTruthy();
         await closePanel(ana.page);
         await openPanel(ana.page);
         await openTab(ana.page, 'Básicos');
@@ -186,7 +192,14 @@ test.describe('stickers full', () => {
       }
       // HOLA is the first tile of "Básicos" (left column): a real mouse click
       // works now that the menu is a sibling of the grid, not clipped by it.
+      // El toggle es async (PUT /api/v1/stickers/favorites en background tras
+      // cerrar el menú): esperar la respuesta antes de cerrar/recargar, o una
+      // recarga rápida pierde el favorito y el test flakea bajo carga.
+      const favorited = ana.page.waitForResponse(
+        (r) => r.request().method() === 'PUT' && new URL(r.url()).pathname === '/api/v1/stickers/favorites',
+      );
       await ana.page.getByRole('menuitem', { name: 'Favorito', exact: true }).click();
+      expect((await favorited).ok()).toBeTruthy();
       await closePanel(ana.page);
 
       await ana.page.reload();
