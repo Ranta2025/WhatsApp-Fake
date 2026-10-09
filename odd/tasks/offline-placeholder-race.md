@@ -13,7 +13,11 @@
 - Whether product placeholder switching on WS state (vs `navigator.onLine`) is intended UX.
 
 ## Scope / Authorized
-Not authorized. Fix only after the user approves it on its own branch from `main`.
+Authorized by user 2026-10-0x ("si hazlo"): product+test fix on branch `fix/offline-placeholder-race` from `main`.
+
+## Review (RDD)
+- Assess `c23ebc0 --committed-only`: medium, under_budget (17 lines). Consent granted by user via native question. START froze lineage `review-1aab4940762dea43`.
+- Outcome: **unavailable** — single lens `review-reliability` cannot be relayed in this runtime (no reviewer Task agent; capture without `--input` refused with `invalid_request`; `--agent=opencode` has no in-process adapter). No verdict authored, nothing burned. Verification of record: typecheck + GroupMessageInput 23/23 + offline-send 5/5 + full suite (only known flake).
 
 ## Tasks
 - [x] OP1 Decide product vs test fix (placeholder source of truth) with user. Decided 2026-10-0x: product+test. Test-only tolerance alone cannot save runs (disabled textarea blocks the send); group text already queues via outbox, so composer stays enabled offline for text (media/attach/voice/edit stay online-only).
