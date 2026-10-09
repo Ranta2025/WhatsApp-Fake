@@ -16,9 +16,9 @@
 Not authorized. Fix only after the user approves it on its own branch from `main`.
 
 ## Tasks
-- [ ] OP1 Decide product vs test fix (placeholder source of truth) with user.
-- [ ] OP2 Harden spec/helper (wait for WS-down or placeholder-tolerant openGroup) with RED-first proof of the race if product behavior stays.
-- [ ] OP3 Run `offline-send.e2e.ts` 5 times + full e2e once.
+- [x] OP1 Decide product vs test fix (placeholder source of truth) with user. Decided 2026-10-0x: product+test. Test-only tolerance alone cannot save runs (disabled textarea blocks the send); group text already queues via outbox, so composer stays enabled offline for text (media/attach/voice/edit stay online-only).
+- [x] OP2 Harden spec/helper + product composer. Done: GroupMessageInput textarea always enabled + Enviar enabled offline for new text (edits still gated); openGroup/sendGroupText accept either placeholder. Typecheck clean, GroupMessageInput 23/23.
+- [x] OP3 Run `offline-send.e2e.ts` 5 times + full e2e once. Done: 5/5 green (:84/:85-87/:106); full suite 44/1 skipped/1 failed = known stickers-full:168 flake (teardown close). CLOSED.
 
 ## Related
 - Found while verifying `odd/tasks/outbox-sender-echo.md` (OE3 second cycle, run 5). The `:106` sender-echo assertion passed 4/4 post-OE4; this failure never reached it.

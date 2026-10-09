@@ -19,7 +19,8 @@ export async function openChat(page: Page, contactName: string): Promise<void> {
 export async function openGroup(page: Page, groupName = 'Equipo demo'): Promise<void> {
   await page.getByRole('tab', { name: 'Grupos' }).click();
   await page.getByText(groupName).first().click();
-  await expect(page.getByPlaceholder('Escribe un mensaje en el grupo...')).toBeVisible();
+  // Sin conexión el placeholder es 'Sin conexión...' (el grupo queda abierto igual).
+  await expect(page.getByPlaceholder(/Escribe un mensaje en el grupo\.\.\.|Sin conexión\.\.\./)).toBeVisible();
 }
 
 export async function sendChatText(page: Page, text: string): Promise<void> {
@@ -29,7 +30,7 @@ export async function sendChatText(page: Page, text: string): Promise<void> {
 }
 
 export async function sendGroupText(page: Page, text: string): Promise<void> {
-  const input = page.getByPlaceholder('Escribe un mensaje en el grupo...');
+  const input = page.getByPlaceholder(/Escribe un mensaje en el grupo\.\.\.|Sin conexión\.\.\./);
   await input.fill(text);
   await input.press('Enter');
 }

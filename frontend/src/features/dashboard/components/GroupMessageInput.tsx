@@ -226,7 +226,8 @@ const GroupMessageInput = () => {
                         value={inputValue}
                         onChange={inputOnChange}
                         onKeyDown={onKeyDown}
-                        disabled={!isConnected}
+                        // El texto se puede escribir sin conexión: va al outbox (igual que el 1:1).
+                        // Solo adjuntos/media/voz siguen siendo online-only.
                         placeholder={isConnected ? 'Escribe un mensaje en el grupo...' : 'Sin conexión...'}
                         className="flex-1 resize-none bg-slate-800 border border-fg/10 rounded-2xl px-4 py-2.5 text-fg placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm leading-relaxed disabled:opacity-50 max-h-36 overflow-auto transition-all"
                         style={{ height: 'auto', minHeight: '42px' }}
@@ -240,7 +241,8 @@ const GroupMessageInput = () => {
                 {!isRecording && (editingMessageId || text.trim()) ? (
                     <button
                         onClick={editingMessageId ? handleEditMessageSave : onSend}
-                        disabled={!isConnected || !(editingMessageId ? editingMessageText.trim() : text.trim())}
+                        // Nuevo texto: habilitado offline (outbox). Edición: online-only.
+                        disabled={editingMessageId ? !isConnected || !editingMessageText.trim() : !text.trim()}
                         className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-on-accent rounded-full transition-all flex-shrink-0 shadow-lg"
                         aria-label="Enviar"
                     >
